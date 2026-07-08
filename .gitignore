@@ -1,0 +1,8 @@
+build/
+build-wsc/
+.vs/
+out/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
