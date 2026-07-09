@@ -98,6 +98,23 @@ float Row::gap() const noexcept
     return gap_;
 }
 
+Row& Row::padding(InsetsF padding) noexcept
+{
+    setPadding(padding);
+    return *this;
+}
+
+void Row::setPadding(InsetsF padding) noexcept
+{
+    padding_ = padding;
+    markDirty(DirtyFlag::Layout);
+}
+
+InsetsF Row::padding() const noexcept
+{
+    return padding_;
+}
+
 SizeF Row::measure(const Constraints& constraints) const
 {
     float width = 0.0f;
@@ -113,7 +130,7 @@ SizeF Row::measure(const Constraints& constraints) const
         }
     }
 
-    return constraints.clamp({width, height});
+    return constraints.clamp({width + padding_.horizontal(), height + padding_.vertical()});
 }
 
 void Row::layout(const RectF& bounds)
@@ -121,11 +138,13 @@ void Row::layout(const RectF& bounds)
     Node::layout(bounds);
 
     const auto& childNodes = children();
-    float cursorX = bounds.x;
-    const Constraints childConstraints{0.0f, bounds.width, 0.0f, bounds.height};
+    const float innerWidth = std::max(0.0f, bounds.width - padding_.horizontal());
+    const float innerHeight = std::max(0.0f, bounds.height - padding_.vertical());
+    float cursorX = bounds.x + padding_.left;
+    const Constraints childConstraints{0.0f, innerWidth, 0.0f, innerHeight};
     for (const auto& child : childNodes) {
         const auto childSize = child->measure(childConstraints);
-        child->layout({cursorX, bounds.y, childSize.width, childSize.height});
+        child->layout({cursorX, bounds.y + padding_.top, childSize.width, childSize.height});
         cursorX += childSize.width + gap_;
     }
 }
@@ -153,6 +172,23 @@ float Column::gap() const noexcept
     return gap_;
 }
 
+Column& Column::padding(InsetsF padding) noexcept
+{
+    setPadding(padding);
+    return *this;
+}
+
+void Column::setPadding(InsetsF padding) noexcept
+{
+    padding_ = padding;
+    markDirty(DirtyFlag::Layout);
+}
+
+InsetsF Column::padding() const noexcept
+{
+    return padding_;
+}
+
 SizeF Column::measure(const Constraints& constraints) const
 {
     float width = 0.0f;
@@ -168,7 +204,7 @@ SizeF Column::measure(const Constraints& constraints) const
         }
     }
 
-    return constraints.clamp({width, height});
+    return constraints.clamp({width + padding_.horizontal(), height + padding_.vertical()});
 }
 
 void Column::layout(const RectF& bounds)
@@ -176,11 +212,13 @@ void Column::layout(const RectF& bounds)
     Node::layout(bounds);
 
     const auto& childNodes = children();
-    float cursorY = bounds.y;
-    const Constraints childConstraints{0.0f, bounds.width, 0.0f, bounds.height};
+    const float innerWidth = std::max(0.0f, bounds.width - padding_.horizontal());
+    const float innerHeight = std::max(0.0f, bounds.height - padding_.vertical());
+    float cursorY = bounds.y + padding_.top;
+    const Constraints childConstraints{0.0f, innerWidth, 0.0f, innerHeight};
     for (const auto& child : childNodes) {
         const auto childSize = child->measure(childConstraints);
-        child->layout({bounds.x, cursorY, childSize.width, childSize.height});
+        child->layout({bounds.x + padding_.left, cursorY, childSize.width, childSize.height});
         cursorY += childSize.height + gap_;
     }
 }

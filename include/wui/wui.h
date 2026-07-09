@@ -9,4 +9,5 @@
 #include "wui/state.h"
 #include "wui/text_input.h"
 #include "wui/types.h"
+#include "wui/ui.h"
 #include "wui/widgets.h"

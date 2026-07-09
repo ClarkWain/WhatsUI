@@ -97,6 +97,49 @@ void testInputRouterAndButton()
     expect((button->visualStates() & wui::toMask(wui::ControlVisualState::Hovered)) == 0, "Button should clear hovered state after leave");
 }
 
+void testDeclarativeBuilderAndCounter()
+{
+    using namespace wui::ui;
+
+    wui::State<int> count{0};
+
+    // Declarative authoring: config first (padding/gap), children last.
+    std::unique_ptr<wui::Node> root =
+        Column()
+            .padding(16)
+            .gap(8)
+            .children(
+                Text("Counter"),
+                Row().gap(8).children(
+                    Text("Value:"),
+                    Button("Increment").onClick([&count] { count.set(count.get() + 1); })
+                )
+            );
+
+    auto* column = dynamic_cast<wui::Column*>(root.get());
+    expect(column != nullptr, "Builder root should be a Column node");
+    expect(column->children().size() == 2, "Column should have exactly two children");
+    expect(column->padding().left == 16.0f && column->padding().top == 16.0f,
+           "padding(16) should apply uniform insets to the Column node");
+    expect(column->gap() == 8.0f, "gap(8) should apply to the Column node");
+
+    auto* row = dynamic_cast<wui::Row*>(column->children()[1].get());
+    expect(row != nullptr, "Second child should be the nested Row");
+    expect(row->children().size() == 2, "Row should hold the label and the button");
+
+    auto* button = dynamic_cast<wui::Button*>(row->children()[1].get());
+    expect(button != nullptr, "Row's second child should be a Button");
+
+    // Lay the tree out so node bounds are valid, then click the button.
+    root->layout({0.0f, 0.0f, 300.0f, 200.0f});
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down, wui::MouseButton::Left, {0.0f, 0.0f}, 0};
+    const wui::PointerEvent up{0, wui::PointerType::Mouse, wui::PointerAction::Up, wui::MouseButton::Left, {0.0f, 0.0f}, 0};
+    button->onPointerEvent(down);
+    button->onPointerEvent(up);
+
+    expect(count.get() == 1, "Clicking the declaratively-built button should increment the counter state");
+}
+
 void testTextInputRouting()
 {
     auto input = std::make_unique<wui::TextInput>("Type here");
@@ -131,6 +174,7 @@ int main()
     testNavigator();
     testTextInputModel();
     testInputRouterAndButton();
+    testDeclarativeBuilderAndCounter();
     testTextInputRouting();
     return 0;
 }

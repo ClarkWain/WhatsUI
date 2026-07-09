@@ -38,11 +38,16 @@ public:
     void setGap(float gap) noexcept;
     [[nodiscard]] float gap() const noexcept;
 
+    Row& padding(InsetsF padding) noexcept;
+    void setPadding(InsetsF padding) noexcept;
+    [[nodiscard]] InsetsF padding() const noexcept;
+
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
 
 private:
     float gap_{0.0f};
+    InsetsF padding_{};
 };
 
 class Column : public ContainerNode {
@@ -52,11 +57,16 @@ public:
     void setGap(float gap) noexcept;
     [[nodiscard]] float gap() const noexcept;
 
+    Column& padding(InsetsF padding) noexcept;
+    void setPadding(InsetsF padding) noexcept;
+    [[nodiscard]] InsetsF padding() const noexcept;
+
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
 
 private:
     float gap_{0.0f};
+    InsetsF padding_{};
 };
 
 class Button : public ControlNode {
