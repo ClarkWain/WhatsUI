@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include "wui/thread_check.h"
+
 namespace wui {
 
 template <typename T>
@@ -23,11 +25,13 @@ public:
 
     [[nodiscard]] const T& get() const noexcept
     {
+        WUI_ASSERT_UI_THREAD();
         return value_;
     }
 
     bool set(T value)
     {
+        WUI_ASSERT_UI_THREAD();
         if (value_ == value) {
             return false;
         }
@@ -38,6 +42,7 @@ public:
 
     [[nodiscard]] SubscriptionId subscribe(Callback callback)
     {
+        WUI_ASSERT_UI_THREAD();
         const auto id = nextId_++;
         observers_.emplace(id, std::move(callback));
         return id;
@@ -45,6 +50,7 @@ public:
 
     void unsubscribe(SubscriptionId id)
     {
+        WUI_ASSERT_UI_THREAD();
         observers_.erase(id);
     }
 

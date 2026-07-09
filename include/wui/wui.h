@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wui/animation.h"
 #include "wui/app.h"
 #include "wui/events.h"
 #include "wui/node.h"
@@ -12,6 +13,7 @@
 #include "wui/text_input.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
+#include "wui/thread_check.h"
 #include "wui/types.h"
 #include "wui/ui.h"
 #include "wui/whatscanvas_text.h"

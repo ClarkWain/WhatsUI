@@ -298,7 +298,9 @@ private:
     wui::State<bool>* state_{nullptr};
 };
 
-// Structural control: (re)generate a vertical list of children from `items`.
+// Structural control: (re)generate a list of children from `items`.
+// Layout direction is configurable (vertical by default, horizontal via
+// `.direction(ForEachDirection::Horizontal)`).
 template <class T>
 class ForEach : public BuilderBase<ForEach<T>, wui::ForEachNode> {
 public:
@@ -321,9 +323,27 @@ public:
         raw->addTeardown([state, id] { state->unsubscribe(id); });
     }
 
+    ForEach<T>&& direction(ForEachDirection dir) &&
+    {
+        this->node_->setDirection(dir);
+        return std::move(this->self());
+    }
+
     ForEach<T>&& gap(float gap) &&
     {
         this->node_->setGap(gap);
+        return std::move(this->self());
+    }
+
+    ForEach<T>&& padding(float all) &&
+    {
+        this->node_->setPadding(InsetsF{all, all, all, all});
+        return std::move(this->self());
+    }
+
+    ForEach<T>&& padding(InsetsF insets) &&
+    {
+        this->node_->setPadding(insets);
         return std::move(this->self());
     }
 
