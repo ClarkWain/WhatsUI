@@ -4,6 +4,7 @@ project(WhatsUI LANGUAGES CXX)
 
 option(WHATSUI_WITH_WHATSCANVAS "Link WhatsCanvas into the WhatsUI target" OFF)
 option(WHATSUI_BUILD_TESTS "Build WhatsUI tests" ON)
+option(WHATSUI_BUILD_EXAMPLES "Build WhatsUI examples (requires WHATSUI_WITH_WHATSCANVAS)" OFF)
 
 add_library(WhatsUI
     src/whatsui/core/app.cpp
@@ -44,6 +45,10 @@ if(WHATSUI_WITH_WHATSCANVAS)
     add_subdirectory(third_party/WhatsCanvas EXCLUDE_FROM_ALL)
     target_compile_definitions(WhatsUI PUBLIC WHATSUI_HAS_WHATSCANVAS=1)
     target_link_libraries(WhatsUI PUBLIC WhatsCanvas::Software)
+endif()
+
+if(WHATSUI_WITH_WHATSCANVAS AND WHATSUI_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
 
 if(WHATSUI_BUILD_TESTS)

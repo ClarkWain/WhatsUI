@@ -12,9 +12,10 @@
 4. `ADR-003-navigation-window-and-platform-host.md`
 5. `ADR-004-theme-and-authoring.md`
 6. `ADR-005-declarative-builder-api.md`
-7. `LAYOUT_MODEL.md`
-8. `TEXT_INPUT_AND_IME.md`
-9. `TESTING_AND_VALIDATION.md`
+7. `REACTIVITY_AND_STRUCTURE.md`
+8. `LAYOUT_MODEL.md`
+9. `TEXT_INPUT_AND_IME.md`
+10. `TESTING_AND_VALIDATION.md`
 
 ## 文档职责
 
@@ -24,6 +25,7 @@
 - `ADR-003-navigation-window-and-platform-host.md`：说明多页面、多窗口、浮层和平台壳的关系与边界。
 - `ADR-004-theme-and-authoring.md`：说明 UI 编写方式、样式体系和复合控件策略。
 - `ADR-005-declarative-builder-api.md`：说明声明式构建器编写 API（move-only 构建器 + CRTP + 变参 children），以及为何保留 `unique_ptr` 而不改用句柄。
+- `REACTIVITY_AND_STRUCTURE.md`：说明响应式绑定（`Text().bind`、节点 teardown 生命周期）、结构控件 `If`/`ForEach`、可插拔文本测量与新控件。
 - `LAYOUT_MODEL.md`：细化约束布局模型、容器语义、逻辑单位与滚动边界。
 - `TEXT_INPUT_AND_IME.md`：细化文本输入、组合输入、光标、选区和平台 IME 会话边界。
 - `TESTING_AND_VALIDATION.md`：细化 golden image、布局快照、行为回归与 Software backend 验证策略。
