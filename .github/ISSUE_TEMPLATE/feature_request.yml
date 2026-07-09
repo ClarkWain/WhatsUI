@@ -1,0 +1,27 @@
+name: Feature Request
+description: 提出一个功能、架构或 API 方向建议
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 需求背景
+      description: 你想解决什么问题？当前的痛点是什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 你希望它怎么工作？尽量描述清楚 API、行为或使用方式。
+    validations:
+      required: true
+
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: 取舍与影响
+      description: 如果你已经想过复杂度、兼容性或非目标边界，也请写在这里。

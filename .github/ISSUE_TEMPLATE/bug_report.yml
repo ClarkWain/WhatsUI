@@ -1,0 +1,45 @@
+name: Bug Report
+description: 报告一个可复现的问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 简要说明你遇到的问题和预期行为。
+      placeholder: 发生了什么？你原本期望看到什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 请提供最小可复现步骤。
+      placeholder: |
+        1. 执行 ...
+        2. 打开 ...
+        3. 点击 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境信息
+      description: 请补充系统、编译器、CMake 和构建选项。
+      placeholder: |
+        - OS:
+        - Compiler:
+        - CMake:
+        - Build flags:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 如果有报错日志、断言、截图或堆栈，请贴在这里。

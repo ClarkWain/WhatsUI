@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure default build
+        run: cmake -S . -B build
+
+      - name: Build default target
+        run: cmake --build build --config Debug
+
+      - name: Run smoke tests
+        run: ctest --test-dir build -C Debug --output-on-failure
+
+  whatscanvas:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure WhatsCanvas-enabled build
+        run: cmake -S . -B build-wsc -DWHATSUI_WITH_WHATSCANVAS=ON -DWHATSUI_BUILD_TESTS=OFF
+
+      - name: Build WhatsCanvas-enabled target
+        run: cmake --build build-wsc --config Debug
