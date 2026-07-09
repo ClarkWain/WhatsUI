@@ -7,6 +7,7 @@
 #include "wui/platform.h"
 #include "wui/runtime.h"
 #include "wui/state.h"
+#include "wui/structural.h"
 #include "wui/text_input.h"
 #include "wui/types.h"
 #include "wui/ui.h"

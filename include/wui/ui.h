@@ -23,8 +23,12 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "wui/node.h"
+#include "wui/state.h"
+#include "wui/structural.h"
+#include "wui/text_input.h"
 #include "wui/types.h"
 #include "wui/widgets.h"
 
@@ -85,6 +89,52 @@ public:
     Text&& text(std::string value) &&
     {
         node_->setValue(std::move(value));
+        return std::move(self());
+    }
+
+    // Reactive: re-render the text whenever `state` changes.
+    template <class T, class Format>
+    Text&& bind(wui::State<T>& state, Format format) &&
+    {
+        wui::Text* raw = node_.get();
+        raw->setValue(format(state.get()));
+        const auto id = state.subscribe([raw, format](const T& value) {
+            raw->setValue(format(value));
+        });
+        raw->addTeardown([&state, id] { state.unsubscribe(id); });
+        return std::move(self());
+    }
+
+    // Convenience for State<std::string>.
+    Text&& bind(wui::State<std::string>& state) &&
+    {
+        return std::move(*this).bind(state, [](const std::string& value) { return value; });
+    }
+};
+
+class Box : public BuilderBase<Box, wui::Container> {
+public:
+    Box() : BuilderBase() {}
+};
+
+class Spacer : public BuilderBase<Spacer, wui::Spacer> {
+public:
+    explicit Spacer(float width = 0.0f, float height = 0.0f)
+        : BuilderBase(wui::SizeF{width, height})
+    {
+    }
+};
+
+class TextField : public BuilderBase<TextField, wui::TextInput> {
+public:
+    explicit TextField(std::string placeholder = {})
+        : BuilderBase(std::move(placeholder))
+    {
+    }
+
+    TextField&& placeholder(std::string value) &&
+    {
+        node_->setPlaceholder(std::move(value));
         return std::move(self());
     }
 };
@@ -152,6 +202,62 @@ public:
     {
         node_->setPadding(insets);
         return std::move(self());
+    }
+};
+
+// Structural control: mount `then(...)` only while `state` is true.
+class If : public BuilderBase<If, wui::IfNode> {
+public:
+    explicit If(wui::State<bool>& state)
+        : BuilderBase()
+        , state_(&state)
+    {
+    }
+
+    // `factory` returns a builder (or unique_ptr<Node>) for the mounted subtree.
+    template <class Factory>
+    If&& then(Factory factory) &&
+    {
+        wui::IfNode* raw = node_.get();
+        raw->setFactory([factory = std::move(factory)]() mutable -> std::unique_ptr<wui::Node> {
+            return asNode(factory());
+        });
+        raw->setVisible(state_->get());
+        wui::State<bool>* state = state_;
+        const auto id = state->subscribe([raw](const bool& visible) { raw->setVisible(visible); });
+        raw->addTeardown([state, id] { state->unsubscribe(id); });
+        return std::move(self());
+    }
+
+private:
+    wui::State<bool>* state_{nullptr};
+};
+
+// Structural control: (re)generate a vertical list of children from `items`.
+template <class T>
+class ForEach : public BuilderBase<ForEach<T>, wui::ForEachNode> {
+public:
+    template <class ItemBuilder>
+    ForEach(wui::State<std::vector<T>>& items, ItemBuilder itemBuilder)
+        : BuilderBase<ForEach<T>, wui::ForEachNode>()
+    {
+        wui::ForEachNode* raw = this->node_.get();
+        auto rebuild = [raw, &items, itemBuilder]() {
+            raw->clearChildren();
+            for (const auto& item : items.get()) {
+                raw->appendChild(asNode(itemBuilder(item)));
+            }
+        };
+        rebuild();
+        wui::State<std::vector<T>>* state = &items;
+        const auto id = state->subscribe([rebuild](const std::vector<T>&) { rebuild(); });
+        raw->addTeardown([state, id] { state->unsubscribe(id); });
+    }
+
+    ForEach<T>&& gap(float gap) &&
+    {
+        this->node_->setGap(gap);
+        return std::move(this->self());
     }
 };
 

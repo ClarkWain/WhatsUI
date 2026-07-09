@@ -23,6 +23,20 @@ private:
     float fontSize_{16.0f};
 };
 
+class Spacer : public Node {
+public:
+    explicit Spacer(SizeF size = {}) noexcept;
+
+    [[nodiscard]] SizeF size() const noexcept;
+    void setSize(SizeF size) noexcept;
+
+    [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
+    void paint(PaintContext& context) override;
+
+private:
+    SizeF size_{};
+};
+
 class Container : public ContainerNode {
 public:
     Container& child(std::unique_ptr<Node> child);

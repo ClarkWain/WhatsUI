@@ -55,6 +55,33 @@ void Text::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
+Spacer::Spacer(SizeF size) noexcept
+    : size_(size)
+{
+}
+
+SizeF Spacer::size() const noexcept
+{
+    return size_;
+}
+
+void Spacer::setSize(SizeF size) noexcept
+{
+    size_ = size;
+    markDirty(DirtyFlag::Layout);
+}
+
+SizeF Spacer::measure(const Constraints& constraints) const
+{
+    return constraints.clamp(size_);
+}
+
+void Spacer::paint(PaintContext& context)
+{
+    (void)context;
+    clearDirty(DirtyFlag::Paint);
+}
+
 Container& Container::child(std::unique_ptr<Node> child)
 {
     appendChild(std::move(child));

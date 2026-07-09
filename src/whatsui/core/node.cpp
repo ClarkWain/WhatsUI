@@ -4,7 +4,14 @@
 
 namespace wui {
 
-Node::~Node() = default;
+Node::~Node()
+{
+    for (auto& callback : teardown_) {
+        if (callback) {
+            callback();
+        }
+    }
+}
 
 void Node::appendChild(std::unique_ptr<Node> child)
 {
@@ -27,6 +34,25 @@ std::unique_ptr<Node> Node::removeChild(std::size_t index)
     children_.erase(children_.begin() + static_cast<std::ptrdiff_t>(index));
     markDirty(DirtyFlag::Layout);
     return child;
+}
+
+void Node::clearChildren()
+{
+    if (children_.empty()) {
+        return;
+    }
+    for (auto& child : children_) {
+        if (child) {
+            child->parent_ = nullptr;
+        }
+    }
+    children_.clear();
+    markDirty(DirtyFlag::Layout);
+}
+
+void Node::addTeardown(std::function<void()> callback)
+{
+    teardown_.push_back(std::move(callback));
 }
 
 void Node::layout(const RectF& bounds)

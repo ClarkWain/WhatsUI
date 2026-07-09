@@ -1,6 +1,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "wui/wui.h"
 
@@ -140,6 +141,60 @@ void testDeclarativeBuilderAndCounter()
     expect(count.get() == 1, "Clicking the declaratively-built button should increment the counter state");
 }
 
+void testReactiveText()
+{
+    using namespace wui::ui;
+
+    wui::State<int> count{0};
+    std::unique_ptr<wui::Node> node =
+        Text().bind(count, [](const int& value) { return std::string("Count: ") + std::to_string(value); });
+
+    auto* text = dynamic_cast<wui::Text*>(node.get());
+    expect(text != nullptr, "Bound builder should yield a Text node");
+    expect(text->value() == "Count: 0", "Reactive Text should render the initial state");
+
+    count.set(5);
+    expect(text->value() == "Count: 5", "Reactive Text should update when the bound state changes");
+}
+
+void testStructuralIf()
+{
+    using namespace wui::ui;
+
+    wui::State<bool> show{false};
+    std::unique_ptr<wui::Node> node =
+        If(show).then([] { return Text("Advanced"); });
+
+    auto* ifNode = dynamic_cast<wui::IfNode*>(node.get());
+    expect(ifNode != nullptr, "If builder should yield an IfNode");
+    expect(ifNode->children().empty(), "If should not mount its child while the state is false");
+
+    show.set(true);
+    expect(ifNode->children().size() == 1, "If should mount the child when the state becomes true");
+
+    show.set(false);
+    expect(ifNode->children().empty(), "If should unmount the child when the state becomes false");
+}
+
+void testStructuralForEach()
+{
+    using namespace wui::ui;
+
+    wui::State<std::vector<std::string>> items{{"a", "b"}};
+    std::unique_ptr<wui::Node> node =
+        ForEach<std::string>(items, [](const std::string& label) { return Text(label); });
+
+    auto* list = dynamic_cast<wui::ForEachNode*>(node.get());
+    expect(list != nullptr, "ForEach builder should yield a ForEachNode");
+    expect(list->children().size() == 2, "ForEach should generate one child per item");
+
+    items.set({"a", "b", "c"});
+    expect(list->children().size() == 3, "ForEach should rebuild children when the list changes");
+
+    items.set({});
+    expect(list->children().empty(), "ForEach should clear children for an empty list");
+}
+
 void testTextInputRouting()
 {
     auto input = std::make_unique<wui::TextInput>("Type here");
@@ -175,6 +230,9 @@ int main()
     testTextInputModel();
     testInputRouterAndButton();
     testDeclarativeBuilderAndCounter();
+    testReactiveText();
+    testStructuralIf();
+    testStructuralForEach();
     testTextInputRouting();
     return 0;
 }

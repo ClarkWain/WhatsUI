@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -47,6 +48,12 @@ public:
 
     void appendChild(std::unique_ptr<Node> child);
     [[nodiscard]] std::unique_ptr<Node> removeChild(std::size_t index);
+    void clearChildren();
+
+    // Register a callback that runs when this node is destroyed. Reactive
+    // builders use it to unsubscribe from a State, so a State outliving the
+    // node cannot call into freed memory.
+    void addTeardown(std::function<void()> callback);
 
     [[nodiscard]] virtual SizeF measure(const Constraints& constraints) const = 0;
     virtual void layout(const RectF& bounds);
@@ -90,6 +97,7 @@ protected:
 private:
     Node* parent_{nullptr};
     std::vector<std::unique_ptr<Node>> children_;
+    std::vector<std::function<void()>> teardown_;
     RectF bounds_{};
     DirtyFlags dirtyFlags_{toMask(DirtyFlag::Layout) | toMask(DirtyFlag::Paint)};
 };
