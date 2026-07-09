@@ -30,10 +30,10 @@ void expect(bool condition, const std::string& message)
 
 class FixedMeasurer : public wui::TextMeasurer {
 public:
-    [[nodiscard]] wui::SizeF measureText(const std::string& text, float fontSize) const override
+    [[nodiscard]] wui::TextExtents measureText(const std::string& text, float fontSize) const override
     {
         // Deterministic and distinct from the built-in heuristic.
-        return {static_cast<float>(text.size()) * fontSize, fontSize * 2.0f};
+        return {static_cast<float>(text.size()) * fontSize, fontSize * 2.0f, fontSize * 0.75f};
     }
 };
 

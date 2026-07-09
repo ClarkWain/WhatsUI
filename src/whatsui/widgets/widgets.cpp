@@ -45,7 +45,8 @@ void Text::setValue(std::string value)
 SizeF Text::measure(const Constraints& constraints) const
 {
     if (const TextMeasurer* measurer = textMeasurer()) {
-        return constraints.clamp(measurer->measureText(value_, fontSize_));
+        const TextExtents extents = measurer->measureText(value_, fontSize_);
+        return constraints.clamp({extents.width, extents.height});
     }
     const auto width = static_cast<float>(value_.size()) * (fontSize_ * 0.5f);
     const auto height = fontSize_ * 1.25f;
@@ -55,7 +56,11 @@ SizeF Text::measure(const Constraints& constraints) const
 void Text::paint(PaintContext& context)
 {
     if (!value_.empty()) {
-        context.drawText(value_, bounds().x, bounds().y + fontSize_, fontSize_, Color{32, 32, 32, 255});
+        float baseline = bounds().y + fontSize_ * 0.8f;
+        if (const TextMeasurer* measurer = textMeasurer()) {
+            baseline = bounds().y + measurer->measureText(value_, fontSize_).ascent;
+        }
+        context.drawText(value_, bounds().x, baseline, fontSize_, Color{32, 32, 32, 255});
     }
     clearDirty(DirtyFlag::Paint);
 }

@@ -25,13 +25,22 @@ public:
     {
     }
 
-    [[nodiscard]] SizeF measureText(const std::string& text, float fontSize) const override
+    [[nodiscard]] TextExtents measureText(const std::string& text, float fontSize) const override
     {
         wsc::Paint paint;
         paint.setTextSize(fontSize);
         const wsc::Canvas::TextMetrics metrics = canvas_->measureTextMetrics(text, paint);
-        const float height = metrics.lineHeight > 0.0f ? metrics.lineHeight : metrics.height;
-        return {metrics.width, height};
+        TextExtents extents;
+        extents.width = metrics.width;
+        extents.height = metrics.lineHeight > 0.0f ? metrics.lineHeight : metrics.height;
+        extents.ascent = metrics.ascent >= 0.0f ? metrics.ascent : -metrics.ascent;
+        if (extents.height <= 0.0f) {
+            extents.height = fontSize * 1.25f;
+        }
+        if (extents.ascent <= 0.0f) {
+            extents.ascent = fontSize * 0.8f;
+        }
+        return extents;
     }
 
 private:
