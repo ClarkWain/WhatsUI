@@ -351,6 +351,8 @@ public:
 private:
     void installCallbacks(GLFWwindow* window)
     {
+        auto* pw = GlfwPlatformWindow::fromGlfw(window);
+
         glfwSetCursorPosCallback(window, [](GLFWwindow* w, double x, double y) {
             auto* pw = GlfwPlatformWindow::fromGlfw(w);
             if (!pw) return;
@@ -399,7 +401,6 @@ private:
         glfwSetCharCallback(window, [](GLFWwindow* w, unsigned int codepoint) {
             auto* pw = GlfwPlatformWindow::fromGlfw(w);
             if (!pw) return;
-            // Convert codepoint to UTF-8
             char buf[5] = {};
             if (codepoint < 0x80) {
                 buf[0] = static_cast<char>(codepoint);
@@ -425,9 +426,14 @@ private:
         glfwSetFramebufferSizeCallback(window, [](GLFWwindow* w, int width, int height) {
             auto* pw = GlfwPlatformWindow::fromGlfw(w);
             if (!pw) return;
-            pw->glfwSurface().resize({static_cast<float>(width), static_cast<float>(height)});
+            if (width > 0 && height > 0) {
+                glfwMakeContextCurrent(w);
+                pw->glfwSurface().resize({static_cast<float>(width), static_cast<float>(height)});
+            }
             pw->requestRedraw();
         });
+
+        (void)pw;
     }
 
     std::vector<GlfwPlatformWindow*> windows_;
@@ -482,25 +488,28 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
 
             if (!platformWin.isOpen()) continue;
 
+            // Ensure the GL context is current for this window before rendering
+            auto& glfwSurface = static_cast<GlfwRenderSurface&>(platformWin.surface());
+            GLFWwindow* glfwWinRaw = static_cast<GlfwPlatformWindow*>(&platformWin)->glfwWindow();
+            glfwMakeContextCurrent(glfwWinRaw);
+
             // Flush deferred structural updates
             flushStructuralUpdates();
 
             // Tick animations
-            Ticker::instance().tick(1.0f / 60.0f); // approximate
+            Ticker::instance().tick(1.0f / 60.0f);
 
             // Layout
             auto m = platformWin.metrics();
             win.uiRoot().layout({0.0f, 0.0f, m.logicalSize.width, m.logicalSize.height});
 
             // Paint
-            auto& surface = platformWin.surface();
-            surface.beginFrame();
+            platformWin.surface().beginFrame();
 
-            auto& glfwSurface = static_cast<GlfwRenderSurface&>(surface);
             PaintContext ctx(glfwSurface.canvas(), m.scaleFactor);
             win.uiRoot().paint(ctx);
 
-            surface.endFrame();
+            platformWin.surface().endFrame();
         }
     });
 
