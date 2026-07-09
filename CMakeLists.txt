@@ -49,7 +49,7 @@ if(WHATSUI_WITH_WHATSCANVAS)
 
     add_subdirectory(third_party/WhatsCanvas EXCLUDE_FROM_ALL)
     target_compile_definitions(WhatsUI PUBLIC WHATSUI_HAS_WHATSCANVAS=1)
-    target_link_libraries(WhatsUI PUBLIC WhatsCanvas::Software)
+    target_include_directories(WhatsUI PUBLIC "${WHATSUI_WHATSCANVAS_ROOT}/include")
 endif()
 
 # --- GLFW Platform Backend (requires WhatsCanvas + OpenGL) ---

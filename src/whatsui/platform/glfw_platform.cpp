@@ -1,8 +1,7 @@
 // GLFW platform backend for WhatsUI.
 // Implements PlatformHost, PlatformWindow, and RenderSurface using GLFW + WhatsCanvas OpenGL.
 
-// Include WhatsCanvas headers BEFORE any Windows-polluting headers to avoid
-// macro conflicts (NEAR/FAR from <windows.h> breaking wsc/Path.h).
+// Include wsc BEFORE GLFW to avoid Windows header macro pollution (NEAR/FAR).
 #include <wsc/Canvas.h>
 #include <wsc/Surface.h>
 #include <wsc/wsc.h>
@@ -42,12 +41,12 @@ public:
         canvas_->setSize(fbWidth, fbHeight);
         canvas_->initializeContext();
 
-        wsc::NativeSurface surface;
 #if defined(_WIN32)
+        wsc::NativeSurface surface;
         surface.platform = wsc::NativeSurface::Platform::Win32;
         surface.window = glfwGetWin32Window(window);
-#endif
         canPresent_ = canvas_->setOutputTarget(wsc::OutputTarget::ToWindow(surface));
+#endif
 
         fbSize_ = {static_cast<float>(fbWidth), static_cast<float>(fbHeight)};
     }
@@ -65,7 +64,6 @@ public:
     void beginFrame() override
     {
         canvas_->beginFrame();
-        // Clear background
         canvas_->drawColor(wsc::Color(30, 30, 30));
     }
 
@@ -269,7 +267,6 @@ public:
         if (!glfwInit()) {
             throw std::runtime_error("glfwInit() failed");
         }
-        glLoaded_ = false;
     }
 
     ~GlfwPlatformHost() override
@@ -282,20 +279,13 @@ public:
         const int w = static_cast<int>(logicalSize.width);
         const int h = static_cast<int>(logicalSize.height);
 
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
-#ifdef __APPLE__
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-#endif
-
         GLFWwindow* glfwWindow = glfwCreateWindow(w, h, title.c_str(), nullptr, nullptr);
         if (!glfwWindow) {
-            glfwDefaultWindowHints();
-            throw std::runtime_error("glfwCreateWindow() failed");
+            const char* errMsg = nullptr;
+            glfwGetError(&errMsg);
+            throw std::runtime_error(std::string("glfwCreateWindow() failed: ") + (errMsg ? errMsg : "unknown"));
         }
 
-        glfwDefaultWindowHints();
         glfwMakeContextCurrent(glfwWindow);
         glfwSwapInterval(1);
 
@@ -310,7 +300,6 @@ public:
         auto window = std::make_unique<GlfwPlatformWindow>(glfwWindow, nextWindowId_++);
         window->initSurface();
 
-        // Install GLFW callbacks
         installCallbacks(glfwWindow);
 
         windows_.push_back(window.get());
@@ -490,10 +479,9 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
 
             if (!platformWin.isOpen()) continue;
 
-            // Ensure the GL context is current for this window before rendering
-            auto& glfwSurface = static_cast<GlfwRenderSurface&>(platformWin.surface());
-            GLFWwindow* glfwWinRaw = static_cast<GlfwPlatformWindow*>(&platformWin)->glfwWindow();
-            glfwMakeContextCurrent(glfwWinRaw);
+            // Ensure GL context is current before rendering
+            auto* glfwWin = static_cast<GlfwPlatformWindow*>(&platformWin);
+            glfwMakeContextCurrent(glfwWin->glfwWindow());
 
             // Flush deferred structural updates
             flushStructuralUpdates();
@@ -506,6 +494,7 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
             win.uiRoot().layout({0.0f, 0.0f, m.logicalSize.width, m.logicalSize.height});
 
             // Paint
+            auto& glfwSurface = static_cast<GlfwRenderSurface&>(platformWin.surface());
             platformWin.surface().beginFrame();
 
             PaintContext ctx(glfwSurface.canvas(), m.scaleFactor);
