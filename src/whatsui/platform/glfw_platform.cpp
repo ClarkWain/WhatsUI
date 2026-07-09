@@ -284,16 +284,18 @@ public:
 
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
 #ifdef __APPLE__
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 #endif
 
         GLFWwindow* glfwWindow = glfwCreateWindow(w, h, title.c_str(), nullptr, nullptr);
         if (!glfwWindow) {
+            glfwDefaultWindowHints();
             throw std::runtime_error("glfwCreateWindow() failed");
         }
 
+        glfwDefaultWindowHints();
         glfwMakeContextCurrent(glfwWindow);
         glfwSwapInterval(1);
 
