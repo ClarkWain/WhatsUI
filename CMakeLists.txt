@@ -12,9 +12,11 @@ add_library(WhatsUI
     src/whatsui/core/text_metrics.cpp
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
+    src/whatsui/widgets/button.cpp
+    src/whatsui/widgets/layout.cpp
     src/whatsui/widgets/structural.cpp
+    src/whatsui/widgets/text.cpp
     src/whatsui/widgets/text_input.cpp
-    src/whatsui/widgets/widgets.cpp
 )
 
 add_library(WhatsUI::WhatsUI ALIAS WhatsUI)

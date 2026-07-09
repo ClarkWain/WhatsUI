@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <utility>
 
-#include "wui/text_metrics.h"
-
 namespace wui {
 
 namespace {
@@ -19,78 +17,6 @@ SizeF measureSingleChild(const ContainerNode& node, const Constraints& constrain
 }
 
 } // namespace
-
-Text::Text(std::string value)
-    : value_(std::move(value))
-{
-}
-
-const std::string& Text::value() const noexcept
-{
-    return value_;
-}
-
-Text& Text::value(std::string value)
-{
-    setValue(std::move(value));
-    return *this;
-}
-
-void Text::setValue(std::string value)
-{
-    value_ = std::move(value);
-    markDirty(DirtyFlag::Layout);
-}
-
-SizeF Text::measure(const Constraints& constraints) const
-{
-    if (const TextMeasurer* measurer = textMeasurer()) {
-        const TextExtents extents = measurer->measureText(value_, fontSize_);
-        return constraints.clamp({extents.width, extents.height});
-    }
-    const auto width = static_cast<float>(value_.size()) * (fontSize_ * 0.5f);
-    const auto height = fontSize_ * 1.25f;
-    return constraints.clamp({width, height});
-}
-
-void Text::paint(PaintContext& context)
-{
-    if (!value_.empty()) {
-        float baseline = bounds().y + fontSize_ * 0.8f;
-        if (const TextMeasurer* measurer = textMeasurer()) {
-            baseline = bounds().y + measurer->measureText(value_, fontSize_).ascent;
-        }
-        context.drawText(value_, bounds().x, baseline, fontSize_, Color{32, 32, 32, 255});
-    }
-    clearDirty(DirtyFlag::Paint);
-}
-
-Spacer::Spacer(SizeF size) noexcept
-    : size_(size)
-{
-}
-
-SizeF Spacer::size() const noexcept
-{
-    return size_;
-}
-
-void Spacer::setSize(SizeF size) noexcept
-{
-    size_ = size;
-    markDirty(DirtyFlag::Layout);
-}
-
-SizeF Spacer::measure(const Constraints& constraints) const
-{
-    return constraints.clamp(size_);
-}
-
-void Spacer::paint(PaintContext& context)
-{
-    (void)context;
-    clearDirty(DirtyFlag::Paint);
-}
 
 Container& Container::child(std::unique_ptr<Node> child)
 {
@@ -258,83 +184,6 @@ void Column::layout(const RectF& bounds)
         child->layout({bounds.x + padding_.left, cursorY, childSize.width, childSize.height});
         cursorY += childSize.height + gap_;
     }
-}
-
-Button::Button(std::string label)
-    : label_(std::move(label))
-{
-}
-
-const std::string& Button::label() const noexcept
-{
-    return label_;
-}
-
-Button& Button::label(std::string label)
-{
-    setLabel(std::move(label));
-    return *this;
-}
-
-void Button::setLabel(std::string label)
-{
-    label_ = std::move(label);
-    markDirty(DirtyFlag::Layout);
-}
-
-Button& Button::onClick(ClickHandler handler)
-{
-    onClick_ = std::move(handler);
-    return *this;
-}
-
-SizeF Button::measure(const Constraints& constraints) const
-{
-    const auto textWidth = static_cast<float>(label_.size()) * 8.0f;
-    return constraints.clamp({textWidth + 24.0f, 32.0f});
-}
-
-void Button::paint(PaintContext& context)
-{
-    context.fillRoundRect(bounds(), 8.0f, Color{34, 114, 229, 255});
-    if (!label_.empty()) {
-        context.drawText(label_, bounds().x + 12.0f, bounds().y + 20.0f, 14.0f, Color{255, 255, 255, 255});
-    }
-    ContainerNode::paint(context);
-    clearDirty(DirtyFlag::Paint);
-}
-
-bool Button::onPointerEvent(const PointerEvent& event)
-{
-    switch (event.action) {
-    case PointerAction::Down:
-        if (event.button == MouseButton::Left) {
-            setVisualState(ControlVisualState::Pressed, true);
-            setVisualState(ControlVisualState::Focused, true);
-            return true;
-        }
-        return false;
-    case PointerAction::Up:
-        if (event.button == MouseButton::Left) {
-            const bool shouldClick = (visualStates() & toMask(ControlVisualState::Pressed)) != 0;
-            setVisualState(ControlVisualState::Pressed, false);
-            if (shouldClick && onClick_) {
-                onClick_();
-            }
-            return true;
-        }
-        return false;
-    case PointerAction::Enter:
-    case PointerAction::Move:
-        setVisualState(ControlVisualState::Hovered, true);
-        return true;
-    case PointerAction::Leave:
-        setVisualState(ControlVisualState::Hovered, false);
-        setVisualState(ControlVisualState::Pressed, false);
-        return true;
-    }
-
-    return false;
 }
 
 } // namespace wui
