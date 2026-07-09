@@ -223,6 +223,27 @@ void testStructuralForEach()
     expect(list->children().empty(), "ForEach should clear children for an empty list");
 }
 
+void testLayoutFlexAndAlign()
+{
+    using namespace wui::ui;
+
+    std::unique_ptr<wui::Node> root =
+        Row().align(wui::Alignment::Center).children(
+            Spacer(20.0f, 10.0f),
+            Spacer().flex(1),
+            Spacer(30.0f, 40.0f));
+
+    auto* row = dynamic_cast<wui::Row*>(root.get());
+    expect(row != nullptr, "Builder should yield a Row node");
+    row->layout({0.0f, 0.0f, 200.0f, 40.0f});
+
+    const auto& kids = row->children();
+    expect(kids.size() == 3, "Row should hold three children");
+    expect(kids[0]->bounds().x == 0.0f, "First child sits at the start");
+    expect(kids[2]->bounds().x == 170.0f, "Flex spacer pushes the last child to the end");
+    expect(kids[0]->bounds().y == 15.0f, "Cross-axis Center centers a short child vertically");
+}
+
 void testTextInputRouting()
 {
     auto input = std::make_unique<wui::TextInput>("Type here");
@@ -262,6 +283,7 @@ int main()
     testStructuralIf();
     testStructuralForEach();
     testPluggableTextMeasurement();
+    testLayoutFlexAndAlign();
     testTextInputRouting();
     return 0;
 }

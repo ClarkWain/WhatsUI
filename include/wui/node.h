@@ -86,6 +86,19 @@ public:
         return bounds_;
     }
 
+    // Main-axis flex weight for Row/Column layout. 0 = fixed (measured) size;
+    // >0 = share of the remaining main-axis space, proportional to weight.
+    [[nodiscard]] float flex() const noexcept
+    {
+        return flex_;
+    }
+
+    void setFlex(float flex) noexcept
+    {
+        flex_ = flex;
+        markDirty(DirtyFlag::Layout);
+    }
+
 protected:
     Node() = default;
 
@@ -99,6 +112,7 @@ private:
     std::vector<std::unique_ptr<Node>> children_;
     std::vector<std::function<void()>> teardown_;
     RectF bounds_{};
+    float flex_{0.0f};
     DirtyFlags dirtyFlags_{toMask(DirtyFlag::Layout) | toMask(DirtyFlag::Paint)};
 };
 

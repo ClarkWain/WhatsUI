@@ -66,6 +66,13 @@ public:
         return std::move(self());
     }
 
+    // Main-axis flex weight for Row/Column layout (0 = fixed size).
+    Self&& flex(float weight) &&
+    {
+        node_->setFlex(weight);
+        return std::move(self());
+    }
+
     // Hand ownership to a parent or to setContent().
     std::unique_ptr<Node> intoNode() { return std::move(node_); }
     operator std::unique_ptr<Node>() { return std::move(node_); }
@@ -181,6 +188,12 @@ public:
         node_->setPadding(insets);
         return std::move(self());
     }
+
+    Row&& align(Alignment align) &&
+    {
+        node_->setAlign(align);
+        return std::move(self());
+    }
 };
 
 class Column : public BuilderBase<Column, wui::Column> {
@@ -202,6 +215,12 @@ public:
     Column&& padding(InsetsF insets) &&
     {
         node_->setPadding(insets);
+        return std::move(self());
+    }
+
+    Column&& align(Alignment align) &&
+    {
+        node_->setAlign(align);
         return std::move(self());
     }
 };
@@ -262,6 +281,12 @@ public:
     ForEach<T>&& gap(float gap) &&
     {
         this->node_->setGap(gap);
+        return std::move(this->self());
+    }
+
+    ForEach<T>&& align(Alignment align) &&
+    {
+        this->node_->setAlign(align);
         return std::move(this->self());
     }
 };

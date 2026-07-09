@@ -56,12 +56,17 @@ public:
     void setPadding(InsetsF padding) noexcept;
     [[nodiscard]] InsetsF padding() const noexcept;
 
+    Row& align(Alignment align) noexcept;
+    void setAlign(Alignment align) noexcept;
+    [[nodiscard]] Alignment align() const noexcept;
+
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
 
 private:
     float gap_{0.0f};
     InsetsF padding_{};
+    Alignment align_{Alignment::Start};
 };
 
 class Column : public ContainerNode {
@@ -75,12 +80,17 @@ public:
     void setPadding(InsetsF padding) noexcept;
     [[nodiscard]] InsetsF padding() const noexcept;
 
+    Column& align(Alignment align) noexcept;
+    void setAlign(Alignment align) noexcept;
+    [[nodiscard]] Alignment align() const noexcept;
+
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
 
 private:
     float gap_{0.0f};
     InsetsF padding_{};
+    Alignment align_{Alignment::Start};
 };
 
 class Button : public ControlNode {

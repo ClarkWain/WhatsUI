@@ -56,18 +56,21 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
     return Column()
         .padding(20)
         .gap(12)
+        .align(wui::Alignment::Stretch)
         .children(
             Text("Todo List"),
             Text().bind(todos, summary),
             ForEach<Todo>(todos, [toggle, remove](const Todo& item) {
                 const int id = item.id;
                 return Row()
+                    .align(wui::Alignment::Center)
                     .gap(8)
                     .children(
                         Button(item.done ? "[x]" : "[ ]").onClick([toggle, id] { toggle(id); }),
                         Text(item.done ? ("done: " + item.text) : item.text),
+                        Spacer().flex(1),
                         Button("del").onClick([remove, id] { remove(id); }));
-            }).gap(8));
+            }).gap(8).align(wui::Alignment::Stretch));
 }
 
 } // namespace
