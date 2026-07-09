@@ -52,6 +52,32 @@ if(WHATSUI_WITH_WHATSCANVAS)
     target_link_libraries(WhatsUI PUBLIC WhatsCanvas::Software)
 endif()
 
+# --- GLFW Platform Backend (requires WhatsCanvas + OpenGL) ---
+if(WHATSUI_WITH_WHATSCANVAS)
+    # Include the GLFW helper from WhatsCanvas
+    include("${WHATSUI_WHATSCANVAS_ROOT}/cmake/WhatsCanvasOpenGL.cmake")
+    whatscanvas_add_glfw_dependency("${WHATSUI_WHATSCANVAS_ROOT}")
+
+    add_library(WhatsUIGlfw
+        src/whatsui/platform/glfw_platform.cpp
+    )
+    add_library(WhatsUI::Glfw ALIAS WhatsUIGlfw)
+
+    target_compile_features(WhatsUIGlfw PUBLIC cxx_std_17)
+
+    target_link_libraries(WhatsUIGlfw
+        PUBLIC
+            WhatsUI::WhatsUI
+            WhatsCanvas::OpenGL
+            glfw
+    )
+
+    target_include_directories(WhatsUIGlfw
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+endif()
+
 if(WHATSUI_WITH_WHATSCANVAS AND WHATSUI_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()

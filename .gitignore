@@ -6,3 +6,4 @@ out/
 *.suo
 *.VC.db
 *.VC.opendb
+build_glfw/
