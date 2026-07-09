@@ -15,12 +15,20 @@ public:
     Text& value(std::string value);
     void setValue(std::string value);
 
+    [[nodiscard]] float fontSize() const noexcept;
+    void setFontSize(float size) noexcept;
+
+    void setColor(Color color) noexcept;
+    void clearColor() noexcept;
+
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
 
 private:
     std::string value_;
     float fontSize_{16.0f};
+    Color color_{};
+    bool hasColor_{false};
 };
 
 class Spacer : public Node {
@@ -41,8 +49,18 @@ class Container : public ContainerNode {
 public:
     Container& child(std::unique_ptr<Node> child);
 
+    void setBackground(Color color) noexcept;
+    void setRadius(float radius) noexcept;
+    void setPadding(InsetsF padding) noexcept;
+
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
+    void paint(PaintContext& context) override;
+
+private:
+    Color background_{0, 0, 0, 0};
+    float radius_{0.0f};
+    InsetsF padding_{};
 };
 
 class Row : public ContainerNode {
@@ -93,6 +111,12 @@ private:
     Alignment align_{Alignment::Start};
 };
 
+enum class ButtonVariant {
+    Primary,
+    Ghost,
+    Danger,
+};
+
 class Button : public ControlNode {
 public:
     using ClickHandler = std::function<void()>;
@@ -105,6 +129,9 @@ public:
 
     Button& onClick(ClickHandler handler);
 
+    void setVariant(ButtonVariant variant) noexcept;
+    [[nodiscard]] ButtonVariant variant() const noexcept;
+
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
     bool onPointerEvent(const PointerEvent& event) override;
@@ -112,6 +139,7 @@ public:
 private:
     std::string label_;
     ClickHandler onClick_;
+    ButtonVariant variant_{ButtonVariant::Primary};
 };
 
 } // namespace wui

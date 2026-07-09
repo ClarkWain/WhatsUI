@@ -34,6 +34,17 @@ Button& Button::onClick(ClickHandler handler)
     return *this;
 }
 
+void Button::setVariant(ButtonVariant variant) noexcept
+{
+    variant_ = variant;
+    markDirty(DirtyFlag::Paint);
+}
+
+ButtonVariant Button::variant() const noexcept
+{
+    return variant_;
+}
+
 SizeF Button::measure(const Constraints& constraints) const
 {
     const auto textWidth = static_cast<float>(label_.size()) * 8.0f;
@@ -44,14 +55,27 @@ void Button::paint(PaintContext& context)
 {
     const Theme& current = theme();
     Color background = current.colors.accent;
+    Color foreground = current.colors.onAccent;
+    switch (variant_) {
+    case ButtonVariant::Danger:
+        background = current.colors.danger;
+        break;
+    case ButtonVariant::Ghost:
+        background = current.colors.surfaceAlt;
+        foreground = current.colors.text;
+        break;
+    case ButtonVariant::Primary:
+    default:
+        break;
+    }
     if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) {
         background = scaleColor(background, 0.85f);
     } else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) {
-        background = scaleColor(background, 1.10f);
+        background = scaleColor(background, 1.08f);
     }
     context.fillRoundRect(bounds(), current.radius.md, background);
     if (!label_.empty()) {
-        context.drawText(label_, bounds().x + 12.0f, bounds().y + 20.0f, 14.0f, current.colors.onAccent);
+        context.drawText(label_, bounds().x + 12.0f, bounds().y + 20.0f, 14.0f, foreground);
     }
     ContainerNode::paint(context);
     clearDirty(DirtyFlag::Paint);

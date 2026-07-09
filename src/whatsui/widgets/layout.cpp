@@ -6,28 +6,37 @@
 
 namespace wui {
 
-namespace {
-
-SizeF measureSingleChild(const ContainerNode& node, const Constraints& constraints)
-{
-    const auto& children = node.children();
-    if (children.empty()) {
-        return constraints.clamp({0.0f, 0.0f});
-    }
-    return constraints.clamp(children.front()->measure(constraints));
-}
-
-} // namespace
-
 Container& Container::child(std::unique_ptr<Node> child)
 {
     appendChild(std::move(child));
     return *this;
 }
 
+void Container::setBackground(Color color) noexcept
+{
+    background_ = color;
+    markDirty(DirtyFlag::Paint);
+}
+
+void Container::setRadius(float radius) noexcept
+{
+    radius_ = radius;
+    markDirty(DirtyFlag::Paint);
+}
+
+void Container::setPadding(InsetsF padding) noexcept
+{
+    padding_ = padding;
+    markDirty(DirtyFlag::Layout);
+}
+
 SizeF Container::measure(const Constraints& constraints) const
 {
-    return measureSingleChild(*this, constraints);
+    SizeF child{0.0f, 0.0f};
+    if (!children().empty()) {
+        child = children().front()->measure(constraints);
+    }
+    return constraints.clamp({child.width + padding_.horizontal(), child.height + padding_.vertical()});
 }
 
 void Container::layout(const RectF& bounds)
@@ -35,8 +44,20 @@ void Container::layout(const RectF& bounds)
     Node::layout(bounds);
     const auto& childNodes = children();
     if (!childNodes.empty()) {
-        childNodes.front()->layout(bounds);
+        childNodes.front()->layout({bounds.x + padding_.left,
+                                    bounds.y + padding_.top,
+                                    std::max(0.0f, bounds.width - padding_.horizontal()),
+                                    std::max(0.0f, bounds.height - padding_.vertical())});
     }
+}
+
+void Container::paint(PaintContext& context)
+{
+    if (background_.a > 0) {
+        context.fillRoundRect(bounds(), radius_, background_);
+    }
+    ContainerNode::paint(context);
+    clearDirty(DirtyFlag::Paint);
 }
 
 Row& Row::child(std::unique_ptr<Node> child)

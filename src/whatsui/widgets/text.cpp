@@ -29,6 +29,30 @@ void Text::setValue(std::string value)
     markDirty(DirtyFlag::Layout);
 }
 
+float Text::fontSize() const noexcept
+{
+    return fontSize_;
+}
+
+void Text::setFontSize(float size) noexcept
+{
+    fontSize_ = size;
+    markDirty(DirtyFlag::Layout);
+}
+
+void Text::setColor(Color color) noexcept
+{
+    color_ = color;
+    hasColor_ = true;
+    markDirty(DirtyFlag::Paint);
+}
+
+void Text::clearColor() noexcept
+{
+    hasColor_ = false;
+    markDirty(DirtyFlag::Paint);
+}
+
 SizeF Text::measure(const Constraints& constraints) const
 {
     if (const TextMeasurer* measurer = textMeasurer()) {
@@ -47,7 +71,8 @@ void Text::paint(PaintContext& context)
         if (const TextMeasurer* measurer = textMeasurer()) {
             baseline = bounds().y + measurer->measureText(value_, fontSize_).ascent;
         }
-        context.drawText(value_, bounds().x, baseline, fontSize_, theme().colors.text);
+        const Color color = hasColor_ ? color_ : theme().colors.text;
+        context.drawText(value_, bounds().x, baseline, fontSize_, color);
     }
     clearDirty(DirtyFlag::Paint);
 }

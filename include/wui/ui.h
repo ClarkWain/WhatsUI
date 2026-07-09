@@ -100,6 +100,18 @@ public:
         return std::move(self());
     }
 
+    Text&& size(float fontSize) &&
+    {
+        node_->setFontSize(fontSize);
+        return std::move(self());
+    }
+
+    Text&& color(Color color) &&
+    {
+        node_->setColor(color);
+        return std::move(self());
+    }
+
     // Reactive: re-render the text whenever the observable source (State or
     // Computed) changes.
     template <class Observable, class Format>
@@ -124,6 +136,30 @@ public:
 class Box : public BuilderBase<Box, wui::Container> {
 public:
     Box() : BuilderBase() {}
+
+    Box&& background(Color color) &&
+    {
+        node_->setBackground(color);
+        return std::move(self());
+    }
+
+    Box&& radius(float radius) &&
+    {
+        node_->setRadius(radius);
+        return std::move(self());
+    }
+
+    Box&& padding(InsetsF padding) &&
+    {
+        node_->setPadding(padding);
+        return std::move(self());
+    }
+
+    Box&& padding(float all) &&
+    {
+        node_->setPadding(InsetsF{all, all, all, all});
+        return std::move(self());
+    }
 };
 
 class Spacer : public BuilderBase<Spacer, wui::Spacer> {
@@ -164,6 +200,12 @@ public:
     Button&& onClick(std::function<void()> handler) &&
     {
         node_->onClick(std::move(handler));
+        return std::move(self());
+    }
+
+    Button&& variant(wui::ButtonVariant variant) &&
+    {
+        node_->setVariant(variant);
         return std::move(self());
     }
 };

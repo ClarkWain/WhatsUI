@@ -43,6 +43,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                        std::function<void(int)> remove)
 {
     using namespace wui::ui;
+    const wui::Theme& t = wui::theme();
 
     auto summary = [](const std::vector<Todo>& items) {
         int done = 0;
@@ -51,27 +52,36 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                 ++done;
             }
         }
-        return std::to_string(done) + " / " + std::to_string(items.size()) + " done";
+        return std::to_string(done) + " of " + std::to_string(items.size()) + " done";
     };
 
     return Column()
-        .padding(20)
-        .gap(12)
+        .padding(wui::InsetsF{24.0f, 24.0f, 24.0f, 24.0f})
+        .gap(14.0f)
         .align(wui::Alignment::Stretch)
         .children(
-            Text("Todo List"),
-            Text().bind(todos, summary),
-            ForEach<Todo>(todos, [toggle, remove](const Todo& item) {
+            Text("Todo").size(26.0f),
+            Text().bind(todos, summary).size(14.0f).color(t.colors.textMuted),
+            ForEach<Todo>(todos, [toggle, remove, t](const Todo& item) {
                 const int id = item.id;
-                return Row()
-                    .align(wui::Alignment::Center)
-                    .gap(8)
+                return Box()
+                    .background(t.colors.surfaceAlt)
+                    .radius(t.radius.md)
+                    .padding(wui::InsetsF{12.0f, 8.0f, 12.0f, 8.0f})
                     .children(
-                        Button(item.done ? "[x]" : "[ ]").onClick([toggle, id] { toggle(id); }),
-                        Text(item.done ? ("done: " + item.text) : item.text),
-                        Spacer().flex(1),
-                        Button("del").onClick([remove, id] { remove(id); }));
-            }).gap(8).align(wui::Alignment::Stretch));
+                        Row()
+                            .align(wui::Alignment::Center)
+                            .gap(10.0f)
+                            .children(
+                                Button(item.done ? "[x]" : "[ ]")
+                                    .variant(wui::ButtonVariant::Ghost)
+                                    .onClick([toggle, id] { toggle(id); }),
+                                Text(item.text).color(item.done ? t.colors.textMuted : t.colors.text),
+                                Spacer().flex(1),
+                                Button("del")
+                                    .variant(wui::ButtonVariant::Danger)
+                                    .onClick([remove, id] { remove(id); })));
+            }).gap(10.0f).align(wui::Alignment::Stretch));
 }
 
 } // namespace
