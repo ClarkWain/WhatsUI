@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include "wui/theme.h"
+
 namespace wui {
 
 Button::Button(std::string label)
@@ -40,9 +42,16 @@ SizeF Button::measure(const Constraints& constraints) const
 
 void Button::paint(PaintContext& context)
 {
-    context.fillRoundRect(bounds(), 8.0f, Color{34, 114, 229, 255});
+    const Theme& current = theme();
+    Color background = current.colors.accent;
+    if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) {
+        background = scaleColor(background, 0.85f);
+    } else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) {
+        background = scaleColor(background, 1.10f);
+    }
+    context.fillRoundRect(bounds(), current.radius.md, background);
     if (!label_.empty()) {
-        context.drawText(label_, bounds().x + 12.0f, bounds().y + 20.0f, 14.0f, Color{255, 255, 255, 255});
+        context.drawText(label_, bounds().x + 12.0f, bounds().y + 20.0f, 14.0f, current.colors.onAccent);
     }
     ContainerNode::paint(context);
     clearDirty(DirtyFlag::Paint);

@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "wui/text_metrics.h"
+#include "wui/theme.h"
 
 namespace wui {
 
@@ -46,7 +47,7 @@ void Text::paint(PaintContext& context)
         if (const TextMeasurer* measurer = textMeasurer()) {
             baseline = bounds().y + measurer->measureText(value_, fontSize_).ascent;
         }
-        context.drawText(value_, bounds().x, baseline, fontSize_, Color{32, 32, 32, 255});
+        context.drawText(value_, bounds().x, baseline, fontSize_, theme().colors.text);
     }
     clearDirty(DirtyFlag::Paint);
 }

@@ -11,6 +11,7 @@
 #include "wui/structural.h"
 #include "wui/text_input.h"
 #include "wui/text_metrics.h"
+#include "wui/theme.h"
 #include "wui/types.h"
 #include "wui/ui.h"
 #include "wui/whatscanvas_text.h"

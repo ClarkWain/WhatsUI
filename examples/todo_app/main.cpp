@@ -21,6 +21,7 @@
 #include "wsc/Canvas.h"
 
 #include "wui/paint_context.h"
+#include "wui/theme.h"
 #include "wui/ui.h"
 #include "wui/whatscanvas_text.h"
 
@@ -122,6 +123,7 @@ int main()
         root->layout({0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
         canvas->beginFrame();
         wui::PaintContext paint(*canvas);
+        paint.fillRect({0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)}, wui::theme().colors.surface);
         root->paint(paint);
         canvas->endFrame();
         const std::string path = "todo_frame_" + std::to_string(frame++) + ".ppm";

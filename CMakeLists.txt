@@ -11,6 +11,7 @@ add_library(WhatsUI
     src/whatsui/core/node.cpp
     src/whatsui/core/scheduler.cpp
     src/whatsui/core/text_metrics.cpp
+    src/whatsui/core/theme.cpp
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
     src/whatsui/widgets/button.cpp

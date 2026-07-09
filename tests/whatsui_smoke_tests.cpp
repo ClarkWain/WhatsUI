@@ -195,6 +195,17 @@ void testComputed()
     expect(observed == 13, "Computed should notify its own observers on change");
 }
 
+void testTheme()
+{
+    wui::Theme custom;
+    custom.colors.accent = wui::Color{10, 20, 30, 255};
+    wui::setTheme(custom);
+    expect(wui::theme().colors.accent.r == 10, "setTheme should install the theme");
+
+    wui::setTheme(wui::Theme{});
+    expect(wui::theme().colors.accent.r == 34, "default theme accent should be restored");
+}
+
 void testStructuralIf()
 {
     using namespace wui::ui;
@@ -295,6 +306,7 @@ int main()
     testDeclarativeBuilderAndCounter();
     testReactiveText();
     testComputed();
+    testTheme();
     testStructuralIf();
     testStructuralForEach();
     testPluggableTextMeasurement();
