@@ -181,6 +181,20 @@ void testReactiveText()
     expect(text->value() == "Count: 5", "Reactive Text should update when the bound state changes");
 }
 
+void testComputed()
+{
+    wui::State<int> a{2};
+    wui::State<int> b{3};
+    wui::Computed<int> sum([&a, &b] { return a.get() + b.get(); }, a, b);
+    expect(sum.get() == 5, "Computed should hold the initial derived value");
+
+    int observed = 0;
+    sum.subscribe([&observed](const int& value) { observed = value; });
+    a.set(10);
+    expect(sum.get() == 13, "Computed should recompute when a source State changes");
+    expect(observed == 13, "Computed should notify its own observers on change");
+}
+
 void testStructuralIf()
 {
     using namespace wui::ui;
@@ -280,6 +294,7 @@ int main()
     testInputRouterAndButton();
     testDeclarativeBuilderAndCounter();
     testReactiveText();
+    testComputed();
     testStructuralIf();
     testStructuralForEach();
     testPluggableTextMeasurement();

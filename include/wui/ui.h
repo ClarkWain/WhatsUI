@@ -100,16 +100,17 @@ public:
         return std::move(self());
     }
 
-    // Reactive: re-render the text whenever `state` changes.
-    template <class T, class Format>
-    Text&& bind(wui::State<T>& state, Format format) &&
+    // Reactive: re-render the text whenever the observable source (State or
+    // Computed) changes.
+    template <class Observable, class Format>
+    Text&& bind(Observable& source, Format format) &&
     {
         wui::Text* raw = node_.get();
-        raw->setValue(format(state.get()));
-        const auto id = state.subscribe([raw, format](const T& value) {
+        raw->setValue(format(source.get()));
+        const auto id = source.subscribe([raw, format](const auto& value) {
             raw->setValue(format(value));
         });
-        raw->addTeardown([&state, id] { state.unsubscribe(id); });
+        raw->addTeardown([&source, id] { source.unsubscribe(id); });
         return std::move(self());
     }
 
