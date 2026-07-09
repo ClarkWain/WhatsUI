@@ -9,6 +9,7 @@ option(WHATSUI_BUILD_EXAMPLES "Build WhatsUI examples (requires WHATSUI_WITH_WHA
 add_library(WhatsUI
     src/whatsui/core/app.cpp
     src/whatsui/core/node.cpp
+    src/whatsui/core/scheduler.cpp
     src/whatsui/core/text_metrics.cpp
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp

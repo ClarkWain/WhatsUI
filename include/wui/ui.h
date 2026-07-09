@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "wui/node.h"
+#include "wui/scheduler.h"
 #include "wui/state.h"
 #include "wui/structural.h"
 #include "wui/text_input.h"
@@ -224,7 +225,9 @@ public:
         });
         raw->setVisible(state_->get());
         wui::State<bool>* state = state_;
-        const auto id = state->subscribe([raw](const bool& visible) { raw->setVisible(visible); });
+        const auto id = state->subscribe([raw, state](const bool&) {
+            wui::scheduleStructuralUpdate(raw, [raw, state] { raw->setVisible(state->get()); });
+        });
         raw->addTeardown([state, id] { state->unsubscribe(id); });
         return std::move(self());
     }
@@ -250,7 +253,9 @@ public:
         };
         rebuild();
         wui::State<std::vector<T>>* state = &items;
-        const auto id = state->subscribe([rebuild](const std::vector<T>&) { rebuild(); });
+        const auto id = state->subscribe([raw, rebuild](const std::vector<T>&) {
+            wui::scheduleStructuralUpdate(raw, [rebuild] { rebuild(); });
+        });
         raw->addTeardown([state, id] { state->unsubscribe(id); });
     }
 

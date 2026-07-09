@@ -34,6 +34,18 @@ auto list = ForEach<std::string>(items, [](const std::string& s){ return Text(s)
 
 对应节点：`wui::IfNode`（挂载/卸载单个子树）、`wui::ForEachNode`（复用 `Column` 的纵向布局）。
 
+### 2.1 延迟失效（帧调度）
+
+结构变化（If 挂载/卸载、ForEach 重建）**不在** `State` 通知里同步执行，而是通过调度器排队、在**帧边界统一 flush**（架构 §8 帧管线 / §11.7 更新规则）：
+
+- `wui::scheduleStructuralUpdate(key, action)`：按 `key`（通常是节点指针）**合并**排队。
+- `wui::flushStructuralUpdates()`：每帧 layout 前调用一次，执行并清空队列。
+
+这样做的关键收益：**事件处理器可以安全地修改 `State`**。若结构重建同步发生在按钮自己的 `onClick` 里，会立刻销毁正在执行的那个按钮（自毁）；延迟到 flush 后，处理器先安全返回，再统一重建。宿主的帧循环应为：`flushStructuralUpdates → layout → paint → present`。
+
+（`Text().bind` 的文本更新是纯属性写入，不改树，仍同步生效。）
+
+
 ## 3. 可插拔文本测量
 
 文本布局不再依赖硬编码字符启发式，而是走 `TextMeasurer` 接口：

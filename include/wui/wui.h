@@ -6,6 +6,7 @@
 #include "wui/paint_context.h"
 #include "wui/platform.h"
 #include "wui/runtime.h"
+#include "wui/scheduler.h"
 #include "wui/state.h"
 #include "wui/structural.h"
 #include "wui/text_input.h"

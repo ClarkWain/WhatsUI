@@ -194,9 +194,11 @@ void testStructuralIf()
     expect(ifNode->children().empty(), "If should not mount its child while the state is false");
 
     show.set(true);
+    wui::flushStructuralUpdates();
     expect(ifNode->children().size() == 1, "If should mount the child when the state becomes true");
 
     show.set(false);
+    wui::flushStructuralUpdates();
     expect(ifNode->children().empty(), "If should unmount the child when the state becomes false");
 }
 
@@ -213,9 +215,11 @@ void testStructuralForEach()
     expect(list->children().size() == 2, "ForEach should generate one child per item");
 
     items.set({"a", "b", "c"});
+    wui::flushStructuralUpdates();
     expect(list->children().size() == 3, "ForEach should rebuild children when the list changes");
 
     items.set({});
+    wui::flushStructuralUpdates();
     expect(list->children().empty(), "ForEach should clear children for an empty list");
 }
 
