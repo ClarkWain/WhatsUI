@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "wui/text_metrics.h"
+
 namespace wui {
 
 namespace {
@@ -42,6 +44,9 @@ void Text::setValue(std::string value)
 
 SizeF Text::measure(const Constraints& constraints) const
 {
+    if (const TextMeasurer* measurer = textMeasurer()) {
+        return constraints.clamp(measurer->measureText(value_, fontSize_));
+    }
     const auto width = static_cast<float>(value_.size()) * (fontSize_ * 0.5f);
     const auto height = fontSize_ * 1.25f;
     return constraints.clamp({width, height});

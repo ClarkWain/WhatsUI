@@ -8,6 +8,7 @@ option(WHATSUI_BUILD_TESTS "Build WhatsUI tests" ON)
 add_library(WhatsUI
     src/whatsui/core/app.cpp
     src/whatsui/core/node.cpp
+    src/whatsui/core/text_metrics.cpp
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
     src/whatsui/widgets/structural.cpp

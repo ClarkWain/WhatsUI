@@ -28,6 +28,30 @@ void expect(bool condition, const std::string& message)
     }
 }
 
+class FixedMeasurer : public wui::TextMeasurer {
+public:
+    [[nodiscard]] wui::SizeF measureText(const std::string& text, float fontSize) const override
+    {
+        // Deterministic and distinct from the built-in heuristic.
+        return {static_cast<float>(text.size()) * fontSize, fontSize * 2.0f};
+    }
+};
+
+void testPluggableTextMeasurement()
+{
+    FixedMeasurer measurer;
+    wui::setTextMeasurer(&measurer);
+
+    wui::Text text{"abcd"};
+    const auto measured = text.measure(wui::Constraints{});
+    expect(measured.width == 4.0f * 16.0f, "Text::measure should use the installed measurer's width");
+    expect(measured.height == 32.0f, "Text::measure should use the installed measurer's height");
+
+    wui::setTextMeasurer(nullptr);
+    const auto fallback = text.measure(wui::Constraints{});
+    expect(fallback.width == 4.0f * 8.0f, "Text::measure should fall back to the heuristic without a measurer");
+}
+
 void testState()
 {
     wui::State<int> state{1};
@@ -233,6 +257,7 @@ int main()
     testReactiveText();
     testStructuralIf();
     testStructuralForEach();
+    testPluggableTextMeasurement();
     testTextInputRouting();
     return 0;
 }
