@@ -1,0 +1,33 @@
+{
+    "configurations": [
+        {
+            "name": "WhatsUI (GLFW)",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/third_party/WhatsCanvas/include",
+                "${workspaceFolder}/third_party/WhatsCanvas/third_party/glad/include",
+                "${workspaceFolder}/third_party/WhatsCanvas/third_party/glm",
+                "${workspaceFolder}/third_party/WhatsCanvas/third_party/glfw/include"
+            ],
+            "defines": [
+                "WHATSUI_HAS_WHATSCANVAS=1"
+            ],
+            "intelliSenseMode": "windows-msvc-x64",
+            "cStandard": "c17",
+            "cppStandard": "c++17"
+        },
+        {
+            "name": "WhatsUI (Baseline)",
+            "includePath": [
+                "${workspaceFolder}/include"
+            ],
+            "defines": [],
+            "intelliSenseMode": "windows-msvc-x64",
+            "cStandard": "c17",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}
+
+
