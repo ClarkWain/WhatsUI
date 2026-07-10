@@ -28,10 +28,26 @@ public:
     [[nodiscard]] OverlayHost& overlayHost() noexcept;
     [[nodiscard]] const OverlayHost& overlayHost() const noexcept;
 
-    void setRoot(std::unique_ptr<Node> root) noexcept;
+    void setRoot(std::unique_ptr<Node> root);
     [[nodiscard]] Node* root() const noexcept;
 
+    // Window-level frame pipeline. update() commits deferred structural state;
+    // layout() synchronizes page and overlay geometry; paint() preserves z-order.
+    void update();
+    void layout();
+    void prepare(PaintContext& context);
+    void paint(PaintContext& context);
+
+    // Window-level input routing keeps overlays above the active page.
+    bool dispatchPointer(const PointerEvent& event);
+    bool dispatchKey(const KeyEvent& event);
+    bool dispatchTextInput(const TextInputEvent& event);
+    bool dispatchComposition(const CompositionInputEvent& event);
+
 private:
+    void syncActiveRoot(Node* navigationRoot = nullptr) noexcept;
+    [[nodiscard]] Node* hitTest(PointF point) const;
+
     std::unique_ptr<PlatformWindow> platformWindow_;
     UiRoot uiRoot_;
     FocusManager focusManager_;

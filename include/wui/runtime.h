@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,15 +18,18 @@ enum class PageRetention {
 class UiRoot {
 public:
     void setContent(std::unique_ptr<Node> content) noexcept;
+    void setBorrowedContent(Node* content) noexcept;
     [[nodiscard]] Node* content() const noexcept;
 
     void layout(const RectF& bounds);
+    void prepare(PaintContext& context);
     void paint(PaintContext& context);
 
     [[nodiscard]] const RectF& bounds() const noexcept;
 
 private:
-    std::unique_ptr<Node> content_;
+    std::unique_ptr<Node> ownedContent_;
+    Node* content_{nullptr};
     RectF bounds_{};
 };
 
@@ -33,16 +37,24 @@ struct PageEntry {
     std::string key;
     PageRetention retention{PageRetention::KeepAlive};
     std::unique_ptr<Node> content;
+    std::function<std::unique_ptr<Node>()> factory;
 };
 
 class Navigator {
 public:
+    using ChangeHandler = std::function<void(Node*)>;
+    using PageFactory = std::function<std::unique_ptr<Node>()>;
+
+    void setOnChange(ChangeHandler handler);
     void setRoot(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
+    void setRoot(std::string key, PageFactory factory, PageRetention retention);
     void push(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
+    void push(std::string key, PageFactory factory, PageRetention retention);
     void replace(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
+    void replace(std::string key, PageFactory factory, PageRetention retention);
     [[nodiscard]] std::unique_ptr<Node> pop();
     void popToRoot();
-    void clear() noexcept;
+    void clear();
 
     [[nodiscard]] bool empty() const noexcept;
     [[nodiscard]] bool canPop() const noexcept;
@@ -53,7 +65,12 @@ public:
     [[nodiscard]] const std::vector<PageEntry>& pages() const noexcept;
 
 private:
+    void hideCurrent();
+    void activateCurrent();
+    void notifyChanged();
+
     std::vector<PageEntry> stack_;
+    ChangeHandler onChange_;
 };
 
 using OverlayId = std::size_t;
@@ -69,7 +86,10 @@ public:
     [[nodiscard]] std::unique_ptr<Node> dismiss(OverlayId id);
     [[nodiscard]] std::unique_ptr<Node> dismissTop();
     void clear() noexcept;
+    void layout(const RectF& bounds);
+    void prepare(PaintContext& context);
     void paint(PaintContext& context);
+    [[nodiscard]] Node* hitTest(PointF point) const;
 
     [[nodiscard]] bool empty() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;

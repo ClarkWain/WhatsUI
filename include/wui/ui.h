@@ -106,6 +106,12 @@ public:
         return std::move(self());
     }
 
+    Text&& lineHeight(float height) &&
+    {
+        node_->setLineHeight(height);
+        return std::move(self());
+    }
+
     Text&& color(Color color) &&
     {
         node_->setColor(color);
@@ -130,6 +136,34 @@ public:
     Text&& bind(wui::State<std::string>& state) &&
     {
         return std::move(*this).bind(state, [](const std::string& value) { return value; });
+    }
+};
+
+class Image : public BuilderBase<Image, wui::Image> {
+public:
+    Image() : BuilderBase() {}
+
+    Image(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
+        : BuilderBase(std::move(rgbaPixels), pixelWidth, pixelHeight)
+    {
+    }
+
+    Image&& source(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight) &&
+    {
+        node_->setSource(std::move(rgbaPixels), pixelWidth, pixelHeight);
+        return std::move(self());
+    }
+
+    Image&& fit(wui::ImageFit fit) &&
+    {
+        node_->setFit(fit);
+        return std::move(self());
+    }
+
+    Image&& align(float x, float y) &&
+    {
+        node_->setAlignment(x, y);
+        return std::move(self());
     }
 };
 
@@ -158,6 +192,24 @@ public:
     Box&& padding(float all) &&
     {
         node_->setPadding(InsetsF{all, all, all, all});
+        return std::move(self());
+    }
+
+    Box&& contentAlign(Alignment horizontal, Alignment vertical) &&
+    {
+        node_->setContentAlignment(horizontal, vertical);
+        return std::move(self());
+    }
+
+    Box&& width(float width) &&
+    {
+        node_->setWidth(width);
+        return std::move(self());
+    }
+
+    Box&& height(float height) &&
+    {
+        node_->setHeight(height);
         return std::move(self());
     }
 };

@@ -60,9 +60,25 @@ struct Constraints {
 
     [[nodiscard]] SizeF clamp(SizeF size) const noexcept
     {
+        const float safeMinWidth = std::max(0.0f, minWidth);
+        const float safeMinHeight = std::max(0.0f, minHeight);
+        const float safeMaxWidth = std::max(safeMinWidth, maxWidth);
+        const float safeMaxHeight = std::max(safeMinHeight, maxHeight);
         return {
-            std::clamp(size.width, minWidth, maxWidth),
-            std::clamp(size.height, minHeight, maxHeight),
+            std::clamp(std::max(0.0f, size.width), safeMinWidth, safeMaxWidth),
+            std::clamp(std::max(0.0f, size.height), safeMinHeight, safeMaxHeight),
+        };
+    }
+
+    [[nodiscard]] Constraints deflate(InsetsF insets) const noexcept
+    {
+        const float horizontal = std::max(0.0f, insets.horizontal());
+        const float vertical = std::max(0.0f, insets.vertical());
+        return {
+            std::max(0.0f, minWidth - horizontal),
+            std::max(0.0f, maxWidth - horizontal),
+            std::max(0.0f, minHeight - vertical),
+            std::max(0.0f, maxHeight - vertical),
         };
     }
 };
@@ -87,6 +103,7 @@ enum class Alignment {
     Center,
     End,
     Stretch,
+    Baseline,
 };
 
 enum class CanvasBackend {

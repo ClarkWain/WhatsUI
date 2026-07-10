@@ -253,6 +253,104 @@ void testContainerSingleChild()
     expect(approx(pChild->bounds().y, 20.0f), "Container child should get parent bounds y");
 }
 
+void testRowLayoutAlignBaseline()
+{
+    wui::setTextMeasurer(nullptr);
+    wui::Row row;
+    row.setAlign(wui::Alignment::Baseline);
+    auto large = std::make_unique<wui::Text>("Title");
+    large->setFontSize(24.0f);
+    large->setLineHeight(32.0f);
+    auto small = std::make_unique<wui::Text>("Meta");
+    small->setFontSize(12.0f);
+    small->setLineHeight(18.0f);
+    auto* pLarge = large.get();
+    auto* pSmall = small.get();
+    row.appendChild(std::move(large));
+    row.appendChild(std::move(small));
+    row.layout({0.0f, 0.0f, 200.0f, 40.0f});
+    expect(approx(pLarge->bounds().y + pLarge->baselineOffset(),
+                  pSmall->bounds().y + pSmall->baselineOffset()),
+           "Baseline Row should align different text sizes");
+}
+
+void testContainerOverlaysAllChildren()
+{
+    wui::Container container;
+    container.setPadding({5.0f, 10.0f, 15.0f, 20.0f});
+    auto small = std::make_unique<wui::Spacer>(wui::SizeF{30.0f, 40.0f});
+    auto large = std::make_unique<wui::Spacer>(wui::SizeF{80.0f, 60.0f});
+    auto* pSmall = small.get();
+    auto* pLarge = large.get();
+    container.appendChild(std::move(small));
+    container.appendChild(std::move(large));
+
+    const auto size = container.measure({0.0f, 200.0f, 0.0f, 200.0f});
+    expect(approx(size.width, 100.0f), "Container width should use widest child plus horizontal padding");
+    expect(approx(size.height, 90.0f), "Container height should use tallest child plus vertical padding");
+
+    container.layout({10.0f, 20.0f, 120.0f, 100.0f});
+    for (const auto* child : {static_cast<wui::Node*>(pSmall), static_cast<wui::Node*>(pLarge)}) {
+        expect(approx(child->bounds().x, 15.0f), "Every Container child should share the padded x");
+        expect(approx(child->bounds().y, 30.0f), "Every Container child should share the padded y");
+        expect(approx(child->bounds().width, 100.0f), "Every Container child should fill padded width");
+        expect(approx(child->bounds().height, 70.0f), "Every Container child should fill padded height");
+    }
+}
+
+void testImageIntrinsicMeasurement()
+{
+    std::vector<unsigned char> pixels(4u * 3u * 2u, 255u);
+    wui::Image image(std::move(pixels), 3, 2);
+
+    expect(image.hasSource(), "Image should report a valid RGBA source");
+    expect(approx(image.intrinsicSize().width, 3.0f), "Image intrinsic width should use pixel width");
+    expect(approx(image.intrinsicSize().height, 2.0f), "Image intrinsic height should use pixel height");
+    const auto constrained = image.measure({0.0f, 2.0f, 0.0f, 1.0f});
+    expect(approx(constrained.width, 2.0f), "Image measurement should clamp width");
+    expect(approx(constrained.height, 1.0f), "Image measurement should clamp height");
+
+    image.setAlignment(-1.0f, 2.0f);
+    expect(approx(image.alignment().x, 0.0f) && approx(image.alignment().y, 1.0f),
+           "Image alignment should clamp to normalized coordinates");
+}
+
+void testTextMeasurementBaselineAndHitTest()
+{
+    wui::setTextMeasurer(nullptr);
+    wui::Text text("Hello");
+    text.setFontSize(20.0f);
+    text.setLineHeight(30.0f);
+
+    const auto size = text.measure({0.0f, 200.0f, 0.0f, 100.0f});
+    expect(approx(size.width, 50.0f), "Text fallback width should be deterministic");
+    expect(approx(size.height, 30.0f), "Text should honor its explicit line height");
+    expect(approx(text.baselineOffset(), 21.0f), "Text baseline should center glyph metrics in line height");
+
+    text.layout({10.0f, 20.0f, size.width, size.height});
+    expect(text.hitTest({10.0f, 20.0f}) == &text, "Text should hit test inside its laid-out bounds");
+    expect(text.hitTest({9.0f, 20.0f}) == nullptr, "Text should reject points outside its bounds");
+}
+
+void testFoundationalContainerHitTestOrder()
+{
+    wui::Container container;
+    auto back = std::make_unique<wui::Column>();
+    back->appendChild(std::make_unique<wui::Text>("Back"));
+    auto front = std::make_unique<wui::Row>();
+    auto image = std::make_unique<wui::Image>(std::vector<unsigned char>(4u, 255u), 1, 1);
+    auto* frontImage = image.get();
+    front->appendChild(std::move(image));
+    container.appendChild(std::move(back));
+    container.appendChild(std::move(front));
+
+    container.layout({0.0f, 0.0f, 80.0f, 40.0f});
+    expect(container.hitTest({0.5f, 0.5f}) == frontImage,
+           "Overlapping foundational widgets should hit test in reverse paint order");
+    expect(container.hitTest({81.0f, 1.0f}) == nullptr,
+           "Foundational widget tree should reject points outside its root bounds");
+}
+
 // --- Row layout with gap + flex ---
 
 void testRowGapWithFlex()
@@ -279,6 +377,41 @@ void testRowGapWithFlex()
            "Last fixed child should be positioned after flex+gaps");
 }
 
+void testConstraintsDeflate()
+{
+    const wui::Constraints constraints{20.0f, 100.0f, 30.0f, 90.0f};
+    const auto inner = constraints.deflate({5.0f, 10.0f, 15.0f, 20.0f});
+    expect(approx(inner.minWidth, 0.0f) && approx(inner.maxWidth, 80.0f),
+           "Deflated constraints should remove horizontal insets");
+    expect(approx(inner.minHeight, 0.0f) && approx(inner.maxHeight, 60.0f),
+           "Deflated constraints should remove vertical insets");
+}
+
+void testContainerContentAlignment()
+{
+    wui::Container container;
+    container.setContentAlignment(wui::Alignment::Center, wui::Alignment::Center);
+    auto child = std::make_unique<wui::Spacer>(wui::SizeF{20.0f, 10.0f});
+    auto* pChild = child.get();
+    container.appendChild(std::move(child));
+    container.layout({10.0f, 20.0f, 100.0f, 50.0f});
+    expect(approx(pChild->bounds().x, 50.0f) && approx(pChild->bounds().y, 40.0f),
+           "Centered Container content should have precise position");
+    expect(approx(pChild->bounds().width, 20.0f) && approx(pChild->bounds().height, 10.0f),
+           "Centered Container content should preserve intrinsic size");
+}
+
+void testContainerExplicitSize()
+{
+    wui::Container container;
+    container.setWidth(120.0f);
+    container.setHeight(48.0f);
+    container.appendChild(std::make_unique<wui::Spacer>(wui::SizeF{10.0f, 10.0f}));
+    const auto size = container.measure({0.0f, 200.0f, 0.0f, 200.0f});
+    expect(approx(size.width, 120.0f) && approx(size.height, 48.0f),
+           "Container explicit size should override intrinsic content size");
+}
+
 } // namespace
 
 int main()
@@ -291,6 +424,7 @@ int main()
     testRowLayoutAlignEnd();
     testRowLayoutAlignStretch();
     testRowMeasureClampsToConstraints();
+    testRowLayoutAlignBaseline();
     testColumnMeasureNoChildren();
     testColumnMeasureWithGap();
     testColumnMeasureWithPadding();
@@ -299,6 +433,13 @@ int main()
     testColumnLayoutAlignStretch();
     testConstraintsClamp();
     testContainerSingleChild();
+    testContainerOverlaysAllChildren();
+    testImageIntrinsicMeasurement();
+    testTextMeasurementBaselineAndHitTest();
+    testFoundationalContainerHitTestOrder();
     testRowGapWithFlex();
+    testConstraintsDeflate();
+    testContainerContentAlignment();
+    testContainerExplicitSize();
     return 0;
 }

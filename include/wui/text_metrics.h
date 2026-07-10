@@ -15,6 +15,7 @@ struct TextExtents {
     float width{0.0f};
     float height{0.0f};   // full line height (leading included)
     float ascent{0.0f};   // distance from the line top down to the baseline
+    float descent{0.0f};  // distance from the baseline to the glyph bottom
 };
 
 class TextMeasurer {

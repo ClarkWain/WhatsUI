@@ -84,6 +84,7 @@ public:
 
     [[nodiscard]] Node* hitTest(PointF point) const;
     bool dispatchPointer(const PointerEvent& event);
+    bool dispatchPointerTo(Node* target, const PointerEvent& event);
     bool dispatchKey(const KeyEvent& event);
     bool dispatchTextInput(const TextInputEvent& event);
     bool dispatchComposition(const CompositionInputEvent& event);

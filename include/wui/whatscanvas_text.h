@@ -20,31 +20,37 @@ namespace wui {
 
 class WhatsCanvasTextMeasurer : public TextMeasurer {
 public:
-    explicit WhatsCanvasTextMeasurer(wsc::Canvas& canvas) noexcept
+    explicit WhatsCanvasTextMeasurer(wsc::Canvas& canvas, float scaleFactor = 1.0f) noexcept
         : canvas_(&canvas)
+        , scaleFactor_(scaleFactor > 0.0f ? scaleFactor : 1.0f)
     {
     }
 
     [[nodiscard]] TextExtents measureText(const std::string& text, float fontSize) const override
     {
         wsc::Paint paint;
-        paint.setTextSize(fontSize);
+        paint.setTextSize(fontSize * scaleFactor_);
         const wsc::Canvas::TextMetrics metrics = canvas_->measureTextMetrics(text, paint);
         TextExtents extents;
-        extents.width = metrics.width;
-        extents.height = metrics.lineHeight > 0.0f ? metrics.lineHeight : metrics.height;
-        extents.ascent = metrics.ascent >= 0.0f ? metrics.ascent : -metrics.ascent;
+        extents.width = metrics.width / scaleFactor_;
+        extents.height = (metrics.lineHeight > 0.0f ? metrics.lineHeight : metrics.height) / scaleFactor_;
+        extents.ascent = (metrics.ascent >= 0.0f ? metrics.ascent : -metrics.ascent) / scaleFactor_;
+        extents.descent = (metrics.descent >= 0.0f ? metrics.descent : -metrics.descent) / scaleFactor_;
         if (extents.height <= 0.0f) {
             extents.height = fontSize * 1.25f;
         }
         if (extents.ascent <= 0.0f) {
             extents.ascent = fontSize * 0.8f;
         }
+        if (extents.descent <= 0.0f) {
+            extents.descent = fontSize * 0.2f;
+        }
         return extents;
     }
 
 private:
     wsc::Canvas* canvas_{nullptr};
+    float scaleFactor_{1.0f};
 };
 
 } // namespace wui

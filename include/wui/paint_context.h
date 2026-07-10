@@ -17,13 +17,13 @@ namespace wui {
 class PaintContext {
 public:
     explicit PaintContext(float scaleFactor = 1.0f) noexcept
-        : scaleFactor_(scaleFactor)
+        : scaleFactor_(scaleFactor > 0.0f ? scaleFactor : 1.0f)
     {
     }
 
 #ifdef WHATSUI_HAS_WHATSCANVAS
     explicit PaintContext(wsc::Canvas& canvas, float scaleFactor = 1.0f) noexcept
-        : scaleFactor_(scaleFactor)
+        : scaleFactor_(scaleFactor > 0.0f ? scaleFactor : 1.0f)
         , canvas_(&canvas)
     {
     }
@@ -36,7 +36,7 @@ public:
 
     void setScaleFactor(float scaleFactor) noexcept
     {
-        scaleFactor_ = scaleFactor;
+        scaleFactor_ = scaleFactor > 0.0f ? scaleFactor : 1.0f;
     }
 
 #ifdef WHATSUI_HAS_WHATSCANVAS
@@ -68,7 +68,8 @@ public:
         }
         wsc::CanvasAdapter adapter(*canvas_);
         adapter.setFillColor(wsc::Color(color.r, color.g, color.b, color.a));
-        adapter.fillRect(wsc::RectF(rect.x, rect.y, rect.width, rect.height));
+        adapter.fillRect(wsc::RectF(rect.x * scaleFactor_, rect.y * scaleFactor_,
+                                    rect.width * scaleFactor_, rect.height * scaleFactor_));
 #else
         (void)rect;
         (void)color;
@@ -84,7 +85,10 @@ public:
         wsc::Paint paint;
         paint.setStyle(wsc::Paint::Style::FILL);
         paint.setColor(wsc::Color(color.r, color.g, color.b, color.a));
-        canvas_->drawRoundRect(wsc::RectF(rect.x, rect.y, rect.width, rect.height), radius, paint);
+        paint.setAntiAlias(true);
+        canvas_->drawRoundRect(wsc::RectF(rect.x * scaleFactor_, rect.y * scaleFactor_,
+                                          rect.width * scaleFactor_, rect.height * scaleFactor_),
+                               radius * scaleFactor_, paint);
 #else
         (void)rect;
         (void)radius;
@@ -100,8 +104,8 @@ public:
         }
         wsc::CanvasAdapter adapter(*canvas_);
         adapter.setFillColor(wsc::Color(color.r, color.g, color.b, color.a));
-        adapter.setTextSize(textSize);
-        adapter.drawText(text, x, y);
+        adapter.setTextSize(textSize * scaleFactor_);
+        adapter.drawText(text, x * scaleFactor_, y * scaleFactor_);
 #else
         (void)text;
         (void)x;

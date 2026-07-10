@@ -7,25 +7,32 @@ namespace wui {
 
 void UiRoot::setContent(std::unique_ptr<Node> content) noexcept
 {
-    content_ = std::move(content);
+    ownedContent_ = std::move(content);
+    content_ = ownedContent_.get();
+}
+
+void UiRoot::setBorrowedContent(Node* content) noexcept
+{
+    ownedContent_.reset();
+    content_ = content;
 }
 
 Node* UiRoot::content() const noexcept
 {
-    return content_.get();
+    return content_;
 }
 
 void UiRoot::layout(const RectF& bounds)
 {
     bounds_ = bounds;
-    if (content_) {
+    if (content_ != nullptr) {
         content_->layout(bounds);
     }
 }
 
 void UiRoot::paint(PaintContext& context)
 {
-    if (content_) {
+    if (content_ != nullptr) {
         content_->paint(context);
     }
 }
@@ -35,10 +42,39 @@ const RectF& UiRoot::bounds() const noexcept
     return bounds_;
 }
 
+void UiRoot::prepare(PaintContext& context)
+{
+    if (content_ != nullptr) {
+        content_->prepare(context);
+    }
+}
+
+void Navigator::setOnChange(ChangeHandler handler)
+{
+    onChange_ = std::move(handler);
+    notifyChanged();
+}
+
+void Navigator::notifyChanged()
+{
+    if (onChange_) {
+        onChange_(current());
+    }
+}
+
 void Navigator::setRoot(std::string key, std::unique_ptr<Node> page, PageRetention retention)
 {
+    if (retention == PageRetention::DisposeOnHide) {
+        throw std::invalid_argument("DisposeOnHide pages require a PageFactory");
+    }
     clear();
     push(std::move(key), std::move(page), retention);
+}
+
+void Navigator::setRoot(std::string key, PageFactory factory, PageRetention retention)
+{
+    clear();
+    push(std::move(key), std::move(factory), retention);
 }
 
 void Navigator::push(std::string key, std::unique_ptr<Node> page, PageRetention retention)
@@ -46,7 +82,26 @@ void Navigator::push(std::string key, std::unique_ptr<Node> page, PageRetention 
     if (!page) {
         throw std::invalid_argument("page must not be null");
     }
-    stack_.push_back(PageEntry{std::move(key), retention, std::move(page)});
+    if (retention == PageRetention::DisposeOnHide) {
+        throw std::invalid_argument("DisposeOnHide pages require a PageFactory");
+    }
+    hideCurrent();
+    stack_.push_back(PageEntry{std::move(key), retention, std::move(page), {}});
+    notifyChanged();
+}
+
+void Navigator::push(std::string key, PageFactory factory, PageRetention retention)
+{
+    if (!factory) {
+        throw std::invalid_argument("page factory must not be empty");
+    }
+    auto page = factory();
+    if (!page) {
+        throw std::runtime_error("page factory returned null");
+    }
+    hideCurrent();
+    stack_.push_back(PageEntry{std::move(key), retention, std::move(page), std::move(factory)});
+    notifyChanged();
 }
 
 void Navigator::replace(std::string key, std::unique_ptr<Node> page, PageRetention retention)
@@ -54,11 +109,32 @@ void Navigator::replace(std::string key, std::unique_ptr<Node> page, PageRetenti
     if (!page) {
         throw std::invalid_argument("page must not be null");
     }
+    if (retention == PageRetention::DisposeOnHide) {
+        throw std::invalid_argument("DisposeOnHide pages require a PageFactory");
+    }
     if (stack_.empty()) {
         push(std::move(key), std::move(page), retention);
         return;
     }
-    stack_.back() = PageEntry{std::move(key), retention, std::move(page)};
+    stack_.back() = PageEntry{std::move(key), retention, std::move(page), {}};
+    notifyChanged();
+}
+
+void Navigator::replace(std::string key, PageFactory factory, PageRetention retention)
+{
+    if (!factory) {
+        throw std::invalid_argument("page factory must not be empty");
+    }
+    if (stack_.empty()) {
+        push(std::move(key), std::move(factory), retention);
+        return;
+    }
+    auto page = factory();
+    if (!page) {
+        throw std::runtime_error("page factory returned null");
+    }
+    stack_.back() = PageEntry{std::move(key), retention, std::move(page), std::move(factory)};
+    notifyChanged();
 }
 
 std::unique_ptr<Node> Navigator::pop()
@@ -69,6 +145,8 @@ std::unique_ptr<Node> Navigator::pop()
 
     auto page = std::move(stack_.back().content);
     stack_.pop_back();
+    activateCurrent();
+    notifyChanged();
     return page;
 }
 
@@ -77,11 +155,14 @@ void Navigator::popToRoot()
     while (canPop()) {
         stack_.pop_back();
     }
+    activateCurrent();
+    notifyChanged();
 }
 
-void Navigator::clear() noexcept
+void Navigator::clear()
 {
     stack_.clear();
+    notifyChanged();
 }
 
 bool Navigator::empty() const noexcept
@@ -162,6 +243,45 @@ void OverlayHost::clear() noexcept
     overlays_.clear();
 }
 
+void Navigator::hideCurrent()
+{
+    if (!stack_.empty() && stack_.back().retention == PageRetention::DisposeOnHide) {
+        stack_.back().content.reset();
+    }
+}
+
+void Navigator::activateCurrent()
+{
+    if (stack_.empty() || stack_.back().content) {
+        return;
+    }
+    if (!stack_.back().factory) {
+        throw std::logic_error("disposed page has no factory");
+    }
+    stack_.back().content = stack_.back().factory();
+    if (!stack_.back().content) {
+        throw std::runtime_error("page factory returned null");
+    }
+}
+
+void OverlayHost::layout(const RectF& bounds)
+{
+    for (const auto& overlay : overlays_) {
+        if (overlay.content) {
+            overlay.content->layout(bounds);
+        }
+    }
+}
+
+void OverlayHost::prepare(PaintContext& context)
+{
+    for (const auto& overlay : overlays_) {
+        if (overlay.content) {
+            overlay.content->prepare(context);
+        }
+    }
+}
+
 void OverlayHost::paint(PaintContext& context)
 {
     for (const auto& overlay : overlays_) {
@@ -169,6 +289,18 @@ void OverlayHost::paint(PaintContext& context)
             overlay.content->paint(context);
         }
     }
+}
+
+Node* OverlayHost::hitTest(PointF point) const
+{
+    for (auto it = overlays_.rbegin(); it != overlays_.rend(); ++it) {
+        if (it->content) {
+            if (auto* hit = it->content->hitTest(point)) {
+                return hit;
+            }
+        }
+    }
+    return nullptr;
 }
 
 bool OverlayHost::empty() const noexcept

@@ -1,4 +1,5 @@
 #include "wui/app.h"
+#include "wui/scheduler.h"
 
 #include <stdexcept>
 
@@ -10,6 +11,7 @@ UiWindow::UiWindow(std::unique_ptr<PlatformWindow> platformWindow)
     if (!platformWindow_) {
         throw std::invalid_argument("platformWindow must not be null");
     }
+    navigator_.setOnChange([this](Node* page) { syncActiveRoot(page); });
 }
 
 WindowId UiWindow::id() const noexcept
@@ -77,8 +79,9 @@ const OverlayHost& UiWindow::overlayHost() const noexcept
     return overlayHost_;
 }
 
-void UiWindow::setRoot(std::unique_ptr<Node> root) noexcept
+void UiWindow::setRoot(std::unique_ptr<Node> root)
 {
+    navigator_.clear();
     uiRoot_.setContent(std::move(root));
     inputRouter_.setRoot(uiRoot_.content());
 }
@@ -86,6 +89,66 @@ void UiWindow::setRoot(std::unique_ptr<Node> root) noexcept
 Node* UiWindow::root() const noexcept
 {
     return uiRoot_.content();
+}
+
+void UiWindow::update()
+{
+    flushStructuralUpdates();
+}
+
+void UiWindow::layout()
+{
+    const auto metrics = platformWindow_->metrics();
+    const RectF bounds{0.0f, 0.0f, metrics.logicalSize.width, metrics.logicalSize.height};
+    uiRoot_.layout(bounds);
+    overlayHost_.layout(bounds);
+}
+
+void UiWindow::paint(PaintContext& context)
+{
+    uiRoot_.paint(context);
+    overlayHost_.paint(context);
+}
+
+void UiWindow::prepare(PaintContext& context)
+{
+    uiRoot_.prepare(context);
+    overlayHost_.prepare(context);
+}
+
+Node* UiWindow::hitTest(PointF point) const
+{
+    if (auto* overlay = overlayHost_.hitTest(point)) {
+        return overlay;
+    }
+    return inputRouter_.hitTest(point);
+}
+
+bool UiWindow::dispatchPointer(const PointerEvent& event)
+{
+    return inputRouter_.dispatchPointerTo(hitTest(event.position), event);
+}
+
+bool UiWindow::dispatchKey(const KeyEvent& event)
+{
+    return inputRouter_.dispatchKey(event);
+}
+
+bool UiWindow::dispatchTextInput(const TextInputEvent& event)
+{
+    return inputRouter_.dispatchTextInput(event);
+}
+
+bool UiWindow::dispatchComposition(const CompositionInputEvent& event)
+{
+    return inputRouter_.dispatchComposition(event);
+}
+
+void UiWindow::syncActiveRoot(Node* navigationRoot) noexcept
+{
+    uiRoot_.setBorrowedContent(navigationRoot);
+    inputRouter_.setRoot(uiRoot_.content());
+    platformWindow_->requestRedraw();
 }
 
 UiApp::UiApp(std::unique_ptr<PlatformHost> host) noexcept

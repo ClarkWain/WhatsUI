@@ -71,7 +71,10 @@ void testState()
 void testNavigator()
 {
     wui::Navigator navigator;
+    wui::Node* observedPage = nullptr;
+    navigator.setOnChange([&observedPage](wui::Node* page) { observedPage = page; });
     navigator.setRoot("home", std::make_unique<DummyNode>());
+    expect(observedPage == navigator.current(), "Navigator should publish its active root page");
     navigator.push("settings", std::make_unique<DummyNode>());
 
     expect(navigator.size() == 2, "Navigator should hold root and pushed page");
@@ -81,6 +84,59 @@ void testNavigator()
     auto popped = navigator.pop();
     expect(static_cast<bool>(popped), "Navigator should return the popped page");
     expect(navigator.size() == 1, "Navigator should keep root page after pop");
+    expect(observedPage == navigator.current(), "Navigator should publish the revealed page after pop");
+}
+
+void testNavigatorPageRetention()
+{
+    wui::Navigator navigator;
+    int disposedFactoryCalls = 0;
+    navigator.setRoot("disposable", [&disposedFactoryCalls] {
+        ++disposedFactoryCalls;
+        return std::make_unique<DummyNode>();
+    }, wui::PageRetention::DisposeOnHide);
+    expect(navigator.current() != nullptr, "Factory root should create its initial page");
+
+    auto keepAlive = std::make_unique<DummyNode>();
+    auto* keepAliveInstance = keepAlive.get();
+    navigator.push("kept", std::move(keepAlive));
+    expect(navigator.pages().front().content == nullptr,
+           "DisposeOnHide should release a page when another page covers it");
+    expect(navigator.current() == keepAliveInstance, "KeepAlive page should remain the active instance");
+
+    auto popped = navigator.pop();
+    expect(popped.get() == keepAliveInstance, "Pop should return the active KeepAlive page");
+    expect(navigator.current() != nullptr, "Returning to a disposed page should create a fresh instance");
+    expect(disposedFactoryCalls == 2, "DisposeOnHide factory should run once per visible instance");
+
+    bool rejectedOneShotDisposable = false;
+    try {
+        navigator.push("invalid", std::make_unique<DummyNode>(), wui::PageRetention::DisposeOnHide);
+    } catch (const std::invalid_argument&) {
+        rejectedOneShotDisposable = true;
+    }
+    expect(rejectedOneShotDisposable, "DisposeOnHide should require a recreatable page factory");
+}
+
+void testPaintContextScaleFactor()
+{
+    wui::PaintContext context(2.0f);
+    expect(context.scaleFactor() == 2.0f, "PaintContext should preserve a valid DPR");
+    context.setScaleFactor(0.0f);
+    expect(context.scaleFactor() == 1.0f, "PaintContext should normalize invalid DPR to 1");
+}
+
+void testAnimationUsesElapsedTime()
+{
+    float value = -1.0f;
+    bool completed = false;
+    wui::Animation animation(1.0f, [&value](float next) { value = next; });
+    animation.onComplete([&completed] { completed = true; });
+
+    expect(animation.tick(0.25f), "Animation should remain active before its duration elapses");
+    expect(value == 0.25f, "Animation progress should use the supplied elapsed time");
+    expect(!animation.tick(0.75f), "Animation should finish at its exact duration");
+    expect(value == 1.0f && completed, "Animation should publish its final value and completion");
 }
 
 void testTextInputModel()
@@ -120,6 +176,28 @@ void testInputRouterAndButton()
     expect(clicked, "Button click handler should run after pointer down/up");
     expect(!router.dispatchPointer(moveOutside), "Pointer move outside should not target the button");
     expect((button->visualStates() & wui::toMask(wui::ControlVisualState::Hovered)) == 0, "Button should clear hovered state after leave");
+}
+
+void testOverlayHitTestingAndRouting()
+{
+    wui::OverlayHost overlays;
+    auto overlayButton = std::make_unique<wui::Button>("Overlay");
+    auto* rawButton = overlayButton.get();
+    bool clicked = false;
+    overlayButton->onClick([&clicked] { clicked = true; });
+    overlays.show(std::move(overlayButton));
+    overlays.layout({0.0f, 0.0f, 160.0f, 40.0f});
+
+    wui::FocusManager focus;
+    wui::InputRouter router(&focus);
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                                 wui::MouseButton::Left, {10.0f, 10.0f}, 0};
+    const wui::PointerEvent up{0, wui::PointerType::Mouse, wui::PointerAction::Up,
+                               wui::MouseButton::Left, {10.0f, 10.0f}, 0};
+    expect(overlays.hitTest(down.position) == rawButton, "Top overlay should win hit testing");
+    expect(router.dispatchPointerTo(overlays.hitTest(down.position), down), "Overlay pointer down should route");
+    expect(router.dispatchPointerTo(overlays.hitTest(up.position), up), "Overlay pointer up should route");
+    expect(clicked, "Overlay button should receive routed click");
 }
 
 void testDeclarativeBuilderAndCounter()
@@ -301,8 +379,10 @@ int main()
 {
     testState();
     testNavigator();
+    testNavigatorPageRetention();
     testTextInputModel();
     testInputRouterAndButton();
+    testOverlayHitTestingAndRouting();
     testDeclarativeBuilderAndCounter();
     testReactiveText();
     testComputed();
@@ -310,6 +390,8 @@ int main()
     testStructuralIf();
     testStructuralForEach();
     testPluggableTextMeasurement();
+    testPaintContextScaleFactor();
+    testAnimationUsesElapsedTime();
     testLayoutFlexAndAlign();
     testTextInputRouting();
     return 0;

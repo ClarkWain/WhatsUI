@@ -45,8 +45,9 @@ int main()
 
     root->layout({0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
 
-    canvas->beginFrame();
     wui::PaintContext paint(*canvas);
+    root->prepare(paint);
+    canvas->beginFrame();
     root->paint(paint);
     canvas->endFrame();
 

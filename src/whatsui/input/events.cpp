@@ -58,7 +58,11 @@ Node* InputRouter::hitTest(PointF point) const
 
 bool InputRouter::dispatchPointer(const PointerEvent& event)
 {
-    Node* target = hitTest(event.position);
+    return dispatchPointerTo(hitTest(event.position), event);
+}
+
+bool InputRouter::dispatchPointerTo(Node* target, const PointerEvent& event)
+{
 
     if (target != hovered_) {
         if (hovered_ != nullptr) {

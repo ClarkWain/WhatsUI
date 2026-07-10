@@ -13,6 +13,18 @@ Node::~Node()
     }
 }
 
+void Node::prepare(PaintContext& context)
+{
+    for (const auto& child : children_) {
+        child->prepare(context);
+    }
+}
+
+float Node::baselineOffset() const noexcept
+{
+    return -1.0f;
+}
+
 void Node::appendChild(std::unique_ptr<Node> child)
 {
     if (!child) {

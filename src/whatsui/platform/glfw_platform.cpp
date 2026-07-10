@@ -12,6 +12,7 @@
 #include "wui/events.h"
 #include "wui/paint_context.h"
 #include "wui/scheduler.h"
+#include "wui/whatscanvas_text.h"
 
 #include <algorithm>
 #include <cassert>
@@ -460,19 +461,28 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
 
     // Wire event callbacks to dispatch into the UI tree
     glfwWin->onPointerEvent = [&uiWindow](const PointerEvent& event) {
-        uiWindow.inputRouter().dispatchPointer(event);
+        uiWindow.dispatchPointer(event);
     };
 
     glfwWin->onKeyEvent = [&uiWindow](const KeyEvent& event) {
-        uiWindow.inputRouter().dispatchKey(event);
+        uiWindow.dispatchKey(event);
     };
 
     glfwWin->onTextInput = [&uiWindow](const TextInputEvent& event) {
-        uiWindow.inputRouter().dispatchTextInput(event);
+        uiWindow.dispatchTextInput(event);
     };
 
     // Set frame callback: flush structural updates, tick animations, layout, paint
-    host->setFrameCallback([&uiWindow, &app]() {
+    host->setFrameCallback([&app, lastFrame = std::chrono::steady_clock::now()]() mutable {
+        const auto now = std::chrono::steady_clock::now();
+        const float deltaSeconds = std::clamp(
+            std::chrono::duration<float>(now - lastFrame).count(), 0.0f, 0.1f);
+        lastFrame = now;
+
+        // The ticker is application-scoped: advance it exactly once per host
+        // frame, regardless of how many windows are currently open.
+        Ticker::instance().tick(deltaSeconds);
+
         for (const auto& winPtr : app.windows()) {
             auto& win = *winPtr;
             auto& platformWin = win.platformWindow();
@@ -483,24 +493,25 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
             auto* glfwWin = static_cast<GlfwPlatformWindow*>(&platformWin);
             glfwMakeContextCurrent(glfwWin->glfwWindow());
 
-            // Flush deferred structural updates
-            flushStructuralUpdates();
+            // Commit deferred state changes at the window frame boundary.
+            win.update();
 
-            // Tick animations
-            Ticker::instance().tick(1.0f / 60.0f);
-
-            // Layout
+            // Measure, layout and paint against the same font backend and DPR.
             auto m = platformWin.metrics();
-            win.uiRoot().layout({0.0f, 0.0f, m.logicalSize.width, m.logicalSize.height});
+            auto& glfwSurface = static_cast<GlfwRenderSurface&>(platformWin.surface());
+            WhatsCanvasTextMeasurer textMeasurer(glfwSurface.canvas(), m.scaleFactor);
+            setTextMeasurer(&textMeasurer);
+            win.layout();
 
             // Paint
-            auto& glfwSurface = static_cast<GlfwRenderSurface&>(platformWin.surface());
+            PaintContext ctx(glfwSurface.canvas(), m.scaleFactor);
+            win.prepare(ctx);
             platformWin.surface().beginFrame();
 
-            PaintContext ctx(glfwSurface.canvas(), m.scaleFactor);
-            win.uiRoot().paint(ctx);
+            win.paint(ctx);
 
             platformWin.surface().endFrame();
+            setTextMeasurer(nullptr);
         }
     });
 

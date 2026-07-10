@@ -56,6 +56,10 @@ public:
     void addTeardown(std::function<void()> callback);
 
     [[nodiscard]] virtual SizeF measure(const Constraints& constraints) const = 0;
+    [[nodiscard]] virtual float baselineOffset() const noexcept;
+    // Prepare backend resources before beginFrame(). The default implementation
+    // walks children so leaf widgets only override when they own resources.
+    virtual void prepare(PaintContext& context);
     virtual void layout(const RectF& bounds);
     virtual void paint(PaintContext& context) = 0;
     [[nodiscard]] virtual Node* hitTest(PointF point);

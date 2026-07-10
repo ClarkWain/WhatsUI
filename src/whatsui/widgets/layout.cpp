@@ -30,24 +30,82 @@ void Container::setPadding(InsetsF padding) noexcept
     markDirty(DirtyFlag::Layout);
 }
 
+void Container::setContentAlignment(Alignment horizontal, Alignment vertical) noexcept
+{
+    horizontalAlignment_ = horizontal;
+    verticalAlignment_ = vertical;
+    markDirty(DirtyFlag::Layout);
+}
+
+void Container::setWidth(float width) noexcept
+{
+    width_ = std::max(0.0f, width);
+    markDirty(DirtyFlag::Layout);
+}
+
+void Container::clearWidth() noexcept
+{
+    width_.reset();
+    markDirty(DirtyFlag::Layout);
+}
+
+void Container::setHeight(float height) noexcept
+{
+    height_ = std::max(0.0f, height);
+    markDirty(DirtyFlag::Layout);
+}
+
+void Container::clearHeight() noexcept
+{
+    height_.reset();
+    markDirty(DirtyFlag::Layout);
+}
+
 SizeF Container::measure(const Constraints& constraints) const
 {
-    SizeF child{0.0f, 0.0f};
-    if (!children().empty()) {
-        child = children().front()->measure(constraints);
+    const Constraints innerConstraints = constraints.deflate(padding_);
+    SizeF content{};
+    for (const auto& child : children()) {
+        const auto childSize = child->measure(innerConstraints);
+        content.width = std::max(content.width, childSize.width);
+        content.height = std::max(content.height, childSize.height);
     }
-    return constraints.clamp({child.width + padding_.horizontal(), child.height + padding_.vertical()});
+    SizeF measured{content.width + padding_.horizontal(), content.height + padding_.vertical()};
+    if (width_) {
+        measured.width = *width_;
+    }
+    if (height_) {
+        measured.height = *height_;
+    }
+    return constraints.clamp(measured);
 }
 
 void Container::layout(const RectF& bounds)
 {
     Node::layout(bounds);
-    const auto& childNodes = children();
-    if (!childNodes.empty()) {
-        childNodes.front()->layout({bounds.x + padding_.left,
-                                    bounds.y + padding_.top,
-                                    std::max(0.0f, bounds.width - padding_.horizontal()),
-                                    std::max(0.0f, bounds.height - padding_.vertical())});
+    const RectF contentBounds{bounds.x + padding_.left,
+                              bounds.y + padding_.top,
+                              std::max(0.0f, bounds.width - padding_.horizontal()),
+                              std::max(0.0f, bounds.height - padding_.vertical())};
+    for (const auto& child : children()) {
+        SizeF childSize = child->measure({0.0f, contentBounds.width, 0.0f, contentBounds.height});
+        float childX = contentBounds.x;
+        float childY = contentBounds.y;
+        switch (horizontalAlignment_) {
+        case Alignment::Center: childX += (contentBounds.width - childSize.width) * 0.5f; break;
+        case Alignment::End: childX += contentBounds.width - childSize.width; break;
+        case Alignment::Stretch: childSize.width = contentBounds.width; break;
+        case Alignment::Baseline:
+        case Alignment::Start: break;
+        }
+        switch (verticalAlignment_) {
+        case Alignment::Center: childY += (contentBounds.height - childSize.height) * 0.5f; break;
+        case Alignment::End: childY += contentBounds.height - childSize.height; break;
+        case Alignment::Stretch: childSize.height = contentBounds.height; break;
+        case Alignment::Baseline:
+        case Alignment::Start: break;
+        }
+        child->layout({childX, childY, childSize.width, childSize.height});
     }
 }
 
@@ -119,17 +177,35 @@ Alignment Row::align() const noexcept
 
 SizeF Row::measure(const Constraints& constraints) const
 {
+    const Constraints inner = constraints.deflate(padding_);
     float width = 0.0f;
     float height = 0.0f;
+    float maxBaseline = 0.0f;
+    float maxBelowBaseline = 0.0f;
 
     const auto& childNodes = children();
     for (std::size_t index = 0; index < childNodes.size(); ++index) {
-        const auto childSize = childNodes[index]->measure(constraints);
+        const float usedGaps = gap_ * static_cast<float>(childNodes.size() > 0 ? childNodes.size() - 1 : 0);
+        const float remainingWidth = std::max(0.0f, inner.maxWidth - width - usedGaps);
+        const auto childSize = childNodes[index]->measure({0.0f, remainingWidth, 0.0f, inner.maxHeight});
         width += childSize.width;
         height = std::max(height, childSize.height);
+        if (align_ == Alignment::Baseline) {
+            const float baseline = childNodes[index]->baselineOffset();
+            if (baseline >= 0.0f) {
+                maxBaseline = std::max(maxBaseline, baseline);
+                maxBelowBaseline = std::max(maxBelowBaseline, childSize.height - baseline);
+            } else {
+                maxBelowBaseline = std::max(maxBelowBaseline, childSize.height);
+            }
+        }
         if (index + 1 < childNodes.size()) {
             width += gap_;
         }
+    }
+
+    if (align_ == Alignment::Baseline) {
+        height = std::max(height, maxBaseline + maxBelowBaseline);
     }
 
     return constraints.clamp({width + padding_.horizontal(), height + padding_.vertical()});
@@ -161,6 +237,15 @@ void Row::layout(const RectF& bounds)
     }
     const float remaining = std::max(0.0f, innerWidth - fixedWidth);
 
+    float rowBaseline = 0.0f;
+    if (align_ == Alignment::Baseline) {
+        for (std::size_t i = 0; i < childNodes.size(); ++i) {
+            if (childNodes[i]->flex() <= 0.0f) {
+                rowBaseline = std::max(rowBaseline, childNodes[i]->baselineOffset());
+            }
+        }
+    }
+
     // Pass 2: size flex children from the remainder, then place with cross align.
     float cursorX = bounds.x + padding_.left;
     for (std::size_t i = 0; i < childNodes.size(); ++i) {
@@ -173,6 +258,15 @@ void Row::layout(const RectF& bounds)
         }
         float childY = bounds.y + padding_.top;
         switch (align_) {
+        case Alignment::Baseline: {
+            const float baseline = child->baselineOffset();
+            if (baseline >= 0.0f) {
+                childY += rowBaseline - baseline;
+            } else {
+                childY += std::max(0.0f, rowBaseline - childSize.height);
+            }
+            break;
+        }
         case Alignment::Center:
             childY += (innerHeight - childSize.height) * 0.5f;
             break;
@@ -250,12 +344,14 @@ Alignment Column::align() const noexcept
 
 SizeF Column::measure(const Constraints& constraints) const
 {
+    const Constraints inner = constraints.deflate(padding_);
     float width = 0.0f;
     float height = 0.0f;
 
     const auto& childNodes = children();
     for (std::size_t index = 0; index < childNodes.size(); ++index) {
-        const auto childSize = childNodes[index]->measure(constraints);
+        const float remainingHeight = std::max(0.0f, inner.maxHeight - height);
+        const auto childSize = childNodes[index]->measure({0.0f, inner.maxWidth, 0.0f, remainingHeight});
         width = std::max(width, childSize.width);
         height += childSize.height;
         if (index + 1 < childNodes.size()) {
@@ -304,6 +400,8 @@ void Column::layout(const RectF& bounds)
         }
         float childX = bounds.x + padding_.left;
         switch (align_) {
+        case Alignment::Baseline:
+            break;
         case Alignment::Center:
             childX += (innerWidth - childSize.width) * 0.5f;
             break;

@@ -16,6 +16,7 @@ add_library(WhatsUI
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
     src/whatsui/widgets/button.cpp
+    src/whatsui/widgets/image.cpp
     src/whatsui/widgets/layout.cpp
     src/whatsui/widgets/structural.cpp
     src/whatsui/widgets/text.cpp
