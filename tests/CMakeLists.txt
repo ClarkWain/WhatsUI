@@ -403,3 +403,14 @@ if(TARGET WhatsUITodoApp)
         TIMEOUT 180
     )
 endif()
+
+if(TARGET WhatsUIDebugInspectorApp)
+    add_test(
+        NAME whatsui_inspector_reference_capture
+        COMMAND $<TARGET_FILE:WhatsUIDebugInspectorApp>
+            ${CMAKE_CURRENT_BINARY_DIR}/debug_inspector_reference_capture
+    )
+    set_tests_properties(whatsui_inspector_reference_capture PROPERTIES
+        LABELS "visual;software;inspector"
+    )
+endif()

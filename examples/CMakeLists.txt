@@ -52,6 +52,18 @@ target_link_libraries(WhatsUICommandPaletteApp
 
 target_compile_features(WhatsUICommandPaletteApp PRIVATE cxx_std_17)
 
+add_executable(WhatsUIDebugInspectorApp
+    debug_inspector/main.cpp
+)
+
+target_link_libraries(WhatsUIDebugInspectorApp
+    PRIVATE
+        WhatsUI::WhatsUI
+        WhatsCanvas::Software
+)
+
+target_compile_features(WhatsUIDebugInspectorApp PRIVATE cxx_std_17)
+
 # --- Interactive window example (GLFW + OpenGL) ---
 if(TARGET WhatsUI::Glfw)
     # Same declarative Todo tree as WhatsUITodoApp, presented by the GLFW host.
@@ -93,6 +105,18 @@ if(TARGET WhatsUI::Glfw)
 
     target_compile_definitions(WhatsUICommandPaletteGlfw PRIVATE WUI_COMMAND_PALETTE_INTERACTIVE=1)
     target_compile_features(WhatsUICommandPaletteGlfw PRIVATE cxx_std_17)
+
+    add_executable(WhatsUIDebugInspectorGlfw
+        debug_inspector/main.cpp
+    )
+
+    target_link_libraries(WhatsUIDebugInspectorGlfw
+        PRIVATE
+            WhatsUI::Glfw
+    )
+
+    target_compile_definitions(WhatsUIDebugInspectorGlfw PRIVATE WUI_DEBUG_INSPECTOR_INTERACTIVE=1)
+    target_compile_features(WhatsUIDebugInspectorGlfw PRIVATE cxx_std_17)
 
     add_executable(WhatsUIHelloWindow
         hello_window/main.cpp
