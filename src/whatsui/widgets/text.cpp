@@ -103,6 +103,21 @@ std::vector<std::string> Text::layoutLines(float availableWidth) const
 {
     const bool constrained = std::isfinite(availableWidth);
     const bool canWrap = wrap_ == TextWrap::Word && constrained;
+    if (canWrap) {
+        if (const auto* provider = dynamic_cast<const TextLayoutProvider*>(textMeasurer())) {
+            const auto resolved = provider->layoutText(value_, fontSize_, availableWidth,
+                                                       effectiveLineHeight(), maxLines_,
+                                                       overflow_ == TextOverflow::Ellipsis);
+            std::vector<std::string> lines;
+            lines.reserve(resolved.size());
+            for (const auto& line : resolved) lines.push_back(line.text);
+            // An empty paragraph is still one visible logical line. Backends
+            // return no lines for an empty input, while Text's longstanding
+            // measure/paint contract reserves that line.
+            if (lines.empty() && value_.empty()) lines.emplace_back();
+            return lines;
+        }
+    }
     std::vector<std::string> lines;
     std::string current;
     bool truncated = false;
@@ -175,18 +190,40 @@ void Text::paint(PaintContext& context)
         const Color color = hasColor_ ? color_ : theme().colors.text;
         const float lineHeight = effectiveLineHeight();
         const float baseline = bounds().y + baselineOffset();
-        (void)context.save();
-        // Keep horizontal overflow contained, while allowing the backend's
-        // real glyph ascenders/descenders to extend beyond the simplified
-        // layout metrics.  In particular, the WhatsCanvas glyph atlas may
-        // report a line box smaller than the rasterized glyph bounds; clipping
-        // to the exact line box turns a label into one-pixel fragments.
-        context.clipRect({bounds().x, bounds().y - fontSize_, bounds().width,
-                          bounds().height + fontSize_ * 2.0f});
+        // Most text is already contained by wrapping/ellipsis, so adding a
+        // clip for every run is redundant. More importantly, the Software
+        // backend batches glyph-atlas draws after paint has returned; a large
+        // structural update can otherwise leave those independent per-run
+        // clips associated with the wrong batch. Clip only when Clip overflow
+        // can actually expose pixels outside this node's bounds.
+        bool needsClip = false;
+#ifndef WHATSUI_HAS_WHATSCANVAS
+        // The headless contract retains literal Clip semantics. WhatsCanvas
+        // itself batches glyphs at endFrame, so its platform viewport (or the
+        // window edge) owns clipping rather than an ephemeral clip around a
+        // single text draw. See the Software structural regression below.
+        needsClip = overflow_ == TextOverflow::Clip
+            && static_cast<float>(lines.size()) * lineHeight > bounds().height + 0.01f;
+        if (!needsClip) {
+            for (const auto& line : lines) {
+                if (textWidth(line) > bounds().width + 0.01f) {
+                    needsClip = true;
+                    break;
+                }
+            }
+        }
+#endif
+        if (needsClip) {
+            (void)context.save();
+            context.clipRect({bounds().x, bounds().y - fontSize_, bounds().width,
+                              bounds().height + fontSize_ * 2.0f});
+        }
         for (std::size_t index = 0; index < lines.size(); ++index) {
             context.drawText(lines[index], bounds().x, baseline + lineHeight * static_cast<float>(index), fontSize_, color);
         }
-        context.restore();
+        if (needsClip) {
+            context.restore();
+        }
     }
     clearDirty(DirtyFlag::Paint);
 }

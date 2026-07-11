@@ -21,10 +21,10 @@ endif()
 # Fluent Todo baseline, visually reviewed after the add/toggle/delete/clear
 # walkthrough.  `todo_3` specifically exercises the structural rebuild that
 # previously exposed the backend text-clip defect.
-set(expected_todo_0 "d1b5184c458d9bc6c663d9a1dd97844a6e2ac89f2a479dcc416fb80eba616734")
-set(expected_todo_1 "9aa5acb94fcef3b01c31e3b7107b4ab0f65342117b19150eaee77088dc7fc53b")
-set(expected_todo_2 "b0adf94fe4e2c1c5b122a72b7de3cf9a064a86c8fe3fad487abe98d4762969ca")
-set(expected_todo_3 "ca1d1113013b6149c466f93e2371858d77596084c8ad07a61dc4c46d613c24e3")
+set(expected_todo_0 "92b099f26fab59df64720a6f77f9b1cc4fc7507ab843753314290db13bd935a2")
+set(expected_todo_1 "fb89a764fa65cc1829ec1cf9a87dadb7b5d436d6179370a59c5a490dcb8dc4c3")
+set(expected_todo_2 "5ae124f61d8e4284bc9b1cf6d63471fdccadb4721f3b33cf72d57c9a1ee968e9")
+set(expected_todo_3 "92b099f26fab59df64720a6f77f9b1cc4fc7507ab843753314290db13bd935a2")
 
 foreach(frame RANGE 0 3)
     set(image "${WHATSUI_TODO_OUTPUT_DIR}/todo_${frame}.ppm")

@@ -57,8 +57,8 @@ all be true.
   caret placement, and high-DPI verification.
 - [x] Text editing controller: selection by pointer/Shift, Home/End, word
   deletion, clipboard, undo/redo, and composition underline.
-- [ ] Shaping/fallback policy for CJK, emoji, bidi, and deterministic text cache.
-- [ ] Searchable command palette and editable Settings form reference examples.
+- [x] Shaping/fallback policy for CJK, emoji, bidi, and deterministic text cache.
+- [x] Searchable command palette and editable Settings form reference examples.
 
 ### M3 — Components and Themes (`v0.4-components-preview`)
 
@@ -92,6 +92,6 @@ all be true.
 
 ## Current active focus
 
-The immediate sequence is M2 shaping/fallback and command-palette/settings
-proof, then M3 component-state and dark-theme coverage. New components must
+The immediate sequence is M3 component-state and dark-theme coverage, followed
+by M4 performance/inspector work. New components must
 not bypass the runtime, input, and Windows text contracts.

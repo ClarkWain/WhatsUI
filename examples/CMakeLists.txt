@@ -36,6 +36,20 @@ target_link_libraries(WhatsUISettingsApp
 
 target_compile_features(WhatsUISettingsApp PRIVATE cxx_std_17)
 
+# Searchable command-palette reference: deterministic Software capture plus
+# an interactive GLFW target from one source tree.
+add_executable(WhatsUICommandPaletteApp
+    command_palette/main.cpp
+)
+
+target_link_libraries(WhatsUICommandPaletteApp
+    PRIVATE
+        WhatsUI::WhatsUI
+        WhatsCanvas::Software
+)
+
+target_compile_features(WhatsUICommandPaletteApp PRIVATE cxx_std_17)
+
 # --- Interactive window example (GLFW + OpenGL) ---
 if(TARGET WhatsUI::Glfw)
     # Same declarative Todo tree as WhatsUITodoApp, presented by the GLFW host.
@@ -63,6 +77,18 @@ if(TARGET WhatsUI::Glfw)
 
     target_compile_definitions(WhatsUISettingsGlfw PRIVATE WUI_SETTINGS_INTERACTIVE=1)
     target_compile_features(WhatsUISettingsGlfw PRIVATE cxx_std_17)
+
+    add_executable(WhatsUICommandPaletteGlfw
+        command_palette/main.cpp
+    )
+
+    target_link_libraries(WhatsUICommandPaletteGlfw
+        PRIVATE
+            WhatsUI::Glfw
+    )
+
+    target_compile_definitions(WhatsUICommandPaletteGlfw PRIVATE WUI_COMMAND_PALETTE_INTERACTIVE=1)
+    target_compile_features(WhatsUICommandPaletteGlfw PRIVATE cxx_std_17)
 
     add_executable(WhatsUIHelloWindow
         hello_window/main.cpp

@@ -76,6 +76,17 @@ void TextEditingController::setComposition(TextRange composition) noexcept
 
 void TextEditingController::clearComposition() noexcept
 {
+    // updateComposition mirrors the native pre-edit range into selection so
+    // IME and accessibility clients can query the active text. Once the IME
+    // explicitly ends, that range is no longer a user selection. Collapse it
+    // at the pre-edit end so clearing the underline cannot immediately turn
+    // into a selection-highlight flash on the same characters.
+    if (!value_.composition.empty()
+        && value_.selection.start == value_.composition.start
+        && value_.selection.end == value_.composition.end) {
+        value_.selection = {value_.composition.end, value_.composition.end};
+        selectionAnchor_ = value_.composition.end;
+    }
     value_.composition = {};
 }
 
@@ -316,7 +327,33 @@ TextInput& TextInput::text(std::string text)
 {
     controller_.setText(std::move(text));
     markDirty(DirtyFlag::Layout);
+    notifyChanged();
     return *this;
+}
+
+TextInput& TextInput::onChange(ChangeHandler handler)
+{
+    onChange_ = std::move(handler);
+    return *this;
+}
+
+TextInput& TextInput::onSubmit(SubmitHandler handler)
+{
+    onSubmit_ = std::move(handler);
+    return *this;
+}
+
+TextInput& TextInput::onCancel(CancelHandler handler)
+{
+    onCancel_ = std::move(handler);
+    return *this;
+}
+
+void TextInput::notifyChanged()
+{
+    if (onChange_) {
+        onChange_(controller_.text());
+    }
 }
 
 void TextInput::syncSession(TextInputSession& session, const RectF& caretRect) const
@@ -355,7 +392,17 @@ void TextInput::paint(PaintContext& context)
                           std::max(0.0f, current.radius.md - inset), current.colors.surface);
     const float characterWidth = current.typography.body * 0.56f;
     const auto selection = controller_.selection();
-    if (focused && !selection.empty()) {
+    const auto composition = controller_.composition();
+    // Win32 pre-edit text carries a selection covering its composition span.
+    // That is editing state, not a user selection: rendering it with the
+    // normal translucent selection fill makes active IME input look selected
+    // and hides the conventional composition affordance. Paint an underline
+    // for the exact pre-edit range instead; a genuine selection remains
+    // visible while no composition is active.
+    const bool selectionIsComposition = !composition.empty()
+        && selection.start == composition.start
+        && selection.end == composition.end;
+    if (focused && !selection.empty() && !selectionIsComposition) {
         const float selectionX = bounds().x + current.controls.horizontalPadding + static_cast<float>(selection.start) * characterWidth;
         const float selectionWidth = static_cast<float>(selection.end - selection.start) * characterWidth;
         const auto selectionColor = Color{current.colors.focus.r, current.colors.focus.g, current.colors.focus.b, 72};
@@ -366,6 +413,17 @@ void TextInput::paint(PaintContext& context)
         context.drawText(text, bounds().x + current.controls.horizontalPadding,
             bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f, current.typography.body,
             showPlaceholder ? current.colors.textMuted : current.colors.text);
+    }
+    if (focused && !composition.empty()) {
+        const float compositionX = bounds().x + current.controls.horizontalPadding
+            + static_cast<float>(composition.start) * characterWidth;
+        const float compositionWidth = static_cast<float>(composition.end - composition.start) * characterWidth;
+        const float baseline = bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f;
+        // Keep the marker close to the glyph baseline (rather than at the
+        // input's bottom edge) so it remains correct for Fluent's compact
+        // and regular control heights.
+        context.fillRect({compositionX, baseline + current.controls.focusInset,
+                          std::max(1.0f, compositionWidth), 1.0f}, current.colors.focus);
     }
     if (focused && selection.empty()) {
         const float caretX = bounds().x + current.controls.horizontalPadding + static_cast<float>(selection.end) * characterWidth;
@@ -437,11 +495,13 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
     case 259: // GLFW_KEY_BACKSPACE
         controller_.backspace(byWord);
         markDirty(DirtyFlag::Layout);
+        notifyChanged();
         return true;
     case 46:
     case 261: // GLFW_KEY_DELETE
         controller_.deleteForward(byWord);
         markDirty(DirtyFlag::Layout);
+        notifyChanged();
         return true;
     case 36:
     case 268: // GLFW_KEY_HOME
@@ -478,6 +538,7 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
                 controller_.undo();
             }
             markDirty(DirtyFlag::Layout);
+            notifyChanged();
             return true;
         }
         return false;
@@ -485,6 +546,21 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
         if (byWord) {
             controller_.redo();
             markDirty(DirtyFlag::Layout);
+            notifyChanged();
+            return true;
+        }
+        return false;
+    case 13:
+    case 257: // GLFW_KEY_ENTER
+        if (onSubmit_) {
+            onSubmit_();
+            return true;
+        }
+        return false;
+    case 27:
+    case 256: // GLFW_KEY_ESCAPE
+        if (onCancel_) {
+            onCancel_();
             return true;
         }
         return false;
@@ -501,6 +577,7 @@ bool TextInput::onTextInput(const TextInputEvent& event)
 
     controller_.commit(event.text);
     markDirty(DirtyFlag::Layout);
+    notifyChanged();
     return true;
 }
 
@@ -516,6 +593,7 @@ bool TextInput::onCompositionInput(const CompositionInputEvent& event)
     // text is valid and simply leaves an empty active composition range.
     controller_.updateComposition(event.text);
     markDirty(DirtyFlag::Layout);
+    notifyChanged();
     return true;
 }
 
@@ -536,6 +614,7 @@ bool TextInput::cutSelection(Clipboard& clipboard)
     }
     controller_.replaceSelection("");
     markDirty(DirtyFlag::Layout);
+    notifyChanged();
     return true;
 }
 
@@ -546,6 +625,7 @@ bool TextInput::paste(Clipboard& clipboard)
     }
     controller_.commit(clipboard.getText());
     markDirty(DirtyFlag::Layout);
+    notifyChanged();
     return true;
 }
 

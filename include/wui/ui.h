@@ -276,6 +276,24 @@ public:
         node_->setPlaceholder(std::move(value));
         return std::move(self());
     }
+
+    TextField&& onChange(wui::TextInput::ChangeHandler handler) &&
+    {
+        node_->onChange(std::move(handler));
+        return std::move(self());
+    }
+
+    TextField&& onSubmit(wui::TextInput::SubmitHandler handler) &&
+    {
+        node_->onSubmit(std::move(handler));
+        return std::move(self());
+    }
+
+    TextField&& onCancel(wui::TextInput::CancelHandler handler) &&
+    {
+        node_->onCancel(std::move(handler));
+        return std::move(self());
+    }
 };
 
 class Button : public BuilderBase<Button, wui::Button> {

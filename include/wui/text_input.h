@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -100,6 +101,9 @@ using TextInputModel = TextEditingController;
 
 class TextInput : public ControlNode {
 public:
+    using ChangeHandler = std::function<void(const std::string&)>;
+    using SubmitHandler = std::function<void()>;
+    using CancelHandler = std::function<void()>;
     TextInput() = default;
     explicit TextInput(std::string placeholder);
 
@@ -113,6 +117,12 @@ public:
     void setPlaceholder(std::string placeholder);
 
     TextInput& text(std::string text);
+
+    // Applications can react to editing without polling the controller. This
+    // keeps filtering and Enter/Escape form semantics widget-local.
+    TextInput& onChange(ChangeHandler handler);
+    TextInput& onSubmit(SubmitHandler handler);
+    TextInput& onCancel(CancelHandler handler);
 
     void syncSession(TextInputSession& session, const RectF& caretRect) const;
     [[nodiscard]] RectF caretRect() const noexcept;
@@ -130,9 +140,13 @@ public:
 
 private:
     [[nodiscard]] std::size_t caretAt(PointF point) const noexcept;
+    void notifyChanged();
 
     TextEditingController controller_;
     std::string placeholder_;
+    ChangeHandler onChange_;
+    SubmitHandler onSubmit_;
+    CancelHandler onCancel_;
     bool selectingWithPointer_{false};
 };
 

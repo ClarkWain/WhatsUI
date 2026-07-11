@@ -10,6 +10,8 @@ option(WHATSUI_BUILD_TESTS "Build WhatsUI tests" ON)
 option(WHATSUI_BUILD_EXAMPLES "Build WhatsUI examples (requires WHATSUI_WITH_WHATSCANVAS)" OFF)
 option(WHATSUI_INSTALL "Generate install and CMake package export rules" ON)
 option(WHATSUI_ENABLE_SANITIZERS "Enable supported runtime memory sanitizers for WhatsUI and its dependents" OFF)
+option(WHATSUI_ENABLE_ADVANCED_TEXT
+    "Enable the in-tree WhatsCanvas FreeType/HarfBuzz text pipeline by default" ON)
 
 add_library(WhatsUI
     src/whatsui/core/app.cpp
@@ -66,7 +68,32 @@ if(WHATSUI_WITH_WHATSCANVAS)
         )
     endif()
 
+    # WhatsUI's Windows text contract depends on the public WhatsCanvas text
+    # API. Fresh builds enable the FreeType rasterizer and HarfBuzz adapter;
+    # an explicit cache value still wins for embedders that need a smaller
+    # backend (the adapter reports the documented simple-shaping fallback).
+    if(WHATSUI_ENABLE_ADVANCED_TEXT)
+        if(NOT DEFINED WHATSCANVAS_ENABLE_FREETYPE_RASTERIZER)
+            set(WHATSCANVAS_ENABLE_FREETYPE_RASTERIZER ON CACHE BOOL
+                "Enable FreeType rasterization for WhatsUI text" )
+        endif()
+        if(NOT DEFINED WHATSCANVAS_ENABLE_OPENTYPE_SHAPING)
+            set(WHATSCANVAS_ENABLE_OPENTYPE_SHAPING ON CACHE BOOL
+                "Enable HarfBuzz shaping for WhatsUI text" )
+        endif()
+    endif()
     add_subdirectory(third_party/WhatsCanvas EXCLUDE_FROM_ALL)
+    if(NOT TARGET WhatsCanvas::Software)
+        message(FATAL_ERROR
+            "WHATSUI_WITH_WHATSCANVAS=ON requires WhatsCanvas Software. "
+            "Set WHATSCANVAS_BUILD_SOFTWARE=ON so headless tests and core paint symbols link correctly.")
+    endif()
+    # Widget implementations contain the Canvas-backed PaintContext path, so
+    # static-library consumers must carry a concrete renderer transitively.
+    # Without this, ordinary unit-test executables link WhatsUI successfully
+    # until a widget object is pulled in, then fail with unresolved Canvas /
+    # Paint / Image symbols.
+    target_link_libraries(WhatsUI PUBLIC WhatsCanvas::Software)
     target_compile_definitions(WhatsUI PUBLIC WHATSUI_HAS_WHATSCANVAS=1)
     target_include_directories(WhatsUI PUBLIC "${WHATSUI_WHATSCANVAS_ROOT}/include")
 endif()

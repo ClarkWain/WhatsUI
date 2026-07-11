@@ -108,6 +108,42 @@ add_test(
     COMMAND WhatsUIScrollViewTests
 )
 
+# Exercise the public WhatsCanvas bridge rather than WhatsCanvas internals.
+# This is deliberately Windows-font-aware: it proves the default fallback
+# chain and Segoe UI Emoji policy when that system font is installed, while
+# still allowing a reduced CI image to validate UTF-8/bidi/line layout.
+if(TARGET WhatsCanvasSoftware)
+    add_executable(WhatsUITextShapingTests
+        text_shaping_tests.cpp
+    )
+    target_link_libraries(WhatsUITextShapingTests
+        PRIVATE
+            WhatsUI::WhatsUI
+            WhatsCanvas::Software
+    )
+    target_compile_features(WhatsUITextShapingTests PRIVATE cxx_std_17)
+    add_test(
+        NAME whatsui_text_shaping_tests
+        COMMAND WhatsUITextShapingTests
+    )
+    set_tests_properties(whatsui_text_shaping_tests PROPERTIES LABELS "text;unicode;software")
+
+    add_executable(WhatsUITextInputCompositionVisualTests
+        text_input_composition_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUITextInputCompositionVisualTests
+        PRIVATE
+            WhatsUI::WhatsUI
+            WhatsCanvas::Software
+    )
+    target_compile_features(WhatsUITextInputCompositionVisualTests PRIVATE cxx_std_17)
+    add_test(
+        NAME whatsui_text_input_composition_visual_tests
+        COMMAND WhatsUITextInputCompositionVisualTests
+    )
+    set_tests_properties(whatsui_text_input_composition_visual_tests PROPERTIES LABELS "text;ime;visual;software")
+endif()
+
 add_executable(WhatsUILifecycleTests
     lifecycle_tests.cpp
 )
@@ -127,6 +163,22 @@ add_test(
     NAME whatsui_lifecycle_tests
     COMMAND WhatsUILifecycleTests
 )
+
+# When WhatsUI is configured with its optional renderer bridge, widget object
+# files reference WhatsCanvas symbols even for otherwise headless runtime
+# tests. Link that backend consistently so the Windows test executables remain
+# runnable in both supported build configurations.
+if(TARGET WhatsCanvas::Software)
+    foreach(whatsui_runtime_test_target IN ITEMS
+            WhatsUISmokeTests
+            WhatsUILayoutTests
+            WhatsUIStateTests
+            WhatsUIWindowTests
+            WhatsUIScrollViewTests
+            WhatsUILifecycleTests)
+        target_link_libraries(${whatsui_runtime_test_target} PRIVATE WhatsCanvas::Software)
+    endforeach()
+endif()
 
 # The Todo sample is a deterministic, headless Software-renderer walkthrough.
 # Keep its pixel hashes in source control so UI changes are reviewed as visual

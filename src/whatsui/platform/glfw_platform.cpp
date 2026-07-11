@@ -514,9 +514,12 @@ public:
         int fbw, fbh;
         glfwGetFramebufferSize(window_, &fbw, &fbh);
         surface_ = std::make_unique<GlfwRenderSurface>(window_, fbw, fbh);
+        textMeasurer_ = std::make_unique<WhatsCanvasTextMeasurer>(surface_->canvas());
+        textMeasurer_->installWindowsFallbackPolicy();
     }
 
     [[nodiscard]] GlfwRenderSurface& glfwSurface() noexcept { return *surface_; }
+    [[nodiscard]] WhatsCanvasTextMeasurer& textMeasurer() noexcept { return *textMeasurer_; }
 
     static GlfwPlatformWindow* fromGlfw(GLFWwindow* window)
     {
@@ -537,6 +540,7 @@ private:
     GlfwClipboard clipboard_;
     GlfwCursorService cursorService_;
     GlfwTextInputSession textInputSession_;
+    std::unique_ptr<WhatsCanvasTextMeasurer> textMeasurer_;
     bool needsRedraw_{true};
 };
 
@@ -877,8 +881,8 @@ int runGlfwApp(std::string title, SizeF size, GlfwRootFactory rootFactory)
             // Measure, layout and paint against the same font backend and DPR.
             auto m = platformWin.metrics();
             auto& glfwSurface = static_cast<GlfwRenderSurface&>(platformWin.surface());
-            WhatsCanvasTextMeasurer textMeasurer(glfwSurface.canvas(), m.scaleFactor);
-            setTextMeasurer(&textMeasurer);
+            glfwWin->textMeasurer().setScaleFactor(m.scaleFactor);
+            setTextMeasurer(&glfwWin->textMeasurer());
             win.layout();
 
             // Paint

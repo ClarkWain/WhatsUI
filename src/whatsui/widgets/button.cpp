@@ -194,9 +194,15 @@ void Checkbox::paint(PaintContext& context)
     context.fillRoundRect(indicator, current.radius.sm, border);
     context.fillRoundRect({indicator.x + 1.0f, indicator.y + 1.0f, indicatorSize - 2.0f, indicatorSize - 2.0f}, current.radius.sm, box);
     if (isChecked()) {
-        // Kept ASCII because the lightweight canvas text backend guarantees
-        // this glyph on every supported Windows font configuration.
-        context.drawText("x", indicator.x + 5.0f, indicator.y + indicatorSize - 3.0f, 14.0f, current.colors.onAccent);
+        // A geometric checkmark keeps this compact control independent of the
+        // text glyph atlas. That matters when a completed ForEach branch is
+        // mounted mid-frame: the Software renderer batches text after widget
+        // paint, whereas the selection indicator must be immediately stable.
+        const Color mark = current.colors.onAccent;
+        context.fillRect({indicator.x + 4.0f, indicator.y + 10.0f, 3.0f, 1.0f}, mark);
+        context.fillRect({indicator.x + 6.0f, indicator.y + 9.0f, 2.0f, 2.0f}, mark);
+        context.fillRect({indicator.x + 8.0f, indicator.y + 7.0f, 2.0f, 3.0f}, mark);
+        context.fillRect({indicator.x + 9.0f, indicator.y + 6.0f, 6.0f, 2.0f}, mark);
     }
     if (!label_.empty()) {
         context.drawText(label_, bounds().x + indicatorSize + current.spacing.sm,

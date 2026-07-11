@@ -1,5 +1,6 @@
 #include <memory>
 #include <cstdio>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 
@@ -63,9 +64,13 @@ public:
 
 class FakeWindow final : public wui::PlatformWindow {
 public:
-    explicit FakeWindow(wui::WindowId id) : id_(id) {}
+    explicit FakeWindow(wui::WindowId id, wui::WindowMetrics metrics = {{320.0f, 180.0f}, {640.0f, 360.0f}, 2.0f})
+        : id_(id)
+        , metrics_(metrics)
+    {
+    }
     [[nodiscard]] wui::WindowId id() const noexcept override { return id_; }
-    [[nodiscard]] wui::WindowMetrics metrics() const noexcept override { return {{320.0f, 180.0f}, {640.0f, 360.0f}, 2.0f}; }
+    [[nodiscard]] wui::WindowMetrics metrics() const noexcept override { return metrics_; }
     void show() override { open_ = true; }
     void close() override { open_ = false; }
     [[nodiscard]] bool isOpen() const noexcept override { return open_; }
@@ -82,6 +87,7 @@ public:
     int redraws{0};
 private:
     wui::WindowId id_;
+    wui::WindowMetrics metrics_;
     bool open_{true};
     FakeSurface surface_;
     FakeClipboard clipboard_;
@@ -91,16 +97,37 @@ private:
 
 class FakeHost final : public wui::PlatformHost {
 public:
+    explicit FakeHost(wui::WindowMetrics metrics = {{320.0f, 180.0f}, {640.0f, 360.0f}, 2.0f})
+        : metrics_(metrics)
+    {
+    }
+
     [[nodiscard]] std::unique_ptr<wui::PlatformWindow> createWindow(std::string, wui::SizeF) override
     {
-        return std::make_unique<FakeWindow>(nextId_++);
+        return std::make_unique<FakeWindow>(nextId_++, metrics_);
     }
     [[nodiscard]] int run() override { return 0; }
     void quit(int exitCode = 0) override { exitCode_ = exitCode; }
 private:
     wui::WindowId nextId_{1};
+    wui::WindowMetrics metrics_;
     int exitCode_{0};
 };
+
+// Mirrors the documented native-boundary projection without linking the
+// headless test to Win32.  The GLFW IMM32 backend owns this conversion using
+// GetClientRect()/glfwGetWindowSize(); this unit check proves the UiWindow
+// side supplies unscaled logical coordinates at fractional DPI.
+wui::PointF projectLogicalCaretToClient(const wui::RectF& caret, const wui::WindowMetrics& metrics)
+{
+    const float scaleX = metrics.logicalSize.width > 0.0f
+        ? metrics.framebufferSize.width / metrics.logicalSize.width
+        : 1.0f;
+    const float scaleY = metrics.logicalSize.height > 0.0f
+        ? metrics.framebufferSize.height / metrics.logicalSize.height
+        : 1.0f;
+    return {std::round(caret.x * scaleX), std::round((caret.y + caret.height) * scaleY)};
+}
 
 wui::PointerEvent pointer(wui::PointerAction action)
 {
@@ -275,6 +302,66 @@ void testWindowCoordinatesTextInputSession()
     expect(session.deactivations == 1, "Replacing a focused text root should deactivate the session");
 }
 
+void testHighDpiImeCaretCompositionAndClipboardContract()
+{
+    // 150% is intentional: integer-only 100%/200% checks can conceal a
+    // logical-vs-client coordinate mix-up at the IMM32 boundary.
+    const wui::WindowMetrics metrics{{400.0f, 260.0f}, {600.0f, 390.0f}, 1.5f};
+    wui::UiApp app(std::make_unique<FakeHost>(metrics));
+    auto& window = app.openWindow("high dpi input", metrics.logicalSize);
+    auto& platform = static_cast<FakeWindow&>(window.platformWindow());
+
+    auto input = std::make_unique<wui::TextInput>();
+    input->text("abcdef");
+    auto* inputPtr = input.get();
+    window.setRoot(std::move(input));
+    window.layout();
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Down)),
+           "High-DPI text input should accept focus before synchronizing its native session");
+
+    // Move to a known position through normal window routing, which must
+    // trigger the same session synchronization path as an IME update.
+    inputPtr->controller().setSelection({4, 4});
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 39, 0, false}),
+           "Right arrow should update the high-DPI caret through the focused TextInput");
+    const auto logicalCaret = inputPtr->caretRect();
+    const auto& session = platform.fakeTextInput();
+    expect(std::fabs(session.caretRect.x - logicalCaret.x) < 0.01f &&
+               std::fabs(session.caretRect.y - logicalCaret.y) < 0.01f,
+           "UiWindow must hand TextInputSession an unscaled logical caret rectangle");
+
+    const auto clientCaret = projectLogicalCaretToClient(session.caretRect, metrics);
+    expect(clientCaret.x == std::round(logicalCaret.x * 1.5f) &&
+               clientCaret.y == std::round((logicalCaret.y + logicalCaret.height) * 1.5f),
+           "The documented logical-to-client projection must preserve a fractional-DPI caret and candidate anchor");
+
+    expect(window.dispatchComposition({window.id(), "ni", wui::CompositionInputEvent::Phase::Start}),
+           "Composition start must route through the high-DPI focused input");
+    expect(inputPtr->controller().composition().start == 5 && inputPtr->controller().composition().end == 7,
+           "Pre-edit text must retain an explicit composition range for the visual underline path");
+    expect(session.surroundingText == "abcdenif" && session.selectionStart == 5 && session.selectionEnd == 7,
+           "IME updates must synchronize pre-edit surrounding text and selection to the platform session");
+    expect(window.dispatchComposition({window.id(), "", wui::CompositionInputEvent::Phase::End}),
+           "Composition end must route through the high-DPI focused input");
+    expect(inputPtr->controller().composition().empty(),
+           "Composition end must clear the range so a stale underline cannot survive a commit/cancel");
+    expect(inputPtr->controller().selection().empty() && inputPtr->controller().selection().end == 7,
+           "Composition end must collapse the transient pre-edit selection so Windows does not show a stale highlight");
+
+    inputPtr->controller().setSelection({1, 3});
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 67, wui::KeyModifierControl, false}),
+           "Ctrl+C must remain available after an IME lifecycle");
+    expect(platform.clipboard().getText() == "bc",
+           "Clipboard copy must use the post-composition selection rather than the cancelled pre-edit span");
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 88, wui::KeyModifierControl, false}),
+           "Ctrl+X must remain available after an IME lifecycle");
+    platform.clipboard().setText("BC");
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 86, wui::KeyModifierControl, false}),
+           "Ctrl+V must remain available after an IME lifecycle");
+    expect(inputPtr->controller().text() == "aBCdenif",
+           "Clipboard paste must replace the same logical range after high-DPI IME composition");
+}
+
 void testWindowSuspendsAndRestoresTextInputOnPlatformFocusChange()
 {
     wui::UiApp app(std::make_unique<FakeHost>());
@@ -321,6 +408,31 @@ void testWindowRoutesClipboardShortcutsToFocusedTextInput()
     window.platformWindow().clipboard().setText("LPH");
     expect(window.dispatchKey(ctrlV), "UiWindow should route Ctrl+V to the focused TextInput");
     expect(inputPtr->controller().text() == "aLPHa", "Ctrl+V should insert the platform clipboard content at the caret");
+}
+
+void testTextInputCallbacksSupportPaletteFilteringAndKeyboardCompletion()
+{
+    wui::UiApp app(std::make_unique<FakeHost>());
+    auto& window = app.openWindow("palette input", {320.0f, 180.0f});
+    std::string lastQuery;
+    int submits = 0;
+    int cancels = 0;
+    auto input = std::make_unique<wui::TextInput>("Search commands");
+    input->onChange([&](const std::string& value) { lastQuery = value; });
+    input->onSubmit([&] { ++submits; });
+    input->onCancel([&] { ++cancels; });
+    window.setRoot(std::move(input));
+    window.layout();
+
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Down)), "Palette input should accept focus");
+    expect(window.dispatchTextInput({window.id(), "focus"}), "Committed palette text should route to TextInput");
+    expect(lastQuery == "focus", "TextInput onChange should receive the live query after committed input");
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 13, 0, false}),
+           "TextInput onSubmit should consume Enter");
+    expect(submits == 1, "Enter should run exactly one palette submit callback");
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 27, 0, false}),
+           "TextInput onCancel should consume Escape when no modal owns it");
+    expect(cancels == 1, "Escape should run exactly one palette cancel callback");
 }
 
 void testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus()
@@ -402,8 +514,10 @@ int main()
         testWindowRoutesTopOverlayAndRequestsRedraw();
         testPointerCaptureCancelsForWindowOverlayAndDetach();
         testWindowCoordinatesTextInputSession();
+        testHighDpiImeCaretCompositionAndClipboardContract();
         testWindowSuspendsAndRestoresTextInputOnPlatformFocusChange();
         testWindowRoutesClipboardShortcutsToFocusedTextInput();
+        testTextInputCallbacksSupportPaletteFilteringAndKeyboardCompletion();
         testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus();
         testDeclarativeDialogBuilderProducesConcreteModal();
         testAppReleasesClosedWindows();
