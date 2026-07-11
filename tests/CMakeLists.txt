@@ -260,6 +260,23 @@ add_test(
     COMMAND WhatsUIListViewTests
 )
 
+add_executable(WhatsUITodoStorageTests
+    todo_storage_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_storage.cpp
+)
+
+target_include_directories(WhatsUITodoStorageTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app
+)
+
+target_compile_features(WhatsUITodoStorageTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_todo_storage_tests
+    COMMAND WhatsUITodoStorageTests
+)
+
 # When WhatsUI is configured with its optional renderer bridge, widget object
 # files reference WhatsCanvas symbols even for otherwise headless runtime
 # tests. Link that backend consistently so the Windows test executables remain
@@ -277,7 +294,8 @@ if(TARGET WhatsCanvas::Software)
             WhatsUIBasicControlsTests
             WhatsUIOverlayTests
             WhatsUIAccessibilityTests
-            WhatsUIListViewTests)
+            WhatsUIListViewTests
+            WhatsUITodoStorageTests)
         target_link_libraries(${whatsui_runtime_test_target} PRIVATE WhatsCanvas::Software)
     endforeach()
 endif()
