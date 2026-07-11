@@ -46,7 +46,7 @@ all be true.
 - [ ] Pointer capture API and cancellation semantics.
 - [ ] Capture/target/bubble routing contract with typed event result/context.
 - [ ] Nested scrolling handoff and horizontal scrolling.
-- [ ] Settings Panel reference example: controls, scrolling, tab navigation,
+- [x] Settings Panel reference example: controls, scrolling, tab navigation,
   dialog, and popup menu.
 
 ### M2 — Windows Text and IME (`v0.3-text-preview`)

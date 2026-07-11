@@ -107,7 +107,7 @@ bool Button::onPointerEvent(const PointerEvent& event)
         return false;
     case PointerAction::Up:
         if (event.button == MouseButton::Left) {
-            const bool shouldClick = (visualStates() & toMask(ControlVisualState::Pressed)) != 0;
+            const bool shouldClick = (visualStates() & toMask(ControlVisualState::Pressed)) != 0 && bounds().contains(event.position);
             setVisualState(ControlVisualState::Pressed, false);
             if (shouldClick && onClick_) {
                 onClick_();
@@ -116,11 +116,15 @@ bool Button::onPointerEvent(const PointerEvent& event)
         }
         return false;
     case PointerAction::Enter:
-    case PointerAction::Move:
         setVisualState(ControlVisualState::Hovered, true);
+        return true;
+    case PointerAction::Move:
+        setVisualState(ControlVisualState::Hovered, bounds().contains(event.position));
         return true;
     case PointerAction::Leave:
         setVisualState(ControlVisualState::Hovered, false);
+        return true;
+    case PointerAction::Cancel:
         setVisualState(ControlVisualState::Pressed, false);
         return true;
     }
@@ -218,14 +222,16 @@ bool Checkbox::onPointerEvent(const PointerEvent& event)
         return false;
     case PointerAction::Up:
         if (event.button == MouseButton::Left) {
-            const bool activate = (visualStates() & toMask(ControlVisualState::Pressed)) != 0;
+            const bool activate = (visualStates() & toMask(ControlVisualState::Pressed)) != 0 && bounds().contains(event.position);
             setVisualState(ControlVisualState::Pressed, false);
             if (activate) toggle();
             return true;
         }
         return false;
-    case PointerAction::Enter: case PointerAction::Move: setVisualState(ControlVisualState::Hovered, true); return true;
-    case PointerAction::Leave: setVisualState(ControlVisualState::Hovered, false); setVisualState(ControlVisualState::Pressed, false); return true;
+    case PointerAction::Enter: setVisualState(ControlVisualState::Hovered, true); return true;
+    case PointerAction::Move: setVisualState(ControlVisualState::Hovered, bounds().contains(event.position)); return true;
+    case PointerAction::Leave: setVisualState(ControlVisualState::Hovered, false); return true;
+    case PointerAction::Cancel: setVisualState(ControlVisualState::Pressed, false); return true;
     default: return false;
     }
 }

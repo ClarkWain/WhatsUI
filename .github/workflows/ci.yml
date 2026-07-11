@@ -81,7 +81,9 @@ jobs:
             test_regex: ''
           - name: software-visual-regression
             configure_args: -DWHATSUI_WITH_WHATSCANVAS=ON -DWHATSUI_BUILD_TESTS=ON -DWHATSUI_BUILD_EXAMPLES=ON
-            test_regex: -R ^whatsui_todo_visual_regression$
+            # Quote the alternation for PowerShell: an unquoted | becomes a
+            # pipeline before CTest receives its regular expression.
+            test_regex: -R '^whatsui_(todo_visual_regression|settings_reference_capture)$'
 
     steps:
       - name: Checkout

@@ -80,6 +80,10 @@ public:
     virtual void layout(const RectF& bounds);
     virtual void paint(PaintContext& context) = 0;
     [[nodiscard]] virtual Node* hitTest(PointF point);
+    // Compatibility adapter: established widgets may continue overriding the
+    // bool overload while new nodes can inspect the routing phase and make
+    // explicit focus/capture/propagation requests.
+    virtual EventResult onPointerEvent(const PointerEvent& event, EventContext& context);
     virtual bool onPointerEvent(const PointerEvent& event);
     virtual bool onKeyEvent(const KeyEvent& event);
     virtual bool onTextInput(const TextInputEvent& event);

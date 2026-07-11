@@ -235,6 +235,7 @@ void UiWindow::onPlatformFocusChanged(bool focused) noexcept
 {
     if (!focused) {
         deactivateTextInputSession();
+        inputRouter_.cancelPointerCapture();
         inputRouter_.clearHover();
     } else {
         syncTextInputSession();
@@ -258,6 +259,7 @@ void UiWindow::onOverlayChanged() noexcept
     // non-owning pointers before the next event is delivered.
     deactivateTextInputSession();
     focusManager_.clear();
+    inputRouter_.cancelPointerCapture();
     inputRouter_.clearHover();
     for (const auto& overlay : overlayHost_.overlays()) {
         if (overlay.content) {

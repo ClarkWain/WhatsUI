@@ -109,6 +109,95 @@ wui::PointerEvent pointer(wui::PointerAction action)
             {12.0f, 12.0f}, 0};
 }
 
+class CaptureProbe final : public wui::Node {
+public:
+    [[nodiscard]] wui::SizeF measure(const wui::Constraints& constraints) const override
+    {
+        return constraints.clamp({100.0f, 64.0f});
+    }
+
+    void paint(wui::PaintContext&) override { clearDirty(wui::DirtyFlag::Paint); }
+
+    bool onPointerEvent(const wui::PointerEvent& event) override
+    {
+        switch (event.action) {
+        case wui::PointerAction::Down: ++downs; break;
+        case wui::PointerAction::Move: ++moves; break;
+        case wui::PointerAction::Up: ++ups; break;
+        case wui::PointerAction::Cancel: ++cancels; break;
+        default: break;
+        }
+        return event.action != wui::PointerAction::Enter && event.action != wui::PointerAction::Leave;
+    }
+
+    int downs{0};
+    int moves{0};
+    int ups{0};
+    int cancels{0};
+};
+
+class CaptureHost final : public wui::ContainerNode {
+public:
+    [[nodiscard]] wui::SizeF measure(const wui::Constraints& constraints) const override
+    {
+        return constraints.clamp({320.0f, 180.0f});
+    }
+};
+
+void testPointerCaptureCancelsForWindowOverlayAndDetach()
+{
+    wui::UiApp app(std::make_unique<FakeHost>());
+    auto& window = app.openWindow("capture", {320.0f, 180.0f});
+
+    auto probe = std::make_unique<CaptureProbe>();
+    auto* probeRaw = probe.get();
+    window.setRoot(std::move(probe));
+    window.layout();
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Down)), "Pointer down should start a capture gesture");
+    expect(window.inputRouter().capturedPointer() == probeRaw, "Handled primary down must capture its target");
+
+    auto outside = pointer(wui::PointerAction::Move);
+    outside.position = {800.0f, 600.0f};
+    expect(window.dispatchPointer(outside), "Captured move outside hit bounds must still be delivered");
+    expect(probeRaw->moves == 1, "Capture target must receive outside move");
+
+    window.onPlatformFocusChanged(false);
+    expect(probeRaw->cancels == 1 && window.inputRouter().capturedPointer() == nullptr,
+           "Native focus loss must cancel and release the active gesture exactly once");
+
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Down)), "A new gesture should start after focus cancellation");
+    const auto overlay = window.overlayHost().show(std::make_unique<wui::Button>("Overlay"));
+    expect(probeRaw->cancels == 2 && window.inputRouter().capturedPointer() == nullptr,
+           "Overlay mutations must cancel page capture before changing the input layer");
+    (void)window.overlayHost().dismiss(overlay);
+
+    auto host = std::make_unique<CaptureHost>();
+    auto child = std::make_unique<CaptureProbe>();
+    auto* hostRaw = host.get();
+    auto* childRaw = child.get();
+    child->layout({0.0f, 0.0f, 100.0f, 64.0f});
+    host->appendChild(std::move(child));
+    window.setRoot(std::move(host));
+    window.layout();
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Down)), "Attached child should begin a captured gesture");
+    expect(window.inputRouter().capturedPointer() == childRaw, "Child should own the active capture");
+    auto retained = hostRaw->removeChild(0);
+    expect(childRaw->cancels == 1 && window.inputRouter().capturedPointer() == nullptr,
+           "Detaching a captured node must synchronously cancel and release it");
+
+    auto button = std::make_unique<wui::Button>("No drag-out activation");
+    int clicks = 0;
+    button->onClick([&] { ++clicks; });
+    window.setRoot(std::move(button));
+    window.layout();
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Down)), "Button press should be handled");
+    auto upOutside = pointer(wui::PointerAction::Up);
+    upOutside.position = {800.0f, 600.0f};
+    expect(window.dispatchPointer(upOutside), "Captured button up should be delivered outside bounds");
+    expect(clicks == 0 && window.inputRouter().capturedPointer() == nullptr,
+           "Release outside must not activate and must release the capture");
+}
+
 void testWindowRoutesTopOverlayAndRequestsRedraw()
 {
     wui::UiApp app(std::make_unique<FakeHost>());
@@ -287,6 +376,7 @@ int main()
 {
     try {
         testWindowRoutesTopOverlayAndRequestsRedraw();
+        testPointerCaptureCancelsForWindowOverlayAndDetach();
         testWindowCoordinatesTextInputSession();
         testWindowSuspendsAndRestoresTextInputOnPlatformFocusChange();
         testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus();

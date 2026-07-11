@@ -1,4 +1,5 @@
 #include <memory>
+#include <cstdio>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -40,6 +41,39 @@ public:
         context.clipRect({0.0f, 0.0f, 1.0f, 1.0f});
         clearDirty(wui::DirtyFlag::Paint);
     }
+};
+
+class EventProbe final : public wui::ContainerNode {
+public:
+    EventProbe(std::string name, std::vector<std::string>& trace)
+        : name_(std::move(name)), trace_(trace) {}
+
+    [[nodiscard]] wui::SizeF measure(const wui::Constraints& constraints) const override
+    {
+        return constraints.clamp({10.0f, 10.0f});
+    }
+
+    wui::EventResult onPointerEvent(const wui::PointerEvent&, wui::EventContext& context) override
+    {
+        const char* phase = "target";
+        if (context.phase() == wui::EventPhase::Capture) phase = "capture";
+        if (context.phase() == wui::EventPhase::Bubble) phase = "bubble";
+        trace_.push_back(name_ + ":" + phase);
+        if (stopWithContext_) context.stopPropagation();
+        if (focusWithContext_) context.requestFocus(focusTarget_);
+        if (captureWithContext_) context.capturePointer();
+        return result_;
+    }
+
+    wui::EventResult result_{wui::EventResult::Ignored};
+    bool stopWithContext_{false};
+    bool focusWithContext_{false};
+    bool captureWithContext_{false};
+    wui::Node* focusTarget_{nullptr};
+
+private:
+    std::string name_;
+    std::vector<std::string>& trace_;
 };
 
 void expect(bool condition, const std::string& message)
@@ -288,6 +322,66 @@ void testInputRouterAndButton()
     expect((button->visualStates() & wui::toMask(wui::ControlVisualState::Hovered)) == 0, "Button should clear hovered state after leave");
 }
 
+void testPointerCaptureTargetBubbleRoutingContract()
+{
+    std::vector<std::string> trace;
+    auto root = std::make_unique<EventProbe>("root", trace);
+    auto parent = std::make_unique<EventProbe>("parent", trace);
+    auto target = std::make_unique<EventProbe>("target", trace);
+    auto* rootRaw = root.get();
+    auto* parentRaw = parent.get();
+    auto* targetRaw = target.get();
+    targetRaw->result_ = wui::EventResult::Handled;
+    parentRaw->appendChild(std::move(target));
+    rootRaw->appendChild(std::move(parent));
+    rootRaw->layout({0.0f, 0.0f, 100.0f, 100.0f});
+    parentRaw->layout({0.0f, 0.0f, 100.0f, 100.0f});
+    targetRaw->layout({0.0f, 0.0f, 100.0f, 100.0f});
+
+    wui::FocusManager focus;
+    wui::InputRouter router(&focus);
+    router.setRoot(rootRaw);
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                                 wui::MouseButton::Left, {10.0f, 10.0f}, 0};
+    const wui::PointerEvent move{0, wui::PointerType::Mouse, wui::PointerAction::Move,
+                                 wui::MouseButton::None, {10.0f, 10.0f}, 0};
+    (void)router.dispatchPointer(move); // Establish hover; Enter is not part of the Down route contract.
+    trace.clear();
+    expect(router.dispatchPointer(down), "Target handler should mark the routed pointer event handled");
+    expect(trace == std::vector<std::string>{"root:capture", "parent:capture", "target:target", "parent:bubble", "root:bubble"},
+           "Pointer routing must follow Capture -> Target -> Bubble exactly once per path node");
+
+    router.releasePointer();
+    trace.clear();
+    parentRaw->stopWithContext_ = true;
+    expect(router.dispatchPointer(down), "Stopping propagation should count as handled");
+    expect(trace == std::vector<std::string>{"root:capture", "parent:capture"},
+           "Capture stopPropagation must prevent Target and Bubble delivery");
+
+    parentRaw->stopWithContext_ = false;
+    trace.clear();
+    parentRaw->focusWithContext_ = true;
+    parentRaw->focusTarget_ = parentRaw;
+    expect(router.dispatchPointer(down), "Context focus request should handle the event");
+    expect(focus.focused() == parentRaw, "EventContext::requestFocus should override default target focus");
+
+    router.releasePointer();
+    parentRaw->focusWithContext_ = false;
+    parentRaw->captureWithContext_ = true;
+    trace.clear();
+    expect(router.dispatchPointer(down), "Context pointer capture request should handle the event");
+    expect(router.capturedPointer() == parentRaw,
+           "EventContext::capturePointer should delegate to the router capture API without storing capture in the context");
+
+    parentRaw->captureWithContext_ = false;
+    parentRaw->stopWithContext_ = true;
+    const wui::PointerEvent upOutside{0, wui::PointerType::Mouse, wui::PointerAction::Up,
+                                      wui::MouseButton::Left, {150.0f, 150.0f}, 0};
+    expect(router.dispatchPointer(upOutside), "A stopped captured Up should still report handled");
+    expect(router.capturedPointer() == nullptr,
+           "Stopping propagation must not retain pointer capture after the gesture's Up event");
+}
+
 void testCheckboxPointerKeyboardBindingAndDisabledState()
 {
     wui::State<bool> value{false};
@@ -373,10 +467,13 @@ void testDeclarativeBuilderAndCounter()
 
     // Lay the tree out so node bounds are valid, then click the button.
     root->layout({0.0f, 0.0f, 300.0f, 200.0f});
-    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down, wui::MouseButton::Left, {0.0f, 0.0f}, 0};
-    const wui::PointerEvent up{0, wui::PointerType::Mouse, wui::PointerAction::Up, wui::MouseButton::Left, {0.0f, 0.0f}, 0};
-    button->onPointerEvent(down);
-    button->onPointerEvent(up);
+    const auto& buttonBounds = button->bounds();
+    const wui::PointF buttonCenter{buttonBounds.x + buttonBounds.width * 0.5f,
+                                   buttonBounds.y + buttonBounds.height * 0.5f};
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down, wui::MouseButton::Left, buttonCenter, 0};
+    const wui::PointerEvent up{0, wui::PointerType::Mouse, wui::PointerAction::Up, wui::MouseButton::Left, buttonCenter, 0};
+    (void)button->onPointerEvent(down);
+    (void)button->onPointerEvent(up);
 
     expect(count.get() == 1, "Clicking the declaratively-built button should increment the counter state");
 }
@@ -499,12 +596,13 @@ void testListActionCanRemoveItsOwnRow()
 
     auto* first = dynamic_cast<wui::Button*>(list->children().front().get());
     expect(first != nullptr, "First list child should be a button");
+    first->layout({0.0f, 0.0f, 80.0f, 32.0f});
     const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down,
-                                 wui::MouseButton::Left, {0.0f, 0.0f}, 0};
+                                 wui::MouseButton::Left, {10.0f, 10.0f}, 0};
     const wui::PointerEvent up{0, wui::PointerType::Mouse, wui::PointerAction::Up,
-                               wui::MouseButton::Left, {0.0f, 0.0f}, 0};
-    first->onPointerEvent(down);
-    first->onPointerEvent(up);
+                               wui::MouseButton::Left, {10.0f, 10.0f}, 0};
+    (void)first->onPointerEvent(down);
+    (void)first->onPointerEvent(up);
 
     expect(items.get() == std::vector<int>{2}, "Click handler should remove its own item");
     expect(list->children().size() == 2, "Structural mutation must wait until the handler returns");
@@ -612,6 +710,7 @@ void testKeyboardFocusTraversalAndControlActivation()
 
 int main()
 {
+    try {
     testInvalidationReachesTheRootAndPaintsAfterLayout();
     testContainerPaintStateIsolation();
     testStructuralPaintStateIsolation();
@@ -620,6 +719,7 @@ int main()
     testNavigatorPageRetention();
     testTextInputModel();
     testInputRouterAndButton();
+    testPointerCaptureTargetBubbleRoutingContract();
     testCheckboxPointerKeyboardBindingAndDisabledState();
     testOverlayHitTestingAndRouting();
     testDeclarativeBuilderAndCounter();
@@ -637,5 +737,9 @@ int main()
     testLayoutFlexAndAlign();
     testTextInputRouting();
     testKeyboardFocusTraversalAndControlActivation();
+    } catch (const std::exception& error) {
+        std::fprintf(stderr, "WhatsUISmokeTests failed: %s\\n", error.what());
+        return 1;
+    }
     return 0;
 }

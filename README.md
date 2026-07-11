@@ -105,6 +105,12 @@ GLFW Todo demo are available as `WhatsUITodoApp` and `WhatsUITodoGlfw`.
 See [Todo demo delivery](doc/whatsui/TODO_DEMO_DELIVERY.md) for commands and
 the fixed visual-regression scene set.
 
+### Settings reference
+
+`WhatsUISettingsApp` (Software capture) and `WhatsUISettingsGlfw` (interactive
+GLFW) share a Fluent Windows Settings tree that demonstrates the M1 focus,
+scroll, dialog, and overlay contracts. See [Settings reference](doc/whatsui/SETTINGS_PANEL_REFERENCE.md).
+
 ## GitHub 配置
 
 仓库当前已经带有：

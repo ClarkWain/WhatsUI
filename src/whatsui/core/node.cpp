@@ -159,6 +159,18 @@ Node* Node::hitTest(PointF point)
     return bounds_.contains(point) ? this : nullptr;
 }
 
+EventResult Node::onPointerEvent(const PointerEvent& event, EventContext& context)
+{
+    // The legacy callback historically ran on the hit target and then during
+    // bubbling. Do not invoke it during the newly introduced capture phase:
+    // existing ScrollView/Dialog/Button implementations must not observe the
+    // same gesture twice simply because the router gained capture semantics.
+    if (context.phase() == EventPhase::Capture) {
+        return EventResult::Ignored;
+    }
+    return onPointerEvent(event) ? EventResult::Handled : EventResult::Ignored;
+}
+
 bool Node::onPointerEvent(const PointerEvent& event)
 {
     (void)event;
