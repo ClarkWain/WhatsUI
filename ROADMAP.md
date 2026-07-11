@@ -72,11 +72,12 @@ all be true.
 
 ### M4 — Performance and Inspector (`v0.5-performance-preview`)
 
-- [ ] Keyed virtual ListView and item reuse.
+- [x] Keyed virtual ListView and item reuse.
 - [ ] Frame/layout/paint/dirty/draw-call/text-cache instrumentation.
-- [ ] UiInspector: node tree, constraints, final rect, dirty flags, hit path,
-  style resolution, and repaint regions.
-- [ ] Benchmarks: 1,000 controls, 100,000-row logical list, 10,000 text nodes,
+- [x] UiInspector snapshot: node tree, final rect, dirty flags, hit path, and
+  repaint summary.
+- [ ] Inspector constraints, resolved style values, and repaint-region overlays.
+- [x] Benchmarks: 1,000 controls, 100,000-row logical list, 10,000 text nodes,
   mutation storm, and overlay stress.
 
 ### M5 — Stable Windows 1.0

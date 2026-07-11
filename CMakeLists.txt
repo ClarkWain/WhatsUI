@@ -20,6 +20,7 @@ add_library(WhatsUI
     src/whatsui/core/text_metrics.cpp
     src/whatsui/core/theme.cpp
     src/whatsui/core/thread_check.cpp
+    src/whatsui/core/ui_inspector.cpp
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
     src/whatsui/widgets/button.cpp
@@ -33,6 +34,7 @@ add_library(WhatsUI
     src/whatsui/widgets/structural.cpp
     src/whatsui/widgets/text.cpp
     src/whatsui/widgets/text_input.cpp
+    src/whatsui/widgets/virtual_list.cpp
 )
 
 add_library(WhatsUI::WhatsUI ALIAS WhatsUI)

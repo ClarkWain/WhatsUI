@@ -277,6 +277,55 @@ add_test(
     COMMAND WhatsUITodoStorageTests
 )
 
+add_executable(WhatsUIVirtualListTests
+    m4_virtual_list_tests.cpp
+)
+
+target_link_libraries(WhatsUIVirtualListTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIVirtualListTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_virtual_list_tests
+    COMMAND WhatsUIVirtualListTests
+)
+
+add_executable(WhatsUIUiInspectorTests
+    m4_ui_inspector_tests.cpp
+)
+
+target_link_libraries(WhatsUIUiInspectorTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIUiInspectorTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_ui_inspector_tests
+    COMMAND WhatsUIUiInspectorTests
+)
+
+add_executable(WhatsUIBenchmarks
+    m4_benchmarks.cpp
+)
+
+target_link_libraries(WhatsUIBenchmarks
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIBenchmarks PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_benchmarks
+    COMMAND WhatsUIBenchmarks
+)
+set_tests_properties(whatsui_benchmarks PROPERTIES LABELS "benchmark;diagnostic")
+
 # When WhatsUI is configured with its optional renderer bridge, widget object
 # files reference WhatsCanvas symbols even for otherwise headless runtime
 # tests. Link that backend consistently so the Windows test executables remain
@@ -295,7 +344,10 @@ if(TARGET WhatsCanvas::Software)
             WhatsUIOverlayTests
             WhatsUIAccessibilityTests
             WhatsUIListViewTests
-            WhatsUITodoStorageTests)
+            WhatsUITodoStorageTests
+            WhatsUIVirtualListTests
+            WhatsUIUiInspectorTests
+            WhatsUIBenchmarks)
         target_link_libraries(${whatsui_runtime_test_target} PRIVATE WhatsCanvas::Software)
     endforeach()
 endif()

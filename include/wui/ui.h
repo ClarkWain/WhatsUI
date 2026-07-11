@@ -29,6 +29,7 @@
 #include "wui/basic_controls.h"
 #include "wui/list_view.h"
 #include "wui/overlays.h"
+#include "wui/virtual_list.h"
 #include "wui/scheduler.h"
 #include "wui/state.h"
 #include "wui/structural.h"

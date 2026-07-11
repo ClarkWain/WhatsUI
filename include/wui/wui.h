@@ -19,5 +19,6 @@
 #include "wui/thread_check.h"
 #include "wui/types.h"
 #include "wui/ui.h"
+#include "wui/ui_inspector.h"
 #include "wui/whatscanvas_text.h"
 #include "wui/widgets.h"
