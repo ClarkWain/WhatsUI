@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <iostream>
@@ -25,49 +26,27 @@
 #include "wui/ui.h"
 #include "wui/whatscanvas_text.h"
 
+#include "todo_model.h"
+#include "todo_controller.h"
+#include "todo_storage.h"
+
 #ifdef WUI_TODO_INTERACTIVE
 #include "wui/glfw_platform.h"
 #endif
 
 namespace {
 
-std::vector<unsigned char> makeStatusIcon(bool done)
+using Todo = whatsui::todo::TodoRecord;
+
+std::filesystem::path interactiveTodoStorePath()
 {
-    constexpr int size = 28;
-    std::vector<unsigned char> pixels(static_cast<std::size_t>(size * size * 4), 0);
-    for (int y = 0; y < size; ++y) {
-        for (int x = 0; x < size; ++x) {
-            const float dx = static_cast<float>(x) - 13.5f;
-            const float dy = static_cast<float>(y) - 13.5f;
-            const bool circle = dx * dx + dy * dy <= 12.0f * 12.0f;
-            const bool check = done && ((x >= 7 && x <= 12 && y - x >= 4 && y - x <= 7)
-                                      || (x >= 11 && x <= 21 && x + y >= 27 && x + y <= 31));
-            const std::size_t offset = static_cast<std::size_t>((y * size + x) * 4);
-            const bool border = dx * dx + dy * dy >= 9.5f * 9.5f;
-            const wui::Color color = !circle ? wui::Color{255, 255, 255, 255}
-                : check ? wui::Color{255, 255, 255, 255}
-                : done ? wui::Color{99, 102, 241, 255}
-                : border ? wui::Color{148, 163, 184, 255}
-                : wui::Color{248, 250, 252, 255};
-            pixels[offset] = color.r;
-            pixels[offset + 1] = color.g;
-            pixels[offset + 2] = color.b;
-            pixels[offset + 3] = color.a;
-        }
+    if (const char* localAppData = std::getenv("LOCALAPPDATA"); localAppData != nullptr && *localAppData != '\0') {
+        return std::filesystem::path(localAppData) / "WhatsUI" / "Todo" / "todos.store";
     }
-    return pixels;
+    // GLFW can also be hosted in a portable/sandboxed Windows environment.
+    // Keep the fallback explicit and local rather than losing user work.
+    return std::filesystem::current_path() / "WhatsUI" / "Todo" / "todos.store";
 }
-
-struct Todo {
-    int id{0};
-    std::string text;
-    bool done{false};
-
-    bool operator==(const Todo& other) const
-    {
-        return id == other.id && text == other.text && done == other.done;
-    }
-};
 
 using ConfirmationRequest = std::function<void(std::string title,
                                                std::string detail,
@@ -87,7 +66,7 @@ void synchronizeTodoPresentation(wui::State<std::vector<Todo>>& todos,
     std::vector<Todo> active;
     std::vector<Todo> completed;
     for (const auto& item : todos.get()) {
-        (item.done ? completed : active).push_back(item);
+        (item.completed ? completed : active).push_back(item);
     }
     activeTodos.set(std::move(active));
     completedTodos.set(std::move(completed));
@@ -137,6 +116,8 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                        wui::State<std::vector<Todo>>& completedTodos,
                                        wui::State<bool>& hasActive,
                                        wui::State<bool>& hasCompleted,
+                                       wui::State<bool>& hasOperationMessage,
+                                       wui::State<std::string>& operationMessage,
                                        std::function<void(std::string)> addTodo,
                                        std::function<void(int)> toggle,
                                        std::function<void(int)> remove,
@@ -147,20 +128,20 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
     auto summary = [](const std::vector<Todo>& items) {
         int done = 0;
         for (const auto& item : items) {
-            if (item.done) {
+            if (item.completed) {
                 ++done;
             }
         }
         return std::to_string(done) + " of " + std::to_string(items.size()) + " done";
     };
 
-    const wui::Color canvas{243, 243, 243, 255};
-    const wui::Color surface{255, 255, 255, 255};
-    const wui::Color ink{36, 36, 36, 255};
-    const wui::Color muted{97, 97, 97, 255};
-    const wui::Color blue{15, 108, 189, 255};
-    const wui::Color blueSoft{230, 242, 252, 255};
-    const wui::Color white{255, 255, 255, 255};
+    const auto& colors = wui::theme().colors;
+    const wui::Color canvas = colors.background;
+    const wui::Color surface = colors.surface;
+    const wui::Color ink = colors.text;
+    const wui::Color muted = colors.textMuted;
+    const wui::Color blue = colors.accent;
+    const wui::Color blueSoft = colors.surfaceAlt;
 
     // The composer is deliberately a real TextInput, not a decorative Text
     // node. Its raw pointer is safe for the lifetime of this returned tree and
@@ -176,6 +157,9 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
         addTodo(value.substr(first, last - first + 1));
         composerRaw->text("");
     };
+    // Enter is the primary desktop completion path. TextInput keeps IME
+    // composition separate, so this runs only after text has been committed.
+    composerRaw->onSubmit(submit);
     std::unique_ptr<wui::Node> composerNode = std::move(composer);
 
     return Box()
@@ -190,7 +174,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
             Row().align(wui::Alignment::Center).gap(12.0f).children(
                 Column().gap(3.0f).children(
                     Text("My day").size(30.0f).lineHeight(38.0f).color(ink),
-                    Text("Friday, July 11  ·  Keep the day intentional").size(13.0f).lineHeight(18.0f).color(muted)),
+                    Text("Plan what matters today").size(13.0f).lineHeight(18.0f).color(muted)),
                 Spacer().flex(1.0f),
                 Box().background(blueSoft).radius(14.0f).padding({12.0f, 7.0f, 12.0f, 7.0f})
                     .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
@@ -199,16 +183,18 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
                     std::move(composerNode),
                     Button("Add").variant(wui::ButtonVariant::Primary).onClick(submit))),
-            Box().background(blue).radius(12.0f).padding({18.0f, 14.0f, 18.0f, 14.0f})
+            If(hasOperationMessage).then([&operationMessage, error = colors.danger] {
+                return Box().background({255, 235, 238, 255}).radius(8.0f).padding({12.0f, 8.0f, 12.0f, 8.0f})
+                    .children(Text().bind(operationMessage).size(12.0f).lineHeight(18.0f).color(error));
+            }),
+            Box().background(blueSoft).radius(12.0f).padding({18.0f, 14.0f, 18.0f, 14.0f})
                 .children(Row().align(wui::Alignment::Center).gap(12.0f).children(
                     Column().gap(2.0f).children(
-                        Text("YOUR FOCUS").size(10.0f).lineHeight(14.0f).color({220, 235, 249, 255}),
-                        // Keep the Software fallback path ASCII-only until its
-                        // glyph-atlas fallback handles punctuation consistently.
+                        Text("TODAY").size(10.0f).lineHeight(14.0f).color(blue),
                         Text().bind(todos, [summary](const std::vector<Todo>& values) { return summary(values) + " - keep going"; })
-                            .size(16.0f).lineHeight(22.0f).color(white)),
+                            .size(16.0f).lineHeight(22.0f).color(ink)),
                     Spacer().flex(1.0f),
-                    Text("Today").size(12.0f).lineHeight(18.0f).color({220, 235, 249, 255}))),
+                    Text("My day").size(12.0f).lineHeight(18.0f).color(muted))),
             // Keep the list header in the same content rail as the composer
             // and focus card. The list action belongs beside its heading,
             // rather than stranded at the bottom of a tall window.
@@ -244,12 +230,11 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                             return Box().background({255, 255, 255, 255}).radius(10.0f)
                                 .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
-                                    Checkbox("", item.done).onChange([toggle, id = item.id](bool) { toggle(id); }),
-                                    Column().gap(2.0f).flex(1.0f).children(
-                                        Text(item.text).wrap().maxLines(2).ellipsis().size(15.0f).lineHeight(20.0f)
-                                            .color({36, 36, 36, 255}),
-                                        Text("Due today").size(11.0f).lineHeight(15.0f).color({97, 97, 97, 255})),
-                                    Button("x").variant(wui::ButtonVariant::Ghost)
+                                    Checkbox("", item.completed).onChange([toggle, id = item.id](bool) { toggle(id); }),
+                                    Column().gap(0.0f).flex(1.0f).children(
+                                        Text(item.title).wrap().maxLines(2).ellipsis().size(15.0f).lineHeight(20.0f)
+                                            .color({36, 36, 36, 255})),
+                                    IconButton("x", "Remove task")
                                         .onClick([remove, id = item.id, requestConfirmation] {
                                             requestConfirmation("Remove this task?",
                                                                 "This task will be removed from My day.",
@@ -264,15 +249,11 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                         return Box().background({255, 255, 255, 255}).radius(10.0f)
                             .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                             .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
-                                Checkbox("", item.done).onChange([toggle, id = item.id](bool) { toggle(id); }),
-                                Column().gap(2.0f).flex(1.0f).children(
-                                    Text(item.text).wrap().maxLines(2).ellipsis().size(15.0f).lineHeight(20.0f)
-                                        .color({117, 117, 117, 255}),
-                                    Text("Completed").size(11.0f).lineHeight(15.0f).color({16, 124, 16, 255})),
-                                // A compact close affordance keeps this
-                                // destructive row action low-emphasis while
-                                // retaining the same safe removal behavior.
-                                Button("x").variant(wui::ButtonVariant::Ghost)
+                                Checkbox("", item.completed).onChange([toggle, id = item.id](bool) { toggle(id); }),
+                                Column().gap(0.0f).flex(1.0f).children(
+                                    Text(item.title).wrap().maxLines(2).ellipsis().size(15.0f).lineHeight(20.0f)
+                                        .color({117, 117, 117, 255})),
+                                IconButton("x", "Remove task")
                                     .onClick([remove, id = item.id, requestConfirmation] {
                                         requestConfirmation("Remove this task?",
                                                             "This task will be removed from My day.",
@@ -280,7 +261,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                     })));
                     }).gap(8.0f).align(wui::Alignment::Stretch));
             }),
-            Text("MY DAY  ·  WHATSUI").size(10.0f).lineHeight(14.0f).color({117, 117, 117, 255}))),
+            Spacer(0.0f, 0.0f))),
             Spacer().flex(1.0f)));
 }
 
@@ -291,60 +272,70 @@ int main(int argc, char** argv)
 #ifdef WUI_TODO_INTERACTIVE
     // This target deliberately uses buildTodoUi() below rather than a separate
     // window-only tree. It is the hands-on counterpart of the captured scenes.
-    wui::State<std::vector<Todo>> todos{{
-        {1, "Review the visual regression scenes", false},
-        {2, "Exercise the interactive GLFW demo", true},
-        {3, "Ship the WhatsUI milestone", false},
-    }};
+    whatsui::todo::TodoStorage storage(interactiveTodoStorePath());
+    const auto loaded = storage.load();
+    if (loaded.status == whatsui::todo::TodoLoadStatus::IoError ||
+        loaded.status == whatsui::todo::TodoLoadStatus::RecoveredMalformed) {
+        std::cerr << "Todo storage: " << loaded.message << std::endl;
+    }
+    whatsui::todo::TodoController controller(loaded.records);
+    wui::State<std::vector<Todo>> todos{controller.records()};
     wui::State<bool> isEmpty{false};
     wui::State<std::vector<Todo>> activeTodos;
     wui::State<std::vector<Todo>> completedTodos;
     wui::State<bool> hasActive{true};
     wui::State<bool> hasCompleted{true};
-    int nextId = 4;
-
+    wui::State<bool> hasOperationMessage{false};
+    wui::State<std::string> operationMessage;
     auto synchronize = [&] {
         synchronizeTodoPresentation(todos, activeTodos, completedTodos,
                                     isEmpty, hasActive, hasCompleted);
     };
     synchronize();
 
-    auto addTodo = [&todos, &nextId, &synchronize](std::string text) {
-        auto items = todos.get();
-        items.push_back({nextId++, std::move(text), false});
-        todos.set(items);
-        synchronize();
-    };
-    std::function<void(int)> toggle = [&todos, &synchronize](int id) {
-        auto items = todos.get();
-        for (auto& item : items) {
-            if (item.id == id) item.done = !item.done;
+    auto persist = [&storage](const std::vector<Todo>& items) {
+        std::string error;
+        if (!storage.save(items, &error)) {
+            // The in-memory operation remains valid; a user should never lose
+            // a completed edit merely because the storage volume is transient.
+            std::cerr << "Todo storage: " << error << std::endl;
         }
-        todos.set(items);
-        synchronize();
     };
-    std::function<void(int)> remove = [&todos, &synchronize](int id) {
-        auto items = todos.get();
-        items.erase(std::remove_if(items.begin(), items.end(),
-                                   [id](const Todo& item) { return item.id == id; }),
-                    items.end());
-        todos.set(items);
+
+    auto apply = [&controller, &todos, &synchronize, &persist, &hasOperationMessage, &operationMessage](const whatsui::todo::TodoActionResult& result) {
+        if (!result.succeeded()) {
+            std::cerr << "Todo: " << result.message << std::endl;
+            operationMessage.set(result.message);
+            hasOperationMessage.set(true);
+            return false;
+        }
+        operationMessage.set({});
+        hasOperationMessage.set(false);
+        todos.set(controller.records());
         synchronize();
+        persist(controller.records());
+        return true;
     };
-    std::function<void()> clearCompleted = [&todos, &synchronize] {
-        auto items = todos.get();
-        items.erase(std::remove_if(items.begin(), items.end(),
-                                   [](const Todo& item) { return item.done; }),
-                    items.end());
-        todos.set(items);
-        synchronize();
+    auto addTodo = [&controller, &apply](std::string text) {
+        (void)apply(controller.add(std::move(text)));
+    };
+    std::function<void(int)> toggle = [&controller, &apply](int id) {
+        (void)apply(controller.toggle(id));
+    };
+    std::function<void(int)> remove = [&controller, &apply](int id) {
+        (void)apply(controller.remove(id));
+    };
+    std::function<void()> clearCompleted = [&controller, &apply] {
+        (void)apply(controller.clearCompleted());
     };
 
     try {
         return wui::runGlfwApp("WhatsUI Todo", {640.0f, 560.0f},
                                 [&todos, &isEmpty, &activeTodos, &completedTodos, &hasActive, &hasCompleted,
+                                 &hasOperationMessage, &operationMessage,
                                  addTodo, toggle, remove, clearCompleted](wui::UiWindow& window) {
             return buildTodoUi(todos, isEmpty, activeTodos, completedTodos, hasActive, hasCompleted,
+                               hasOperationMessage, operationMessage,
                                addTodo, toggle, remove, clearCompleted,
                                [&window](std::string title, std::string detail, std::function<void()> confirm) {
                                    showConfirmation(window, std::move(title), std::move(detail), std::move(confirm));
@@ -390,6 +381,8 @@ int main(int argc, char** argv)
     wui::State<std::vector<Todo>> completedTodos;
     wui::State<bool> hasActive{false};
     wui::State<bool> hasCompleted{false};
+    wui::State<bool> hasOperationMessage{false};
+    wui::State<std::string> operationMessage;
     int nextId = 1;
 
     auto synchronize = [&] {
@@ -400,7 +393,7 @@ int main(int argc, char** argv)
 
     auto addTodo = [&todos, &nextId, &synchronize](std::string text) {
         auto items = todos.get();
-        items.push_back({nextId++, std::move(text), false});
+        items.push_back({nextId++, std::move(text), false, false, std::nullopt});
         todos.set(items);
         synchronize();
     };
@@ -408,7 +401,7 @@ int main(int argc, char** argv)
         auto items = todos.get();
         for (auto& item : items) {
             if (item.id == id) {
-                item.done = !item.done;
+                item.completed = !item.completed;
             }
         }
         todos.set(items);
@@ -425,13 +418,14 @@ int main(int argc, char** argv)
     std::function<void()> clearCompleted = [&todos, &synchronize] {
         auto items = todos.get();
         items.erase(std::remove_if(items.begin(), items.end(),
-                                   [](const Todo& item) { return item.done; }),
+                                   [](const Todo& item) { return item.completed; }),
                     items.end());
         todos.set(items);
         synchronize();
     };
 
     auto root = buildTodoUi(todos, isEmpty, activeTodos, completedTodos, hasActive, hasCompleted,
+                            hasOperationMessage, operationMessage,
                             addTodo, toggle, remove, clearCompleted,
                             [](std::string, std::string, std::function<void()> confirm) { confirm(); });
 
