@@ -2,6 +2,7 @@
 #include "wui/theme.h"
 
 #include <algorithm>
+#include <cctype>
 #include <utility>
 
 namespace wui {
@@ -18,96 +19,255 @@ TextRange normalizeRange(TextRange range, std::size_t textSize) noexcept
     return range;
 }
 
+bool isWordCharacter(char character) noexcept
+{
+    const auto value = static_cast<unsigned char>(character);
+    return std::isalnum(value) != 0 || character == '_';
+}
+
+constexpr std::size_t kMaximumUndoEntries = 100;
+
 } // namespace
 
-const std::string& TextInputModel::text() const noexcept
+const EditingValue& TextEditingController::value() const noexcept
 {
-    return text_;
+    return value_;
 }
 
-void TextInputModel::setText(std::string text)
+void TextEditingController::setValue(EditingValue value)
 {
-    text_ = std::move(text);
-    selection_ = normalizeRange(selection_, text_.size());
-    composition_ = normalizeRange(composition_, text_.size());
+    value_ = std::move(value);
+    normalize();
+    selectionAnchor_ = value_.selection.start;
 }
 
-const TextRange& TextInputModel::selection() const noexcept
+const std::string& TextEditingController::text() const noexcept
 {
-    return selection_;
+    return value_.text;
 }
 
-void TextInputModel::setSelection(TextRange selection) noexcept
+void TextEditingController::setText(std::string text)
 {
-    selection_ = normalizeRange(selection, text_.size());
+    value_.text = std::move(text);
+    normalize();
+    selectionAnchor_ = value_.selection.start;
 }
 
-const TextRange& TextInputModel::composition() const noexcept
+const TextRange& TextEditingController::selection() const noexcept
 {
-    return composition_;
+    return value_.selection;
 }
 
-void TextInputModel::setComposition(TextRange composition) noexcept
+void TextEditingController::setSelection(TextRange selection) noexcept
 {
-    composition_ = normalizeRange(composition, text_.size());
+    value_.selection = normalizeRange(selection, value_.text.size());
+    selectionAnchor_ = value_.selection.start;
 }
 
-void TextInputModel::clearComposition() noexcept
+const TextRange& TextEditingController::composition() const noexcept
 {
-    composition_ = {};
+    return value_.composition;
 }
 
-void TextInputModel::updateComposition(std::string text)
+void TextEditingController::setComposition(TextRange composition) noexcept
 {
-    const auto activeRange = composition_.empty()
-        ? normalizeRange(selection_, text_.size())
-        : normalizeRange(composition_, text_.size());
+    value_.composition = normalizeRange(composition, value_.text.size());
+}
 
-    text_.replace(activeRange.start, activeRange.end - activeRange.start, text);
+void TextEditingController::clearComposition() noexcept
+{
+    value_.composition = {};
+}
+
+void TextEditingController::updateComposition(std::string text)
+{
+    const auto activeRange = value_.composition.empty()
+        ? normalizeRange(value_.selection, value_.text.size())
+        : normalizeRange(value_.composition, value_.text.size());
+
+    value_.text.replace(activeRange.start, activeRange.end - activeRange.start, text);
     const auto end = activeRange.start + text.size();
-    composition_ = TextRange{activeRange.start, end};
-    selection_ = composition_;
+    value_.composition = TextRange{activeRange.start, end};
+    value_.selection = value_.composition;
+    selectionAnchor_ = activeRange.start;
 }
 
-void TextInputModel::moveCaret(int delta) noexcept
+void TextEditingController::collapseOrExtend(std::size_t position, bool extendSelection) noexcept
 {
-    selection_ = normalizeRange(selection_, text_.size());
-    const auto caret = selection_.end;
+    position = std::min(position, value_.text.size());
+    if (!extendSelection) {
+        value_.selection = {position, position};
+        selectionAnchor_ = position;
+        return;
+    }
+    value_.selection = normalizeRange({selectionAnchor_, position}, value_.text.size());
+}
+
+void TextEditingController::setCaret(std::size_t position, bool extendSelection) noexcept
+{
+    collapseOrExtend(position, extendSelection);
+}
+
+void TextEditingController::moveCaret(int delta, bool extendSelection) noexcept
+{
+    value_.selection = normalizeRange(value_.selection, value_.text.size());
+    std::size_t caret = value_.selection.end;
+    if (!extendSelection && !value_.selection.empty()) {
+        caret = delta < 0 ? value_.selection.start : value_.selection.end;
+    }
     const auto next = delta < 0
         ? caret - static_cast<std::size_t>(std::min<std::size_t>(caret, static_cast<std::size_t>(-delta)))
-        : std::min(text_.size(), caret + static_cast<std::size_t>(delta));
-    selection_ = TextRange{next, next};
+        : std::min(value_.text.size(), caret + static_cast<std::size_t>(delta));
+    if (extendSelection) {
+        if (value_.selection.empty()) {
+            selectionAnchor_ = caret;
+        }
+        collapseOrExtend(next, true);
+        return;
+    }
+    collapseOrExtend(next, false);
 }
 
-void TextInputModel::backspace()
+void TextEditingController::moveToStart(bool extendSelection) noexcept
 {
-    selection_ = normalizeRange(selection_, text_.size());
-    if (!selection_.empty()) {
+    if (extendSelection && value_.selection.empty()) {
+        selectionAnchor_ = value_.selection.end;
+    }
+    collapseOrExtend(0, extendSelection);
+}
+
+void TextEditingController::moveToEnd(bool extendSelection) noexcept
+{
+    if (extendSelection && value_.selection.empty()) {
+        selectionAnchor_ = value_.selection.end;
+    }
+    collapseOrExtend(value_.text.size(), extendSelection);
+}
+
+void TextEditingController::selectAll() noexcept
+{
+    value_.selection = {0, value_.text.size()};
+    selectionAnchor_ = 0;
+}
+
+void TextEditingController::backspace(bool byWord)
+{
+    value_.selection = normalizeRange(value_.selection, value_.text.size());
+    if (!value_.selection.empty()) {
         replaceSelection("");
         return;
     }
-    if (selection_.start == 0) {
+    if (value_.selection.start == 0) {
         return;
     }
-
-    text_.erase(selection_.start - 1, 1);
-    const auto caret = selection_.start - 1;
-    selection_ = TextRange{caret, caret};
-    composition_ = {};
+    const auto start = byWord ? previousWordBoundary(value_.selection.start) : value_.selection.start - 1;
+    replaceRange({start, value_.selection.start}, "", true);
 }
 
-void TextInputModel::replaceSelection(std::string text)
+void TextEditingController::deleteForward(bool byWord)
 {
-    selection_ = normalizeRange(selection_, text_.size());
-    text_.replace(selection_.start, selection_.end - selection_.start, text);
-    const auto caret = selection_.start + text.size();
-    selection_ = TextRange{caret, caret};
-    composition_ = {};
+    value_.selection = normalizeRange(value_.selection, value_.text.size());
+    if (!value_.selection.empty()) {
+        replaceSelection("");
+        return;
+    }
+    if (value_.selection.end == value_.text.size()) {
+        return;
+    }
+    const auto end = byWord ? nextWordBoundary(value_.selection.end) : value_.selection.end + 1;
+    replaceRange({value_.selection.end, end}, "", true);
 }
 
-void TextInputModel::commit(std::string text)
+void TextEditingController::replaceSelection(std::string text)
 {
-    replaceSelection(std::move(text));
+    replaceRange(value_.selection, text, true);
+}
+
+void TextEditingController::commit(std::string text)
+{
+    replaceRange(value_.composition.empty() ? value_.selection : value_.composition, text, true);
+}
+
+std::string TextEditingController::selectedText() const
+{
+    const auto selected = normalizeRange(value_.selection, value_.text.size());
+    return value_.text.substr(selected.start, selected.end - selected.start);
+}
+
+bool TextEditingController::undo()
+{
+    if (undoStack_.empty()) {
+        return false;
+    }
+    redoStack_.push_back(value_);
+    value_ = std::move(undoStack_.back());
+    undoStack_.pop_back();
+    normalize();
+    selectionAnchor_ = value_.selection.start;
+    return true;
+}
+
+bool TextEditingController::redo()
+{
+    if (redoStack_.empty()) {
+        return false;
+    }
+    undoStack_.push_back(value_);
+    value_ = std::move(redoStack_.back());
+    redoStack_.pop_back();
+    normalize();
+    selectionAnchor_ = value_.selection.start;
+    return true;
+}
+
+void TextEditingController::rememberForUndo()
+{
+    undoStack_.push_back(value_);
+    if (undoStack_.size() > kMaximumUndoEntries) {
+        undoStack_.erase(undoStack_.begin());
+    }
+    redoStack_.clear();
+}
+
+void TextEditingController::replaceRange(TextRange range, std::string_view text, bool saveHistory)
+{
+    range = normalizeRange(range, value_.text.size());
+    if (saveHistory) {
+        rememberForUndo();
+    }
+    value_.text.replace(range.start, range.end - range.start, text.data(), text.size());
+    const auto caret = range.start + text.size();
+    value_.selection = {caret, caret};
+    value_.composition = {};
+    selectionAnchor_ = caret;
+}
+
+std::size_t TextEditingController::previousWordBoundary(std::size_t position) const noexcept
+{
+    while (position > 0 && !isWordCharacter(value_.text[position - 1])) {
+        --position;
+    }
+    while (position > 0 && isWordCharacter(value_.text[position - 1])) {
+        --position;
+    }
+    return position;
+}
+
+std::size_t TextEditingController::nextWordBoundary(std::size_t position) const noexcept
+{
+    while (position < value_.text.size() && !isWordCharacter(value_.text[position])) {
+        ++position;
+    }
+    while (position < value_.text.size() && isWordCharacter(value_.text[position])) {
+        ++position;
+    }
+    return position;
+}
+
+void TextEditingController::normalize() noexcept
+{
+    value_.selection = normalizeRange(value_.selection, value_.text.size());
+    value_.composition = normalizeRange(value_.composition, value_.text.size());
 }
 
 TextInput::TextInput(std::string placeholder)
@@ -115,14 +275,24 @@ TextInput::TextInput(std::string placeholder)
 {
 }
 
+TextEditingController& TextInput::controller() noexcept
+{
+    return controller_;
+}
+
+const TextEditingController& TextInput::controller() const noexcept
+{
+    return controller_;
+}
+
 TextInputModel& TextInput::model() noexcept
 {
-    return model_;
+    return controller_;
 }
 
 const TextInputModel& TextInput::model() const noexcept
 {
-    return model_;
+    return controller_;
 }
 
 const std::string& TextInput::placeholder() const noexcept
@@ -144,7 +314,7 @@ void TextInput::setPlaceholder(std::string placeholder)
 
 TextInput& TextInput::text(std::string text)
 {
-    model_.setText(std::move(text));
+    controller_.setText(std::move(text));
     markDirty(DirtyFlag::Layout);
     return *this;
 }
@@ -152,21 +322,21 @@ TextInput& TextInput::text(std::string text)
 void TextInput::syncSession(TextInputSession& session, const RectF& caretRect) const
 {
     session.setCaretRect(caretRect);
-    session.setSurroundingText(model_.text(), model_.selection().start, model_.selection().end);
+    session.setSurroundingText(controller_.text(), controller_.selection().start, controller_.selection().end);
 }
 
 RectF TextInput::caretRect() const noexcept
 {
     const float kHorizontalPadding = theme().controls.horizontalPadding;
     const float kCharacterWidth = theme().typography.body * 0.56f;
-    const auto caret = static_cast<float>(model_.selection().end);
+    const auto caret = static_cast<float>(controller_.selection().end);
     return {bounds().x + kHorizontalPadding + caret * kCharacterWidth,
             bounds().y + 6.0f, 1.0f, std::max(1.0f, bounds().height - 12.0f)};
 }
 
 SizeF TextInput::measure(const Constraints& constraints) const
 {
-    const auto contentLength = std::max(model_.text().size(), placeholder_.size());
+    const auto contentLength = std::max(controller_.text().size(), placeholder_.size());
     const auto& current = theme();
     const auto width = static_cast<float>(contentLength) * (current.typography.body * 0.56f) + current.controls.horizontalPadding * 2.0f;
     return constraints.clamp({width, current.controls.height});
@@ -174,8 +344,8 @@ SizeF TextInput::measure(const Constraints& constraints) const
 
 void TextInput::paint(PaintContext& context)
 {
-    const bool showPlaceholder = model_.text().empty();
-    const auto& text = showPlaceholder ? placeholder_ : model_.text();
+    const bool showPlaceholder = controller_.text().empty();
+    const auto& text = showPlaceholder ? placeholder_ : controller_.text();
 
     const auto& current = theme();
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
@@ -183,21 +353,75 @@ void TextInput::paint(PaintContext& context)
     const float inset = focused ? current.controls.focusWidth : 1.0f;
     context.fillRoundRect({bounds().x + inset, bounds().y + inset, std::max(0.0f, bounds().width - inset * 2.0f), std::max(0.0f, bounds().height - inset * 2.0f)},
                           std::max(0.0f, current.radius.md - inset), current.colors.surface);
+    const float characterWidth = current.typography.body * 0.56f;
+    const auto selection = controller_.selection();
+    if (focused && !selection.empty()) {
+        const float selectionX = bounds().x + current.controls.horizontalPadding + static_cast<float>(selection.start) * characterWidth;
+        const float selectionWidth = static_cast<float>(selection.end - selection.start) * characterWidth;
+        const auto selectionColor = Color{current.colors.focus.r, current.colors.focus.g, current.colors.focus.b, 72};
+        context.fillRect({selectionX, bounds().y + current.controls.focusInset,
+                          selectionWidth, std::max(0.0f, bounds().height - current.controls.focusInset * 2.0f)}, selectionColor);
+    }
     if (!text.empty()) {
         context.drawText(text, bounds().x + current.controls.horizontalPadding,
             bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f, current.typography.body,
             showPlaceholder ? current.colors.textMuted : current.colors.text);
     }
+    if (focused && selection.empty()) {
+        const float caretX = bounds().x + current.controls.horizontalPadding + static_cast<float>(selection.end) * characterWidth;
+        context.fillRect({caretX, bounds().y + current.controls.focusInset, 1.0f,
+                          std::max(1.0f, bounds().height - current.controls.focusInset * 2.0f)}, current.colors.focus);
+    }
     clearDirty(DirtyFlag::Paint);
 }
 
-bool TextInput::onPointerEvent(const PointerEvent& event)
+std::size_t TextInput::caretAt(PointF point) const noexcept
 {
-    if (event.action == PointerAction::Down && event.button == MouseButton::Left) {
-        setVisualState(ControlVisualState::Focused, true);
-        return true;
+    const float characterWidth = theme().typography.body * 0.56f;
+    const float localX = std::max(0.0f, point.x - bounds().x - theme().controls.horizontalPadding);
+    const auto index = static_cast<std::size_t>(localX / std::max(1.0f, characterWidth) + 0.5f);
+    return std::min(index, controller_.text().size());
+}
+
+EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& context)
+{
+    if (context.phase() == EventPhase::Capture) {
+        return EventResult::Ignored;
     }
-    return false;
+    switch (event.action) {
+    case PointerAction::Down:
+        if (event.button != MouseButton::Left) {
+            return EventResult::Ignored;
+        }
+        selectingWithPointer_ = true;
+        controller_.setCaret(caretAt(event.position), (event.modifiers & KeyModifierShift) != 0);
+        setVisualState(ControlVisualState::Focused, true);
+        markDirty(DirtyFlag::Paint);
+        context.requestFocus();
+        context.capturePointer();
+        return EventResult::Handled;
+    case PointerAction::Move:
+        if (!selectingWithPointer_) {
+            return EventResult::Ignored;
+        }
+        controller_.setCaret(caretAt(event.position), true);
+        markDirty(DirtyFlag::Paint);
+        return EventResult::Handled;
+    case PointerAction::Up:
+    case PointerAction::Cancel:
+        if (!selectingWithPointer_) {
+            return EventResult::Ignored;
+        }
+        if (event.action == PointerAction::Up) {
+            controller_.setCaret(caretAt(event.position), true);
+        }
+        selectingWithPointer_ = false;
+        markDirty(DirtyFlag::Paint);
+        context.releasePointer();
+        return EventResult::Handled;
+    default:
+        return EventResult::Ignored;
+    }
 }
 
 bool TextInput::onKeyEvent(const KeyEvent& event)
@@ -206,19 +430,64 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
         return false;
     }
 
+    const bool extendSelection = (event.modifiers & KeyModifierShift) != 0;
+    const bool byWord = (event.modifiers & KeyModifierControl) != 0;
     switch (event.keyCode) {
     case 8:
-        model_.backspace();
+    case 259: // GLFW_KEY_BACKSPACE
+        controller_.backspace(byWord);
         markDirty(DirtyFlag::Layout);
         return true;
+    case 46:
+    case 261: // GLFW_KEY_DELETE
+        controller_.deleteForward(byWord);
+        markDirty(DirtyFlag::Layout);
+        return true;
+    case 36:
+    case 268: // GLFW_KEY_HOME
+        controller_.moveToStart(extendSelection);
+        markDirty(DirtyFlag::Paint);
+        return true;
+    case 35:
+    case 269: // GLFW_KEY_END
+        controller_.moveToEnd(extendSelection);
+        markDirty(DirtyFlag::Paint);
+        return true;
     case 37:
-        model_.moveCaret(-1);
+    case 263: // GLFW_KEY_LEFT
+        controller_.moveCaret(-1, extendSelection);
         markDirty(DirtyFlag::Paint);
         return true;
     case 39:
-        model_.moveCaret(1);
+    case 262: // GLFW_KEY_RIGHT
+        controller_.moveCaret(1, extendSelection);
         markDirty(DirtyFlag::Paint);
         return true;
+    case 65:
+        if (byWord) {
+            controller_.selectAll();
+            markDirty(DirtyFlag::Paint);
+            return true;
+        }
+        return false;
+    case 90:
+        if (byWord) {
+            if (extendSelection) {
+                controller_.redo();
+            } else {
+                controller_.undo();
+            }
+            markDirty(DirtyFlag::Layout);
+            return true;
+        }
+        return false;
+    case 89:
+        if (byWord) {
+            controller_.redo();
+            markDirty(DirtyFlag::Layout);
+            return true;
+        }
+        return false;
     default:
         return false;
     }
@@ -230,7 +499,7 @@ bool TextInput::onTextInput(const TextInputEvent& event)
         return false;
     }
 
-    model_.commit(event.text);
+    controller_.commit(event.text);
     markDirty(DirtyFlag::Layout);
     return true;
 }
@@ -238,14 +507,44 @@ bool TextInput::onTextInput(const TextInputEvent& event)
 bool TextInput::onCompositionInput(const CompositionInputEvent& event)
 {
     if (event.phase == CompositionInputEvent::Phase::End) {
-        model_.clearComposition();
+        controller_.clearComposition();
         markDirty(DirtyFlag::Paint);
         return true;
     }
 
     // Start and Update both replace the active pre-edit span. Empty pre-edit
     // text is valid and simply leaves an empty active composition range.
-    model_.updateComposition(event.text);
+    controller_.updateComposition(event.text);
+    markDirty(DirtyFlag::Layout);
+    return true;
+}
+
+bool TextInput::copySelection(Clipboard& clipboard) const
+{
+    const auto selected = controller_.selectedText();
+    if (selected.empty()) {
+        return false;
+    }
+    clipboard.setText(selected);
+    return true;
+}
+
+bool TextInput::cutSelection(Clipboard& clipboard)
+{
+    if (!copySelection(clipboard)) {
+        return false;
+    }
+    controller_.replaceSelection("");
+    markDirty(DirtyFlag::Layout);
+    return true;
+}
+
+bool TextInput::paste(Clipboard& clipboard)
+{
+    if (!clipboard.hasText()) {
+        return false;
+    }
+    controller_.commit(clipboard.getText());
     markDirty(DirtyFlag::Layout);
     return true;
 }

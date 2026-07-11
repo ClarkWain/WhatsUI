@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <stdexcept>
 
 #define GLFW_INCLUDE_NONE
@@ -27,6 +28,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <GLFW/glfw3native.h>
+#include <imm.h>
 #endif
 
 namespace wui {
@@ -98,7 +100,7 @@ private:
     SizeF fbSize_{};
 };
 
-// --- Stub implementations for Clipboard, CursorService, TextInputSession ---
+// --- Platform implementations for Clipboard, CursorService, TextInputSession ---
 
 class GlfwClipboard : public Clipboard {
 public:
@@ -169,12 +171,268 @@ private:
     int currentShape_{-1};
 };
 
+// GLFW exposes committed Unicode codepoints, but deliberately does not expose
+// the Win32 pre-edit (composition) messages.  IMM32 is the small, stable
+// Windows bridge for the reference GLFW host: it preserves the platform-neutral
+// TextInputSession API while forwarding pre-edit updates into UiWindow.
+//
+// This is intentionally hosted here rather than in TextInput. Widgets never
+// include Win32 headers and the editing controller remains platform agnostic.
 class GlfwTextInputSession : public TextInputSession {
 public:
-    void activate() override {}
-    void deactivate() override {}
-    void setCaretRect(const RectF&) override {}
-    void setSurroundingText(std::string_view, std::size_t, std::size_t) override {}
+    GlfwTextInputSession(GLFWwindow* window, WindowId windowId)
+        : window_(window)
+        , windowId_(windowId)
+    {
+#if defined(_WIN32)
+        nativeWindow_ = glfwGetWin32Window(window_);
+        if (nativeWindow_ == nullptr) {
+            return;
+        }
+
+        // GLFW uses GWLP_USERDATA itself, so a window property gives the
+        // subclass procedure a private association without disturbing GLFW.
+        SetPropW(nativeWindow_, propertyName(), reinterpret_cast<HANDLE>(this));
+        SetLastError(ERROR_SUCCESS);
+        const auto previous = SetWindowLongPtrW(
+            nativeWindow_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&imeWindowProc));
+        if (previous == 0 && GetLastError() != ERROR_SUCCESS) {
+            RemovePropW(nativeWindow_, propertyName());
+            nativeWindow_ = nullptr;
+            return;
+        }
+        previousWindowProc_ = reinterpret_cast<WNDPROC>(previous);
+#endif
+    }
+
+    ~GlfwTextInputSession() override
+    {
+#if defined(_WIN32)
+        if (nativeWindow_ != nullptr) {
+            // Restore only while this is still our subclass. GLFW destroys the
+            // HWND after the PlatformWindow members, so this is deterministic.
+            if (reinterpret_cast<WNDPROC>(GetWindowLongPtrW(nativeWindow_, GWLP_WNDPROC)) == &imeWindowProc) {
+                SetWindowLongPtrW(nativeWindow_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previousWindowProc_));
+            }
+            RemovePropW(nativeWindow_, propertyName());
+        }
+#endif
+    }
+
+    void setCallbacks(std::function<void(const TextInputEvent&)> onTextInput,
+                      std::function<void(const CompositionInputEvent&)> onComposition)
+    {
+        onTextInput_ = std::move(onTextInput);
+        onComposition_ = std::move(onComposition);
+    }
+
+    void activate() override
+    {
+        active_ = true;
+#if defined(_WIN32)
+        updateImeWindows();
+#endif
+    }
+
+    void deactivate() override
+    {
+        // Mark inactive before asking IMM32 to cancel. This prevents an
+        // immediate native end message from re-synchronizing the caret while
+        // UiWindow is tearing the session down.
+#if defined(_WIN32)
+        const bool wasActive = active_;
+#endif
+        active_ = false;
+#if defined(_WIN32)
+        if (wasActive && nativeWindow_ != nullptr) {
+            if (HIMC context = ImmGetContext(nativeWindow_)) {
+                // Cancel, rather than commit, a pre-edit string when focus
+                // leaves the widget/window. UiWindow already owns the logical
+                // focus transition and will ignore any now-stale update.
+                ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0);
+                ImmReleaseContext(nativeWindow_, context);
+            }
+        }
+#endif
+        // Some IMEs do not emit WM_IME_ENDCOMPOSITION after CPS_CANCEL. Keep
+        // the framework composition lifecycle balanced in that case.
+        if (compositionOpen_ && onComposition_) {
+            onComposition_({windowId_, {}, CompositionInputEvent::Phase::End});
+        }
+        compositionOpen_ = false;
+    }
+
+    void setCaretRect(const RectF& rect) override
+    {
+        caretRect_ = rect;
+#if defined(_WIN32)
+        if (active_) {
+            updateImeWindows();
+        }
+#endif
+    }
+
+    void setSurroundingText(std::string_view text, std::size_t selectionStart, std::size_t selectionEnd) override
+    {
+        // IMM32 cannot publish surrounding text to modern TSF services. Keep a
+        // snapshot for diagnostics and future TSF adoption; composition and
+        // committed strings still route through the existing UiWindow model.
+        surroundingText_.assign(text.data(), text.size());
+        selectionStart_ = selectionStart;
+        selectionEnd_ = selectionEnd;
+    }
+
+private:
+#if defined(_WIN32)
+    static constexpr const wchar_t* propertyName() noexcept
+    {
+        return L"WhatsUI.GlfwTextInputSession";
+    }
+
+    static std::string utf8FromWide(const std::wstring& text)
+    {
+        if (text.empty()) {
+            return {};
+        }
+        const int size = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+        std::string result(static_cast<std::size_t>(std::max(0, size)), '\0');
+        if (size > 0) {
+            WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), size, nullptr, nullptr);
+        }
+        return result;
+    }
+
+    static std::string readImeString(HIMC context, DWORD kind)
+    {
+        const LONG bytes = ImmGetCompositionStringW(context, kind, nullptr, 0);
+        if (bytes <= 0) {
+            return {};
+        }
+        std::wstring value(static_cast<std::size_t>(bytes) / sizeof(wchar_t), L'\0');
+        const LONG copied = ImmGetCompositionStringW(context, kind, value.data(), bytes);
+        if (copied <= 0) {
+            return {};
+        }
+        value.resize(static_cast<std::size_t>(copied) / sizeof(wchar_t));
+        return utf8FromWide(value);
+    }
+
+    POINT nativeCaretPoint() const noexcept
+    {
+        RECT client{};
+        GetClientRect(nativeWindow_, &client);
+        int logicalWidth = 0;
+        int logicalHeight = 0;
+        glfwGetWindowSize(window_, &logicalWidth, &logicalHeight);
+        const float scaleX = logicalWidth > 0
+            ? static_cast<float>(client.right - client.left) / static_cast<float>(logicalWidth)
+            : 1.0f;
+        const float scaleY = logicalHeight > 0
+            ? static_cast<float>(client.bottom - client.top) / static_cast<float>(logicalHeight)
+            : 1.0f;
+        return {static_cast<LONG>(std::lround(caretRect_.x * scaleX)),
+                static_cast<LONG>(std::lround((caretRect_.y + caretRect_.height) * scaleY))};
+    }
+
+    void updateImeWindows() noexcept
+    {
+        if (nativeWindow_ == nullptr) {
+            return;
+        }
+        HIMC context = ImmGetContext(nativeWindow_);
+        if (context == nullptr) {
+            return;
+        }
+        const POINT point = nativeCaretPoint();
+        COMPOSITIONFORM composition{};
+        composition.dwStyle = CFS_POINT;
+        composition.ptCurrentPos = point;
+        ImmSetCompositionWindow(context, &composition);
+
+        CANDIDATEFORM candidate{};
+        candidate.dwIndex = 0;
+        candidate.dwStyle = CFS_CANDIDATEPOS;
+        candidate.ptCurrentPos = point;
+        ImmSetCandidateWindow(context, &candidate);
+        ImmReleaseContext(nativeWindow_, context);
+    }
+
+    LRESULT handleImeMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        if (!active_) {
+            return CallWindowProcW(previousWindowProc_, hwnd, message, wParam, lParam);
+        }
+
+        switch (message) {
+        case WM_IME_STARTCOMPOSITION:
+            updateImeWindows();
+            compositionOpen_ = true;
+            if (onComposition_) {
+                onComposition_({windowId_, {}, CompositionInputEvent::Phase::Start});
+            }
+            return 0;
+        case WM_IME_COMPOSITION: {
+            HIMC context = ImmGetContext(hwnd);
+            if (context == nullptr) {
+                return 0;
+            }
+            if ((lParam & GCS_COMPSTR) != 0 && onComposition_) {
+                onComposition_({windowId_, readImeString(context, GCS_COMPSTR), CompositionInputEvent::Phase::Update});
+            }
+            if ((lParam & GCS_RESULTSTR) != 0) {
+                const std::string committed = readImeString(context, GCS_RESULTSTR);
+                if (!committed.empty() && onTextInput_) {
+                    onTextInput_({windowId_, committed});
+                }
+                if (compositionOpen_ && onComposition_) {
+                    onComposition_({windowId_, {}, CompositionInputEvent::Phase::End});
+                }
+                compositionOpen_ = false;
+            }
+            ImmReleaseContext(hwnd, context);
+            return 0;
+        }
+        case WM_IME_ENDCOMPOSITION:
+            if (compositionOpen_ && onComposition_) {
+                onComposition_({windowId_, {}, CompositionInputEvent::Phase::End});
+            }
+            compositionOpen_ = false;
+            return 0;
+        case WM_IME_NOTIFY:
+            if (wParam == IMN_OPENCANDIDATE || wParam == IMN_CHANGECANDIDATE) {
+                updateImeWindows();
+            }
+            break;
+        default:
+            break;
+        }
+        return CallWindowProcW(previousWindowProc_, hwnd, message, wParam, lParam);
+    }
+
+    static LRESULT CALLBACK imeWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        auto* session = reinterpret_cast<GlfwTextInputSession*>(GetPropW(hwnd, propertyName()));
+        if (session != nullptr && session->previousWindowProc_ != nullptr) {
+            return session->handleImeMessage(hwnd, message, wParam, lParam);
+        }
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+#endif
+
+    GLFWwindow* window_{nullptr};
+    WindowId windowId_{0};
+    RectF caretRect_{};
+    std::string surroundingText_;
+    std::size_t selectionStart_{0};
+    std::size_t selectionEnd_{0};
+    bool active_{false};
+    bool compositionOpen_{false};
+    std::function<void(const TextInputEvent&)> onTextInput_;
+    std::function<void(const CompositionInputEvent&)> onComposition_;
+#if defined(_WIN32)
+    HWND nativeWindow_{nullptr};
+    WNDPROC previousWindowProc_{nullptr};
+#endif
 };
 
 // --- GlfwPlatformWindow ---
@@ -186,8 +444,18 @@ public:
         , id_(id)
         , clipboard_(window)
         , cursorService_(window)
+        , textInputSession_(window, id)
     {
         glfwSetWindowUserPointer(window, this);
+        textInputSession_.setCallbacks(
+            [this](const TextInputEvent& event) {
+                requestRedraw();
+                if (onTextInput) onTextInput(event);
+            },
+            [this](const CompositionInputEvent& event) {
+                requestRedraw();
+                if (onCompositionInput) onCompositionInput(event);
+            });
     }
 
     ~GlfwPlatformWindow() override
@@ -259,6 +527,7 @@ public:
     std::function<void(const PointerEvent&)> onPointerEvent;
     std::function<void(const KeyEvent&)> onKeyEvent;
     std::function<void(const TextInputEvent&)> onTextInput;
+    std::function<void(const CompositionInputEvent&)> onCompositionInput;
     std::function<void(bool)> onFocusChanged;
 
 private:
@@ -561,6 +830,9 @@ int runGlfwApp(std::string title, SizeF size, GlfwRootFactory rootFactory)
 
     glfwWin->onTextInput = [&uiWindow](const TextInputEvent& event) {
         uiWindow.dispatchTextInput(event);
+    };
+    glfwWin->onCompositionInput = [&uiWindow](const CompositionInputEvent& event) {
+        uiWindow.dispatchComposition(event);
     };
     glfwWin->onFocusChanged = [&uiWindow](bool focused) {
         uiWindow.onPlatformFocusChanged(focused);

@@ -91,6 +91,14 @@ if(WHATSUI_WITH_WHATSCANVAS)
             glfw
     )
 
+    # The Windows GLFW host subclasses its native HWND to bridge IMM32
+    # composition/candidate-window messages into TextInputSession. Keep this
+    # private to the backend so headless and non-Windows consumers stay free
+    # of Win32 dependencies.
+    if(WIN32)
+        target_link_libraries(WhatsUIGlfw PRIVATE imm32)
+    endif()
+
     target_include_directories(WhatsUIGlfw
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/include
