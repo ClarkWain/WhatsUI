@@ -50,6 +50,21 @@ public:
     [[nodiscard]] std::unique_ptr<Node> removeChild(std::size_t index);
     void clearChildren();
 
+    // A node becomes attached when a UiRoot or OverlayHost adopts it.  Nodes
+    // are detached before they are removed or destroyed by those owners.  The
+    // callbacks are deliberately separate from destruction: a detached node
+    // may be retained and attached to a different tree later.
+    //
+    // Lifecycle callbacks must not throw.  They are intended for resources
+    // whose lifetime follows tree membership, such as State subscriptions.
+    void addAttachCallback(std::function<void()> callback);
+    void addDetachCallback(std::function<void()> callback);
+
+    [[nodiscard]] bool isAttached() const noexcept
+    {
+        return attached_;
+    }
+
     // Register a callback that runs when this node is destroyed. Reactive
     // builders use it to unsubscribe from a State, so a State outliving the
     // node cannot call into freed memory.
@@ -117,18 +132,33 @@ public:
 protected:
     Node() = default;
 
+    // Override these only for node-local resources.  Use the callback API for
+    // bindings created by builders, where the subscription lifetime is owned
+    // by the builder rather than the widget subclass.
+    virtual void onAttach() noexcept {}
+    virtual void onDetach() noexcept {}
+
     void setBounds(const RectF& bounds) noexcept
     {
         bounds_ = bounds;
     }
 
 private:
+    friend class UiRoot;
+    friend class OverlayHost;
+
+    void attachRecursively();
+    void detachRecursively() noexcept;
+
     Node* parent_{nullptr};
     std::vector<std::unique_ptr<Node>> children_;
+    std::vector<std::function<void()>> attachCallbacks_;
+    std::vector<std::function<void()>> detachCallbacks_;
     std::vector<std::function<void()>> teardown_;
     std::function<void()> invalidationHandler_;
     RectF bounds_{};
     float flex_{0.0f};
+    bool attached_{false};
     DirtyFlags dirtyFlags_{toMask(DirtyFlag::Layout) | toMask(DirtyFlag::Paint)};
 };
 

@@ -89,6 +89,26 @@ add_test(
     COMMAND WhatsUIScrollViewTests
 )
 
+add_executable(WhatsUILifecycleTests
+    lifecycle_tests.cpp
+)
+
+target_link_libraries(WhatsUILifecycleTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUILifecycleTests PRIVATE cxx_std_17)
+
+if(WHATSUI_ENABLE_SANITIZERS)
+    whatsui_prepare_sanitized_executable(WhatsUILifecycleTests)
+endif()
+
+add_test(
+    NAME whatsui_lifecycle_tests
+    COMMAND WhatsUILifecycleTests
+)
+
 # The Todo sample is a deterministic, headless Software-renderer walkthrough.
 # Keep its pixel hashes in source control so UI changes are reviewed as visual
 # changes, while leaving the WhatsCanvas package's own test registration alone.

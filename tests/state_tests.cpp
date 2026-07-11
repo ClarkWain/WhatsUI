@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -5,6 +6,7 @@
 
 #include "wui/state.h"
 #include "wui/scheduler.h"
+#include "wui/ui.h"
 
 namespace {
 
@@ -301,6 +303,128 @@ void testStructuralUpdatesDrainReentrantWork()
            "Work scheduled during a structural flush should commit in the same frame after its current batch");
 }
 
+// This is deliberately deterministic: when a lifecycle or subscription
+// regression appears, the same operation number is reproducible locally and
+// in CI.  It mixes State notification reentrancy with structural work that is
+// allowed to outlive the tree node that originally queued it.
+void testDeterministicMutationStress()
+{
+    using namespace wui::ui;
+
+    constexpr int kOperations = 1200;
+    std::uint32_t random = 0xC0FFEEu;
+    const auto nextRandom = [&random] {
+        random = random * 1664525u + 1013904223u;
+        return random;
+    };
+
+    wui::State<bool> visible{true};
+    wui::State<std::vector<int>> items{{1, 2, 3}};
+    wui::State<int> value{0};
+    wui::Column root;
+    int mountedBranches = 0;
+    int generatedRows = 0;
+
+    // A notification that removes itself also performs one nested state
+    // mutation.  This exercises both stable observer snapshots and the
+    // notification queue while the tree churns around it.
+    int selfRemovalCalls = 0;
+    bool nestedMutationSent = false;
+    wui::State<int>::SubscriptionId selfRemovalId = 0;
+    selfRemovalId = value.subscribe([&](const int& current) {
+        ++selfRemovalCalls;
+        value.unsubscribe(selfRemovalId);
+        if (!nestedMutationSent) {
+            nestedMutationSent = true;
+            value.set(current + 10000);
+        }
+    });
+
+    const auto makeBranch = [&]() -> std::unique_ptr<wui::Node> {
+        return Column()
+            .gap(2.0f)
+            .children(
+                If(visible).then([&] {
+                    ++mountedBranches;
+                    return ForEach<int>(items, [&](const int& item) {
+                        ++generatedRows;
+                        return Text().bind(value, [item](const int& current) {
+                            return std::to_string(item) + ":" + std::to_string(current);
+                        });
+                    });
+                }),
+                Text().bind(value, [](const int& current) {
+                    return std::string("value:") + std::to_string(current);
+                })
+            );
+    };
+
+    for (int operation = 0; operation < kOperations; ++operation) {
+        switch (nextRandom() % 6u) {
+        case 0: // Add a tree that owns reactive and structural subscriptions.
+            if (root.children().size() < 24) {
+                root.appendChild(makeBranch());
+            }
+            break;
+        case 1: // Delete a possibly recently queued tree before the safe point.
+            if (!root.children().empty()) {
+                const auto index = nextRandom() % root.children().size();
+                (void)root.removeChild(index);
+            }
+            break;
+        case 2:
+            visible.set(!visible.get());
+            break;
+        case 3: {
+            auto next = items.get();
+            next.push_back(static_cast<int>(nextRandom() % 100u));
+            items.set(std::move(next));
+            break;
+        }
+        case 4: {
+            auto next = items.get();
+            if (!next.empty()) {
+                next.erase(next.begin() + static_cast<std::ptrdiff_t>(nextRandom() % next.size()));
+            }
+            items.set(std::move(next));
+            break;
+        }
+        default:
+            value.set(static_cast<int>(nextRandom() % 100000u));
+            break;
+        }
+
+        // Leave some work pending long enough for removals to invalidate it,
+        // then require every frame boundary to converge completely.
+        if (operation % 3 == 2 || operation + 1 == kOperations) {
+            wui::flushStructuralUpdates();
+            expect(!wui::hasPendingStructuralUpdates(),
+                   "Mutation stress structural queue must converge at every frame boundary");
+        }
+    }
+
+    expect(selfRemovalCalls == 1,
+           "A nested self-removing observer must be delivered exactly once during mutation stress");
+    expect(nestedMutationSent, "Mutation stress must exercise a nested State update");
+    expect(mountedBranches > 0 && generatedRows > 0,
+           "Mutation stress must mount branches and generate list rows");
+
+    // Clearing the tree must synchronously release every structural
+    // subscription.  Mutating the source states afterwards must not schedule
+    // stale work or recreate branches that no longer exist.
+    root.clearChildren();
+    wui::flushStructuralUpdates();
+    const int branchesBeforeReleaseCheck = mountedBranches;
+    visible.set(!visible.get());
+    items.set({7, 8, 9});
+    value.set(value.get() + 1);
+    expect(!wui::hasPendingStructuralUpdates(),
+           "Destroyed stress branches must release structural subscriptions immediately");
+    wui::flushStructuralUpdates();
+    expect(mountedBranches == branchesBeforeReleaseCheck,
+           "Destroyed stress branches must not be rebuilt by later State mutations");
+}
+
 } // namespace
 
 int main()
@@ -325,5 +449,6 @@ int main()
     testNestedStateUpdatePreservesDeliveryOrderForAllObservers();
     testStructuralUpdatesCoalesceByKey();
     testStructuralUpdatesDrainReentrantWork();
+    testDeterministicMutationStress();
     return 0;
 }

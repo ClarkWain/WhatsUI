@@ -8,21 +8,29 @@ namespace wui {
 void UiRoot::setContent(std::unique_ptr<Node> content) noexcept
 {
     if (content_ != nullptr) {
+        content_->detachRecursively();
         content_->setInvalidationHandler({});
     }
     ownedContent_ = std::move(content);
     content_ = ownedContent_.get();
     wireInvalidationHandler();
+    if (content_ != nullptr) {
+        content_->attachRecursively();
+    }
 }
 
 void UiRoot::setBorrowedContent(Node* content) noexcept
 {
     if (content_ != nullptr && content_ != content) {
+        content_->detachRecursively();
         content_->setInvalidationHandler({});
     }
     ownedContent_.reset();
     content_ = content;
     wireInvalidationHandler();
+    if (content_ != nullptr) {
+        content_->attachRecursively();
+    }
 }
 
 void UiRoot::setOnInvalidate(std::function<void()> handler)
@@ -256,6 +264,7 @@ OverlayId OverlayHost::show(std::unique_ptr<Node> overlay)
 
     const auto id = nextId_++;
     overlays_.push_back(OverlayEntry{id, std::move(overlay)});
+    overlays_.back().content->attachRecursively();
     if (onChange_) {
         onChange_();
     }
@@ -272,6 +281,7 @@ std::unique_ptr<Node> OverlayHost::dismiss(OverlayId id)
     for (auto it = overlays_.begin(); it != overlays_.end(); ++it) {
         if (it->id == id) {
             auto overlay = std::move(it->content);
+            overlay->detachRecursively();
             overlay->setInvalidationHandler({});
             overlays_.erase(it);
             if (onChange_) {
@@ -290,6 +300,7 @@ std::unique_ptr<Node> OverlayHost::dismissTop()
     }
 
     auto overlay = std::move(overlays_.back().content);
+    overlay->detachRecursively();
     overlay->setInvalidationHandler({});
     overlays_.pop_back();
     if (onChange_) {
@@ -305,6 +316,7 @@ void OverlayHost::clear() noexcept
     }
     for (const auto& overlay : overlays_) {
         if (overlay.content) {
+            overlay.content->detachRecursively();
             overlay.content->setInvalidationHandler({});
         }
     }

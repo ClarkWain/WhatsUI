@@ -142,11 +142,35 @@ public:
     Text&& bind(Observable& source, Format format) &&
     {
         wui::Text* raw = node_.get();
-        raw->setValue(format(source.get()));
-        const auto id = source.subscribe([raw, format](const auto& value) {
-            raw->setValue(format(value));
-        });
-        raw->addTeardown([&source, id] { source.unsubscribe(id); });
+        struct Subscription {
+            std::size_t id{0};
+            bool active{false};
+        };
+        auto subscription = std::make_shared<Subscription>();
+        auto connect = [raw, source = &source, format, subscription] {
+            raw->setValue(format(source->get()));
+            if (subscription->active) {
+                return;
+            }
+            subscription->id = source->subscribe([raw, format](const auto& value) {
+                raw->setValue(format(value));
+            });
+            subscription->active = true;
+        };
+        auto disconnect = [source = &source, subscription] {
+            if (!subscription->active) {
+                return;
+            }
+            source->unsubscribe(subscription->id);
+            subscription->active = false;
+        };
+        // Bind immediately for detached construction (useful for headless
+        // composition), then pause updates whenever the node leaves a live
+        // UI tree. Reattachment refreshes from the source before reconnecting.
+        connect();
+        raw->addAttachCallback(connect);
+        raw->addDetachCallback(disconnect);
+        raw->addTeardown(disconnect);
         return std::move(self());
     }
 
@@ -412,16 +436,34 @@ public:
         });
         raw->setVisible(state_->get());
         wui::State<bool>* state = state_;
+        struct Subscription { std::size_t id{0}; bool active{false}; };
         auto alive = std::make_shared<bool>(true);
-        const auto id = state->subscribe([raw, state, weakAlive = std::weak_ptr<bool>(alive)](const bool&) {
-            wui::scheduleStructuralUpdate(raw, [raw, state, weakAlive] {
-                const auto guard = weakAlive.lock();
-                if (guard && *guard) {
-                    raw->setVisible(state->get());
-                }
+        auto subscription = std::make_shared<Subscription>();
+        auto connect = [raw, state, alive, subscription] {
+            raw->setVisible(state->get());
+            if (subscription->active) {
+                return;
+            }
+            subscription->id = state->subscribe([raw, state, weakAlive = std::weak_ptr<bool>(alive)](const bool&) {
+                wui::scheduleStructuralUpdate(raw, [raw, state, weakAlive] {
+                    const auto guard = weakAlive.lock();
+                    if (guard && *guard) {
+                        raw->setVisible(state->get());
+                    }
+                });
             });
-        });
-        raw->addTeardown([state, id, alive] { *alive = false; state->unsubscribe(id); });
+            subscription->active = true;
+        };
+        auto disconnect = [state, subscription] {
+            if (subscription->active) {
+                state->unsubscribe(subscription->id);
+                subscription->active = false;
+            }
+        };
+        connect();
+        raw->addAttachCallback(connect);
+        raw->addDetachCallback(disconnect);
+        raw->addTeardown([disconnect, alive] { *alive = false; disconnect(); });
         return std::move(self());
     }
 
@@ -448,16 +490,34 @@ public:
         };
         rebuild();
         wui::State<std::vector<T>>* state = &items;
+        struct Subscription { std::size_t id{0}; bool active{false}; };
         auto alive = std::make_shared<bool>(true);
-        const auto id = state->subscribe([raw, rebuild, weakAlive = std::weak_ptr<bool>(alive)](const std::vector<T>&) {
-            wui::scheduleStructuralUpdate(raw, [rebuild, weakAlive] {
-                const auto guard = weakAlive.lock();
-                if (guard && *guard) {
-                    rebuild();
-                }
+        auto subscription = std::make_shared<Subscription>();
+        auto connect = [raw, state, rebuild, alive, subscription] {
+            rebuild();
+            if (subscription->active) {
+                return;
+            }
+            subscription->id = state->subscribe([raw, rebuild, weakAlive = std::weak_ptr<bool>(alive)](const std::vector<T>&) {
+                wui::scheduleStructuralUpdate(raw, [rebuild, weakAlive] {
+                    const auto guard = weakAlive.lock();
+                    if (guard && *guard) {
+                        rebuild();
+                    }
+                });
             });
-        });
-        raw->addTeardown([state, id, alive] { *alive = false; state->unsubscribe(id); });
+            subscription->active = true;
+        };
+        auto disconnect = [state, subscription] {
+            if (subscription->active) {
+                state->unsubscribe(subscription->id);
+                subscription->active = false;
+            }
+        };
+        connect();
+        raw->addAttachCallback(connect);
+        raw->addDetachCallback(disconnect);
+        raw->addTeardown([disconnect, alive] { *alive = false; disconnect(); });
     }
 
     ForEach<T>&& direction(ForEachDirection dir) &&

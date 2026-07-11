@@ -6,6 +6,10 @@ namespace wui {
 
 Node::~Node()
 {
+    // UiRoot/OverlayHost normally detach their content before releasing it.
+    // Keep this fallback for direct owners so subscriptions registered through
+    // addDetachCallback cannot outlive an attached tree by accident.
+    detachRecursively();
     for (auto& callback : teardown_) {
         if (callback) {
             callback();
@@ -32,7 +36,11 @@ void Node::appendChild(std::unique_ptr<Node> child)
     }
     child->parent_ = this;
     child->setInvalidationHandler(invalidationHandler_);
+    Node* const rawChild = child.get();
     children_.push_back(std::move(child));
+    if (attached_) {
+        rawChild->attachRecursively();
+    }
     markDirty(DirtyFlag::Layout);
 }
 
@@ -43,6 +51,7 @@ std::unique_ptr<Node> Node::removeChild(std::size_t index)
     }
 
     auto child = std::move(children_[index]);
+    child->detachRecursively();
     child->parent_ = nullptr;
     child->setInvalidationHandler({});
     children_.erase(children_.begin() + static_cast<std::ptrdiff_t>(index));
@@ -57,6 +66,7 @@ void Node::clearChildren()
     }
     for (auto& child : children_) {
         if (child) {
+            child->detachRecursively();
             child->parent_ = nullptr;
             child->setInvalidationHandler({});
         }
@@ -68,6 +78,58 @@ void Node::clearChildren()
 void Node::addTeardown(std::function<void()> callback)
 {
     teardown_.push_back(std::move(callback));
+}
+
+void Node::addAttachCallback(std::function<void()> callback)
+{
+    if (!callback) {
+        return;
+    }
+    attachCallbacks_.push_back(std::move(callback));
+    if (attached_) {
+        attachCallbacks_.back()();
+    }
+}
+
+void Node::addDetachCallback(std::function<void()> callback)
+{
+    if (callback) {
+        detachCallbacks_.push_back(std::move(callback));
+    }
+}
+
+void Node::attachRecursively()
+{
+    if (attached_) {
+        return;
+    }
+    attached_ = true;
+    onAttach();
+    for (auto& callback : attachCallbacks_) {
+        callback();
+    }
+    for (const auto& child : children_) {
+        child->attachRecursively();
+    }
+}
+
+void Node::detachRecursively() noexcept
+{
+    if (!attached_) {
+        return;
+    }
+
+    // Descendants detach first: their callback can still inspect their
+    // parent during cleanup, but no descendant can observe the parent after
+    // its own detach callback has run.
+    for (const auto& child : children_) {
+        child->detachRecursively();
+    }
+    for (auto& callback : detachCallbacks_) {
+        callback();
+    }
+    onDetach();
+    attached_ = false;
 }
 
 void Node::setInvalidationHandler(std::function<void()> handler)
