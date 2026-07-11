@@ -9,6 +9,7 @@ option(WHATSUI_WITH_WHATSCANVAS "Link WhatsCanvas into the WhatsUI target" OFF)
 option(WHATSUI_BUILD_TESTS "Build WhatsUI tests" ON)
 option(WHATSUI_BUILD_EXAMPLES "Build WhatsUI examples (requires WHATSUI_WITH_WHATSCANVAS)" OFF)
 option(WHATSUI_INSTALL "Generate install and CMake package export rules" ON)
+option(WHATSUI_ENABLE_SANITIZERS "Enable supported runtime memory sanitizers for WhatsUI and its dependents" OFF)
 
 add_library(WhatsUI
     src/whatsui/core/app.cpp
@@ -32,6 +33,11 @@ add_library(WhatsUI
 add_library(WhatsUI::WhatsUI ALIAS WhatsUI)
 
 target_compile_features(WhatsUI PUBLIC cxx_std_17)
+
+if(WHATSUI_ENABLE_SANITIZERS)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/WhatsUISanitizers.cmake")
+    whatsui_enable_sanitizers(WhatsUI)
+endif()
 
 target_include_directories(WhatsUI
     PUBLIC

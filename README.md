@@ -30,6 +30,35 @@ cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
+## Sanitizer validation
+
+Runtime sanitizers are opt-in so ordinary Debug and release builds keep their
+usual flags.  On Clang and GCC, the option enables AddressSanitizer and
+UndefinedBehaviorSanitizer; on Windows/MSVC it enables the supported
+AddressSanitizer equivalent (MSVC does not ship UBSan).  CI runs both the
+Windows/MSVC ASan test suite and the headless Linux/Clang ASan+UBSan suite.
+For MSVC test executables, CMake copies the matching ASan runtime DLL next to
+the binary so `ctest` does not depend on a developer's `PATH`.
+
+```powershell
+# Windows / Visual Studio: AddressSanitizer
+cmake -S . -B build-asan -DWHATSUI_ENABLE_SANITIZERS=ON
+cmake --build build-asan --config Debug
+ctest --test-dir build-asan -C Debug --output-on-failure
+```
+
+```bash
+# Linux or macOS with Clang/GCC: AddressSanitizer + UBSan
+cmake -S . -B build-sanitizers -DCMAKE_BUILD_TYPE=Debug -DWHATSUI_ENABLE_SANITIZERS=ON
+cmake --build build-sanitizers --parallel
+ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 \\
+  ctest --test-dir build-sanitizers --output-on-failure
+```
+
+The sanitizer configuration intentionally covers the headless runtime only.
+Do not combine it with `WHATSUI_WITH_WHATSCANVAS=ON` until that third-party
+rendering dependency has its own supported sanitizer matrix.
+
 ## 安装与外部 CMake 消费（Developer Preview）
 
 当前 Developer Preview 提供无渲染后端的核心包，可安装并通过

@@ -158,6 +158,22 @@ TextInput 这条线建议拆成独立测试组：
 
 这能平衡反馈速度和覆盖深度。
 
+### Sanitizer gate
+
+`WHATSUI_ENABLE_SANITIZERS=ON` is the reproducible memory-safety gate for the
+headless runtime.  The option instruments both `WhatsUI` and targets that link
+it, so test code and the runtime are checked together.
+
+- Windows/MSVC runs AddressSanitizer. MSVC does not provide UBSan, so CI names
+  this limitation explicitly rather than silently claiming equivalent coverage.
+- Linux/Clang runs AddressSanitizer and UndefinedBehaviorSanitizer together.
+- The sanitizer jobs intentionally leave `WHATSUI_WITH_WHATSCANVAS=OFF`:
+  WhatsCanvas is an in-tree third-party integration with a separate validation
+  contract and must not make the core runtime gate non-reproducible.
+
+Run the commands in the root `README.md` locally before changing ownership,
+deferred mutation, event dispatch, or teardown code.
+
 ## 13. 非目标
 
 测试系统当前不追求：

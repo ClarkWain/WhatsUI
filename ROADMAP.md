@@ -36,7 +36,8 @@ all be true.
   parent destruction detaches every child exactly once.
 - [ ] Mutation stress: 1,000 randomized tree mutations and nested self-removal
   without crash or leaked subscriptions.
-- [ ] Sanitizer-ready CI configuration (ASan/UBSan where supported).
+- [x] Sanitizer-ready CI configuration (ASan/UBSan where supported; MSVC ASan
+  alternative documented and gated).
 
 ### M1 — Input, Focus, and Scroll (`v0.2-input-preview`)
 
@@ -94,4 +95,3 @@ all be true.
 The immediate sequence is M0 lifecycle/mutation proof, M1 pointer capture and
 Settings example, then M2 Windows IME. New components must not bypass those
 runtime/input contracts.
-

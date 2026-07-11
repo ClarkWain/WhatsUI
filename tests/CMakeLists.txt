@@ -73,6 +73,17 @@ target_link_libraries(WhatsUIScrollViewTests
 
 target_compile_features(WhatsUIScrollViewTests PRIVATE cxx_std_17)
 
+if(WHATSUI_ENABLE_SANITIZERS)
+    foreach(whatsui_test_target IN ITEMS
+            WhatsUISmokeTests
+            WhatsUILayoutTests
+            WhatsUIStateTests
+            WhatsUIWindowTests
+            WhatsUIScrollViewTests)
+        whatsui_prepare_sanitized_executable(${whatsui_test_target})
+    endforeach()
+endif()
+
 add_test(
     NAME whatsui_scroll_view_tests
     COMMAND WhatsUIScrollViewTests
