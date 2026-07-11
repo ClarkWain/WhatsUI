@@ -7,14 +7,47 @@
 #include <vector>
 
 #include "wui/node.h"
+#include "wui/state.h"
 
 namespace wui {
 
-#ifdef WHATSUI_HAS_WHATSCANVAS
 namespace detail {
 class ImageResource;
 }
-#endif
+
+// Immutable, interned RGBA image data. Constructing equivalent sources reuses
+// the same backing resource, so declaratively rebuilt Image nodes do not keep
+// duplicate pixel buffers or backend textures alive.
+class ImageSource {
+public:
+    ImageSource() = default;
+    ImageSource(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
+
+    [[nodiscard]] int pixelWidth() const noexcept;
+    [[nodiscard]] int pixelHeight() const noexcept;
+    [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] bool operator==(const ImageSource& other) const noexcept;
+    [[nodiscard]] bool operator!=(const ImageSource& other) const noexcept { return !(*this == other); }
+
+private:
+    explicit ImageSource(std::shared_ptr<detail::ImageResource> resource) noexcept;
+    std::shared_ptr<detail::ImageResource> resource_;
+
+    friend class Image;
+};
+
+// Text wraps only at explicit line breaks unless Word wrapping is enabled.
+// When a maximum line count drops content, Ellipsis appends a fitted "..." to
+// the final visible line (where the available width permits it).
+enum class TextWrap {
+    NoWrap,
+    Word,
+};
+
+enum class TextOverflow {
+    Clip,
+    Ellipsis,
+};
 
 class Text : public Node {
 public:
@@ -29,6 +62,19 @@ public:
     [[nodiscard]] float lineHeight() const noexcept;
     void setLineHeight(float height) noexcept;
 
+    [[nodiscard]] TextWrap wrap() const noexcept;
+    void setWrap(TextWrap wrap) noexcept;
+    [[nodiscard]] std::size_t maxLines() const noexcept;
+    // Zero means unlimited lines.
+    void setMaxLines(std::size_t lines) noexcept;
+    [[nodiscard]] TextOverflow overflow() const noexcept;
+    void setOverflow(TextOverflow overflow) noexcept;
+
+    // Resolves explicit breaks, wrapping and optional truncation in logical
+    // coordinates. It is useful to custom renderers that need to mirror Text's
+    // layout decisions.
+    [[nodiscard]] std::vector<std::string> resolvedLines(float availableWidth) const;
+
     void setColor(Color color) noexcept;
     void clearColor() noexcept;
 
@@ -37,9 +83,15 @@ public:
     void paint(PaintContext& context) override;
 
 private:
+    [[nodiscard]] std::vector<std::string> layoutLines(float availableWidth) const;
+    [[nodiscard]] float textWidth(const std::string& value) const;
+    [[nodiscard]] float effectiveLineHeight() const noexcept;
     std::string value_;
     float fontSize_{16.0f};
     float lineHeight_{0.0f};
+    TextWrap wrap_{TextWrap::NoWrap};
+    TextOverflow overflow_{TextOverflow::Clip};
+    std::size_t maxLines_{0};
     Color color_{};
     bool hasColor_{false};
 };
@@ -54,11 +106,16 @@ class Image : public Node {
 public:
     Image();
     Image(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
+    explicit Image(ImageSource source);
     ~Image() override;
 
     Image& source(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
+    Image& source(ImageSource source);
     void setSource(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
+    void setSource(ImageSource source);
     void clearSource() noexcept;
+
+    [[nodiscard]] const ImageSource imageSource() const noexcept;
 
     Image& fit(ImageFit fit) noexcept;
     void setFit(ImageFit fit) noexcept;
@@ -75,15 +132,10 @@ public:
     void paint(PaintContext& context) override;
 
 private:
-    std::vector<unsigned char> pixels_;
-    int pixelWidth_{0};
-    int pixelHeight_{0};
+    ImageSource source_;
     ImageFit fit_{ImageFit::Contain};
     PointF alignment_{0.5f, 0.5f};
 
-#ifdef WHATSUI_HAS_WHATSCANVAS
-    std::unique_ptr<detail::ImageResource> resource_;
-#endif
 };
 
 class Spacer : public Node {
@@ -175,6 +227,63 @@ private:
     Alignment align_{Alignment::Start};
 };
 
+// A single-child vertical viewport. Scroll offsets are logical pixels and are
+// clamped after every layout/content change. Wheel input is intentionally
+// consumed only when the viewport can move, so nested scroll views can defer
+// to an ancestor at their edge in a future routing enhancement.
+class ScrollView : public ContainerNode {
+public:
+    ScrollView& child(std::unique_ptr<Node> child);
+    void setScrollOffset(float offset) noexcept;
+    [[nodiscard]] float scrollOffset() const noexcept;
+    [[nodiscard]] float maxScrollOffset() const noexcept;
+    [[nodiscard]] SizeF contentSize() const noexcept;
+
+    [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
+    void layout(const RectF& bounds) override;
+    void paint(PaintContext& context) override;
+    [[nodiscard]] Node* hitTest(PointF point) override;
+    bool onPointerEvent(const PointerEvent& event) override;
+
+private:
+    void clampOffset() noexcept;
+    SizeF contentSize_{};
+    float scrollOffset_{0.0f};
+};
+
+// A window-sized modal surface. Dialog owns exactly one content subtree,
+// centers it in the available window bounds, paints a dimming scrim behind
+// it, and consumes backdrop pointer input. UiWindow supplies Escape handling
+// and focus restoration through showDialog()/dismissDialog().
+class Dialog : public ContainerNode {
+public:
+    using DismissHandler = std::function<void()>;
+
+    Dialog& content(std::unique_ptr<Node> content);
+    void setMaxWidth(float width) noexcept;
+    [[nodiscard]] float maxWidth() const noexcept;
+    void setBackdropDismissEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool backdropDismissEnabled() const noexcept;
+    void onDismiss(DismissHandler handler);
+
+    [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
+    void layout(const RectF& bounds) override;
+    void paint(PaintContext& context) override;
+    [[nodiscard]] Node* hitTest(PointF point) override;
+    bool onPointerEvent(const PointerEvent& event) override;
+    void dismiss();
+
+private:
+    // UiWindow installs its lifecycle handler separately so author callbacks
+    // registered with onDismiss() are not overwritten.
+    friend class UiWindow;
+    void setWindowDismissHandler(DismissHandler handler);
+    float maxWidth_{420.0f};
+    bool backdropDismissEnabled_{false};
+    DismissHandler onDismiss_;
+    DismissHandler windowDismiss_;
+};
+
 enum class ButtonVariant {
     Primary,
     Ghost,
@@ -204,6 +313,38 @@ private:
     std::string label_;
     ClickHandler onClick_;
     ButtonVariant variant_{ButtonVariant::Primary};
+};
+
+// A two-state form control. Checkbox owns its checked value unless bound to a
+// State<bool>; the binding remains the source of truth for external changes.
+class Checkbox : public ControlNode {
+public:
+    using ChangeHandler = std::function<void(bool)>;
+
+    explicit Checkbox(std::string label = {}, bool checked = false);
+
+    [[nodiscard]] const std::string& label() const noexcept;
+    Checkbox& label(std::string label);
+    void setLabel(std::string label);
+
+    [[nodiscard]] bool isChecked() const noexcept;
+    Checkbox& checked(bool value);
+    void setChecked(bool value);
+    Checkbox& bind(State<bool>& state);
+    Checkbox& onChange(ChangeHandler handler);
+
+    [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
+    void paint(PaintContext& context) override;
+    bool onPointerEvent(const PointerEvent& event) override;
+    bool onKeyEvent(const KeyEvent& event) override;
+
+private:
+    void toggle();
+    std::string label_;
+    bool checked_{false};
+    std::optional<Binding<bool>> binding_;
+    bool hasBinding_{false};
+    ChangeHandler onChange_;
 };
 
 } // namespace wui

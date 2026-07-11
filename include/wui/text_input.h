@@ -74,6 +74,7 @@ public:
     TextInput& text(std::string text);
 
     void syncSession(TextInputSession& session, const RectF& caretRect) const;
+    [[nodiscard]] RectF caretRect() const noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;

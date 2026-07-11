@@ -1,6 +1,7 @@
 #include "wui/widgets.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 #include "wui/text_metrics.h"
@@ -52,6 +53,14 @@ void Text::setLineHeight(float height) noexcept
     markDirty(DirtyFlag::Layout);
 }
 
+TextWrap Text::wrap() const noexcept { return wrap_; }
+void Text::setWrap(TextWrap wrap) noexcept { wrap_ = wrap; markDirty(DirtyFlag::Layout); }
+std::size_t Text::maxLines() const noexcept { return maxLines_; }
+void Text::setMaxLines(std::size_t lines) noexcept { maxLines_ = lines; markDirty(DirtyFlag::Layout); }
+TextOverflow Text::overflow() const noexcept { return overflow_; }
+void Text::setOverflow(TextOverflow overflow) noexcept { overflow_ = overflow; markDirty(DirtyFlag::Layout); }
+std::vector<std::string> Text::resolvedLines(float availableWidth) const { return layoutLines(availableWidth); }
+
 void Text::setColor(Color color) noexcept
 {
     color_ = color;
@@ -67,13 +76,82 @@ void Text::clearColor() noexcept
 
 SizeF Text::measure(const Constraints& constraints) const
 {
-    if (const TextMeasurer* measurer = textMeasurer()) {
-        const TextExtents extents = measurer->measureText(value_, fontSize_);
-        return constraints.clamp({extents.width, lineHeight_ > 0.0f ? lineHeight_ : extents.height});
+    const auto lines = layoutLines(constraints.maxWidth);
+    float width = 0.0f;
+    for (const auto& line : lines) width = std::max(width, textWidth(line));
+    return constraints.clamp({width, effectiveLineHeight() * static_cast<float>(lines.size())});
+}
+
+float Text::textWidth(const std::string& value) const
+{
+    if (const TextMeasurer* measurer = textMeasurer()) return measurer->measureText(value, fontSize_).width;
+    // Fallback is deliberately codepoint-oriented so non-ASCII text does not
+    // become wider merely because UTF-8 uses multiple bytes.
+    std::size_t codepoints = 0;
+    for (unsigned char c : value) if ((c & 0xC0u) != 0x80u) ++codepoints;
+    return static_cast<float>(codepoints) * (fontSize_ * 0.5f);
+}
+
+float Text::effectiveLineHeight() const noexcept
+{
+    if (lineHeight_ > 0.0f) return lineHeight_;
+    if (const TextMeasurer* measurer = textMeasurer()) return measurer->measureText("M", fontSize_).height;
+    return fontSize_ * 1.25f;
+}
+
+std::vector<std::string> Text::layoutLines(float availableWidth) const
+{
+    const bool constrained = std::isfinite(availableWidth);
+    const bool canWrap = wrap_ == TextWrap::Word && constrained;
+    std::vector<std::string> lines;
+    std::string current;
+    bool truncated = false;
+    auto appendLine = [&] { lines.push_back(current); current.clear(); };
+    auto fits = [&](const std::string& candidate) { return !constrained || textWidth(candidate) <= availableWidth; };
+    auto appendEllipsis = [&](std::string& line) {
+        if (!constrained) { line += "..."; return; }
+        while (!line.empty() && !fits(line + "...")) {
+            std::size_t start = line.size() - 1;
+            while (start > 0 && (static_cast<unsigned char>(line[start]) & 0xC0u) == 0x80u) --start;
+            line.erase(start);
+        }
+        if (fits(line + "...")) line += "...";
+    };
+    auto finish = [&] { appendLine(); };
+
+    for (std::size_t index = 0; index < value_.size();) {
+        if (value_[index] == '\n') { finish(); ++index; continue; }
+        if (!canWrap) { current += value_[index++]; continue; }
+
+        // Consume a whole ASCII-delimited word before deciding where it goes;
+        // this avoids leaving the first character of the next word on a line.
+        while (index < value_.size() && (value_[index] == ' ' || value_[index] == '\t')) ++index;
+        if (index == value_.size()) break;
+        if (value_[index] == '\n') { finish(); ++index; continue; }
+        const std::size_t wordStart = index;
+        while (index < value_.size() && value_[index] != '\n' && value_[index] != ' ' && value_[index] != '\t') ++index;
+        const std::string word = value_.substr(wordStart, index - wordStart);
+        const std::string candidate = current.empty() ? word : current + " " + word;
+        if (fits(candidate)) { current = candidate; continue; }
+        if (!current.empty()) appendLine();
+        if (fits(word)) { current = word; continue; }
+        // A word wider than the line has no legal whitespace break; split it
+        // by UTF-8 scalar so every emitted substring remains valid UTF-8.
+        for (std::size_t glyph = 0; glyph < word.size();) {
+            const std::size_t begin = glyph++;
+            while (glyph < word.size() && (static_cast<unsigned char>(word[glyph]) & 0xC0u) == 0x80u) ++glyph;
+            const std::string next = word.substr(begin, glyph - begin);
+            if (!current.empty() && !fits(current + next)) appendLine();
+            current += next;
+        }
     }
-    const auto width = static_cast<float>(value_.size()) * (fontSize_ * 0.5f);
-    const auto height = lineHeight_ > 0.0f ? lineHeight_ : fontSize_ * 1.25f;
-    return constraints.clamp({width, height});
+    finish();
+    if (maxLines_ != 0 && lines.size() > maxLines_) { lines.resize(maxLines_); truncated = true; }
+    // NoWrap can still truncate horizontally; ellipsis is a visual substitute
+    // for that clipped suffix, without changing its single-line height.
+    if (!canWrap && constrained && !lines.empty() && !fits(lines.front())) truncated = true;
+    if (truncated && overflow_ == TextOverflow::Ellipsis && !lines.empty()) appendEllipsis(lines.back());
+    return lines;
 }
 
 float Text::baselineOffset() const noexcept
@@ -92,10 +170,23 @@ float Text::baselineOffset() const noexcept
 
 void Text::paint(PaintContext& context)
 {
-    if (!value_.empty()) {
-        const float baseline = bounds().y + baselineOffset();
+    const auto lines = layoutLines(bounds().width);
+    if (!lines.empty()) {
         const Color color = hasColor_ ? color_ : theme().colors.text;
-        context.drawText(value_, bounds().x, baseline, fontSize_, color);
+        const float lineHeight = effectiveLineHeight();
+        const float baseline = bounds().y + baselineOffset();
+        (void)context.save();
+        // Keep horizontal overflow contained, while allowing the backend's
+        // real glyph ascenders/descenders to extend beyond the simplified
+        // layout metrics.  In particular, the WhatsCanvas glyph atlas may
+        // report a line box smaller than the rasterized glyph bounds; clipping
+        // to the exact line box turns a label into one-pixel fragments.
+        context.clipRect({bounds().x, bounds().y - fontSize_, bounds().width,
+                          bounds().height + fontSize_ * 2.0f});
+        for (std::size_t index = 0; index < lines.size(); ++index) {
+            context.drawText(lines[index], bounds().x, baseline + lineHeight * static_cast<float>(index), fontSize_, color);
+        }
+        context.restore();
     }
     clearDirty(DirtyFlag::Paint);
 }

@@ -137,13 +137,23 @@ public:
         case CursorIcon::Hand: shape = GLFW_HAND_CURSOR; break;
         case CursorIcon::ResizeHorizontal: shape = GLFW_HRESIZE_CURSOR; break;
         case CursorIcon::ResizeVertical: shape = GLFW_VRESIZE_CURSOR; break;
+        // GLFW exposes no diagonal-resize standard cursors. Arrow is the
+        // portable fallback; applications needing branded diagonal cursors
+        // can supply them at the platform layer in a future API extension.
+        case CursorIcon::ResizeDiagonalPrimary:
+        case CursorIcon::ResizeDiagonalSecondary:
+        case CursorIcon::Arrow:
         default: break;
+        }
+        if (shape == currentShape_) {
+            return;
         }
         if (currentCursor_) {
             glfwDestroyCursor(currentCursor_);
         }
         currentCursor_ = glfwCreateStandardCursor(shape);
         glfwSetCursor(window_, currentCursor_);
+        currentShape_ = shape;
     }
 
     ~GlfwCursorService() override
@@ -156,6 +166,7 @@ public:
 private:
     GLFWwindow* window_;
     GLFWcursor* currentCursor_{nullptr};
+    int currentShape_{-1};
 };
 
 class GlfwTextInputSession : public TextInputSession {
@@ -248,6 +259,7 @@ public:
     std::function<void(const PointerEvent&)> onPointerEvent;
     std::function<void(const KeyEvent&)> onKeyEvent;
     std::function<void(const TextInputEvent&)> onTextInput;
+    std::function<void(bool)> onFocusChanged;
 
 private:
     GLFWwindow* window_;
@@ -318,17 +330,27 @@ public:
             glfwPollEvents();
 
             // Remove closed windows
+            const auto previousWindowCount = windows_.size();
             windows_.erase(
                 std::remove_if(windows_.begin(), windows_.end(),
                                [](GlfwPlatformWindow* w) { return !w->isOpen(); }),
                 windows_.end());
+            const bool closedWindowRemoved = windows_.size() != previousWindowCount;
 
             if (windows_.empty()) {
                 break;
             }
 
-            if (frameCallback_) {
+            const bool needsFrame = std::any_of(
+                windows_.begin(), windows_.end(),
+                [](const GlfwPlatformWindow* window) { return window->needsRedraw(); })
+                || Ticker::instance().hasActive();
+            if (frameCallback_ && (needsFrame || closedWindowRemoved)) {
                 frameCallback_();
+            } else {
+                // Block while idle rather than polling at an uncapped rate.
+                // Input, resize, and close events wake GLFW promptly.
+                glfwWaitEventsTimeout(0.05);
             }
         }
         return exitCode_;
@@ -341,6 +363,29 @@ public:
     }
 
 private:
+    static KeyModifiers modifiersFor(GLFWwindow* window)
+    {
+        KeyModifiers modifiers = 0;
+        const auto pressed = [window](int key) {
+            return glfwGetKey(window, key) == GLFW_PRESS;
+        };
+        if (pressed(GLFW_KEY_LEFT_SHIFT) || pressed(GLFW_KEY_RIGHT_SHIFT)) modifiers |= KeyModifierShift;
+        if (pressed(GLFW_KEY_LEFT_CONTROL) || pressed(GLFW_KEY_RIGHT_CONTROL)) modifiers |= KeyModifierControl;
+        if (pressed(GLFW_KEY_LEFT_ALT) || pressed(GLFW_KEY_RIGHT_ALT)) modifiers |= KeyModifierAlt;
+        if (pressed(GLFW_KEY_LEFT_SUPER) || pressed(GLFW_KEY_RIGHT_SUPER)) modifiers |= KeyModifierSuper;
+        return modifiers;
+    }
+
+    static KeyModifiers modifiersFromGlfw(int modifiers)
+    {
+        KeyModifiers result = 0;
+        if ((modifiers & GLFW_MOD_SHIFT) != 0) result |= KeyModifierShift;
+        if ((modifiers & GLFW_MOD_CONTROL) != 0) result |= KeyModifierControl;
+        if ((modifiers & GLFW_MOD_ALT) != 0) result |= KeyModifierAlt;
+        if ((modifiers & GLFW_MOD_SUPER) != 0) result |= KeyModifierSuper;
+        return result;
+    }
+
     void installCallbacks(GLFWwindow* window)
     {
         auto* pw = GlfwPlatformWindow::fromGlfw(window);
@@ -354,10 +399,27 @@ private:
             event.action = PointerAction::Move;
             event.button = MouseButton::None;
             event.position = {static_cast<float>(x), static_cast<float>(y)};
+            event.modifiers = modifiersFor(w);
+            pw->requestRedraw();
             if (pw->onPointerEvent) pw->onPointerEvent(event);
         });
 
-        glfwSetMouseButtonCallback(window, [](GLFWwindow* w, int button, int action, int /*mods*/) {
+        glfwSetCursorEnterCallback(window, [](GLFWwindow* w, int entered) {
+            auto* pw = GlfwPlatformWindow::fromGlfw(w);
+            if (!pw) return;
+            double x, y;
+            glfwGetCursorPos(w, &x, &y);
+            PointerEvent event;
+            event.windowId = pw->id();
+            event.pointerType = PointerType::Mouse;
+            event.action = entered == GLFW_TRUE ? PointerAction::Enter : PointerAction::Leave;
+            event.position = {static_cast<float>(x), static_cast<float>(y)};
+            event.modifiers = modifiersFor(w);
+            pw->requestRedraw();
+            if (pw->onPointerEvent) pw->onPointerEvent(event);
+        });
+
+        glfwSetMouseButtonCallback(window, [](GLFWwindow* w, int button, int action, int mods) {
             auto* pw = GlfwPlatformWindow::fromGlfw(w);
             if (!pw) return;
             double x, y;
@@ -373,6 +435,26 @@ private:
             default: event.button = MouseButton::None; break;
             }
             event.position = {static_cast<float>(x), static_cast<float>(y)};
+            event.modifiers = modifiersFromGlfw(mods);
+            pw->requestRedraw();
+            if (pw->onPointerEvent) pw->onPointerEvent(event);
+        });
+
+        glfwSetScrollCallback(window, [](GLFWwindow* w, double xoffset, double yoffset) {
+            auto* pw = GlfwPlatformWindow::fromGlfw(w);
+            if (!pw) return;
+            double x, y;
+            glfwGetCursorPos(w, &x, &y);
+            PointerEvent event;
+            event.windowId = pw->id();
+            event.pointerType = PointerType::Mouse;
+            event.action = PointerAction::Scroll;
+            event.position = {static_cast<float>(x), static_cast<float>(y)};
+            event.modifiers = modifiersFor(w);
+            // GLFW reports abstract wheel "steps". Convert to the framework's
+            // logical-pixel convention so all backends expose the same API.
+            event.scrollDelta = {static_cast<float>(xoffset * 40.0), static_cast<float>(yoffset * 40.0)};
+            pw->requestRedraw();
             if (pw->onPointerEvent) pw->onPointerEvent(event);
         });
 
@@ -384,8 +466,9 @@ private:
                 event.windowId = pw->id();
                 event.action = (action == GLFW_RELEASE) ? KeyAction::Up : KeyAction::Down;
                 event.keyCode = key;
-                event.modifiers = static_cast<KeyModifiers>(mods);
+                event.modifiers = modifiersFromGlfw(mods);
                 event.isRepeat = (action == GLFW_REPEAT);
+                pw->requestRedraw();
                 if (pw->onKeyEvent) pw->onKeyEvent(event);
             }
         });
@@ -412,7 +495,15 @@ private:
             TextInputEvent event;
             event.windowId = pw->id();
             event.text = buf;
+            pw->requestRedraw();
             if (pw->onTextInput) pw->onTextInput(event);
+        });
+
+        glfwSetWindowFocusCallback(window, [](GLFWwindow* w, int focused) {
+            auto* pw = GlfwPlatformWindow::fromGlfw(w);
+            if (!pw) return;
+            pw->requestRedraw();
+            if (pw->onFocusChanged) pw->onFocusChanged(focused == GLFW_TRUE);
         });
 
         glfwSetFramebufferSizeCallback(window, [](GLFWwindow* w, int width, int height) {
@@ -445,14 +536,14 @@ std::unique_ptr<PlatformHost> createGlfwPlatformHost()
 
 // --- Convenience one-liner ---
 
-int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
+int runGlfwApp(std::string title, SizeF size, GlfwRootFactory rootFactory)
 {
     auto hostPtr = std::make_unique<GlfwPlatformHost>();
     GlfwPlatformHost* host = hostPtr.get();
 
     UiApp app(std::move(hostPtr));
     auto& uiWindow = app.openWindow(std::move(title), size);
-    uiWindow.setRoot(std::move(root));
+    uiWindow.setRoot(rootFactory(uiWindow));
 
     // Get the concrete platform window to wire event callbacks
     auto& pw = uiWindow.platformWindow();
@@ -471,6 +562,9 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
     glfwWin->onTextInput = [&uiWindow](const TextInputEvent& event) {
         uiWindow.dispatchTextInput(event);
     };
+    glfwWin->onFocusChanged = [&uiWindow](bool focused) {
+        uiWindow.onPlatformFocusChanged(focused);
+    };
 
     // Set frame callback: flush structural updates, tick animations, layout, paint
     host->setFrameCallback([&app, lastFrame = std::chrono::steady_clock::now()]() mutable {
@@ -479,9 +573,17 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
             std::chrono::duration<float>(now - lastFrame).count(), 0.0f, 0.1f);
         lastFrame = now;
 
+        const bool hadActiveAnimations = Ticker::instance().hasActive();
         // The ticker is application-scoped: advance it exactly once per host
         // frame, regardless of how many windows are currently open.
-        Ticker::instance().tick(deltaSeconds);
+        if (hadActiveAnimations) {
+            Ticker::instance().tick(deltaSeconds);
+        }
+
+        // The host has already dropped its non-owning native-window pointers
+        // for closed peers. Release the corresponding UI windows before any
+        // event callback can observe stale application state.
+        app.removeClosedWindows();
 
         for (const auto& winPtr : app.windows()) {
             auto& win = *winPtr;
@@ -491,6 +593,10 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
 
             // Ensure GL context is current before rendering
             auto* glfwWin = static_cast<GlfwPlatformWindow*>(&platformWin);
+            if (!glfwWin->needsRedraw() && !hadActiveAnimations) continue;
+            // Consume this request before rendering. Invalidations raised by
+            // update/layout/paint intentionally schedule one more frame.
+            glfwWin->clearRedraw();
             glfwMakeContextCurrent(glfwWin->glfwWindow());
 
             // Commit deferred state changes at the window frame boundary.
@@ -516,6 +622,16 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
     });
 
     return host->run();
+}
+
+int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
+{
+    // std::function requires a copyable callable while a UI tree is
+    // move-only. Share the one-shot holder so the factory itself remains
+    // copyable and still transfers ownership exactly once.
+    auto rootHolder = std::make_shared<std::unique_ptr<Node>>(std::move(root));
+    return runGlfwApp(std::move(title), size,
+                      [rootHolder](UiWindow&) { return std::move(*rootHolder); });
 }
 
 } // namespace wui

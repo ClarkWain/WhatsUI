@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(WhatsUI LANGUAGES CXX)
+project(WhatsUI VERSION 0.1.0 LANGUAGES CXX)
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 option(WHATSUI_WITH_WHATSCANVAS "Link WhatsCanvas into the WhatsUI target" OFF)
 option(WHATSUI_BUILD_TESTS "Build WhatsUI tests" ON)
 option(WHATSUI_BUILD_EXAMPLES "Build WhatsUI examples (requires WHATSUI_WITH_WHATSCANVAS)" OFF)
+option(WHATSUI_INSTALL "Generate install and CMake package export rules" ON)
 
 add_library(WhatsUI
     src/whatsui/core/app.cpp
@@ -16,8 +20,10 @@ add_library(WhatsUI
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
     src/whatsui/widgets/button.cpp
+    src/whatsui/widgets/dialog.cpp
     src/whatsui/widgets/image.cpp
     src/whatsui/widgets/layout.cpp
+    src/whatsui/widgets/scroll_view.cpp
     src/whatsui/widgets/structural.cpp
     src/whatsui/widgets/text.cpp
     src/whatsui/widgets/text_input.cpp
@@ -29,7 +35,13 @@ target_compile_features(WhatsUI PUBLIC cxx_std_17)
 
 target_include_directories(WhatsUI
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+set_target_properties(WhatsUI PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 
 if(WHATSUI_WITH_WHATSCANVAS)
@@ -88,3 +100,47 @@ if(WHATSUI_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
+# The developer-preview package is deliberately headless.  The optional
+# WhatsCanvas integration currently consumes its in-tree subproject directly;
+# publishing that integration requires a separately packaged WhatsCanvas
+# dependency and is therefore kept out of this first consumer contract.
+if(WHATSUI_INSTALL)
+    if(WHATSUI_WITH_WHATSCANVAS)
+        message(WARNING
+            "WhatsUI install/export is unavailable with WHATSUI_WITH_WHATSCANVAS=ON. "
+            "Build the developer-preview package with WHATSUI_WITH_WHATSCANVAS=OFF.")
+    else()
+        install(TARGETS WhatsUI
+            EXPORT WhatsUITargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        )
+        install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/wui"
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        )
+
+        install(EXPORT WhatsUITargets
+            FILE WhatsUITargets.cmake
+            NAMESPACE WhatsUI::
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
+        )
+
+        configure_package_config_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WhatsUIConfig.cmake.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfig.cmake"
+            INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
+        )
+        write_basic_package_version_file(
+            "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfigVersion.cmake"
+            VERSION ${PROJECT_VERSION}
+            COMPATIBILITY SameMajorVersion
+        )
+        install(FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfig.cmake"
+            "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfigVersion.cmake"
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
+        )
+    endif()
+endif()

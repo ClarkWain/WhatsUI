@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <functional>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -36,7 +36,18 @@ public:
             return false;
         }
         value_ = std::move(value);
-        notify();
+        pendingNotifications_.push_back(value_);
+        if (notifying_) {
+            return true;
+        }
+
+        notifying_ = true;
+        while (!pendingNotifications_.empty()) {
+            T snapshot = std::move(pendingNotifications_.front());
+            pendingNotifications_.erase(pendingNotifications_.begin());
+            notify(snapshot);
+        }
+        notifying_ = false;
         return true;
     }
 
@@ -55,17 +66,31 @@ public:
     }
 
 private:
-    void notify()
+    void notify(const T& value)
     {
-        for (const auto& [id, callback] : observers_) {
-            (void)id;
-            callback(value_);
+        // Observers are allowed to unsubscribe themselves or another observer
+        // from inside a callback. Iterate a stable ID snapshot and re-check
+        // membership before each delivery so map mutation never invalidates
+        // the active iteration.
+        std::vector<SubscriptionId> ids;
+        ids.reserve(observers_.size());
+        for (const auto& entry : observers_) {
+            ids.push_back(entry.first);
+        }
+        for (const auto id : ids) {
+            const auto it = observers_.find(id);
+            if (it != observers_.end()) {
+                auto callback = it->second;
+                callback(value);
+            }
         }
     }
 
     T value_{};
     SubscriptionId nextId_{1};
-    std::unordered_map<SubscriptionId, Callback> observers_;
+    std::map<SubscriptionId, Callback> observers_;
+    bool notifying_{false};
+    std::vector<T> pendingNotifications_;
 };
 
 template <typename T>
@@ -164,16 +189,25 @@ private:
             return;
         }
         value_ = std::move(next);
-        for (const auto& [id, callback] : observers_) {
-            (void)id;
-            callback(value_);
+        const T snapshot = value_;
+        std::vector<SubscriptionId> ids;
+        ids.reserve(observers_.size());
+        for (const auto& entry : observers_) {
+            ids.push_back(entry.first);
+        }
+        for (const auto id : ids) {
+            const auto it = observers_.find(id);
+            if (it != observers_.end()) {
+                auto callback = it->second;
+                callback(snapshot);
+            }
         }
     }
 
     std::function<T()> compute_;
     T value_{};
     SubscriptionId nextId_{1};
-    std::unordered_map<SubscriptionId, Callback> observers_;
+    std::map<SubscriptionId, Callback> observers_;
     std::vector<std::function<void()>> unsubscribers_;
 };
 

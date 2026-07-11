@@ -112,6 +112,24 @@ public:
         return std::move(self());
     }
 
+    Text&& wrap(wui::TextWrap value = wui::TextWrap::Word) &&
+    {
+        node_->setWrap(value);
+        return std::move(self());
+    }
+
+    Text&& maxLines(std::size_t value) &&
+    {
+        node_->setMaxLines(value);
+        return std::move(self());
+    }
+
+    Text&& ellipsis(bool enabled = true) &&
+    {
+        node_->setOverflow(enabled ? wui::TextOverflow::Ellipsis : wui::TextOverflow::Clip);
+        return std::move(self());
+    }
+
     Text&& color(Color color) &&
     {
         node_->setColor(color);
@@ -262,6 +280,16 @@ public:
     }
 };
 
+class Checkbox : public BuilderBase<Checkbox, wui::Checkbox> {
+public:
+    explicit Checkbox(std::string label = {}, bool checked = false) : BuilderBase(std::move(label), checked) {}
+    Checkbox&& label(std::string value) && { node_->setLabel(std::move(value)); return std::move(self()); }
+    Checkbox&& checked(bool value) && { node_->setChecked(value); return std::move(self()); }
+    Checkbox&& bind(wui::State<bool>& state) && { node_->bind(state); return std::move(self()); }
+    Checkbox&& onChange(std::function<void(bool)> handler) && { node_->onChange(std::move(handler)); return std::move(self()); }
+    Checkbox&& enabled(bool value) && { node_->setEnabled(value); return std::move(self()); }
+};
+
 class Row : public BuilderBase<Row, wui::Row> {
 public:
     Row() : BuilderBase() {}
@@ -320,6 +348,51 @@ public:
     }
 };
 
+class ScrollView : public BuilderBase<ScrollView, wui::ScrollView> {
+public:
+    ScrollView() : BuilderBase() {}
+
+    ScrollView&& offset(float value) &&
+    {
+        node_->setScrollOffset(value);
+        return std::move(self());
+    }
+};
+
+class Dialog : public BuilderBase<Dialog, wui::Dialog> {
+public:
+    Dialog() : BuilderBase() {}
+
+    Dialog&& maxWidth(float width) &&
+    {
+        node_->setMaxWidth(width);
+        return std::move(self());
+    }
+
+    Dialog&& dismissOnBackdrop(bool enabled = true) &&
+    {
+        node_->setBackdropDismissEnabled(enabled);
+        return std::move(self());
+    }
+
+    Dialog&& onDismiss(std::function<void()> handler) &&
+    {
+        node_->onDismiss(std::move(handler));
+        return std::move(self());
+    }
+
+    template <class Content>
+    Dialog&& content(Content&& value) &&
+    {
+        node_->content(asNode(std::forward<Content>(value)));
+        return std::move(self());
+    }
+
+    // Dialogs are shown through UiWindow::showDialog(), which intentionally
+    // accepts the concrete modal type so it can manage focus restoration.
+    std::unique_ptr<wui::Dialog> intoDialog() { return std::move(node_); }
+};
+
 // Structural control: mount `then(...)` only while `state` is true.
 class If : public BuilderBase<If, wui::IfNode> {
 public:
@@ -339,10 +412,16 @@ public:
         });
         raw->setVisible(state_->get());
         wui::State<bool>* state = state_;
-        const auto id = state->subscribe([raw, state](const bool&) {
-            wui::scheduleStructuralUpdate(raw, [raw, state] { raw->setVisible(state->get()); });
+        auto alive = std::make_shared<bool>(true);
+        const auto id = state->subscribe([raw, state, weakAlive = std::weak_ptr<bool>(alive)](const bool&) {
+            wui::scheduleStructuralUpdate(raw, [raw, state, weakAlive] {
+                const auto guard = weakAlive.lock();
+                if (guard && *guard) {
+                    raw->setVisible(state->get());
+                }
+            });
         });
-        raw->addTeardown([state, id] { state->unsubscribe(id); });
+        raw->addTeardown([state, id, alive] { *alive = false; state->unsubscribe(id); });
         return std::move(self());
     }
 
@@ -369,10 +448,16 @@ public:
         };
         rebuild();
         wui::State<std::vector<T>>* state = &items;
-        const auto id = state->subscribe([raw, rebuild](const std::vector<T>&) {
-            wui::scheduleStructuralUpdate(raw, [rebuild] { rebuild(); });
+        auto alive = std::make_shared<bool>(true);
+        const auto id = state->subscribe([raw, rebuild, weakAlive = std::weak_ptr<bool>(alive)](const std::vector<T>&) {
+            wui::scheduleStructuralUpdate(raw, [rebuild, weakAlive] {
+                const auto guard = weakAlive.lock();
+                if (guard && *guard) {
+                    rebuild();
+                }
+            });
         });
-        raw->addTeardown([state, id] { state->unsubscribe(id); });
+        raw->addTeardown([state, id, alive] { *alive = false; state->unsubscribe(id); });
     }
 
     ForEach<T>&& direction(ForEachDirection dir) &&

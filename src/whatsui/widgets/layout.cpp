@@ -107,6 +107,7 @@ void Container::layout(const RectF& bounds)
         }
         child->layout({childX, childY, childSize.width, childSize.height});
     }
+    clearLayoutDirtyRecursively();
 }
 
 void Container::paint(PaintContext& context)
@@ -283,6 +284,7 @@ void Row::layout(const RectF& bounds)
         child->layout({cursorX, childY, childSize.width, childSize.height});
         cursorX += childSize.width + gap_;
     }
+    clearLayoutDirtyRecursively();
 }
 
 Column& Column::child(std::unique_ptr<Node> child)
@@ -418,6 +420,7 @@ void Column::layout(const RectF& bounds)
         child->layout({childX, cursorY, childSize.width, childSize.height});
         cursorY += childSize.height + gap_;
     }
+    clearLayoutDirtyRecursively();
 }
 
 } // namespace wui

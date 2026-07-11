@@ -31,6 +31,7 @@ void Node::appendChild(std::unique_ptr<Node> child)
         throw std::invalid_argument("child must not be null");
     }
     child->parent_ = this;
+    child->setInvalidationHandler(invalidationHandler_);
     children_.push_back(std::move(child));
     markDirty(DirtyFlag::Layout);
 }
@@ -43,6 +44,7 @@ std::unique_ptr<Node> Node::removeChild(std::size_t index)
 
     auto child = std::move(children_[index]);
     child->parent_ = nullptr;
+    child->setInvalidationHandler({});
     children_.erase(children_.begin() + static_cast<std::ptrdiff_t>(index));
     markDirty(DirtyFlag::Layout);
     return child;
@@ -56,6 +58,7 @@ void Node::clearChildren()
     for (auto& child : children_) {
         if (child) {
             child->parent_ = nullptr;
+            child->setInvalidationHandler({});
         }
     }
     children_.clear();
@@ -67,10 +70,26 @@ void Node::addTeardown(std::function<void()> callback)
     teardown_.push_back(std::move(callback));
 }
 
+void Node::setInvalidationHandler(std::function<void()> handler)
+{
+    invalidationHandler_ = std::move(handler);
+    for (const auto& child : children_) {
+        child->setInvalidationHandler(invalidationHandler_);
+    }
+}
+
 void Node::layout(const RectF& bounds)
 {
     bounds_ = bounds;
     clearDirty(DirtyFlag::Layout);
+}
+
+void Node::clearLayoutDirtyRecursively() noexcept
+{
+    clearDirty(DirtyFlag::Layout);
+    for (const auto& child : children_) {
+        child->clearLayoutDirtyRecursively();
+    }
 }
 
 Node* Node::hitTest(PointF point)
@@ -105,15 +124,35 @@ bool Node::onCompositionInput(const CompositionInputEvent& event)
 void Node::markDirty(DirtyFlag flag) noexcept
 {
     dirtyFlags_ |= toMask(flag);
+    // Geometry is part of the rendered output.  Keeping layout and paint
+    // invalidation coupled here prevents a relaid-out subtree from appearing
+    // clean to a paint-only frame scheduler.
+    if (flag == DirtyFlag::Layout) {
+        dirtyFlags_ |= toMask(DirtyFlag::Paint);
+    }
     if (parent_ != nullptr) {
         parent_->markDirty(flag);
+    } else if (invalidationHandler_) {
+        invalidationHandler_();
     }
 }
 
 void ContainerNode::paint(PaintContext& context)
 {
     for (const auto& child : children()) {
+        // Paint state is deliberately isolated at every tree edge.  A child
+        // may establish a viewport clip or transform while painting; the next
+        // sibling must never inherit it.  Apart from making custom widgets
+        // safer, this is essential for structural nodes: a branch can be
+        // unmounted between frames, so a stale clip left by that branch would
+        // otherwise constrain newly mounted siblings in the following frame.
+        //
+        // Well-behaved built-in widgets already balance their own save/restore
+        // pairs.  This outer guard is therefore pixel-neutral for them and is
+        // a containment boundary for third-party nodes.
+        const int paintState = context.save();
         child->paint(context);
+        context.restoreTo(paintState);
     }
     clearDirty(DirtyFlag::Paint);
 }

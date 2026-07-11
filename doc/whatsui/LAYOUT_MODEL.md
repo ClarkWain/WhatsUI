@@ -262,3 +262,16 @@ auto page = ui::Column()
 - 任意规则混排后的隐式回退行为
 
 这份文档的目标，是给 WhatsUI 一个足够稳、足够清晰、足够好实现的布局内核。
+# Text wrapping and truncation
+
+`Text` measures and paints the same resolved line list. By default it preserves
+each explicit newline and otherwise remains on one line. `TextWrap::Word` uses
+the available finite maximum width to wrap at ASCII spaces/tabs; an unbroken
+word (including CJK text) is split only at UTF-8 codepoint boundaries. A zero
+`maxLines` means unlimited. When a finite non-zero limit removes lines, or a
+single unwrapped line exceeds its available width, `TextOverflow::Ellipsis`
+replaces the final visible suffix with a fitted `...`; `Clip` leaves the text
+unchanged for the backend clip to handle. The measured width is the widest
+resolved line, and height is `lineHeight × lineCount`, both clamped by incoming
+constraints. Paint emits one baseline per resolved line using that same line
+height, so measurement and drawing cannot diverge.

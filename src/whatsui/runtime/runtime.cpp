@@ -7,14 +7,35 @@ namespace wui {
 
 void UiRoot::setContent(std::unique_ptr<Node> content) noexcept
 {
+    if (content_ != nullptr) {
+        content_->setInvalidationHandler({});
+    }
     ownedContent_ = std::move(content);
     content_ = ownedContent_.get();
+    wireInvalidationHandler();
 }
 
 void UiRoot::setBorrowedContent(Node* content) noexcept
 {
+    if (content_ != nullptr && content_ != content) {
+        content_->setInvalidationHandler({});
+    }
     ownedContent_.reset();
     content_ = content;
+    wireInvalidationHandler();
+}
+
+void UiRoot::setOnInvalidate(std::function<void()> handler)
+{
+    onInvalidate_ = std::move(handler);
+    wireInvalidationHandler();
+}
+
+void UiRoot::wireInvalidationHandler() noexcept
+{
+    if (content_ != nullptr) {
+        content_->setInvalidationHandler(onInvalidate_);
+    }
 }
 
 Node* UiRoot::content() const noexcept
@@ -55,6 +76,18 @@ void Navigator::setOnChange(ChangeHandler handler)
     notifyChanged();
 }
 
+void Navigator::setBeforeChange(BeforeChangeHandler handler)
+{
+    onBeforeChange_ = std::move(handler);
+}
+
+void Navigator::notifyWillChange()
+{
+    if (onBeforeChange_) {
+        onBeforeChange_();
+    }
+}
+
 void Navigator::notifyChanged()
 {
     if (onChange_) {
@@ -85,6 +118,7 @@ void Navigator::push(std::string key, std::unique_ptr<Node> page, PageRetention 
     if (retention == PageRetention::DisposeOnHide) {
         throw std::invalid_argument("DisposeOnHide pages require a PageFactory");
     }
+    notifyWillChange();
     hideCurrent();
     stack_.push_back(PageEntry{std::move(key), retention, std::move(page), {}});
     notifyChanged();
@@ -99,6 +133,7 @@ void Navigator::push(std::string key, PageFactory factory, PageRetention retenti
     if (!page) {
         throw std::runtime_error("page factory returned null");
     }
+    notifyWillChange();
     hideCurrent();
     stack_.push_back(PageEntry{std::move(key), retention, std::move(page), std::move(factory)});
     notifyChanged();
@@ -116,6 +151,7 @@ void Navigator::replace(std::string key, std::unique_ptr<Node> page, PageRetenti
         push(std::move(key), std::move(page), retention);
         return;
     }
+    notifyWillChange();
     stack_.back() = PageEntry{std::move(key), retention, std::move(page), {}};
     notifyChanged();
 }
@@ -133,6 +169,7 @@ void Navigator::replace(std::string key, PageFactory factory, PageRetention rete
     if (!page) {
         throw std::runtime_error("page factory returned null");
     }
+    notifyWillChange();
     stack_.back() = PageEntry{std::move(key), retention, std::move(page), std::move(factory)};
     notifyChanged();
 }
@@ -143,6 +180,7 @@ std::unique_ptr<Node> Navigator::pop()
         return nullptr;
     }
 
+    notifyWillChange();
     auto page = std::move(stack_.back().content);
     stack_.pop_back();
     activateCurrent();
@@ -152,6 +190,9 @@ std::unique_ptr<Node> Navigator::pop()
 
 void Navigator::popToRoot()
 {
+    if (canPop()) {
+        notifyWillChange();
+    }
     while (canPop()) {
         stack_.pop_back();
     }
@@ -161,6 +202,9 @@ void Navigator::popToRoot()
 
 void Navigator::clear()
 {
+    if (!stack_.empty()) {
+        notifyWillChange();
+    }
     stack_.clear();
     notifyChanged();
 }
@@ -212,7 +256,15 @@ OverlayId OverlayHost::show(std::unique_ptr<Node> overlay)
 
     const auto id = nextId_++;
     overlays_.push_back(OverlayEntry{id, std::move(overlay)});
+    if (onChange_) {
+        onChange_();
+    }
     return id;
+}
+
+void OverlayHost::setOnChange(ChangeHandler handler)
+{
+    onChange_ = std::move(handler);
 }
 
 std::unique_ptr<Node> OverlayHost::dismiss(OverlayId id)
@@ -220,7 +272,11 @@ std::unique_ptr<Node> OverlayHost::dismiss(OverlayId id)
     for (auto it = overlays_.begin(); it != overlays_.end(); ++it) {
         if (it->id == id) {
             auto overlay = std::move(it->content);
+            overlay->setInvalidationHandler({});
             overlays_.erase(it);
+            if (onChange_) {
+                onChange_();
+            }
             return overlay;
         }
     }
@@ -234,13 +290,28 @@ std::unique_ptr<Node> OverlayHost::dismissTop()
     }
 
     auto overlay = std::move(overlays_.back().content);
+    overlay->setInvalidationHandler({});
     overlays_.pop_back();
+    if (onChange_) {
+        onChange_();
+    }
     return overlay;
 }
 
 void OverlayHost::clear() noexcept
 {
+    if (overlays_.empty()) {
+        return;
+    }
+    for (const auto& overlay : overlays_) {
+        if (overlay.content) {
+            overlay.content->setInvalidationHandler({});
+        }
+    }
     overlays_.clear();
+    if (onChange_) {
+        onChange_();
+    }
 }
 
 void Navigator::hideCurrent()

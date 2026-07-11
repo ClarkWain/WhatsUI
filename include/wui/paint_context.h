@@ -105,6 +105,12 @@ public:
         wsc::CanvasAdapter adapter(*canvas_);
         adapter.setFillColor(wsc::Color(color.r, color.g, color.b, color.a));
         adapter.setTextSize(textSize * scaleFactor_);
+        // WhatsUI's text coordinates are baselines (the layout code computes
+        // ascent/descent and vertically centers using that convention).
+        // WhatsCanvas defaults to a top anchor, which applied the text size a
+        // second time in its glyph-atlas path.  That put button/input labels
+        // below their controls and made Text's bounds clip most glyphs.
+        adapter.fillPaint().setTextBaseline(wsc::Paint::TextBaseline::BOTTOM);
         adapter.drawText(text, x * scaleFactor_, y * scaleFactor_);
 #else
         (void)text;
@@ -115,8 +121,72 @@ public:
 #endif
     }
 
+    // Scoped canvas state used by viewport-like widgets. The headless build
+    // records checkpoints too, so paint-state isolation remains testable
+    // without a renderer.
+    // Returns a checkpoint which can later be restored with restoreTo().
+    // Unlike a bare restore(), restoreTo() also balances any accidental nested
+    // saves made by a child widget, making it suitable for framework-owned
+    // subtree boundaries.
+    [[nodiscard]] int save() noexcept
+    {
+        const int checkpoint = saveCount_;
+        ++saveCount_;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ != nullptr) canvas_->save();
+#endif
+        return checkpoint;
+    }
+
+    void restore() noexcept
+    {
+        if (saveCount_ <= 1) {
+            return;
+        }
+        --saveCount_;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ != nullptr) canvas_->restore();
+#endif
+    }
+
+    void restoreTo(int checkpoint) noexcept
+    {
+        checkpoint = checkpoint < 1 ? 1 : checkpoint;
+        while (saveCount_ > checkpoint) {
+            restore();
+        }
+    }
+
+    [[nodiscard]] int saveCount() const noexcept
+    {
+        return saveCount_;
+    }
+
+    void clipRect(const RectF& rect) noexcept
+    {
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ != nullptr) {
+            canvas_->clipRect(wsc::RectF(rect.x * scaleFactor_, rect.y * scaleFactor_,
+                                         rect.width * scaleFactor_, rect.height * scaleFactor_));
+        }
+#else
+        (void)rect;
+#endif
+    }
+
+    void translate(float dx, float dy) noexcept
+    {
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ != nullptr) canvas_->translate(dx * scaleFactor_, dy * scaleFactor_);
+#else
+        (void)dx;
+        (void)dy;
+#endif
+    }
+
 private:
     float scaleFactor_{1.0f};
+    int saveCount_{1};
 
 #ifdef WHATSUI_HAS_WHATSCANVAS
     wsc::Canvas* canvas_{nullptr};

@@ -17,6 +17,7 @@ enum class PageRetention {
 
 class UiRoot {
 public:
+    void setOnInvalidate(std::function<void()> handler);
     void setContent(std::unique_ptr<Node> content) noexcept;
     void setBorrowedContent(Node* content) noexcept;
     [[nodiscard]] Node* content() const noexcept;
@@ -28,9 +29,12 @@ public:
     [[nodiscard]] const RectF& bounds() const noexcept;
 
 private:
+    void wireInvalidationHandler() noexcept;
+
     std::unique_ptr<Node> ownedContent_;
     Node* content_{nullptr};
     RectF bounds_{};
+    std::function<void()> onInvalidate_;
 };
 
 struct PageEntry {
@@ -43,9 +47,11 @@ struct PageEntry {
 class Navigator {
 public:
     using ChangeHandler = std::function<void(Node*)>;
+    using BeforeChangeHandler = std::function<void()>;
     using PageFactory = std::function<std::unique_ptr<Node>()>;
 
     void setOnChange(ChangeHandler handler);
+    void setBeforeChange(BeforeChangeHandler handler);
     void setRoot(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
     void setRoot(std::string key, PageFactory factory, PageRetention retention);
     void push(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
@@ -65,12 +71,14 @@ public:
     [[nodiscard]] const std::vector<PageEntry>& pages() const noexcept;
 
 private:
+    void notifyWillChange();
     void hideCurrent();
     void activateCurrent();
     void notifyChanged();
 
     std::vector<PageEntry> stack_;
     ChangeHandler onChange_;
+    BeforeChangeHandler onBeforeChange_;
 };
 
 using OverlayId = std::size_t;
@@ -82,6 +90,9 @@ struct OverlayEntry {
 
 class OverlayHost {
 public:
+    using ChangeHandler = std::function<void()>;
+
+    void setOnChange(ChangeHandler handler);
     [[nodiscard]] OverlayId show(std::unique_ptr<Node> overlay);
     [[nodiscard]] std::unique_ptr<Node> dismiss(OverlayId id);
     [[nodiscard]] std::unique_ptr<Node> dismissTop();
@@ -99,6 +110,7 @@ public:
 private:
     OverlayId nextId_{1};
     std::vector<OverlayEntry> overlays_;
+    ChangeHandler onChange_;
 };
 
 } // namespace wui

@@ -1,4 +1,5 @@
 #include <cmath>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -332,6 +333,40 @@ void testTextMeasurementBaselineAndHitTest()
     expect(text.hitTest({9.0f, 20.0f}) == nullptr, "Text should reject points outside its bounds");
 }
 
+void testTextWrapMaxLinesEllipsisAndUnicode()
+{
+    wui::setTextMeasurer(nullptr);
+    wui::Text text("hello world");
+    text.setFontSize(10.0f);
+    text.setWrap(wui::TextWrap::Word);
+    const auto wrapped = text.resolvedLines(25.0f);
+    expect(wrapped.size() == 2 && wrapped[0] == "hello" && wrapped[1] == "world",
+           "Word wrap should break at whitespace and omit the break whitespace");
+    const auto size = text.measure({0.0f, 25.0f, 0.0f, 100.0f});
+    expect(approx(size.width, 25.0f) && approx(size.height, 25.0f),
+           "Wrapped Text should measure the widest resolved line and every line height");
+
+    text.setValue("one two three");
+    text.setMaxLines(2);
+    text.setOverflow(wui::TextOverflow::Ellipsis);
+    const auto truncated = text.resolvedLines(25.0f);
+    expect(truncated.size() == 2 && truncated[1] == "tw...",
+           "maxLines with Ellipsis should preserve a fitted suffix on the final visible line");
+
+    wui::Text multilingual("\xE4\xBD\xA0\xE5\xA5\xBD\xE4\xB8\x96\xE7\x95\x8C");
+    multilingual.setFontSize(10.0f);
+    multilingual.setWrap(wui::TextWrap::Word);
+    const auto unicodeLines = multilingual.resolvedLines(5.0f);
+    expect(unicodeLines.size() == 4 && unicodeLines[0] == "\xE4\xBD\xA0" && unicodeLines[3] == "\xE7\x95\x8C",
+           "Fallback wrapping must split UTF-8 at codepoint boundaries, not bytes");
+
+    auto built = std::move(wui::ui::Text("builder").wrap().maxLines(3).ellipsis()).intoNode();
+    auto* builtText = dynamic_cast<wui::Text*>(built.get());
+    expect(builtText && builtText->wrap() == wui::TextWrap::Word && builtText->maxLines() == 3
+               && builtText->overflow() == wui::TextOverflow::Ellipsis,
+           "Text builder should expose wrapping, line limit, and ellipsis configuration");
+}
+
 void testFoundationalContainerHitTestOrder()
 {
     wui::Container container;
@@ -412,10 +447,79 @@ void testContainerExplicitSize()
            "Container explicit size should override intrinsic content size");
 }
 
+void testNestedLayoutSnapshotAndDirtyClear()
+{
+    wui::Container root;
+    root.setPadding({10.0f, 5.0f, 10.0f, 5.0f});
+    root.setContentAlignment(wui::Alignment::Start, wui::Alignment::Start);
+    auto column = std::make_unique<wui::Column>();
+    column->setGap(4.0f);
+    auto first = std::make_unique<wui::Spacer>(wui::SizeF{30.0f, 20.0f});
+    auto row = std::make_unique<wui::Row>();
+    row->setGap(3.0f);
+    auto left = std::make_unique<wui::Spacer>(wui::SizeF{10.0f, 8.0f});
+    auto right = std::make_unique<wui::Spacer>(wui::SizeF{15.0f, 8.0f});
+    auto* columnPtr = column.get();
+    auto* firstPtr = first.get();
+    auto* rowPtr = row.get();
+    auto* leftPtr = left.get();
+    auto* rightPtr = right.get();
+    row->appendChild(std::move(left));
+    row->appendChild(std::move(right));
+    column->appendChild(std::move(first));
+    column->appendChild(std::move(row));
+    root.appendChild(std::move(column));
+
+    root.layout({20.0f, 30.0f, 100.0f, 80.0f});
+
+    expect(approx(columnPtr->bounds().x, 30.0f) && approx(columnPtr->bounds().width, 30.0f),
+           "Snapshot: start-aligned Column should retain intrinsic width in Container content bounds");
+    expect(approx(firstPtr->bounds().x, 30.0f) && approx(firstPtr->bounds().y, 35.0f),
+           "Snapshot: first Column child should begin at padded content origin");
+    expect(approx(rowPtr->bounds().x, 30.0f) && approx(rowPtr->bounds().y, 59.0f),
+           "Snapshot: second Column child should follow first child and gap");
+    expect(approx(leftPtr->bounds().x, 30.0f) && approx(rightPtr->bounds().x, 43.0f),
+           "Snapshot: nested Row should place children in main-axis order with its gap");
+    for (const wui::Node* node : {static_cast<wui::Node*>(&root), static_cast<wui::Node*>(columnPtr),
+                                  static_cast<wui::Node*>(firstPtr), static_cast<wui::Node*>(rowPtr),
+                                  static_cast<wui::Node*>(leftPtr), static_cast<wui::Node*>(rightPtr)}) {
+        expect(!node->isDirty(wui::DirtyFlag::Layout),
+               "Completed composite layout should clear layout dirtiness for the entire laid-out subtree");
+    }
+}
+
+void testConstrainedNestedLayoutSnapshot()
+{
+    wui::Row row;
+    row.setPadding({4.0f, 2.0f, 4.0f, 2.0f});
+    row.setGap(6.0f);
+    auto fixed = std::make_unique<wui::Spacer>(wui::SizeF{20.0f, 10.0f});
+    auto flex = std::make_unique<wui::Column>();
+    flex->setFlex(1.0f);
+    flex->setAlign(wui::Alignment::Stretch);
+    auto inner = std::make_unique<wui::Spacer>(wui::SizeF{5.0f, 7.0f});
+    auto* fixedPtr = fixed.get();
+    auto* flexPtr = flex.get();
+    auto* innerPtr = inner.get();
+    flex->appendChild(std::move(inner));
+    row.appendChild(std::move(fixed));
+    row.appendChild(std::move(flex));
+
+    row.layout({0.0f, 0.0f, 80.0f, 30.0f});
+
+    expect(approx(fixedPtr->bounds().x, 4.0f) && approx(fixedPtr->bounds().width, 20.0f),
+           "Snapshot: fixed Row child should honor leading padding");
+    expect(approx(flexPtr->bounds().x, 30.0f) && approx(flexPtr->bounds().width, 46.0f),
+           "Snapshot: flex child should receive constrained remaining main-axis space");
+    expect(approx(innerPtr->bounds().width, 46.0f) && approx(innerPtr->bounds().height, 7.0f),
+           "Snapshot: stretched nested Column should constrain its child to allocated cross-axis width");
+}
+
 } // namespace
 
 int main()
 {
+    try {
     testRowMeasureNoChildren();
     testRowMeasureWithGap();
     testRowMeasureWithPadding();
@@ -436,10 +540,17 @@ int main()
     testContainerOverlaysAllChildren();
     testImageIntrinsicMeasurement();
     testTextMeasurementBaselineAndHitTest();
+    testTextWrapMaxLinesEllipsisAndUnicode();
     testFoundationalContainerHitTestOrder();
     testRowGapWithFlex();
     testConstraintsDeflate();
     testContainerContentAlignment();
     testContainerExplicitSize();
+    testNestedLayoutSnapshotAndDirtyClear();
+    testConstrainedNestedLayoutSnapshot();
+    } catch (const std::exception& error) {
+        std::cerr << "Layout test failure: " << error.what() << '\n';
+        return 1;
+    }
     return 0;
 }

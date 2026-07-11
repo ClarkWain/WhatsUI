@@ -51,6 +51,7 @@ void IfNode::layout(const RectF& bounds)
     if (!childNodes.empty()) {
         childNodes.front()->layout(bounds);
     }
+    clearLayoutDirtyRecursively();
 }
 
 // --- ForEachNode ---
@@ -249,6 +250,7 @@ void ForEachNode::layout(const RectF& bounds)
             cursorX += childSize.width + gap_;
         }
     }
+    clearLayoutDirtyRecursively();
 }
 
 } // namespace wui

@@ -7,3 +7,15 @@ out/
 *.VC.db
 *.VC.opendb
 build_glfw/
+
+# Local CMake configurations, package-install prefixes, and visual-review
+# output are reproducible artifacts; source-controlled visual baselines are
+# kept as hashes/scripts under tests/ instead.
+build-*/
+package-preview/
+visual-review/
+artifacts/clip-*/
+artifacts/fluent-review/
+artifacts/p0-repro*/
+artifacts/todo-empty-state-review/
+artifacts/todo-interaction-smoke/

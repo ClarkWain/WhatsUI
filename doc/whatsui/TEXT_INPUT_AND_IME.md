@@ -1,6 +1,6 @@
 # WhatsUI TextInput And IME
 
-状态：Draft v0.1
+状态：Implemented baseline v0.2
 
 ## 1. 目标
 
@@ -192,3 +192,16 @@ IME 会话是窗口级的，不是应用全局级的。
 - 文本输入和渲染完全解耦成独立编辑框架
 
 目标是先把一个可用、可跨平台、契约稳定的 TextInput 架构定下来。
+
+## 14. 当前基线实现
+
+- `UiWindow` 将当前焦点中的 `TextInput` 映射为唯一活跃的窗口级
+  `TextInputSession`：获得焦点即 `activate`，切页、浮层变化、换根或失焦即
+  `deactivate`。
+- 每次指针、键盘、文本提交或组合输入后，窗口同步 caret 矩形和 surrounding
+  text/selection 至平台会话；坐标使用窗口逻辑像素。
+- `CompositionInputEvent::Phase` 明确 Start/Update/End。空的 pre-edit 更新
+  合法；只有 End 清除组合范围。`TextInputEvent` 始终表示已提交文本。
+- 当前 caret 和 selection 索引以 UTF-8 字节偏移表示。平台接入时必须采用同一
+  单位；Unicode grapheme 移动、鼠标按字形命中、多行滚动、剪贴板快捷键和原生
+  IME composition 回调仍是后续工作。

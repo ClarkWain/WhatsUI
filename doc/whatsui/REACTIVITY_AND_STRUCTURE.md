@@ -43,6 +43,8 @@ auto list = ForEach<std::string>(items, [](const std::string& s){ return Text(s)
 
 这样做的关键收益：**事件处理器可以安全地修改 `State`**。若结构重建同步发生在按钮自己的 `onClick` 里，会立刻销毁正在执行的那个按钮（自毁）；延迟到 flush 后，处理器先安全返回，再统一重建。宿主的帧循环应为：`flushStructuralUpdates → layout → paint → present`。
 
+事件分发是该帧提交边界之前的阶段：事件处理器可同步更新普通属性或 `State`，但由结构状态触发的挂载、卸载和列表重建始终延后到下一次 `flushStructuralUpdates()`。同一节点在一帧内反复请求结构更新时，以节点地址为 key 合并，并只执行最后一次请求；flush 期间新增的请求会在同一帧的后续批次继续处理。
+
 （`Text().bind` 的文本更新是纯属性写入，不改树，仍同步生效。）
 
 

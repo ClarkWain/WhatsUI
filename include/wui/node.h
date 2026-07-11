@@ -55,6 +55,8 @@ public:
     // node cannot call into freed memory.
     void addTeardown(std::function<void()> callback);
 
+    void setInvalidationHandler(std::function<void()> handler);
+
     [[nodiscard]] virtual SizeF measure(const Constraints& constraints) const = 0;
     [[nodiscard]] virtual float baselineOffset() const noexcept;
     // Prepare backend resources before beginFrame(). The default implementation
@@ -68,6 +70,9 @@ public:
     virtual bool onTextInput(const TextInputEvent& event);
     virtual bool onCompositionInput(const CompositionInputEvent& event);
 
+    // A layout change also changes the pixels occupied by this node and its
+    // ancestors, so it implicitly invalidates paint up to the root boundary.
+    // Paint-only changes leave layout validity intact.
     void markDirty(DirtyFlag flag) noexcept;
 
     [[nodiscard]] bool isDirty(DirtyFlag flag) const noexcept
@@ -84,6 +89,12 @@ public:
     {
         dirtyFlags_ = toMask(DirtyFlag::None);
     }
+
+    // A composite calls this after it has assigned bounds to its complete
+    // subtree.  This is deliberately separate from clearDirty(Layout): a
+    // parent must not claim a descendant is laid out until that descendant
+    // has received its final bounds.
+    void clearLayoutDirtyRecursively() noexcept;
 
     [[nodiscard]] const RectF& bounds() const noexcept
     {
@@ -115,6 +126,7 @@ private:
     Node* parent_{nullptr};
     std::vector<std::unique_ptr<Node>> children_;
     std::vector<std::function<void()>> teardown_;
+    std::function<void()> invalidationHandler_;
     RectF bounds_{};
     float flex_{0.0f};
     DirtyFlags dirtyFlags_{toMask(DirtyFlag::Layout) | toMask(DirtyFlag::Paint)};

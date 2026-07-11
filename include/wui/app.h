@@ -9,6 +9,9 @@
 
 namespace wui {
 
+class TextInput;
+class Dialog;
+
 class UiWindow {
 public:
     explicit UiWindow(std::unique_ptr<PlatformWindow> platformWindow);
@@ -28,6 +31,13 @@ public:
     [[nodiscard]] OverlayHost& overlayHost() noexcept;
     [[nodiscard]] const OverlayHost& overlayHost() const noexcept;
 
+    // Modal dialogs are overlays with input isolation. Escape and an enabled
+    // backdrop dismissal route through this API so the prior focus is restored.
+    [[nodiscard]] OverlayId showDialog(std::unique_ptr<Dialog> dialog);
+    [[nodiscard]] std::unique_ptr<Dialog> dismissDialog(OverlayId id);
+    [[nodiscard]] std::unique_ptr<Dialog> dismissTopDialog();
+    [[nodiscard]] bool hasDialog() const noexcept;
+
     void setRoot(std::unique_ptr<Node> root);
     [[nodiscard]] Node* root() const noexcept;
 
@@ -44,9 +54,18 @@ public:
     bool dispatchTextInput(const TextInputEvent& event);
     bool dispatchComposition(const CompositionInputEvent& event);
 
+    // Hosts notify this boundary when native window activation changes. Losing
+    // activation ends the platform text-input session and clears transient
+    // pointer state; the logical focus is retained for restoration on return.
+    void onPlatformFocusChanged(bool focused) noexcept;
+
 private:
     void syncActiveRoot(Node* navigationRoot = nullptr) noexcept;
+    void onOverlayChanged() noexcept;
+    void syncTextInputSession() noexcept;
+    void deactivateTextInputSession() noexcept;
     [[nodiscard]] Node* hitTest(PointF point) const;
+    [[nodiscard]] Dialog* activeDialog() const noexcept;
 
     std::unique_ptr<PlatformWindow> platformWindow_;
     UiRoot uiRoot_;
@@ -54,6 +73,9 @@ private:
     InputRouter inputRouter_{&focusManager_};
     Navigator navigator_;
     OverlayHost overlayHost_;
+    TextInput* activeTextInput_{nullptr};
+    struct DialogEntry { OverlayId id; Node* restoreFocus; };
+    std::vector<DialogEntry> dialogs_;
 };
 
 class UiApp {
@@ -66,6 +88,10 @@ public:
     UiWindow& attachWindow(std::unique_ptr<PlatformWindow> platformWindow);
     UiWindow& openWindow(std::string title, SizeF logicalSize);
     [[nodiscard]] UiWindow* findWindow(WindowId id) noexcept;
+
+    // Releases UI and platform resources for windows whose native peer has
+    // closed. Hosts should call this at a safe frame boundary.
+    std::size_t removeClosedWindows() noexcept;
 
     [[nodiscard]] const std::vector<std::unique_ptr<UiWindow>>& windows() const noexcept;
 

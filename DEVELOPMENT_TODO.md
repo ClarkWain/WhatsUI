@@ -28,31 +28,31 @@ widgets: `Text`, `Image`, `Container`, `Column`, and `Row`.
 - [x] Keep the input root synchronized with the active page/root.
 - [x] Make Navigator activation observable by its owning window.
 - [x] Implement page retention semantics instead of storing metadata only.
-- [ ] Route input through overlays above page content (layout, paint, and overlay hit testing are complete).
+- [x] Route input through overlays above page content (layout, paint, and overlay hit testing are complete).
 - [x] Use real frame delta for animations.
-- [ ] Add window/runtime tests with a fake platform host.
+- [x] Add window/runtime tests with a fake platform host.
 
 ## Phase 3 - State and update flow
 
-- [ ] Define event dispatch and state-commit boundaries.
-- [ ] Make structural updates safe under nested/re-entrant state changes.
-- [ ] Coalesce duplicate structural updates per frame.
-- [ ] Propagate layout and paint invalidation to the correct boundary.
-- [ ] Request a redraw when observable UI state changes.
-- [ ] Add teardown, re-entrancy, and self-removal regression tests.
+- [x] Define event dispatch and state-commit boundaries.
+- [x] Make structural updates safe under nested/re-entrant state changes.
+- [x] Coalesce duplicate structural updates per frame.
+- [x] Propagate layout and paint invalidation to the correct boundary.
+- [x] Request a redraw when observable UI state changes.
+- [x] Add teardown, re-entrancy, and self-removal regression tests.
 
 ## Phase 4 - Geometry and rendering contract
 
 - [x] Document constraints passed by each foundational container.
 - [x] Ensure measure results are always clamped and non-negative.
-- [ ] Ensure layout clears layout dirtiness recursively where appropriate.
-- [ ] Define paint order and clipping behavior.
+- [x] Ensure layout clears layout dirtiness recursively where appropriate.
+- [x] Define paint order and clipping behavior.
 - [x] Prepare image/backend resources before beginning the paint pass.
-- [ ] Share immutable image resources across rebuilt nodes.
+- [x] Share immutable image resources across rebuilt nodes.
 - [x] Isolate Software-backend visual-regression scenes with one canvas per capture.
-- [ ] Define reverse-paint-order hit testing and visibility rules.
-- [ ] Add layout snapshots for nested and constrained compositions.
-- [ ] Add Software-backend visual regression scenes.
+- [x] Define reverse-paint-order hit testing and visibility rules.
+- [x] Add layout snapshots for nested and constrained compositions.
+- [x] Add Software-backend visual regression scenes.
 - [x] Apply device-pixel ratio consistently to geometry, images, and text.
 - [x] Enable analytic anti-aliasing for rounded geometry.
 
@@ -60,14 +60,14 @@ widgets: `Text`, `Image`, `Container`, `Column`, and `Row`.
 
 - [x] Build a polished header, summary card, task list, and footer.
 - [x] Provide useful empty, active, completed, and mixed states.
-- [ ] Support add, toggle, delete, and clear-completed actions.
-- [ ] Keep event callbacks safe when they mutate list structure.
-- [ ] Produce deterministic Software-backend screenshots.
-- [ ] Provide an interactive GLFW version using the same UI tree.
+- [x] Support add, toggle, delete, and clear-completed actions.
+- [x] Keep event callbacks safe when they mutate list structure.
+- [x] Produce deterministic Software-backend screenshots.
+- [x] Provide an interactive GLFW version using the same UI tree.
 
 ## Deferred
 
 - Text input and IME refinement.
 - Advanced focus traversal and accessibility.
-- Additional controls such as Button, Checkbox, ScrollView, Menu, and Dialog.
+- Additional controls such as Checkbox and Menu. Dialog/modal overlay is available.
 - Animation and compositing polish beyond what the Todo demo requires.

@@ -1,4 +1,5 @@
 #include "wui/text_input.h"
+#include "wui/theme.h"
 
 #include <algorithm>
 #include <utility>
@@ -154,11 +155,21 @@ void TextInput::syncSession(TextInputSession& session, const RectF& caretRect) c
     session.setSurroundingText(model_.text(), model_.selection().start, model_.selection().end);
 }
 
+RectF TextInput::caretRect() const noexcept
+{
+    const float kHorizontalPadding = theme().controls.horizontalPadding;
+    const float kCharacterWidth = theme().typography.body * 0.56f;
+    const auto caret = static_cast<float>(model_.selection().end);
+    return {bounds().x + kHorizontalPadding + caret * kCharacterWidth,
+            bounds().y + 6.0f, 1.0f, std::max(1.0f, bounds().height - 12.0f)};
+}
+
 SizeF TextInput::measure(const Constraints& constraints) const
 {
     const auto contentLength = std::max(model_.text().size(), placeholder_.size());
-    const auto width = static_cast<float>(contentLength) * 8.0f + 20.0f;
-    return constraints.clamp({width, 32.0f});
+    const auto& current = theme();
+    const auto width = static_cast<float>(contentLength) * (current.typography.body * 0.56f) + current.controls.horizontalPadding * 2.0f;
+    return constraints.clamp({width, current.controls.height});
 }
 
 void TextInput::paint(PaintContext& context)
@@ -166,10 +177,16 @@ void TextInput::paint(PaintContext& context)
     const bool showPlaceholder = model_.text().empty();
     const auto& text = showPlaceholder ? placeholder_ : model_.text();
 
-    context.fillRoundRect(bounds(), 6.0f, Color{245, 246, 248, 255});
+    const auto& current = theme();
+    const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
+    context.fillRoundRect(bounds(), current.radius.md, focused ? current.colors.focus : current.colors.border);
+    const float inset = focused ? current.controls.focusWidth : 1.0f;
+    context.fillRoundRect({bounds().x + inset, bounds().y + inset, std::max(0.0f, bounds().width - inset * 2.0f), std::max(0.0f, bounds().height - inset * 2.0f)},
+                          std::max(0.0f, current.radius.md - inset), current.colors.surface);
     if (!text.empty()) {
-        context.drawText(text, bounds().x + 8.0f, bounds().y + 20.0f, 14.0f,
-            showPlaceholder ? Color{132, 136, 143, 255} : Color{28, 28, 28, 255});
+        context.drawText(text, bounds().x + current.controls.horizontalPadding,
+            bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f, current.typography.body,
+            showPlaceholder ? current.colors.textMuted : current.colors.text);
     }
     clearDirty(DirtyFlag::Paint);
 }
@@ -220,12 +237,14 @@ bool TextInput::onTextInput(const TextInputEvent& event)
 
 bool TextInput::onCompositionInput(const CompositionInputEvent& event)
 {
-    if (event.text.empty()) {
+    if (event.phase == CompositionInputEvent::Phase::End) {
         model_.clearComposition();
         markDirty(DirtyFlag::Paint);
         return true;
     }
 
+    // Start and Update both replace the active pre-edit span. Empty pre-edit
+    // text is valid and simply leaves an empty active composition range.
     model_.updateComposition(event.text);
     markDirty(DirtyFlag::Layout);
     return true;

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "wui/state.h"
+#include "wui/scheduler.h"
 
 namespace {
 
@@ -207,6 +208,99 @@ void testComputedChain()
     expect(quadrupled.get() == 12, "Chained Computed should propagate");
 }
 
+void testStateObserverCanUnsubscribeDuringNotification()
+{
+    wui::State<int> state{0};
+    int firstCalls = 0;
+    int secondCalls = 0;
+    wui::State<int>::SubscriptionId firstId = 0;
+    firstId = state.subscribe([&](const int&) {
+        ++firstCalls;
+        state.unsubscribe(firstId);
+    });
+    state.subscribe([&](const int&) { ++secondCalls; });
+
+    state.set(1);
+    state.set(2);
+    expect(firstCalls == 1, "An observer should be able to unsubscribe itself while notified");
+    expect(secondCalls == 2, "Other observers should continue receiving state updates");
+}
+
+void testStateObserverCanRemoveLaterObserver()
+{
+    wui::State<int> state{0};
+    int removedCalls = 0;
+    wui::State<int>::SubscriptionId removedId = 0;
+    const auto removerId = state.subscribe([&](const int&) { state.unsubscribe(removedId); });
+    (void)removerId;
+    removedId = state.subscribe([&](const int&) { ++removedCalls; });
+
+    state.set(1);
+    expect(removedCalls == 0, "An observer removed during notification must not receive that update");
+}
+
+void testNestedStateUpdateRemainsWellDefined()
+{
+    wui::State<int> state{0};
+    std::vector<int> observed;
+    state.subscribe([&](const int& value) {
+        observed.push_back(value);
+        if (value == 1) {
+            state.set(2);
+        }
+    });
+
+    state.set(1);
+    expect(state.get() == 2, "Nested state changes should commit the latest value");
+    expect(observed.size() == 2 && observed[0] == 1 && observed[1] == 2,
+           "Nested state changes should notify each committed value exactly once");
+}
+
+void testNestedStateUpdatePreservesDeliveryOrderForAllObservers()
+{
+    wui::State<int> state{0};
+    std::vector<std::string> events;
+    state.subscribe([&](const int& value) {
+        events.push_back("a" + std::to_string(value));
+        if (value == 1) {
+            state.set(2);
+        }
+    });
+    state.subscribe([&](const int& value) { events.push_back("b" + std::to_string(value)); });
+
+    state.set(1);
+    expect(events == std::vector<std::string>{"a1", "b1", "a2", "b2"},
+           "Nested state commits must finish the current observer batch before delivering the next value");
+}
+
+void testStructuralUpdatesCoalesceByKey()
+{
+    int calls = 0;
+    int value = 0;
+    const int key = 1;
+    wui::scheduleStructuralUpdate(&key, [&] { ++calls; value = 1; });
+    wui::scheduleStructuralUpdate(&key, [&] { ++calls; value = 2; });
+
+    wui::flushStructuralUpdates();
+    expect(calls == 1 && value == 2, "Repeated structural work for one node should coalesce to its latest action");
+    expect(!wui::hasPendingStructuralUpdates(), "Flushing should empty the structural update queue");
+}
+
+void testStructuralUpdatesDrainReentrantWork()
+{
+    std::vector<int> order;
+    const int firstKey = 1;
+    const int secondKey = 2;
+    wui::scheduleStructuralUpdate(&firstKey, [&] {
+        order.push_back(1);
+        wui::scheduleStructuralUpdate(&secondKey, [&] { order.push_back(2); });
+    });
+
+    wui::flushStructuralUpdates();
+    expect(order.size() == 2 && order[0] == 1 && order[1] == 2,
+           "Work scheduled during a structural flush should commit in the same frame after its current batch");
+}
+
 } // namespace
 
 int main()
@@ -225,5 +319,11 @@ int main()
     testComputedSkipsSameValue();
     testComputedUnsubscribesOnDestruction();
     testComputedChain();
+    testStateObserverCanUnsubscribeDuringNotification();
+    testStateObserverCanRemoveLaterObserver();
+    testNestedStateUpdateRemainsWellDefined();
+    testNestedStateUpdatePreservesDeliveryOrderForAllObservers();
+    testStructuralUpdatesCoalesceByKey();
+    testStructuralUpdatesDrainReentrantWork();
     return 0;
 }

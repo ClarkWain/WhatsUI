@@ -1,6 +1,9 @@
 #include "wui/app.h"
 #include "wui/scheduler.h"
+#include "wui/text_input.h"
+#include "wui/widgets.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace wui {
@@ -12,6 +15,13 @@ UiWindow::UiWindow(std::unique_ptr<PlatformWindow> platformWindow)
         throw std::invalid_argument("platformWindow must not be null");
     }
     navigator_.setOnChange([this](Node* page) { syncActiveRoot(page); });
+    navigator_.setBeforeChange([this] {
+        deactivateTextInputSession();
+        focusManager_.clear();
+        inputRouter_.clearHover();
+    });
+    overlayHost_.setOnChange([this] { onOverlayChanged(); });
+    uiRoot_.setOnInvalidate([this] { platformWindow_->requestRedraw(); });
 }
 
 WindowId UiWindow::id() const noexcept
@@ -79,11 +89,71 @@ const OverlayHost& UiWindow::overlayHost() const noexcept
     return overlayHost_;
 }
 
+OverlayId UiWindow::showDialog(std::unique_ptr<Dialog> dialog)
+{
+    if (!dialog) {
+        throw std::invalid_argument("dialog must not be null");
+    }
+    Node* const previousFocus = focusManager_.focused();
+    Dialog* const raw = dialog.get();
+    const auto id = overlayHost_.show(std::move(dialog));
+    dialogs_.push_back({id, previousFocus});
+    raw->setWindowDismissHandler([this, id] { (void)dismissDialog(id); });
+    // A modal must never leave a page control focused: keyboard and IME input
+    // are isolated until the dialog has been closed.
+    deactivateTextInputSession();
+    focusManager_.clear();
+    inputRouter_.clearHover();
+    // Keyboard routing has to follow the modal as well as pointer routing.
+    // Keeping the page as InputRouter's root made Tab/Enter activate controls
+    // behind a dialog even though the backdrop correctly blocked the pointer.
+    inputRouter_.setRoot(raw);
+    return id;
+}
+
+std::unique_ptr<Dialog> UiWindow::dismissDialog(OverlayId id)
+{
+    auto it = std::find_if(dialogs_.begin(), dialogs_.end(), [id](const DialogEntry& entry) { return entry.id == id; });
+    if (it == dialogs_.end()) {
+        return nullptr;
+    }
+    Node* restoreFocus = it->restoreFocus;
+    dialogs_.erase(it);
+    auto overlay = overlayHost_.dismiss(id);
+    auto* rawDialog = dynamic_cast<Dialog*>(overlay.get());
+    if (rawDialog != nullptr) {
+        (void)overlay.release();
+        std::unique_ptr<Dialog> dialog(rawDialog);
+        // Restoring after OverlayHost's change hook avoids retaining a focus
+        // pointer into the removed modal subtree.
+        // A nested dialog hands keyboard routing back to the dialog beneath it;
+        // otherwise restore the active page tree before restoring prior focus.
+        inputRouter_.setRoot(activeDialog() != nullptr ? static_cast<Node*>(activeDialog()) : uiRoot_.content());
+        focusManager_.setFocused(restoreFocus);
+        syncTextInputSession();
+        return dialog;
+    }
+    return nullptr;
+}
+
+std::unique_ptr<Dialog> UiWindow::dismissTopDialog()
+{
+    return dialogs_.empty() ? nullptr : dismissDialog(dialogs_.back().id);
+}
+
+bool UiWindow::hasDialog() const noexcept
+{
+    return activeDialog() != nullptr;
+}
+
 void UiWindow::setRoot(std::unique_ptr<Node> root)
 {
     navigator_.clear();
+    deactivateTextInputSession();
+    focusManager_.clear();
     uiRoot_.setContent(std::move(root));
     inputRouter_.setRoot(uiRoot_.content());
+    platformWindow_->requestRedraw();
 }
 
 Node* UiWindow::root() const noexcept
@@ -118,6 +188,9 @@ void UiWindow::prepare(PaintContext& context)
 
 Node* UiWindow::hitTest(PointF point) const
 {
+    if (auto* dialog = activeDialog()) {
+        return dialog->hitTest(point);
+    }
     if (auto* overlay = overlayHost_.hitTest(point)) {
         return overlay;
     }
@@ -126,29 +199,113 @@ Node* UiWindow::hitTest(PointF point) const
 
 bool UiWindow::dispatchPointer(const PointerEvent& event)
 {
-    return inputRouter_.dispatchPointerTo(hitTest(event.position), event);
+    const bool handled = inputRouter_.dispatchPointerTo(hitTest(event.position), event);
+    syncTextInputSession();
+    return handled;
 }
 
 bool UiWindow::dispatchKey(const KeyEvent& event)
 {
-    return inputRouter_.dispatchKey(event);
+    if (event.action == KeyAction::Down && event.keyCode == 27) {
+        if (auto* dialog = activeDialog()) {
+            dialog->dismiss();
+            return true;
+        }
+    }
+    const bool handled = inputRouter_.dispatchKey(event);
+    syncTextInputSession();
+    return handled;
 }
 
 bool UiWindow::dispatchTextInput(const TextInputEvent& event)
 {
-    return inputRouter_.dispatchTextInput(event);
+    const bool handled = inputRouter_.dispatchTextInput(event);
+    syncTextInputSession();
+    return handled;
 }
 
 bool UiWindow::dispatchComposition(const CompositionInputEvent& event)
 {
-    return inputRouter_.dispatchComposition(event);
+    const bool handled = inputRouter_.dispatchComposition(event);
+    syncTextInputSession();
+    return handled;
+}
+
+void UiWindow::onPlatformFocusChanged(bool focused) noexcept
+{
+    if (!focused) {
+        deactivateTextInputSession();
+        inputRouter_.clearHover();
+    } else {
+        syncTextInputSession();
+    }
+    platformWindow_->requestRedraw();
 }
 
 void UiWindow::syncActiveRoot(Node* navigationRoot) noexcept
 {
+    deactivateTextInputSession();
+    focusManager_.clear();
     uiRoot_.setBorrowedContent(navigationRoot);
     inputRouter_.setRoot(uiRoot_.content());
     platformWindow_->requestRedraw();
+}
+
+void UiWindow::onOverlayChanged() noexcept
+{
+    // Overlay entries own their nodes. Any mutation may have destroyed the
+    // node currently referenced by focus/hover routing, so invalidate those
+    // non-owning pointers before the next event is delivered.
+    deactivateTextInputSession();
+    focusManager_.clear();
+    inputRouter_.clearHover();
+    for (const auto& overlay : overlayHost_.overlays()) {
+        if (overlay.content) {
+            overlay.content->setInvalidationHandler([this] { platformWindow_->requestRedraw(); });
+        }
+    }
+    platformWindow_->requestRedraw();
+}
+
+Dialog* UiWindow::activeDialog() const noexcept
+{
+    if (dialogs_.empty()) {
+        return nullptr;
+    }
+    const auto id = dialogs_.back().id;
+    for (const auto& overlay : overlayHost_.overlays()) {
+        if (overlay.id == id) {
+            return dynamic_cast<Dialog*>(overlay.content.get());
+        }
+    }
+    return nullptr;
+}
+
+void UiWindow::syncTextInputSession() noexcept
+{
+    auto* focused = dynamic_cast<TextInput*>(focusManager_.focused());
+    if (focused == activeTextInput_) {
+        if (focused != nullptr) {
+            focused->syncSession(platformWindow_->textInput(), focused->caretRect());
+        }
+        return;
+    }
+
+    deactivateTextInputSession();
+    if (focused != nullptr) {
+        activeTextInput_ = focused;
+        auto& session = platformWindow_->textInput();
+        session.activate();
+        focused->syncSession(session, focused->caretRect());
+    }
+}
+
+void UiWindow::deactivateTextInputSession() noexcept
+{
+    if (activeTextInput_ != nullptr) {
+        platformWindow_->textInput().deactivate();
+        activeTextInput_ = nullptr;
+    }
 }
 
 UiApp::UiApp(std::unique_ptr<PlatformHost> host) noexcept
@@ -184,6 +341,18 @@ UiWindow* UiApp::findWindow(WindowId id) noexcept
         }
     }
     return nullptr;
+}
+
+std::size_t UiApp::removeClosedWindows() noexcept
+{
+    const auto previousSize = windows_.size();
+    windows_.erase(
+        std::remove_if(windows_.begin(), windows_.end(),
+                       [](const std::unique_ptr<UiWindow>& window) {
+                           return !window->platformWindow().isOpen();
+                       }),
+        windows_.end());
+    return previousSize - windows_.size();
 }
 
 const std::vector<std::unique_ptr<UiWindow>>& UiApp::windows() const noexcept

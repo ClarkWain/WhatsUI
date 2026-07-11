@@ -21,11 +21,99 @@ public:
     }
 };
 
+class DirtyProbeNode final : public DummyNode {
+public:
+    void invalidate(wui::DirtyFlag flag) noexcept
+    {
+        markDirty(flag);
+    }
+};
+
+// Intentionally violates the PaintContext save/restore contract.  The
+// container boundary must contain this failure so a dynamically removed branch
+// cannot leave a clip active for the next frame's mounted sibling.
+class LeakyPaintStateNode final : public DummyNode {
+public:
+    void paint(wui::PaintContext& context) override
+    {
+        (void)context.save();
+        context.clipRect({0.0f, 0.0f, 1.0f, 1.0f});
+        clearDirty(wui::DirtyFlag::Paint);
+    }
+};
+
 void expect(bool condition, const std::string& message)
 {
     if (!condition) {
         throw std::runtime_error(message);
     }
+}
+
+void testInvalidationReachesTheRootAndPaintsAfterLayout()
+{
+    auto root = std::make_unique<DirtyProbeNode>();
+    auto child = std::make_unique<DirtyProbeNode>();
+    auto* childRaw = child.get();
+    root->appendChild(std::move(child));
+    root->clearDirty();
+    childRaw->clearDirty();
+
+    int redraws = 0;
+    root->setInvalidationHandler([&] { ++redraws; });
+
+    childRaw->invalidate(wui::DirtyFlag::Paint);
+    expect(childRaw->isDirty(wui::DirtyFlag::Paint), "Paint invalidation should mark the changed node");
+    expect(root->isDirty(wui::DirtyFlag::Paint), "Paint invalidation should reach the root paint boundary");
+    expect(!childRaw->isDirty(wui::DirtyFlag::Layout) && !root->isDirty(wui::DirtyFlag::Layout),
+           "Paint-only invalidation must not invalidate layout");
+    expect(redraws == 1, "A descendant paint invalidation should notify the root once");
+
+    root->clearDirty();
+    childRaw->clearDirty();
+    childRaw->invalidate(wui::DirtyFlag::Layout);
+    expect(childRaw->isDirty(wui::DirtyFlag::Layout) && root->isDirty(wui::DirtyFlag::Layout),
+           "Layout invalidation should reach the root layout boundary");
+    expect(childRaw->isDirty(wui::DirtyFlag::Paint) && root->isDirty(wui::DirtyFlag::Paint),
+           "Layout invalidation must also invalidate paint along the path to the root");
+    expect(redraws == 2, "A descendant layout invalidation should notify the root once");
+}
+
+void testContainerPaintStateIsolation()
+{
+    wui::Container root;
+    root.appendChild(std::make_unique<LeakyPaintStateNode>());
+    root.appendChild(std::make_unique<DummyNode>());
+    root.layout({0.0f, 0.0f, 100.0f, 100.0f});
+
+    wui::PaintContext context;
+    const int frameState = context.saveCount();
+    root.paint(context);
+    expect(context.saveCount() == frameState,
+           "A child paint-state leak must be restored at the container boundary");
+}
+
+void testStructuralPaintStateIsolation()
+{
+    using namespace wui::ui;
+
+    wui::State<bool> oldBranch{true};
+    wui::State<bool> newBranch{false};
+    wui::Container root;
+    root.appendChild(asNode(If(oldBranch).then([] { return std::make_unique<LeakyPaintStateNode>(); })));
+    root.appendChild(asNode(If(newBranch).then([] { return std::make_unique<DummyNode>(); })));
+
+    wui::PaintContext context;
+    root.layout({0.0f, 0.0f, 100.0f, 100.0f});
+    root.paint(context);
+    expect(context.saveCount() == 1, "Mounted branches must not leak paint state after a frame");
+
+    oldBranch.set(false);
+    newBranch.set(true);
+    wui::flushStructuralUpdates();
+    root.layout({0.0f, 0.0f, 100.0f, 100.0f});
+    root.paint(context);
+    expect(context.saveCount() == 1,
+           "A replacement structural branch must start from an unclipped paint state");
 }
 
 class FixedMeasurer : public wui::TextMeasurer {
@@ -126,6 +214,28 @@ void testPaintContextScaleFactor()
     expect(context.scaleFactor() == 1.0f, "PaintContext should normalize invalid DPR to 1");
 }
 
+void testImageSourcesAreInternedAcrossRebuiltNodes()
+{
+    const std::vector<unsigned char> pixels{
+        255, 0, 0, 255,
+        0, 255, 0, 255,
+    };
+    wui::Image first(pixels, 2, 1);
+    // Declarative rebuilding normally creates a new input vector each time.
+    wui::Image rebuilt(std::vector<unsigned char>(pixels), 2, 1);
+    expect(first.imageSource() == rebuilt.imageSource(),
+           "Equivalent image data should share an immutable interned resource");
+
+    wui::Image different({255, 0, 0, 255, 0, 0, 255, 255}, 2, 1);
+    expect(first.imageSource() != different.imageSource(),
+           "Different image bytes must not share an image resource");
+
+    const auto reusable = first.imageSource();
+    wui::Image fromReusable(reusable);
+    expect(fromReusable.imageSource() == reusable,
+           "Image should accept a reusable immutable image source without copying it");
+}
+
 void testAnimationUsesElapsedTime()
 {
     float value = -1.0f;
@@ -176,6 +286,34 @@ void testInputRouterAndButton()
     expect(clicked, "Button click handler should run after pointer down/up");
     expect(!router.dispatchPointer(moveOutside), "Pointer move outside should not target the button");
     expect((button->visualStates() & wui::toMask(wui::ControlVisualState::Hovered)) == 0, "Button should clear hovered state after leave");
+}
+
+void testCheckboxPointerKeyboardBindingAndDisabledState()
+{
+    wui::State<bool> value{false};
+    auto checkbox = std::make_unique<wui::Checkbox>("Receive updates");
+    int changes = 0;
+    checkbox->bind(value).onChange([&changes](bool) { ++changes; });
+    checkbox->layout({0.0f, 0.0f, 180.0f, 24.0f});
+    wui::FocusManager focus;
+    wui::InputRouter router(&focus);
+    router.setRoot(checkbox.get());
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down, wui::MouseButton::Left, {10.0f, 10.0f}, 0};
+    const wui::PointerEvent up{0, wui::PointerType::Mouse, wui::PointerAction::Up, wui::MouseButton::Left, {10.0f, 10.0f}, 0};
+    expect(router.dispatchPointer(down) && router.dispatchPointer(up), "Checkbox should consume a pointer activation");
+    expect(value.get() && checkbox->isChecked() && changes == 1, "Checkbox pointer activation should update its bound State");
+    expect(router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false}), "Focused Checkbox should consume Space");
+    expect(!value.get() && changes == 2, "Space should toggle the bound Checkbox value");
+    expect(router.dispatchKey({0, wui::KeyAction::Down, 13, 0, false}), "Focused Checkbox should consume Enter");
+    expect(value.get() && changes == 3, "Enter should toggle the bound Checkbox value");
+    checkbox->setEnabled(false);
+    expect(!router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false}), "Disabled Checkbox should not consume keyboard activation");
+    expect(value.get() && changes == 3, "Disabled Checkbox should not change its bound State");
+
+    std::unique_ptr<wui::Node> declarative = wui::ui::Checkbox("Builder bound").bind(value).enabled(true);
+    auto* builderCheckbox = dynamic_cast<wui::Checkbox*>(declarative.get());
+    expect(builderCheckbox != nullptr && builderCheckbox->isChecked(),
+           "Checkbox builder should retain the strong State<bool> binding");
 }
 
 void testOverlayHitTestingAndRouting()
@@ -281,7 +419,9 @@ void testTheme()
     expect(wui::theme().colors.accent.r == 10, "setTheme should install the theme");
 
     wui::setTheme(wui::Theme{});
-    expect(wui::theme().colors.accent.r == 34, "default theme accent should be restored");
+    expect(wui::theme().colors.accent.r == 15, "default Fluent accent should be restored");
+    expect(wui::theme().controls.height == 32.0f && wui::theme().typography.body == 14.0f,
+           "default Fluent control and typography tokens should remain stable");
 }
 
 void testStructuralIf()
@@ -305,6 +445,22 @@ void testStructuralIf()
     expect(ifNode->children().empty(), "If should unmount the child when the state becomes false");
 }
 
+void testDestroyedStructuralNodeSkipsQueuedUpdate()
+{
+    using namespace wui::ui;
+
+    wui::State<bool> show{false};
+    int factoryCalls = 0;
+    std::unique_ptr<wui::Node> node = If(show).then([&] {
+        ++factoryCalls;
+        return Text("Advanced");
+    });
+    show.set(true);
+    node.reset();
+    wui::flushStructuralUpdates();
+    expect(factoryCalls == 0, "Queued structural work must not access a node destroyed before the frame boundary");
+}
+
 void testStructuralForEach()
 {
     using namespace wui::ui;
@@ -324,6 +480,36 @@ void testStructuralForEach()
     items.set({});
     wui::flushStructuralUpdates();
     expect(list->children().empty(), "ForEach should clear children for an empty list");
+}
+
+void testListActionCanRemoveItsOwnRow()
+{
+    using namespace wui::ui;
+
+    wui::State<std::vector<int>> items{{1, 2}};
+    std::unique_ptr<wui::Node> node = ForEach<int>(items, [&items](const int& id) {
+        return Button("Delete").onClick([&items, id] {
+            auto next = items.get();
+            next.erase(std::remove(next.begin(), next.end(), id), next.end());
+            items.set(next);
+        });
+    });
+    auto* list = dynamic_cast<wui::ForEachNode*>(node.get());
+    expect(list != nullptr && list->children().size() == 2, "List should build delete buttons");
+
+    auto* first = dynamic_cast<wui::Button*>(list->children().front().get());
+    expect(first != nullptr, "First list child should be a button");
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                                 wui::MouseButton::Left, {0.0f, 0.0f}, 0};
+    const wui::PointerEvent up{0, wui::PointerType::Mouse, wui::PointerAction::Up,
+                               wui::MouseButton::Left, {0.0f, 0.0f}, 0};
+    first->onPointerEvent(down);
+    first->onPointerEvent(up);
+
+    expect(items.get() == std::vector<int>{2}, "Click handler should remove its own item");
+    expect(list->children().size() == 2, "Structural mutation must wait until the handler returns");
+    wui::flushStructuralUpdates();
+    expect(list->children().size() == 1, "List should rebuild safely at the frame boundary");
 }
 
 void testLayoutFlexAndAlign()
@@ -373,26 +559,83 @@ void testTextInputRouting()
     expect(input->model().text() == "a", "TextInput backspace should delete one character");
 }
 
+void testKeyboardFocusTraversalAndControlActivation()
+{
+    auto root = std::make_unique<wui::Column>();
+    auto first = std::make_unique<wui::Button>("First");
+    auto disabled = std::make_unique<wui::Button>("Disabled");
+    auto last = std::make_unique<wui::Button>("Last");
+    auto* firstRaw = first.get();
+    auto* disabledRaw = disabled.get();
+    auto* lastRaw = last.get();
+    disabled->setEnabled(false);
+
+    int firstClicks = 0;
+    int disabledClicks = 0;
+    int lastClicks = 0;
+    first->onClick([&] { ++firstClicks; });
+    disabled->onClick([&] { ++disabledClicks; });
+    last->onClick([&] { ++lastClicks; });
+    root->appendChild(std::move(first));
+    root->appendChild(std::move(disabled));
+    root->appendChild(std::move(last));
+    root->layout({0.0f, 0.0f, 200.0f, 120.0f});
+
+    wui::FocusManager focus;
+    wui::InputRouter router(&focus);
+    router.setRoot(root.get());
+    const wui::KeyEvent tab{0, wui::KeyAction::Down, 9, 0, false};
+    const wui::KeyEvent shiftTab{0, wui::KeyAction::Down, 9, wui::KeyModifierShift, false};
+    const wui::KeyEvent enter{0, wui::KeyAction::Down, 13, 0, false};
+    const wui::KeyEvent space{0, wui::KeyAction::Down, 32, 0, false};
+
+    expect(router.dispatchKey(tab), "Tab should focus the first enabled control when no control is focused");
+    expect(focus.focused() == firstRaw, "Tab order should begin with the first enabled control");
+    expect(router.dispatchKey(space) && firstClicks == 1,
+           "Space should activate the focused control through the keyboard route");
+    expect(router.dispatchKey(tab), "Tab should advance focus");
+    expect(focus.focused() == lastRaw, "Tab must skip disabled controls");
+    expect(router.dispatchKey(enter) && lastClicks == 1,
+           "Enter should activate the focused control through the keyboard route");
+    expect(router.dispatchKey(tab), "Tab should wrap at the end of the focus order");
+    expect(focus.focused() == firstRaw, "Forward traversal should wrap to the first control");
+    expect(router.dispatchKey(shiftTab), "Shift+Tab should traverse backwards");
+    expect(focus.focused() == lastRaw, "Reverse traversal should wrap to the last control");
+
+    focus.setFocused(disabledRaw);
+    expect(!router.dispatchKey(enter), "Disabled controls must reject keyboard activation");
+    expect(disabledClicks == 0 && focus.focused() == nullptr,
+           "Disabled keyboard targets must not activate and should be defocused");
+}
+
 } // namespace
 
 int main()
 {
+    testInvalidationReachesTheRootAndPaintsAfterLayout();
+    testContainerPaintStateIsolation();
+    testStructuralPaintStateIsolation();
     testState();
     testNavigator();
     testNavigatorPageRetention();
     testTextInputModel();
     testInputRouterAndButton();
+    testCheckboxPointerKeyboardBindingAndDisabledState();
     testOverlayHitTestingAndRouting();
     testDeclarativeBuilderAndCounter();
     testReactiveText();
     testComputed();
     testTheme();
     testStructuralIf();
+    testDestroyedStructuralNodeSkipsQueuedUpdate();
     testStructuralForEach();
+    testListActionCanRemoveItsOwnRow();
     testPluggableTextMeasurement();
     testPaintContextScaleFactor();
+    testImageSourcesAreInternedAcrossRebuiltNodes();
     testAnimationUsesElapsedTime();
     testLayoutFlexAndAlign();
     testTextInputRouting();
+    testKeyboardFocusTraversalAndControlActivation();
     return 0;
 }
