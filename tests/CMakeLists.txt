@@ -277,6 +277,23 @@ add_test(
     COMMAND WhatsUITodoStorageTests
 )
 
+add_executable(WhatsUITodoControllerTests
+    todo_controller_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_controller.cpp
+)
+
+target_include_directories(WhatsUITodoControllerTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app
+)
+
+target_compile_features(WhatsUITodoControllerTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_todo_controller_tests
+    COMMAND WhatsUITodoControllerTests
+)
+
 add_executable(WhatsUIVirtualListTests
     m4_virtual_list_tests.cpp
 )
@@ -345,6 +362,7 @@ if(TARGET WhatsCanvas::Software)
             WhatsUIAccessibilityTests
             WhatsUIListViewTests
             WhatsUITodoStorageTests
+            WhatsUITodoControllerTests
             WhatsUIVirtualListTests
             WhatsUIUiInspectorTests
             WhatsUIBenchmarks)

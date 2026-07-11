@@ -12,6 +12,7 @@ target_compile_features(WhatsUIRenderToImage PRIVATE cxx_std_17)
 
 add_executable(WhatsUITodoApp
     todo_app/main.cpp
+    todo_app/todo_controller.cpp
     todo_app/todo_storage.cpp
 )
 
@@ -57,6 +58,7 @@ if(TARGET WhatsUI::Glfw)
     # The compile definition only selects its interactive entry point.
     add_executable(WhatsUITodoGlfw
         todo_app/main.cpp
+        todo_app/todo_controller.cpp
         todo_app/todo_storage.cpp
     )
 
