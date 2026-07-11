@@ -13,6 +13,8 @@ option(WHATSUI_ENABLE_SANITIZERS "Enable supported runtime memory sanitizers for
 option(WHATSUI_ENABLE_ADVANCED_TEXT
     "Enable the in-tree WhatsCanvas FreeType/HarfBuzz text pipeline by default" ON)
 
+set(WHATSUI_PACKAGE_REQUIRES_WHATSCANVAS OFF)
+
 add_library(WhatsUI
     src/whatsui/core/app.cpp
     src/whatsui/core/node.cpp
@@ -87,7 +89,15 @@ if(WHATSUI_WITH_WHATSCANVAS)
                 "Enable HarfBuzz shaping for WhatsUI text" )
         endif()
     endif()
-    add_subdirectory(third_party/WhatsCanvas EXCLUDE_FROM_ALL)
+    if(WHATSUI_INSTALL)
+        # Let the dependency's install/export rules participate in the same
+        # prefix so WhatsUIConfig can resolve WhatsCanvas::Software for an
+        # external consumer. Ordinary source builds still keep the third-party
+        # targets out of the default build graph.
+        add_subdirectory(third_party/WhatsCanvas)
+    else()
+        add_subdirectory(third_party/WhatsCanvas EXCLUDE_FROM_ALL)
+    endif()
     if(NOT TARGET WhatsCanvas::Software)
         message(FATAL_ERROR
             "WHATSUI_WITH_WHATSCANVAS=ON requires WhatsCanvas Software. "
@@ -100,7 +110,10 @@ if(WHATSUI_WITH_WHATSCANVAS)
     # Paint / Image symbols.
     target_link_libraries(WhatsUI PUBLIC WhatsCanvas::Software)
     target_compile_definitions(WhatsUI PUBLIC WHATSUI_HAS_WHATSCANVAS=1)
-    target_include_directories(WhatsUI PUBLIC "${WHATSUI_WHATSCANVAS_ROOT}/include")
+    target_include_directories(WhatsUI PUBLIC
+        $<BUILD_INTERFACE:${WHATSUI_WHATSCANVAS_ROOT}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    set(WHATSUI_PACKAGE_REQUIRES_WHATSCANVAS ON)
 endif()
 
 # --- GLFW Platform Backend (requires WhatsCanvas + OpenGL) ---
@@ -146,47 +159,40 @@ if(WHATSUI_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# The developer-preview package is deliberately headless.  The optional
-# WhatsCanvas integration currently consumes its in-tree subproject directly;
-# publishing that integration requires a separately packaged WhatsCanvas
-# dependency and is therefore kept out of this first consumer contract.
+# Core packages may be installed either headless or with the separately
+# exported WhatsCanvas::Software dependency. GLFW/OpenGL remains source-build
+# only until its third-party dependency chain is exported as a package.
 if(WHATSUI_INSTALL)
-    if(WHATSUI_WITH_WHATSCANVAS)
-        message(WARNING
-            "WhatsUI install/export is unavailable with WHATSUI_WITH_WHATSCANVAS=ON. "
-            "Build the developer-preview package with WHATSUI_WITH_WHATSCANVAS=OFF.")
-    else()
-        install(TARGETS WhatsUI
-            EXPORT WhatsUITargets
-            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        )
-        install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/wui"
-            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        )
+    install(TARGETS WhatsUI
+        EXPORT WhatsUITargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/wui"
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
 
-        install(EXPORT WhatsUITargets
-            FILE WhatsUITargets.cmake
-            NAMESPACE WhatsUI::
-            DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
-        )
+    install(EXPORT WhatsUITargets
+        FILE WhatsUITargets.cmake
+        NAMESPACE WhatsUI::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
+    )
 
-        configure_package_config_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WhatsUIConfig.cmake.in"
-            "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfig.cmake"
-            INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
-        )
-        write_basic_package_version_file(
-            "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfigVersion.cmake"
-            VERSION ${PROJECT_VERSION}
-            COMPATIBILITY SameMajorVersion
-        )
-        install(FILES
-            "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfig.cmake"
-            "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfigVersion.cmake"
-            DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
-        )
-    endif()
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WhatsUIConfig.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfig.cmake"
+        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
+    )
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfigVersion.cmake"
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfigVersion.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
+    )
 endif()

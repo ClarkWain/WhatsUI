@@ -82,13 +82,13 @@ all be true.
 
 ### M5 — Stable Windows 1.0
 
-- [ ] Stable source API policy, documented no-ABI guarantee before 1.0, then
+- [x] Stable source API policy, documented no-ABI guarantee before 1.0, then
   explicit compatibility policy.
 - [ ] Windows package exports for core + WhatsCanvas/GLFW path, clean external
   consumer smoke, LICENSE/NOTICE/SBOM, changelog, and release archive hashes.
-- [ ] Windows support matrix, known limitations, upgrade guide, and contributor
+- [x] Windows support matrix, known limitations, upgrade guide, and contributor
   documentation.
-- [ ] Three maintained reference applications: Todo, Settings, and Debug
+- [x] Three maintained reference applications: Todo, Settings, and Debug
   Inspector.
 
 ## Current active focus

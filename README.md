@@ -88,8 +88,24 @@ find_package(WhatsUI 0.1 CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE WhatsUI::WhatsUI)
 ```
 
-此包目前不包含 `WHATSUI_WITH_WHATSCANVAS=ON` 的渲染/GLFW 集成；该集成仍是
-源码树内的实验性接线，需按照下一节从源构建。
+Windows also supports a packaged WhatsCanvas Software variant for external
+consumers. It is intentionally configured with the portable text fallback;
+the advanced in-tree FreeType/HarfBuzz dependency bundle is not exported yet.
+
+```powershell
+cmake -S . -B build-package-wsc -DWHATSUI_WITH_WHATSCANVAS=ON `
+  -DWHATSUI_ENABLE_ADVANCED_TEXT=OFF -DWHATSCANVAS_ENABLE_FREETYPE_RASTERIZER=OFF `
+  -DWHATSCANVAS_ENABLE_OPENTYPE_SHAPING=OFF -DWHATSUI_BUILD_TESTS=OFF `
+  -DWHATSUI_BUILD_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX="$PWD/install-wsc"
+cmake --build build-package-wsc --config Release
+cmake --install build-package-wsc --config Release
+cmake -S tests/package_consumer -B build-consumer-wsc -DCMAKE_PREFIX_PATH="$PWD/install-wsc"
+cmake --build build-consumer-wsc --config Release
+& .\build-consumer-wsc\Release\whatsui_consumer_smoke.exe
+```
+
+The GLFW/OpenGL host remains source-build only while its GLFW/OpenGL package
+dependency chain is completed.
 
 公开 API 的当前预览级别与 1.0 兼容性门槛见
 [source stability policy](doc/whatsui/STABILITY_AND_COMPATIBILITY.md)。

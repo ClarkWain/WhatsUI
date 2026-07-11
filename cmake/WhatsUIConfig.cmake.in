@@ -1,5 +1,11 @@
 @PACKAGE_INIT@
 
+include(CMakeFindDependencyMacro)
+
+if (@WHATSUI_PACKAGE_REQUIRES_WHATSCANVAS@)
+    find_dependency(WhatsCanvas CONFIG)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/WhatsUITargets.cmake")
 
 check_required_components(WhatsUI)
