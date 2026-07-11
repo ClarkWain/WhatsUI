@@ -1,9 +1,11 @@
 #pragma once
 
 #include "wui/animation.h"
+#include "wui/accessibility.h"
 #include "wui/app.h"
 #include "wui/events.h"
 #include "wui/node.h"
+#include "wui/overlays.h"
 #include "wui/paint_context.h"
 #include "wui/platform.h"
 #include "wui/runtime.h"
@@ -13,6 +15,7 @@
 #include "wui/text_input.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
+#include "wui/theme_extensions.h"
 #include "wui/thread_check.h"
 #include "wui/types.h"
 #include "wui/ui.h"

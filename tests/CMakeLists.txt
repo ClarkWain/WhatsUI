@@ -164,6 +164,102 @@ add_test(
     COMMAND WhatsUILifecycleTests
 )
 
+add_executable(WhatsUIThemeTests
+    m3_theme_tests.cpp
+)
+
+target_link_libraries(WhatsUIThemeTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIThemeTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_theme_tests
+    COMMAND WhatsUIThemeTests
+)
+
+add_executable(WhatsUIFrameStatsTests
+    m4_frame_stats_tests.cpp
+)
+
+target_link_libraries(WhatsUIFrameStatsTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIFrameStatsTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_frame_stats_tests
+    COMMAND WhatsUIFrameStatsTests
+)
+
+add_executable(WhatsUIBasicControlsTests
+    m3_basic_controls_tests.cpp
+)
+
+target_link_libraries(WhatsUIBasicControlsTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIBasicControlsTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_basic_controls_tests
+    COMMAND WhatsUIBasicControlsTests
+)
+
+add_executable(WhatsUIOverlayTests
+    m3_overlay_tests.cpp
+)
+
+target_link_libraries(WhatsUIOverlayTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIOverlayTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_overlay_tests
+    COMMAND WhatsUIOverlayTests
+)
+
+add_executable(WhatsUIAccessibilityTests
+    m3_accessibility_tests.cpp
+)
+
+target_link_libraries(WhatsUIAccessibilityTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIAccessibilityTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_accessibility_tests
+    COMMAND WhatsUIAccessibilityTests
+)
+
+add_executable(WhatsUIListViewTests
+    m3_list_view_tests.cpp
+)
+
+target_link_libraries(WhatsUIListViewTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIListViewTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_list_view_tests
+    COMMAND WhatsUIListViewTests
+)
+
 # When WhatsUI is configured with its optional renderer bridge, widget object
 # files reference WhatsCanvas symbols even for otherwise headless runtime
 # tests. Link that backend consistently so the Windows test executables remain
@@ -175,7 +271,13 @@ if(TARGET WhatsCanvas::Software)
             WhatsUIStateTests
             WhatsUIWindowTests
             WhatsUIScrollViewTests
-            WhatsUILifecycleTests)
+            WhatsUILifecycleTests
+            WhatsUIThemeTests
+            WhatsUIFrameStatsTests
+            WhatsUIBasicControlsTests
+            WhatsUIOverlayTests
+            WhatsUIAccessibilityTests
+            WhatsUIListViewTests)
         target_link_libraries(${whatsui_runtime_test_target} PRIVATE WhatsCanvas::Software)
     endforeach()
 endif()

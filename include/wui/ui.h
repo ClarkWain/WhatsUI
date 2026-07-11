@@ -26,6 +26,9 @@
 #include <vector>
 
 #include "wui/node.h"
+#include "wui/basic_controls.h"
+#include "wui/list_view.h"
+#include "wui/overlays.h"
 #include "wui/scheduler.h"
 #include "wui/state.h"
 #include "wui/structural.h"
@@ -330,6 +333,66 @@ public:
     Checkbox&& bind(wui::State<bool>& state) && { node_->bind(state); return std::move(self()); }
     Checkbox&& onChange(std::function<void(bool)> handler) && { node_->onChange(std::move(handler)); return std::move(self()); }
     Checkbox&& enabled(bool value) && { node_->setEnabled(value); return std::move(self()); }
+};
+
+class Radio : public BuilderBase<Radio, wui::Radio> {
+public:
+    explicit Radio(std::string label = {}, bool selected = false) : BuilderBase(std::move(label), selected) {}
+    Radio&& selected(bool value) && { node_->setSelected(value); return std::move(self()); }
+    Radio&& bind(wui::State<bool>& state) && { node_->bind(state); return std::move(self()); }
+    Radio&& onChange(std::function<void(bool)> handler) && { node_->onChange(std::move(handler)); return std::move(self()); }
+};
+
+class Switch : public BuilderBase<Switch, wui::Switch> {
+public:
+    explicit Switch(std::string label = {}, bool on = false) : BuilderBase(std::move(label), on) {}
+    Switch&& on(bool value) && { node_->setOn(value); return std::move(self()); }
+    Switch&& bind(wui::State<bool>& state) && { node_->bind(state); return std::move(self()); }
+    Switch&& onChange(std::function<void(bool)> handler) && { node_->onChange(std::move(handler)); return std::move(self()); }
+};
+
+class Slider : public BuilderBase<Slider, wui::Slider> {
+public:
+    Slider(float minimum = 0.0f, float maximum = 100.0f, float value = 0.0f) : BuilderBase(minimum, maximum, value) {}
+    Slider&& value(float value) && { node_->setValue(value); return std::move(self()); }
+    Slider&& step(float value) && { node_->setStep(value); return std::move(self()); }
+    Slider&& bind(wui::State<float>& state) && { node_->bind(state); return std::move(self()); }
+    Slider&& onChange(std::function<void(float)> handler) && { node_->onChange(std::move(handler)); return std::move(self()); }
+};
+
+class ProgressBar : public BuilderBase<ProgressBar, wui::ProgressBar> {
+public:
+    ProgressBar(float minimum = 0.0f, float maximum = 100.0f, float value = 0.0f) : BuilderBase(minimum, maximum, value) {}
+    ProgressBar&& value(float value) && { node_->setValue(value); return std::move(self()); }
+    ProgressBar&& bind(wui::State<float>& state) && { node_->bind(state); return std::move(self()); }
+};
+
+class Divider : public BuilderBase<Divider, wui::Divider> {
+public:
+    explicit Divider(wui::DividerOrientation orientation = wui::DividerOrientation::Horizontal) : BuilderBase(orientation) {}
+    Divider&& thickness(float value) && { node_->setThickness(value); return std::move(self()); }
+};
+
+class ListView : public BuilderBase<ListView, wui::ListView> {
+public:
+    explicit ListView(std::vector<wui::ListView::Item> items = {}, int selectedIndex = -1)
+        : BuilderBase(std::move(items), selectedIndex) {}
+    ListView&& selectedIndex(int value) && { node_->setSelectedIndex(value); return std::move(self()); }
+    ListView&& bind(wui::State<int>& state) && { node_->bind(state); return std::move(self()); }
+    ListView&& onSelectionChanged(std::function<void(int)> handler) && { node_->onSelectionChanged(std::move(handler)); return std::move(self()); }
+};
+
+class IconButton : public BuilderBase<IconButton, wui::IconButton> {
+public:
+    explicit IconButton(std::string icon = {}, std::string accessibleLabel = {}) : BuilderBase(std::move(icon), std::move(accessibleLabel)) {}
+    IconButton&& onClick(std::function<void()> handler) && { node_->onClick(std::move(handler)); return std::move(self()); }
+};
+
+class SearchField : public BuilderBase<SearchField, wui::SearchField> {
+public:
+    explicit SearchField(std::string placeholder = "Search") : BuilderBase(std::move(placeholder)) {}
+    SearchField&& query(std::string value) && { node_->query(std::move(value)); return std::move(self()); }
+    SearchField&& onChange(wui::TextInput::ChangeHandler handler) && { node_->onQueryChange(std::move(handler)); return std::move(self()); }
 };
 
 class Row : public BuilderBase<Row, wui::Row> {

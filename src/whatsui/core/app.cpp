@@ -4,9 +4,52 @@
 #include "wui/widgets.h"
 
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 
 namespace wui {
+namespace {
+
+NodeTreeStats collectTreeStats(const Node* node)
+{
+    NodeTreeStats stats{};
+    if (node == nullptr) {
+        return stats;
+    }
+    stats.nodes = 1;
+    stats.layoutDirty = node->isDirty(DirtyFlag::Layout) ? 1u : 0u;
+    stats.paintDirty = node->isDirty(DirtyFlag::Paint) ? 1u : 0u;
+    for (const auto& child : node->children()) {
+        const auto nested = collectTreeStats(child.get());
+        stats.nodes += nested.nodes;
+        stats.layoutDirty += nested.layoutDirty;
+        stats.paintDirty += nested.paintDirty;
+    }
+    return stats;
+}
+
+NodeTreeStats collectOverlayStats(const OverlayHost& host)
+{
+    NodeTreeStats stats{};
+    for (const auto& overlay : host.overlays()) {
+        const auto nested = collectTreeStats(overlay.content.get());
+        stats.nodes += nested.nodes;
+        stats.layoutDirty += nested.layoutDirty;
+        stats.paintDirty += nested.paintDirty;
+    }
+    return stats;
+}
+
+template <class Work>
+double measureMilliseconds(Work&& work)
+{
+    const auto started = std::chrono::steady_clock::now();
+    work();
+    const auto elapsed = std::chrono::steady_clock::now() - started;
+    return std::chrono::duration<double, std::milli>(elapsed).count();
+}
+
+} // namespace
 
 UiWindow::UiWindow(std::unique_ptr<PlatformWindow> platformWindow)
     : platformWindow_(std::move(platformWindow))
@@ -163,27 +206,46 @@ Node* UiWindow::root() const noexcept
 
 void UiWindow::update()
 {
-    flushStructuralUpdates();
+    ++frameStats_.frameNumber;
+    frameStats_.layoutMilliseconds = 0.0;
+    frameStats_.prepareMilliseconds = 0.0;
+    frameStats_.paintMilliseconds = 0.0;
+    frameStats_.page = {};
+    frameStats_.overlays = {};
+    frameStats_.updateMilliseconds = measureMilliseconds([] { flushStructuralUpdates(); });
 }
 
 void UiWindow::layout()
 {
     const auto metrics = platformWindow_->metrics();
     const RectF bounds{0.0f, 0.0f, metrics.logicalSize.width, metrics.logicalSize.height};
-    uiRoot_.layout(bounds);
-    overlayHost_.layout(bounds);
+    frameStats_.layoutMilliseconds = measureMilliseconds([&] {
+        uiRoot_.layout(bounds);
+        overlayHost_.layout(bounds);
+    });
 }
 
 void UiWindow::paint(PaintContext& context)
 {
-    uiRoot_.paint(context);
-    overlayHost_.paint(context);
+    frameStats_.paintMilliseconds = measureMilliseconds([&] {
+        uiRoot_.paint(context);
+        overlayHost_.paint(context);
+    });
+    frameStats_.page = collectTreeStats(uiRoot_.content());
+    frameStats_.overlays = collectOverlayStats(overlayHost_);
 }
 
 void UiWindow::prepare(PaintContext& context)
 {
-    uiRoot_.prepare(context);
-    overlayHost_.prepare(context);
+    frameStats_.prepareMilliseconds = measureMilliseconds([&] {
+        uiRoot_.prepare(context);
+        overlayHost_.prepare(context);
+    });
+}
+
+const FrameStats& UiWindow::frameStats() const noexcept
+{
+    return frameStats_;
 }
 
 Node* UiWindow::hitTest(PointF point) const

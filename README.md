@@ -4,7 +4,15 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)](CMakeLists.txt)
 [![CMake](https://img.shields.io/badge/CMake-3.20+-064F8C.svg)](CMakeLists.txt)
 
-WhatsUI 是一个基于 WhatsCanvas 的轻量级原生 UI 系统实验项目，目标场景是桌面工具界面、设置面板、调试器面板、启动器和嵌入式 UI。
+**WhatsUI is a small retained-mode C++ UI runtime for embedded desktop tools and
+custom-rendered applications.**
+
+WhatsUI 是一个基于 WhatsCanvas 的轻量级原生 UI 系统实验项目。第一阶段聚焦
+Windows：桌面工具界面、编辑器侧边面板、设置页、调试器/性能分析面板、启动器，
+以及已有 OpenGL/GLFW 渲染环境中的嵌入式 UI。
+
+当前不把大型办公软件、浏览器式复杂页面、移动端、富文本编辑器或完整无障碍平台
+抽象作为承诺范围；这能让运行时、输入模型和确定性测试保持清晰可验证。
 
 当前仓库包含：
 
@@ -82,6 +90,9 @@ target_link_libraries(my_app PRIVATE WhatsUI::WhatsUI)
 
 此包目前不包含 `WHATSUI_WITH_WHATSCANVAS=ON` 的渲染/GLFW 集成；该集成仍是
 源码树内的实验性接线，需按照下一节从源构建。
+
+公开 API 的当前预览级别与 1.0 兼容性门槛见
+[source stability policy](doc/whatsui/STABILITY_AND_COMPATIBILITY.md)。
 
 ## WhatsCanvas
 

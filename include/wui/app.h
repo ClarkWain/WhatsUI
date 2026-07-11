@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "wui/frame_stats.h"
 #include "wui/platform.h"
 #include "wui/runtime.h"
 
@@ -48,6 +49,11 @@ public:
     void prepare(PaintContext& context);
     void paint(PaintContext& context);
 
+    // The most recently completed frame. This is a diagnostics snapshot, not
+    // a profiler: hosts may render it in an inspector without instrumenting
+    // individual controls or introducing a backend dependency.
+    [[nodiscard]] const FrameStats& frameStats() const noexcept;
+
     // Window-level input routing keeps overlays above the active page.
     bool dispatchPointer(const PointerEvent& event);
     bool dispatchKey(const KeyEvent& event);
@@ -76,6 +82,7 @@ private:
     TextInput* activeTextInput_{nullptr};
     struct DialogEntry { OverlayId id; Node* restoreFocus; };
     std::vector<DialogEntry> dialogs_;
+    FrameStats frameStats_{};
 };
 
 class UiApp {

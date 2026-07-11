@@ -23,9 +23,12 @@ add_library(WhatsUI
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
     src/whatsui/widgets/button.cpp
+    src/whatsui/widgets/basic_controls.cpp
     src/whatsui/widgets/dialog.cpp
     src/whatsui/widgets/image.cpp
     src/whatsui/widgets/layout.cpp
+    src/whatsui/widgets/list_view.cpp
+    src/whatsui/widgets/overlays.cpp
     src/whatsui/widgets/scroll_view.cpp
     src/whatsui/widgets/structural.cpp
     src/whatsui/widgets/text.cpp

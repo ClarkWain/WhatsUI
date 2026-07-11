@@ -64,11 +64,11 @@ all be true.
 
 - [x] Fluent light default tokens, Button, Checkbox, TextField, Dialog, and
   ScrollView.
-- [ ] Dark theme and local theme override regression coverage.
-- [ ] Radio, Switch, Slider, ProgressBar, Divider, IconButton, SearchField,
+- [x] Dark theme and local theme override regression coverage.
+- [x] Radio, Switch, Slider, ProgressBar, Divider, IconButton, SearchField,
   Menu/Popup, Tooltip, and ListView.
-- [ ] StateProperty-style resolution shared by component visual states.
-- [ ] Semantic/control accessibility model scoped to supported platforms.
+- [x] StateProperty-style resolution shared by component visual states.
+- [x] Semantic/control accessibility model scoped to supported platforms.
 
 ### M4 — Performance and Inspector (`v0.5-performance-preview`)
 
@@ -92,6 +92,6 @@ all be true.
 
 ## Current active focus
 
-The immediate sequence is M3 component-state and dark-theme coverage, followed
-by M4 performance/inspector work. New components must
+The immediate sequence is M4 performance/inspector work, followed by the
+Windows release contract. New components must
 not bypass the runtime, input, and Windows text contracts.
