@@ -9,6 +9,7 @@
 namespace wui {
 
 class Node;
+struct PointerEvent;
 
 // Pointer events make one deterministic trip through the hit path. Capture
 // observes root-to-leaf, Target invokes the hit node once, and Bubble returns
@@ -59,14 +60,22 @@ public:
     void releasePointer() noexcept { pointerCaptureRequest_ = PointerCaptureRequest::Release; }
     [[nodiscard]] PointerCaptureRequest pointerCaptureRequest() const noexcept { return pointerCaptureRequest_; }
 
+    // Scroll handlers may consume only the part of a wheel/trackpad delta
+    // their viewport can actually apply.  The router presents this remaining
+    // delta to later bubble handlers, which lets a nested ScrollView hand an
+    // edge overscroll to its ancestor without changing pointer-capture
+    // semantics. This is meaningful only for PointerAction::Scroll.
+    void setRemainingScrollDelta(PointF delta) noexcept;
+
 private:
     friend class InputRouter;
-    EventContext(EventPhase phase, Node* target, Node* currentTarget) noexcept
-        : phase_(phase), target_(target), currentTarget_(currentTarget) {}
+    EventContext(EventPhase phase, Node* target, Node* currentTarget, PointerEvent* pointerEvent = nullptr) noexcept
+        : phase_(phase), target_(target), currentTarget_(currentTarget), pointerEvent_(pointerEvent) {}
 
     EventPhase phase_;
     Node* target_{nullptr};
     Node* currentTarget_{nullptr};
+    PointerEvent* pointerEvent_{nullptr};
     Node* focusTarget_{nullptr};
     PointerCaptureRequest pointerCaptureRequest_{PointerCaptureRequest::None};
     bool propagationStopped_{false};
@@ -124,6 +133,13 @@ struct PointerEvent {
     KeyModifiers modifiers{0};
     PointF scrollDelta{};
 };
+
+inline void EventContext::setRemainingScrollDelta(PointF delta) noexcept
+{
+    if (pointerEvent_ != nullptr) {
+        pointerEvent_->scrollDelta = delta;
+    }
+}
 
 struct KeyEvent {
     WindowId windowId{0};

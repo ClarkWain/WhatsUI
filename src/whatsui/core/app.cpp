@@ -212,6 +212,37 @@ bool UiWindow::dispatchKey(const KeyEvent& event)
             return true;
         }
     }
+
+    // Clipboard ownership is a platform concern, while selection ownership is
+    // a text-control concern. Keep this small bridge at the window boundary
+    // so TextInput remains usable in headless/unit-test trees and native
+    // backends never need widget-specific shortcut handling.
+    if (event.action == KeyAction::Down && (event.modifiers & KeyModifierControl) != 0) {
+        if (auto* input = dynamic_cast<TextInput*>(focusManager_.focused())) {
+            switch (event.keyCode) {
+            case 67: // Ctrl+C
+                if (input->copySelection(platformWindow_->clipboard())) {
+                    syncTextInputSession();
+                    return true;
+                }
+                break;
+            case 88: // Ctrl+X
+                if (input->cutSelection(platformWindow_->clipboard())) {
+                    syncTextInputSession();
+                    return true;
+                }
+                break;
+            case 86: // Ctrl+V
+                if (input->paste(platformWindow_->clipboard())) {
+                    syncTextInputSession();
+                    return true;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
     const bool handled = inputRouter_.dispatchKey(event);
     syncTextInputSession();
     return handled;

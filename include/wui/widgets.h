@@ -227,28 +227,43 @@ private:
     Alignment align_{Alignment::Start};
 };
 
-// A single-child vertical viewport. Scroll offsets are logical pixels and are
-// clamped after every layout/content change. Wheel input is intentionally
-// consumed only when the viewport can move, so nested scroll views can defer
-// to an ancestor at their edge in a future routing enhancement.
+enum class ScrollAxis {
+    Vertical,
+    Horizontal,
+    Both,
+};
+
+// A single-child clipped viewport. Its content is unbounded only on enabled
+// axes; offsets are logical pixels and are clamped after every layout/content
+// change. A wheel handler consumes the part it can apply and leaves the
+// remainder in EventContext for ancestor ScrollViews during bubbling.
 class ScrollView : public ContainerNode {
 public:
     ScrollView& child(std::unique_ptr<Node> child);
+    ScrollView& setAxis(ScrollAxis axis) noexcept;
+    [[nodiscard]] ScrollAxis axis() const noexcept;
     void setScrollOffset(float offset) noexcept;
+    void setScrollOffset(PointF offset) noexcept;
     [[nodiscard]] float scrollOffset() const noexcept;
+    [[nodiscard]] float scrollOffsetX() const noexcept;
+    [[nodiscard]] float scrollOffsetY() const noexcept;
     [[nodiscard]] float maxScrollOffset() const noexcept;
+    [[nodiscard]] float maxScrollOffsetX() const noexcept;
+    [[nodiscard]] float maxScrollOffsetY() const noexcept;
     [[nodiscard]] SizeF contentSize() const noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
     void paint(PaintContext& context) override;
     [[nodiscard]] Node* hitTest(PointF point) override;
+    EventResult onPointerEvent(const PointerEvent& event, EventContext& context) override;
     bool onPointerEvent(const PointerEvent& event) override;
 
 private:
     void clampOffset() noexcept;
     SizeF contentSize_{};
-    float scrollOffset_{0.0f};
+    PointF scrollOffset_{};
+    ScrollAxis axis_{ScrollAxis::Vertical};
 };
 
 // A window-sized modal surface. Dialog owns exactly one content subtree,

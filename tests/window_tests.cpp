@@ -299,6 +299,30 @@ void testWindowSuspendsAndRestoresTextInputOnPlatformFocusChange()
            "Native focus gain must reactivate the logically focused TextInput");
 }
 
+void testWindowRoutesClipboardShortcutsToFocusedTextInput()
+{
+    wui::UiApp app(std::make_unique<FakeHost>());
+    auto& window = app.openWindow("clipboard", {320.0f, 180.0f});
+    auto input = std::make_unique<wui::TextInput>();
+    input->text("alpha");
+    auto* inputPtr = input.get();
+    window.setRoot(std::move(input));
+    window.layout();
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Down)), "Text input should accept focus before clipboard shortcuts");
+
+    inputPtr->controller().setSelection({1, 4});
+    const auto ctrlC = wui::KeyEvent{window.id(), wui::KeyAction::Down, 67, wui::KeyModifierControl, false};
+    const auto ctrlX = wui::KeyEvent{window.id(), wui::KeyAction::Down, 88, wui::KeyModifierControl, false};
+    const auto ctrlV = wui::KeyEvent{window.id(), wui::KeyAction::Down, 86, wui::KeyModifierControl, false};
+    expect(window.dispatchKey(ctrlC), "UiWindow should route Ctrl+C to the focused TextInput");
+    expect(window.platformWindow().clipboard().getText() == "lph", "Ctrl+C should copy the selected text through the platform clipboard");
+    expect(window.dispatchKey(ctrlX), "UiWindow should route Ctrl+X to the focused TextInput");
+    expect(inputPtr->controller().text() == "aa", "Ctrl+X should remove the selected text");
+    window.platformWindow().clipboard().setText("LPH");
+    expect(window.dispatchKey(ctrlV), "UiWindow should route Ctrl+V to the focused TextInput");
+    expect(inputPtr->controller().text() == "aLPHa", "Ctrl+V should insert the platform clipboard content at the caret");
+}
+
 void testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus()
 {
     wui::UiApp app(std::make_unique<FakeHost>());
@@ -379,6 +403,7 @@ int main()
         testPointerCaptureCancelsForWindowOverlayAndDetach();
         testWindowCoordinatesTextInputSession();
         testWindowSuspendsAndRestoresTextInputOnPlatformFocusChange();
+        testWindowRoutesClipboardShortcutsToFocusedTextInput();
         testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus();
         testDeclarativeDialogBuilderProducesConcreteModal();
         testAppReleasesClosedWindows();

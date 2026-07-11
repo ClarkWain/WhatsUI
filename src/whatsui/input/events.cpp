@@ -232,6 +232,11 @@ bool InputRouter::dispatchPointerTo(Node* target, const PointerEvent& event)
         focusManager_->setFocused(deliveryTarget);
     }
 
+    // Each phase sees the same mutable routed event. Scroll handlers can
+    // reduce scrollDelta through EventContext, allowing the unconsumed part
+    // to continue through the bubble path.
+    PointerEvent routedEvent = event;
+
     // Snapshot the path once. Deferred structural mutations make this safe
     // for the duration of dispatch and make the three phases deterministic.
     std::vector<Node*> path;
@@ -243,8 +248,8 @@ bool InputRouter::dispatchPointerTo(Node* target, const PointerEvent& event)
     bool handled = false;
     bool explicitCaptureRequest = false;
     const auto dispatchPhase = [&](Node* current, EventPhase phase) {
-        EventContext context(phase, deliveryTarget, current);
-        const EventResult result = current->onPointerEvent(event, context);
+        EventContext context(phase, deliveryTarget, current, &routedEvent);
+        const EventResult result = current->onPointerEvent(routedEvent, context);
         switch (result) {
         case EventResult::Handled:
             handled = true;

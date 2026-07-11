@@ -285,13 +285,81 @@ void testAnimationUsesElapsedTime()
 
 void testTextInputModel()
 {
-    wui::TextInputModel model;
-    model.setText("abc");
-    model.setSelection({1, 3});
+    wui::TextEditingController model;
+    model.setValue({"abc", {1, 3}, {}});
     model.commit("z");
 
-    expect(model.text() == "az", "TextInputModel should replace the active selection on commit");
+    expect(model.value().text == "az", "EditingValue should replace the active selection on commit");
     expect(model.selection().start == 2 && model.selection().end == 2, "Caret should collapse at the end of committed text");
+
+    model.setText("alpha beta");
+    model.moveToEnd();
+    model.moveCaret(-1, true);
+    expect(model.selectedText() == "a", "Shift+Arrow should extend the selection from its anchor");
+    model.moveToStart();
+    expect(model.selection().empty(), "Home should collapse a selection when Shift is not held");
+    model.moveToEnd(true);
+    expect(model.selectedText() == "alpha beta", "Shift+End should select to the editing boundary");
+
+    model.setText("alpha beta gamma");
+    model.moveToEnd();
+    model.backspace(true);
+    expect(model.text() == "alpha beta ", "Ctrl+Backspace should delete the previous word");
+    expect(model.undo(), "Text edits should be undoable");
+    expect(model.text() == "alpha beta gamma", "Undo should restore the prior EditingValue");
+    expect(model.redo(), "Undone text edits should be redoable");
+    expect(model.text() == "alpha beta ", "Redo should restore the edited value");
+
+    model.setText("alpha beta");
+    model.moveToStart();
+    model.deleteForward(true);
+    expect(model.text() == " beta", "Ctrl+Delete should delete the next word");
+}
+
+class TestClipboard final : public wui::Clipboard {
+public:
+    void setText(std::string_view text) override { text_ = text; }
+    [[nodiscard]] std::string getText() const override { return text_; }
+    [[nodiscard]] bool hasText() const override { return !text_.empty(); }
+private:
+    std::string text_;
+};
+
+void testTextInputPointerSelectionAndClipboard()
+{
+    auto input = std::make_unique<wui::TextInput>();
+    input->text("abcd");
+    input->layout({0.0f, 0.0f, 160.0f, 32.0f});
+    const auto characterWidth = wui::theme().typography.body * 0.56f;
+    const auto xAt = [characterWidth](std::size_t index) {
+        return wui::theme().controls.horizontalPadding + static_cast<float>(index) * characterWidth;
+    };
+
+    wui::FocusManager focusManager;
+    wui::InputRouter router(&focusManager);
+    router.setRoot(input.get());
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down, wui::MouseButton::Left, {xAt(1), 12.0f}, 0};
+    const wui::PointerEvent move{0, wui::PointerType::Mouse, wui::PointerAction::Move, wui::MouseButton::None, {xAt(3), 12.0f}, 0};
+    const wui::PointerEvent up{0, wui::PointerType::Mouse, wui::PointerAction::Up, wui::MouseButton::Left, {xAt(3), 12.0f}, 0};
+    expect(router.dispatchPointer(down) && router.dispatchPointer(move) && router.dispatchPointer(up),
+           "TextInput should capture and handle a pointer selection gesture");
+    expect(input->controller().selectedText() == "bc", "Pointer drag should select the text between down and up positions");
+
+    TestClipboard clipboard;
+    expect(input->copySelection(clipboard) && clipboard.getText() == "bc", "Copy should publish the active selection to the clipboard");
+    expect(input->cutSelection(clipboard) && input->controller().text() == "ad", "Cut should copy and delete the active selection");
+    clipboard.setText("BC");
+    expect(input->paste(clipboard) && input->controller().text() == "aBCd", "Paste should replace the active caret selection");
+
+    input->text("alpha beta");
+    input->controller().moveToEnd();
+    expect(input->onKeyEvent({0, wui::KeyAction::Down, 268, 0, false}), "TextInput should accept GLFW Home");
+    expect(input->controller().selection().start == 0, "GLFW Home should move the caret to the start");
+    expect(input->onKeyEvent({0, wui::KeyAction::Down, 269, wui::KeyModifierShift, false}), "TextInput should accept GLFW Shift+End");
+    expect(input->controller().selectedText() == "alpha beta", "GLFW Shift+End should extend the selection");
+    input->controller().moveToEnd();
+    expect(input->onKeyEvent({0, wui::KeyAction::Down, 259, wui::KeyModifierControl, false}), "TextInput should accept GLFW Ctrl+Backspace");
+    expect(input->controller().text() == "alpha ", "GLFW Ctrl+Backspace should delete the preceding word");
 }
 
 void testInputRouterAndButton()
@@ -718,6 +786,7 @@ int main()
     testNavigator();
     testNavigatorPageRetention();
     testTextInputModel();
+    testTextInputPointerSelectionAndClipboard();
     testInputRouterAndButton();
     testPointerCaptureTargetBubbleRoutingContract();
     testCheckboxPointerKeyboardBindingAndDisabledState();

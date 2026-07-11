@@ -163,9 +163,12 @@ WhatsUI 应明确区分：
 建议语义：
 
 - viewport 自己服从父约束
-- content 在滚动方向上允许超过 viewport
+- `ScrollAxis::Vertical`、`Horizontal` 或 `Both` 决定 content 可超过 viewport 的方向
 - 非滚动方向上尽量沿用普通容器规则
 - 滚动偏移只影响可视窗口与命中区域，不改写子树的固有测量语义
+- 嵌套 viewport 在自身边界会只消费可实际应用的 wheel delta；剩余部分沿 Bubble
+  阶段交给祖先。这样一次大幅 trackpad 手势不会在内层边缘丢失，也不会改变
+  pointer capture 的路由规则。
 
 ## 7. Flex 语义建议
 

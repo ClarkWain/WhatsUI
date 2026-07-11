@@ -376,7 +376,19 @@ class ScrollView : public BuilderBase<ScrollView, wui::ScrollView> {
 public:
     ScrollView() : BuilderBase() {}
 
+    ScrollView&& axis(wui::ScrollAxis axis) &&
+    {
+        node_->setAxis(axis);
+        return std::move(self());
+    }
+
     ScrollView&& offset(float value) &&
+    {
+        node_->setScrollOffset(value);
+        return std::move(self());
+    }
+
+    ScrollView&& offset(wui::PointF value) &&
     {
         node_->setScrollOffset(value);
         return std::move(self());
