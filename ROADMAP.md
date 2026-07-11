@@ -32,9 +32,9 @@ all be true.
   captures.
 - [x] Dirty propagation, frame-boundary state commits, and fake platform-window
   regression tests.
-- [ ] Lifecycle contract: explicit attach/detach callbacks and a test proving
+- [x] Lifecycle contract: explicit attach/detach callbacks and a test proving
   parent destruction detaches every child exactly once.
-- [ ] Mutation stress: 1,000 randomized tree mutations and nested self-removal
+- [x] Mutation stress: 1,000 randomized tree mutations and nested self-removal
   without crash or leaked subscriptions.
 - [x] Sanitizer-ready CI configuration (ASan/UBSan where supported; MSVC ASan
   alternative documented and gated).
