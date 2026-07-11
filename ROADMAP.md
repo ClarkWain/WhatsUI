@@ -43,9 +43,9 @@ all be true.
 
 - [x] Pointer/keyboard routing, overlay routing, Tab traversal, dialog focus
   restoration, clipping, wheel input, and vertical ScrollView.
-- [ ] Pointer capture API and cancellation semantics.
-- [ ] Capture/target/bubble routing contract with typed event result/context.
-- [ ] Nested scrolling handoff and horizontal scrolling.
+- [x] Pointer capture API and cancellation semantics.
+- [x] Capture/target/bubble routing contract with typed event result/context.
+- [x] Nested scrolling handoff and horizontal scrolling.
 - [x] Settings Panel reference example: controls, scrolling, tab navigation,
   dialog, and popup menu.
 
@@ -53,9 +53,9 @@ all be true.
 
 - [x] UTF-8 Text measurement/wrapping/ellipsis, TextInput session routing, and
   composition model lifecycle.
-- [ ] Windows IME adapter (TSF or IMM32): composition update, candidate window,
+- [x] Windows IME adapter (TSF or IMM32): composition update, candidate window,
   caret placement, and high-DPI verification.
-- [ ] Text editing controller: selection by pointer/Shift, Home/End, word
+- [x] Text editing controller: selection by pointer/Shift, Home/End, word
   deletion, clipboard, undo/redo, and composition underline.
 - [ ] Shaping/fallback policy for CJK, emoji, bidi, and deterministic text cache.
 - [ ] Searchable command palette and editable Settings form reference examples.
@@ -92,6 +92,6 @@ all be true.
 
 ## Current active focus
 
-The immediate sequence is M0 lifecycle/mutation proof, M1 pointer capture and
-Settings example, then M2 Windows IME. New components must not bypass those
-runtime/input contracts.
+The immediate sequence is M2 shaping/fallback and command-palette/settings
+proof, then M3 component-state and dark-theme coverage. New components must
+not bypass the runtime, input, and Windows text contracts.
