@@ -108,7 +108,13 @@ if(WHATSUI_WITH_WHATSCANVAS)
     # Without this, ordinary unit-test executables link WhatsUI successfully
     # until a widget object is pulled in, then fail with unresolved Canvas /
     # Paint / Image symbols.
-    target_link_libraries(WhatsUI PUBLIC WhatsCanvas::Software)
+    # A static library does not link its renderer until a final executable is
+    # linked. Source-tree apps/tests link WhatsCanvas::Software explicitly;
+    # the installed interface below supplies it to package consumers. Avoid a
+    # build-tree target edge here because CMake requires every such edge to
+    # belong to WhatsUI's export set.
+    set_property(TARGET WhatsUI PROPERTY INTERFACE_LINK_LIBRARIES
+        "$<INSTALL_INTERFACE:WhatsCanvas::Software>")
     target_compile_definitions(WhatsUI PUBLIC WHATSUI_HAS_WHATSCANVAS=1)
     target_include_directories(WhatsUI PUBLIC
         $<BUILD_INTERFACE:${WHATSUI_WHATSCANVAS_ROOT}/include>
