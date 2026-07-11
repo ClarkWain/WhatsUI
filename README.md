@@ -30,6 +30,30 @@ cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
+## 安装与外部 CMake 消费（Developer Preview）
+
+当前 Developer Preview 提供无渲染后端的核心包，可安装并通过
+`find_package(WhatsUI CONFIG REQUIRED)` 被其他 CMake 项目使用：
+
+```powershell
+cmake -S . -B build-package -DWHATSUI_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$PWD/install"
+cmake --build build-package --config Debug
+cmake --install build-package --config Debug
+cmake -S tests/package_consumer -B build-consumer -DCMAKE_PREFIX_PATH="$PWD/install"
+cmake --build build-consumer --config Debug
+& .\build-consumer\Debug\whatsui_consumer_smoke.exe
+```
+
+消费者只需链接导出的目标：
+
+```cmake
+find_package(WhatsUI 0.1 CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE WhatsUI::WhatsUI)
+```
+
+此包目前不包含 `WHATSUI_WITH_WHATSCANVAS=ON` 的渲染/GLFW 集成；该集成仍是
+源码树内的实验性接线，需按照下一节从源构建。
+
 ## WhatsCanvas
 
 `third_party/WhatsCanvas` 以 Git submodule 形式接入：
@@ -44,6 +68,13 @@ git submodule update --init --recursive
 cmake -S . -B build-wsc -DWHATSUI_WITH_WHATSCANVAS=ON -DWHATSUI_BUILD_TESTS=OFF
 cmake --build build-wsc --config Debug
 ```
+
+### Todo demo
+
+When examples are enabled, the deterministic Software capture and interactive
+GLFW Todo demo are available as `WhatsUITodoApp` and `WhatsUITodoGlfw`.
+See [Todo demo delivery](doc/whatsui/TODO_DEMO_DELIVERY.md) for commands and
+the fixed visual-regression scene set.
 
 ## GitHub 配置
 
