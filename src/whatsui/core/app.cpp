@@ -17,13 +17,25 @@ NodeTreeStats collectTreeStats(const Node* node)
         return stats;
     }
     stats.nodes = 1;
-    stats.layoutDirty = node->isDirty(DirtyFlag::Layout) ? 1u : 0u;
-    stats.paintDirty = node->isDirty(DirtyFlag::Paint) ? 1u : 0u;
+    const bool styleDirty = node->isDirty(DirtyFlag::Style);
+    const bool layoutDirty = node->isDirty(DirtyFlag::Layout);
+    const bool paintDirty = node->isDirty(DirtyFlag::Paint);
+    const bool compositingDirty = node->isDirty(DirtyFlag::Compositing);
+    stats.dirtyNodes = (styleDirty || layoutDirty || paintDirty || compositingDirty) ? 1u : 0u;
+    stats.styleDirty = styleDirty ? 1u : 0u;
+    stats.layoutDirty = layoutDirty ? 1u : 0u;
+    stats.paintDirty = paintDirty ? 1u : 0u;
+    stats.compositingDirty = compositingDirty ? 1u : 0u;
+    stats.textNodes = dynamic_cast<const Text*>(node) != nullptr ? 1u : 0u;
     for (const auto& child : node->children()) {
         const auto nested = collectTreeStats(child.get());
         stats.nodes += nested.nodes;
+        stats.dirtyNodes += nested.dirtyNodes;
+        stats.styleDirty += nested.styleDirty;
         stats.layoutDirty += nested.layoutDirty;
         stats.paintDirty += nested.paintDirty;
+        stats.compositingDirty += nested.compositingDirty;
+        stats.textNodes += nested.textNodes;
     }
     return stats;
 }
@@ -34,8 +46,12 @@ NodeTreeStats collectOverlayStats(const OverlayHost& host)
     for (const auto& overlay : host.overlays()) {
         const auto nested = collectTreeStats(overlay.content.get());
         stats.nodes += nested.nodes;
+        stats.dirtyNodes += nested.dirtyNodes;
+        stats.styleDirty += nested.styleDirty;
         stats.layoutDirty += nested.layoutDirty;
         stats.paintDirty += nested.paintDirty;
+        stats.compositingDirty += nested.compositingDirty;
+        stats.textNodes += nested.textNodes;
     }
     return stats;
 }
@@ -212,6 +228,7 @@ void UiWindow::update()
     frameStats_.paintMilliseconds = 0.0;
     frameStats_.page = {};
     frameStats_.overlays = {};
+    frameStats_.render = {};
     frameStats_.updateMilliseconds = measureMilliseconds([] { flushStructuralUpdates(); });
 }
 
@@ -233,6 +250,11 @@ void UiWindow::paint(PaintContext& context)
     });
     frameStats_.page = collectTreeStats(uiRoot_.content());
     frameStats_.overlays = collectOverlayStats(overlayHost_);
+    // These counts describe the framework's paint candidates, not renderer
+    // command emission. The optional renderer counters remain explicitly
+    // unavailable until PaintContext gains a backend-neutral query surface.
+    frameStats_.render.paintTraversalNodes = frameStats_.page.nodes + frameStats_.overlays.nodes;
+    frameStats_.render.textNodes = frameStats_.page.textNodes + frameStats_.overlays.textNodes;
 }
 
 void UiWindow::prepare(PaintContext& context)

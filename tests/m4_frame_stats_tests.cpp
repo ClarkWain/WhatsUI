@@ -62,7 +62,9 @@ void testFrameStatsCoverPipelineAndTree()
 {
     wui::UiWindow window(std::make_unique<TestWindow>());
     auto root = std::make_unique<wui::Column>();
-    root->appendChild(std::make_unique<wui::Text>("Frame stats"));
+    auto text = std::make_unique<wui::Text>("Frame stats");
+    auto* const textRaw = text.get();
+    root->appendChild(std::move(text));
     window.setRoot(std::move(root));
 
     wui::PaintContext context(2.0f);
@@ -75,9 +77,26 @@ void testFrameStatsCoverPipelineAndTree()
     expect(stats.frameNumber == 1, "update must begin a numbered diagnostics frame");
     expect(stats.page.nodes == 2, "page diagnostics must include root and descendant nodes");
     expect(stats.overlays.nodes == 0, "an empty overlay host must report no overlay nodes");
+    expect(stats.page.textNodes == 1 && stats.render.textNodes == 1 && stats.render.paintTraversalNodes == 2,
+           "backend-neutral diagnostics must report text and paint traversal candidates");
+    expect(!stats.render.drawCalls.isAvailable() && !stats.render.textDrawCalls.isAvailable() &&
+               !stats.render.textCacheHits.isAvailable() && !stats.render.textCacheMisses.isAvailable(),
+           "renderer command and cache counters must be explicitly unavailable without backend instrumentation");
     expect(stats.updateMilliseconds >= 0.0 && stats.layoutMilliseconds >= 0.0 &&
                stats.prepareMilliseconds >= 0.0 && stats.paintMilliseconds >= 0.0,
            "each frame phase must report a non-negative duration");
+
+    textRaw->markDirty(wui::DirtyFlag::Style);
+    window.update();
+    window.layout();
+    window.prepare(context);
+    window.paint(context);
+    const auto& dirtyStats = window.frameStats();
+    expect(dirtyStats.frameNumber == 2 && dirtyStats.page.dirtyNodes == 2 && dirtyStats.page.styleDirty == 2,
+           "dirty diagnostics must count both the changed node and propagated ancestor exactly once");
+    expect(dirtyStats.page.layoutDirty == 0 && dirtyStats.page.paintDirty == 0 &&
+               dirtyStats.page.compositingDirty == 0,
+           "per-flag diagnostics must distinguish style dirtiness from cleared layout and paint work");
 }
 
 } // namespace
