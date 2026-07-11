@@ -16,6 +16,6 @@ package-preview/
 visual-review/
 artifacts/clip-*/
 artifacts/fluent-review/
-artifacts/p0-repro*/
+artifacts/p0-repro*
 artifacts/todo-empty-state-review/
 artifacts/todo-interaction-smoke/
