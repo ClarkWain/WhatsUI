@@ -13,6 +13,7 @@ target_compile_features(WhatsUIRenderToImage PRIVATE cxx_std_17)
 add_executable(WhatsUITodoApp
     todo_app/main.cpp
     todo_app/todo_controller.cpp
+    todo_app/todo_interaction.cpp
     todo_app/todo_storage.cpp
 )
 
@@ -71,6 +72,7 @@ if(TARGET WhatsUI::Glfw)
     add_executable(WhatsUITodoGlfw
         todo_app/main.cpp
         todo_app/todo_controller.cpp
+        todo_app/todo_interaction.cpp
         todo_app/todo_storage.cpp
     )
 
