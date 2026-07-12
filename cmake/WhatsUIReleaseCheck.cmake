@@ -55,7 +55,7 @@ endif()
 
 file(MAKE_DIRECTORY "${_output}")
 set(_archive "${_output}/whatsui-source.zip")
-execute_process(COMMAND "${_git}" -C "${_source}" archive --format=zip --output="${_archive}" HEAD
+execute_process(COMMAND "${_git}" -C "${_source}" archive --format=zip "--output=${_archive}" HEAD
                 RESULT_VARIABLE _archive_result ERROR_VARIABLE _archive_error)
 if(NOT _archive_result EQUAL 0)
     message(FATAL_ERROR "Could not create clean Git source archive: ${_archive_error}")
