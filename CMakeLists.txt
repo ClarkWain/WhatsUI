@@ -14,6 +14,7 @@ option(WHATSUI_ENABLE_ADVANCED_TEXT
     "Enable the in-tree WhatsCanvas FreeType/HarfBuzz text pipeline by default" ON)
 
 set(WHATSUI_PACKAGE_REQUIRES_WHATSCANVAS OFF)
+set(WHATSUI_PACKAGE_REQUIRES_GLFW OFF)
 
 add_library(WhatsUI
     src/whatsui/core/app.cpp
@@ -94,6 +95,8 @@ if(WHATSUI_WITH_WHATSCANVAS)
         # prefix so WhatsUIConfig can resolve WhatsCanvas::Software for an
         # external consumer. Ordinary source builds still keep the third-party
         # targets out of the default build graph.
+        set(WHATSCANVAS_INSTALL_GLFW ON CACHE BOOL
+            "Install GLFW when exporting WhatsUI::Glfw" FORCE)
         add_subdirectory(third_party/WhatsCanvas)
     else()
         add_subdirectory(third_party/WhatsCanvas EXCLUDE_FROM_ALL)
@@ -137,9 +140,12 @@ if(WHATSUI_WITH_WHATSCANVAS)
 
     target_link_libraries(WhatsUIGlfw
         PUBLIC
-            WhatsUI::WhatsUI
-            WhatsCanvas::OpenGL
-            glfw
+            $<BUILD_INTERFACE:WhatsUI::WhatsUI>
+            $<BUILD_INTERFACE:WhatsCanvas::OpenGL>
+            $<BUILD_INTERFACE:glfw>
+            $<INSTALL_INTERFACE:WhatsUI::WhatsUI>
+            $<INSTALL_INTERFACE:WhatsCanvas::OpenGL>
+            $<INSTALL_INTERFACE:glfw>
     )
 
     # The Windows GLFW host subclasses its native HWND to bridge IMM32
@@ -152,8 +158,12 @@ if(WHATSUI_WITH_WHATSCANVAS)
 
     target_include_directories(WhatsUIGlfw
         PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     )
+    if(WHATSUI_INSTALL)
+        set(WHATSUI_PACKAGE_REQUIRES_GLFW ON)
+    endif()
 endif()
 
 if(WHATSUI_WITH_WHATSCANVAS AND WHATSUI_BUILD_EXAMPLES)
@@ -169,7 +179,11 @@ endif()
 # exported WhatsCanvas::Software dependency. GLFW/OpenGL remains source-build
 # only until its third-party dependency chain is exported as a package.
 if(WHATSUI_INSTALL)
-    install(TARGETS WhatsUI
+    set(WHATSUI_INSTALL_TARGETS WhatsUI)
+    if(TARGET WhatsUIGlfw)
+        list(APPEND WHATSUI_INSTALL_TARGETS WhatsUIGlfw)
+    endif()
+    install(TARGETS ${WHATSUI_INSTALL_TARGETS}
         EXPORT WhatsUITargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

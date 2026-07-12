@@ -6,6 +6,14 @@ if (@WHATSUI_PACKAGE_REQUIRES_WHATSCANVAS@)
     find_dependency(WhatsCanvas CONFIG)
 endif()
 
+if (@WHATSUI_PACKAGE_REQUIRES_GLFW@)
+    find_dependency(glfw3 CONFIG)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/WhatsUITargets.cmake")
+
+if (TARGET WhatsUI::WhatsUIGlfw AND NOT TARGET WhatsUI::Glfw)
+    add_library(WhatsUI::Glfw ALIAS WhatsUI::WhatsUIGlfw)
+endif()
 
 check_required_components(WhatsUI)
