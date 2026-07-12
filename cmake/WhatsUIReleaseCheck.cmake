@@ -126,4 +126,4 @@ endif()
 
 message(STATUS "Release groundwork passed for headless core only")
 message(STATUS "Source archive SHA-256: ${_archive_sha256}")
-message(STATUS "Open M5 boundary: WhatsCanvas/GLFW package export is not checked or released by this script")
+message(STATUS "This rehearsal validates the headless package only; run the documented Windows Software/GLFW consumer commands separately for renderer package evidence.")
