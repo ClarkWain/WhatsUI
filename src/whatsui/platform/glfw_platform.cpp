@@ -893,6 +893,10 @@ int runGlfwApp(std::string title, SizeF size, GlfwRootFactory rootFactory)
             win.paint(ctx);
 
             platformWin.surface().endFrame();
+            // WhatsCanvas only finalizes command execution/draw-call counts
+            // at endFrame(). Sample after that boundary so FrameStats never
+            // presents a pre-flush command count as completed GPU work.
+            win.captureCompletedRendererStats(ctx);
             setTextMeasurer(nullptr);
         }
     });

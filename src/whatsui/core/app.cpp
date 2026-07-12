@@ -251,10 +251,32 @@ void UiWindow::paint(PaintContext& context)
     frameStats_.page = collectTreeStats(uiRoot_.content());
     frameStats_.overlays = collectOverlayStats(overlayHost_);
     // These counts describe the framework's paint candidates, not renderer
-    // command emission. The optional renderer counters remain explicitly
-    // unavailable until PaintContext gains a backend-neutral query surface.
+    // command emission. Renderer counters are captured after the host ends
+    // its render-surface frame through captureCompletedRendererStats().
     frameStats_.render.paintTraversalNodes = frameStats_.page.nodes + frameStats_.overlays.nodes;
     frameStats_.render.textNodes = frameStats_.page.textNodes + frameStats_.overlays.textNodes;
+}
+
+void UiWindow::captureCompletedRendererStats(PaintContext& context)
+{
+#ifdef WHATSUI_HAS_WHATSCANVAS
+    if (auto* canvas = context.canvas()) {
+        const auto canvasStats = canvas->getRenderStats();
+        auto& render = frameStats_.render;
+        render.commandCount = {canvasStats.commandCount, CounterAvailability::Available};
+        render.drawCalls = {canvasStats.drawCallCount, CounterAvailability::Available};
+        // WhatsCanvas provides public geometry-cache snapshots. Its public
+        // Canvas API does not expose glyph-atlas/text cache or text draw-call
+        // counters, so those remain explicitly Unavailable rather than being
+        // inferred from generic render commands.
+        render.tessellationCacheHits = {canvasStats.tessellationCacheHits, CounterAvailability::Available};
+        render.tessellationCacheMisses = {canvasStats.tessellationCacheMisses, CounterAvailability::Available};
+        render.strokeCacheHits = {canvasStats.strokeCacheHits, CounterAvailability::Available};
+        render.strokeCacheMisses = {canvasStats.strokeCacheMisses, CounterAvailability::Available};
+    }
+#else
+    (void)context;
+#endif
 }
 
 void UiWindow::prepare(PaintContext& context)

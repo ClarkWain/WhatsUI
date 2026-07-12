@@ -3,6 +3,10 @@
 
 #include "wui/wui.h"
 
+#ifdef WHATSUI_HAS_WHATSCANVAS
+#include "wsc/Canvas.h"
+#endif
+
 namespace {
 
 void expect(bool condition, const char* message)
@@ -99,10 +103,49 @@ void testFrameStatsCoverPipelineAndTree()
            "per-flag diagnostics must distinguish style dirtiness from cleared layout and paint work");
 }
 
+#ifdef WHATSUI_HAS_WHATSCANVAS
+void testWhatsCanvasCompletedFrameCounters()
+{
+    auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software, 320, 180);
+    expect(canvas != nullptr && canvas->initializeContext(),
+           "WhatsCanvas Software must initialize for completed-frame diagnostics");
+
+    wui::UiWindow window(std::make_unique<TestWindow>());
+    auto root = std::make_unique<wui::Container>();
+    root->setBackground({20, 30, 40, 255});
+    window.setRoot(std::move(root));
+
+    wui::PaintContext context(*canvas, 1.0f);
+    canvas->beginFrame();
+    window.update();
+    window.layout();
+    window.prepare(context);
+    window.paint(context);
+    canvas->endFrame();
+    window.captureCompletedRendererStats(context);
+
+    const auto& stats = window.frameStats().render;
+    expect(stats.commandCount.isAvailable() && stats.drawCalls.isAvailable(),
+           "Completed WhatsCanvas frames must expose real command and draw-call counters");
+    expect(stats.commandCount.value >= 1 && stats.drawCalls.value >= 1,
+           "A painted opaque container must produce completed renderer work");
+    expect(stats.tessellationCacheHits.isAvailable() && stats.tessellationCacheMisses.isAvailable() &&
+               stats.strokeCacheHits.isAvailable() && stats.strokeCacheMisses.isAvailable(),
+           "WhatsCanvas public geometry-cache snapshots must be reported as available");
+    expect(!stats.textDrawCalls.isAvailable() && !stats.textCacheHits.isAvailable() &&
+               !stats.textCacheMisses.isAvailable(),
+           "Unavailable WhatsCanvas text-cache metrics must not be fabricated");
+    canvas->finalizeContext();
+}
+#endif
+
 } // namespace
 
 int main()
 {
     testFrameStatsCoverPipelineAndTree();
+#ifdef WHATSUI_HAS_WHATSCANVAS
+    testWhatsCanvasCompletedFrameCounters();
+#endif
     return 0;
 }

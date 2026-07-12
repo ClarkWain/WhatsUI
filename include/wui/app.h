@@ -49,6 +49,12 @@ public:
     void prepare(PaintContext& context);
     void paint(PaintContext& context);
 
+    // Capture renderer-owned counters after the host has completed its render
+    // surface frame (for WhatsCanvas, after Canvas::endFrame()). Headless and
+    // non-instrumented backends leave the corresponding RenderStats counters
+    // explicitly unavailable.
+    void captureCompletedRendererStats(PaintContext& context);
+
     // The most recently completed frame. This is a diagnostics snapshot, not
     // a profiler: hosts may render it in an inspector without instrumenting
     // individual controls or introducing a backend dependency.

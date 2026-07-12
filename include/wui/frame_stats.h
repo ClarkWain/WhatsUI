@@ -51,10 +51,19 @@ struct RenderStats {
     // Explicitly unavailable without backend instrumentation. Keeping them
     // typed rather than silently reporting zero prevents tools from treating
     // "not measured" as a successful zero-cost frame.
+    RendererCounter commandCount{};
     RendererCounter drawCalls{};
     RendererCounter textDrawCalls{};
     RendererCounter textCacheHits{};
     RendererCounter textCacheMisses{};
+
+    // WhatsCanvas exposes these geometry-cache snapshots publicly. They are
+    // lifetime-to-date cache counters, not per-frame deltas; callers should
+    // compare successive completed-frame snapshots when they need a delta.
+    RendererCounter tessellationCacheHits{};
+    RendererCounter tessellationCacheMisses{};
+    RendererCounter strokeCacheHits{};
+    RendererCounter strokeCacheMisses{};
 };
 
 struct FrameStats {
