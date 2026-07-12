@@ -19,3 +19,6 @@ artifacts/fluent-review/
 artifacts/p0-repro*
 artifacts/todo-empty-state-review/
 artifacts/todo-interaction-smoke/
+
+# Local product-input notes are intentionally not source or release artifacts.
+建议.txt
