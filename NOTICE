@@ -1,0 +1,6 @@
+WhatsUI is distributed under the MIT License; see LICENSE.
+
+The Windows renderer and GLFW package paths include third-party components.
+Their license texts and attribution evidence remain in the pinned WhatsCanvas
+submodule and are inventoried in doc/whatsui/SBOM.md. A release archive must
+preserve the applicable third-party notices for the exact artifacts it ships.

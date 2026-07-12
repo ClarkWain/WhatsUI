@@ -15,18 +15,16 @@ candidate revision.
 - [ ] Release owner has reviewed generated artifact names, sizes, hashes, and
   retention location.
 
-## Legal and supply-chain gate — pending
+## Legal and supply-chain gate
 
-- [ ] A release owner has made the project license decision.
+- [x] Project license selected: MIT; see root `LICENSE`.
 - [ ] A release owner has reviewed all third-party license/notice obligations
   for the exact dependency revisions in the artifact.
 - [ ] `LICENSE`, `NOTICE`, and the release-specific SBOM/attribution material
   have been approved by the appropriate project/legal owner.
 
-This repository contains a root `LICENSE` file, but this checklist does **not**
-interpret it, choose license terms, or declare that redistribution obligations
-are complete. The decision and review above remain pending until explicitly
-approved.
+The MIT decision covers WhatsUI first-party source. Third-party attribution and
+artifact-specific notice review remain release-owner gates.
 
 ## Engineering gates
 
@@ -48,8 +46,6 @@ approved.
 The following are not complete merely because a headless archive or demo was
 created:
 
-- Windows package export for the WhatsCanvas Software/OpenGL and GLFW path.
-- A clean external consumer test of that renderer/GLFW package path.
 - Windows UI Automation or equivalent native accessibility bridge and
   screen-reader sign-off.
 - Final ABI/source compatibility and deprecation policy.

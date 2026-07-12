@@ -1,6 +1,7 @@
 # Preliminary software bill of materials
 
-Status: inventory draft, not legal advice and not a release attribution file.
+Status: inventory for the MIT-licensed WhatsUI source tree, not legal advice
+and not a substitute for artifact-specific attribution review.
 It identifies source-tree dependencies that a release owner must verify at the
 exact tagged revisions. It intentionally does **not** assert license terms or
 select a project license. See [Release checklist](RELEASE_CHECKLIST.md).
@@ -9,14 +10,14 @@ select a project license. See [Release checklist](RELEASE_CHECKLIST.md).
 
 | Component | Location | Distribution status | License/notice decision |
 | --- | --- | --- | --- |
-| WhatsUI runtime, public headers, examples, tests, documentation | Repository root excluding `third_party/` | Headless core has a developer-preview CMake export. | Pending release-owner/legal confirmation. A root `LICENSE` file exists but this SBOM does not interpret or approve it. |
+| WhatsUI runtime, public headers, examples, tests, documentation | Repository root excluding `third_party/` | Core and Windows renderer/GLFW CMake exports are validated. | MIT; see root `LICENSE`. |
 | Todo local-store format | `examples/todo_app/` | Example/application code; not a separate package. | Pending with project decision. |
 
 ## Known third-party source dependencies
 
 | Component | Relationship / activation | Source location or upstream pointer | License evidence to review | Release note |
 | --- | --- | --- | --- | --- |
-| WhatsCanvas | Git submodule; required by `WHATSUI_WITH_WHATSCANVAS=ON` | `third_party/WhatsCanvas`, declared in root `.gitmodules` | `third_party/WhatsCanvas/LICENSE` | Renderer integration is source-tree only; it is not currently an exported Windows package. Record the submodule commit in the release manifest. |
+| WhatsCanvas | Git submodule; required by `WHATSUI_WITH_WHATSCANVAS=ON` | `third_party/WhatsCanvas`, declared in root `.gitmodules` | `third_party/WhatsCanvas/LICENSE` | Windows package export is validated; record the submodule commit in the release manifest. |
 | FreeType | WhatsCanvas vendored/submodule dependency; used by advanced text when configured | `third_party/WhatsCanvas/third_party/freetype` | `LICENSE.TXT` in that directory | Inclusion depends on the WhatsCanvas build configuration. |
 | HarfBuzz | WhatsCanvas vendored/submodule dependency; requested by advanced text by default | `third_party/WhatsCanvas/third_party/harfbuzz` | `COPYING` in that directory | Inclusion depends on the WhatsCanvas build configuration. |
 | GLFW | WhatsCanvas submodule dependency; used for the interactive host | `third_party/WhatsCanvas/third_party/glfw` | `LICENSE.md` in that directory | Not part of the headless core export. |
