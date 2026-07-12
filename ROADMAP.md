@@ -84,8 +84,10 @@ all be true.
 
 - [x] Stable source API policy, documented no-ABI guarantee before 1.0, then
   explicit compatibility policy.
-- [ ] Windows package exports for core + WhatsCanvas/GLFW path, clean external
-  consumer smoke, LICENSE/NOTICE/SBOM, changelog, and release archive hashes.
+- [x] Windows package exports for core + WhatsCanvas/GLFW path and clean
+  external consumer smoke.
+- [ ] Release legal metadata (LICENSE/NOTICE), changelog, and signed-off
+  release archive hashes.
 - [x] Windows support matrix, known limitations, upgrade guide, and contributor
   documentation.
 - [x] Three maintained reference applications: Todo, Settings, and Debug
