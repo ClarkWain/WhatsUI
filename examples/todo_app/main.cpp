@@ -11,11 +11,14 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -33,6 +36,7 @@
 #include "todo_storage.h"
 
 #ifdef WUI_TODO_INTERACTIVE
+#include "wui/animation.h"
 #include "wui/glfw_platform.h"
 #endif
 
@@ -54,6 +58,156 @@ using ConfirmationRequest = std::function<void(std::string title,
                                                std::string detail,
                                                std::function<void()> confirm)>;
 using EditRequest = std::function<void(int)>;
+
+#ifdef WUI_TODO_INTERACTIVE
+template <class NodeT>
+void collectTodoNodes(wui::Node* node, std::vector<NodeT*>& result)
+{
+    if (node == nullptr) return;
+    if (auto* match = dynamic_cast<NodeT*>(node)) result.push_back(match);
+    for (const auto& child : node->children()) {
+        collectTodoNodes(child.get(), result);
+    }
+}
+
+// Runs only when WhatsUITodoGlfw receives --perf-smoke. It is deliberately a
+// native GLFW/OpenGL scenario, rather than a headless approximation: focused
+// text input, per-character updates and radio activation all traverse the same
+// event, layout, text and present pipeline used by a person at the window.
+void installTodoPerformanceSmoke(wui::UiWindow& window)
+{
+    struct Sample {
+        bool typed{false};
+        bool selected{false};
+        bool reported{false};
+        double maxUpdate{0.0};
+        double maxLayout{0.0};
+        double maxPrepare{0.0};
+        double maxPaint{0.0};
+        std::uint64_t inputFrame{0};
+        std::uint64_t radioFrame{0};
+        double maxInputLayout{0.0};
+        double maxInputPaint{0.0};
+        wui::PaintOperationStats inputOperations{};
+        std::size_t inputCommandCount{0};
+        std::size_t inputDrawCalls{0};
+        std::size_t inputTessellationHits{0};
+        std::size_t inputTessellationMisses{0};
+        double maxRadioLayout{0.0};
+        double maxRadioPaint{0.0};
+        wui::PaintOperationStats radioOperations{};
+        std::size_t radioCommandCount{0};
+        std::size_t radioDrawCalls{0};
+        std::size_t radioTessellationHits{0};
+        std::size_t radioTessellationMisses{0};
+        std::chrono::steady_clock::time_point inputStarted{};
+        double inputToFrameMilliseconds{0.0};
+    };
+    auto sample = std::make_shared<Sample>();
+    wui::Animation animation(1.4f, [&window, sample](float progress) {
+        const auto& frame = window.frameStats();
+        sample->maxUpdate = std::max(sample->maxUpdate, frame.updateMilliseconds);
+        sample->maxLayout = std::max(sample->maxLayout, frame.layoutMilliseconds);
+        sample->maxPrepare = std::max(sample->maxPrepare, frame.prepareMilliseconds);
+        sample->maxPaint = std::max(sample->maxPaint, frame.paintMilliseconds);
+        if (sample->inputFrame != 0 && frame.frameNumber > sample->inputFrame
+            && frame.frameNumber <= sample->inputFrame + 4) {
+            sample->maxInputLayout = std::max(sample->maxInputLayout, frame.layoutMilliseconds);
+            if (frame.paintMilliseconds >= sample->maxInputPaint) {
+                sample->maxInputPaint = frame.paintMilliseconds;
+                sample->inputOperations = frame.render.paintOperations;
+                sample->inputCommandCount = frame.render.commandCount.value;
+                sample->inputDrawCalls = frame.render.drawCalls.value;
+                sample->inputTessellationHits = frame.render.tessellationCacheHits.value;
+                sample->inputTessellationMisses = frame.render.tessellationCacheMisses.value;
+            }
+        }
+        if (sample->radioFrame != 0 && frame.frameNumber > sample->radioFrame
+            && frame.frameNumber <= sample->radioFrame + 4) {
+            sample->maxRadioLayout = std::max(sample->maxRadioLayout, frame.layoutMilliseconds);
+            if (frame.paintMilliseconds >= sample->maxRadioPaint) {
+                sample->maxRadioPaint = frame.paintMilliseconds;
+                sample->radioOperations = frame.render.paintOperations;
+                sample->radioCommandCount = frame.render.commandCount.value;
+                sample->radioDrawCalls = frame.render.drawCalls.value;
+                sample->radioTessellationHits = frame.render.tessellationCacheHits.value;
+                sample->radioTessellationMisses = frame.render.tessellationCacheMisses.value;
+            }
+        }
+
+        if (!sample->typed && progress >= 0.25f) {
+            std::vector<wui::TextInput*> fields;
+            collectTodoNodes(window.root(), fields);
+            if (fields.size() >= 2 && fields[1]->bounds().width > 0.0f) {
+                const wui::PointF point{fields[1]->bounds().x + 8.0f,
+                                        fields[1]->bounds().y + fields[1]->bounds().height * 0.5f};
+                window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+                                        wui::MouseButton::Left, point, 0});
+                window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Up,
+                                        wui::MouseButton::Left, point, 0});
+                sample->inputStarted = std::chrono::steady_clock::now();
+                for (const char character : std::string{"release"}) {
+                    window.dispatchTextInput({window.id(), std::string(1, character)});
+                }
+                sample->inputFrame = frame.frameNumber;
+                sample->typed = true;
+            }
+        }
+
+        if (sample->typed && sample->inputToFrameMilliseconds == 0.0 && frame.frameNumber > 1) {
+            sample->inputToFrameMilliseconds = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - sample->inputStarted).count();
+        }
+
+        if (!sample->selected && progress >= 0.65f) {
+            std::vector<wui::Radio*> radios;
+            collectTodoNodes(window.root(), radios);
+            if (radios.size() >= 2 && radios[1]->bounds().width > 0.0f) {
+                const auto& bounds = radios[1]->bounds();
+                const wui::PointF point{bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f};
+                window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+                                        wui::MouseButton::Left, point, 0});
+                window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Up,
+                                        wui::MouseButton::Left, point, 0});
+                sample->radioFrame = frame.frameNumber;
+                sample->selected = true;
+            }
+        }
+
+        if (!sample->reported && progress >= 0.9f) {
+            sample->reported = true;
+            std::cout << "Todo perf smoke: max update=" << sample->maxUpdate
+                      << "ms layout=" << sample->maxLayout
+                      << "ms prepare=" << sample->maxPrepare
+                      << "ms paint=" << sample->maxPaint
+                      << "ms input-to-frame=" << sample->inputToFrameMilliseconds
+                      << "ms input(layout/paint)=" << sample->maxInputLayout << "/" << sample->maxInputPaint
+                      << "ms radio(layout/paint)=" << sample->maxRadioLayout << "/" << sample->maxRadioPaint
+                      << "ms\n  input ops(rect/round/text/clip ms)="
+                      << sample->inputOperations.fillRectMilliseconds << "/"
+                      << sample->inputOperations.fillRoundRectMilliseconds << "/"
+                      << sample->inputOperations.textDrawMilliseconds << "/"
+                      << sample->inputOperations.clipRectMilliseconds
+                      << " commands/draws/tess(hit/miss)=" << sample->inputCommandCount << "/"
+                      << sample->inputDrawCalls << "/" << sample->inputTessellationHits << "/"
+                      << sample->inputTessellationMisses
+                      << "\n  radio ops(rect/round/text/clip ms)="
+                      << sample->radioOperations.fillRectMilliseconds << "/"
+                      << sample->radioOperations.fillRoundRectMilliseconds << "/"
+                      << sample->radioOperations.textDrawMilliseconds << "/"
+                      << sample->radioOperations.clipRectMilliseconds
+                      << " commands/draws/tess(hit/miss)=" << sample->radioCommandCount << "/"
+                      << sample->radioDrawCalls << "/" << sample->radioTessellationHits << "/"
+                      << sample->radioTessellationMisses << std::endl;
+        }
+    });
+    // Closing from the update callback leaves that callback registered for
+    // the next host tick while UiWindow has already been destroyed. Close
+    // only from the completion hook, after Animation::tick removes itself.
+    animation.onComplete([&window] { window.platformWindow().close(); });
+    (void)wui::Ticker::instance().add(std::move(animation));
+}
+#endif
 
 // Keep presentation groups as explicit States instead of filtering in a row
 // factory.  That makes empty sections structurally absent (rather than merely
@@ -345,7 +499,9 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
             If(hasActive).then([&activeTodos, toggle, remove, edit, requestConfirmation] {
                 return Column().gap(10.0f).align(wui::Alignment::Stretch).children(
                     Text("IN PROGRESS").size(10.0f).lineHeight(14.0f).color({97, 97, 97, 255}),
-                    ForEach<Todo>(activeTodos, [toggle, remove, edit, requestConfirmation](const Todo& item) {
+                    KeyedForEach<Todo>(activeTodos,
+                        [](const Todo& item) { return std::to_string(item.id); },
+                        [toggle, remove, edit, requestConfirmation](const Todo& item) {
                             return Box().background({255, 255, 255, 255}).radius(10.0f)
                                 .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
@@ -368,7 +524,9 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
             If(hasCompleted).then([&completedTodos, toggle, remove, edit, requestConfirmation] {
                 return Column().gap(10.0f).align(wui::Alignment::Stretch).children(
                     Text("COMPLETED").size(10.0f).lineHeight(14.0f).color({97, 97, 97, 255}),
-                    ForEach<Todo>(completedTodos, [toggle, remove, edit, requestConfirmation](const Todo& item) {
+                    KeyedForEach<Todo>(completedTodos,
+                        [](const Todo& item) { return std::to_string(item.id); },
+                        [toggle, remove, edit, requestConfirmation](const Todo& item) {
                         return Box().background({255, 255, 255, 255}).radius(10.0f)
                             .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                             .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
@@ -487,14 +645,17 @@ int main(int argc, char** argv)
         (void)apply(interaction.undo());
     };
 
+    const bool perfSmoke = std::any_of(argv + 1, argv + argc, [](const char* argument) {
+        return std::string(argument) == "--perf-smoke";
+    });
     try {
         return wui::runGlfwApp("WhatsUI Todo", {640.0f, 560.0f},
                                 [&todos, &isEmpty, &hasNoMatches, &activeTodos, &completedTodos, &hasActive, &hasCompleted, &hasStoredCompleted,
                                  &filterAll, &filterActive, &filterCompleted,
                                  &hasOperationMessage, &operationMessage,
                                  &hasUndo, &undoMessage,
-                                 addTodo, toggle, remove, clearCompleted, undo, setFilter, setSearchQuery, &interaction, &apply](wui::UiWindow& window) {
-            return buildTodoUi(todos, isEmpty, hasNoMatches, activeTodos, completedTodos, hasActive, hasCompleted, hasStoredCompleted,
+                                 addTodo, toggle, remove, clearCompleted, undo, setFilter, setSearchQuery, &interaction, &apply, perfSmoke](wui::UiWindow& window) {
+            auto root = buildTodoUi(todos, isEmpty, hasNoMatches, activeTodos, completedTodos, hasActive, hasCompleted, hasStoredCompleted,
                                filterAll, filterActive, filterCompleted,
                                hasOperationMessage, operationMessage, hasUndo, undoMessage,
                                addTodo, toggle, remove, clearCompleted, undo, setFilter, setSearchQuery,
@@ -522,6 +683,8 @@ int main(int argc, char** argv)
                                [&window](std::string title, std::string detail, std::function<void()> confirm) {
                                    showConfirmation(window, std::move(title), std::move(detail), std::move(confirm));
                                });
+            if (perfSmoke) installTodoPerformanceSmoke(window);
+            return root;
         });
     } catch (const std::exception& e) {
         std::cerr << "FATAL: " << e.what() << std::endl;

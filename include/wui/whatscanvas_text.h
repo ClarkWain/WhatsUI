@@ -104,6 +104,9 @@ public:
         ++cacheMisses_;
         wsc::Paint paint;
         paint.setTextSize(fontSize * scaleFactor_);
+#if defined(_WIN32)
+        paint.setFontFamily("Segoe UI");
+#endif
         const wsc::Canvas::TextMetrics metrics = canvas_->measureTextMetrics(text, paint);
         TextExtents extents;
         extents.width = metrics.width / scaleFactor_;
@@ -141,6 +144,9 @@ public:
 
         wsc::Paint paint;
         paint.setTextSize(fontSize * scaleFactor_);
+#if defined(_WIN32)
+        paint.setFontFamily("Segoe UI");
+#endif
         const float physicalLineHeight = (lineHeight > 0.0f ? lineHeight : fontSize * 1.25f) * scaleFactor_;
         const float physicalHeight = std::max(physicalLineHeight,
             physicalLineHeight * static_cast<float>(maxLines == 0 ? 65536 : maxLines));

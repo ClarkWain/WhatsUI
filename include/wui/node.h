@@ -48,6 +48,10 @@ public:
     }
 
     void appendChild(std::unique_ptr<Node> child);
+    void insertChild(std::size_t index, std::unique_ptr<Node> child);
+    // Reorders an existing child without detaching it.  This preserves focus,
+    // state subscriptions, and native input ownership for keyed collections.
+    void moveChild(std::size_t from, std::size_t to);
     [[nodiscard]] std::unique_ptr<Node> removeChild(std::size_t index);
     void clearChildren();
 

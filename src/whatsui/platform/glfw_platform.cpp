@@ -160,9 +160,16 @@ public:
 
     ~GlfwCursorService() override
     {
+        shutdown();
+    }
+
+    void shutdown() noexcept
+    {
         if (currentCursor_) {
             glfwDestroyCursor(currentCursor_);
+            currentCursor_ = nullptr;
         }
+        currentShape_ = -1;
     }
 
 private:
@@ -207,6 +214,14 @@ public:
 
     ~GlfwTextInputSession() override
     {
+        shutdown();
+    }
+
+    // The Win32 subclass belongs to the GLFW HWND. It must be removed before
+    // glfwDestroyWindow() invalidates that HWND; reverse member destruction is
+    // too late because it follows the owning window's destructor body.
+    void shutdown() noexcept
+    {
 #if defined(_WIN32)
         if (nativeWindow_ != nullptr) {
             // Restore only while this is still our subclass. GLFW destroys the
@@ -215,8 +230,14 @@ public:
                 SetWindowLongPtrW(nativeWindow_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previousWindowProc_));
             }
             RemovePropW(nativeWindow_, propertyName());
+            nativeWindow_ = nullptr;
+            previousWindowProc_ = nullptr;
         }
 #endif
+        active_ = false;
+        compositionOpen_ = false;
+        onTextInput_ = {};
+        onComposition_ = {};
     }
 
     void setCallbacks(std::function<void(const TextInputEvent&)> onTextInput,
@@ -461,6 +482,14 @@ public:
     ~GlfwPlatformWindow() override
     {
         if (window_) {
+            // These resources access the active GL context / Win32 HWND while
+            // being destroyed. Tear them down before GLFW destroys either.
+            glfwMakeContextCurrent(window_);
+            textInputSession_.shutdown();
+            textMeasurer_.reset();
+            surface_.reset();
+            cursorService_.shutdown();
+            glfwSetWindowUserPointer(window_, nullptr);
             glfwDestroyWindow(window_);
             window_ = nullptr;
         }
@@ -603,14 +632,17 @@ public:
             glfwPollEvents();
 
             // Remove closed windows
-            const auto previousWindowCount = windows_.size();
-            windows_.erase(
-                std::remove_if(windows_.begin(), windows_.end(),
-                               [](GlfwPlatformWindow* w) { return !w->isOpen(); }),
-                windows_.end());
-            const bool closedWindowRemoved = windows_.size() != previousWindowCount;
+            const bool closedWindowRemoved = discardClosedWindows();
 
             if (windows_.empty()) {
+                // Release the owning UiWindow while GLFW is still alive. The
+                // frame callback removes the matching UI owner after this
+                // host has discarded its non-owning raw pointer; deferring
+                // it to UiApp teardown can destroy GL/IME resources after
+                // the host begins shutdown.
+                if (frameCallback_ && closedWindowRemoved) {
+                    frameCallback_();
+                }
                 break;
             }
 
@@ -633,6 +665,20 @@ public:
     {
         exitCode_ = exitCode;
         shouldQuit_ = true;
+    }
+
+    // Raw platform-window pointers must be discarded before UiApp destroys
+    // their owners. Frame callbacks may close a window themselves (for
+    // example an animation or a dialog action), so they need the same safe
+    // boundary that the next event-loop iteration normally provides.
+    bool discardClosedWindows()
+    {
+        const auto previousWindowCount = windows_.size();
+        windows_.erase(
+            std::remove_if(windows_.begin(), windows_.end(),
+                           [](GlfwPlatformWindow* w) { return !w->isOpen(); }),
+            windows_.end());
+        return windows_.size() != previousWindowCount;
     }
 
 private:
@@ -673,7 +719,6 @@ private:
             event.button = MouseButton::None;
             event.position = {static_cast<float>(x), static_cast<float>(y)};
             event.modifiers = modifiersFor(w);
-            pw->requestRedraw();
             if (pw->onPointerEvent) pw->onPointerEvent(event);
         });
 
@@ -688,7 +733,6 @@ private:
             event.action = entered == GLFW_TRUE ? PointerAction::Enter : PointerAction::Leave;
             event.position = {static_cast<float>(x), static_cast<float>(y)};
             event.modifiers = modifiersFor(w);
-            pw->requestRedraw();
             if (pw->onPointerEvent) pw->onPointerEvent(event);
         });
 
@@ -709,7 +753,6 @@ private:
             }
             event.position = {static_cast<float>(x), static_cast<float>(y)};
             event.modifiers = modifiersFromGlfw(mods);
-            pw->requestRedraw();
             if (pw->onPointerEvent) pw->onPointerEvent(event);
         });
 
@@ -727,7 +770,6 @@ private:
             // GLFW reports abstract wheel "steps". Convert to the framework's
             // logical-pixel convention so all backends expose the same API.
             event.scrollDelta = {static_cast<float>(xoffset * 40.0), static_cast<float>(yoffset * 40.0)};
-            pw->requestRedraw();
             if (pw->onPointerEvent) pw->onPointerEvent(event);
         });
 
@@ -843,7 +885,7 @@ int runGlfwApp(std::string title, SizeF size, GlfwRootFactory rootFactory)
     };
 
     // Set frame callback: flush structural updates, tick animations, layout, paint
-    host->setFrameCallback([&app, lastFrame = std::chrono::steady_clock::now()]() mutable {
+    host->setFrameCallback([&app, host, lastFrame = std::chrono::steady_clock::now()]() mutable {
         const auto now = std::chrono::steady_clock::now();
         const float deltaSeconds = std::clamp(
             std::chrono::duration<float>(now - lastFrame).count(), 0.0f, 0.1f);
@@ -856,9 +898,11 @@ int runGlfwApp(std::string title, SizeF size, GlfwRootFactory rootFactory)
             Ticker::instance().tick(deltaSeconds);
         }
 
-        // The host has already dropped its non-owning native-window pointers
-        // for closed peers. Release the corresponding UI windows before any
-        // event callback can observe stale application state.
+        // An animation can close a native peer during this callback. Purge
+        // the host's non-owning pointer first, then release the UI owner.
+        // This keeps both the current and the next event-loop iteration free
+        // of stale native-window pointers.
+        host->discardClosedWindows();
         app.removeClosedWindows();
 
         for (const auto& winPtr : app.windows()) {

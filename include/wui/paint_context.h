@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <string>
 
 #include "wui/frame_stats.h"
@@ -83,10 +84,12 @@ public:
         if (canvas_ == nullptr) {
             return;
         }
+        const auto started = std::chrono::steady_clock::now();
         wsc::CanvasAdapter adapter(*canvas_);
         adapter.setFillColor(wsc::Color(color.r, color.g, color.b, color.a));
         adapter.fillRect(wsc::RectF(rect.x * scaleFactor_, rect.y * scaleFactor_,
                                     rect.width * scaleFactor_, rect.height * scaleFactor_));
+        paintStats_.fillRectMilliseconds += elapsedMilliseconds(started);
 #else
         (void)rect;
         (void)color;
@@ -101,6 +104,7 @@ public:
         if (canvas_ == nullptr) {
             return;
         }
+        const auto started = std::chrono::steady_clock::now();
         wsc::Paint paint;
         paint.setStyle(wsc::Paint::Style::FILL);
         paint.setColor(wsc::Color(color.r, color.g, color.b, color.a));
@@ -108,6 +112,7 @@ public:
         canvas_->drawRoundRect(wsc::RectF(rect.x * scaleFactor_, rect.y * scaleFactor_,
                                           rect.width * scaleFactor_, rect.height * scaleFactor_),
                                radius * scaleFactor_, paint);
+        paintStats_.fillRoundRectMilliseconds += elapsedMilliseconds(started);
 #else
         (void)rect;
         (void)radius;
@@ -123,9 +128,15 @@ public:
         if (canvas_ == nullptr) {
             return;
         }
+        const auto started = std::chrono::steady_clock::now();
         wsc::CanvasAdapter adapter(*canvas_);
         adapter.setFillColor(wsc::Color(color.r, color.g, color.b, color.a));
         adapter.setTextSize(textSize * scaleFactor_);
+        // Fluent on Windows is designed around Segoe UI. Selecting it
+        // explicitly also routes through WhatsCanvas' native Windows text
+        // adapter when the portable raster path is unavailable, instead of
+        // falling back to its block-glyph emergency renderer.
+        adapter.fillPaint().setFontFamily("Segoe UI");
         // WhatsUI's text coordinates are baselines (the layout code computes
         // ascent/descent and vertically centers using that convention).
         // WhatsCanvas defaults to a top anchor, which applied the text size a
@@ -133,6 +144,7 @@ public:
         // below their controls and made Text's bounds clip most glyphs.
         adapter.fillPaint().setTextBaseline(wsc::Paint::TextBaseline::BOTTOM);
         adapter.drawText(text, x * scaleFactor_, y * scaleFactor_);
+        paintStats_.textDrawMilliseconds += elapsedMilliseconds(started);
 #else
         (void)text;
         (void)x;
@@ -189,8 +201,10 @@ public:
         ++paintStats_.clipRectCalls;
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ != nullptr) {
+            const auto started = std::chrono::steady_clock::now();
             canvas_->clipRect(wsc::RectF(rect.x * scaleFactor_, rect.y * scaleFactor_,
                                          rect.width * scaleFactor_, rect.height * scaleFactor_));
+            paintStats_.clipRectMilliseconds += elapsedMilliseconds(started);
         }
 #else
         (void)rect;
@@ -208,6 +222,11 @@ public:
     }
 
 private:
+    static double elapsedMilliseconds(std::chrono::steady_clock::time_point started) noexcept
+    {
+        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+    }
+
     float scaleFactor_{1.0f};
     int saveCount_{1};
     PaintOperationStats paintStats_{};

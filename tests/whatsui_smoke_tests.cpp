@@ -647,6 +647,50 @@ void testStructuralForEach()
     expect(list->children().empty(), "ForEach should clear children for an empty list");
 }
 
+void testKeyedForEachRetainsUnchangedRows()
+{
+    using namespace wui::ui;
+    struct Item {
+        int id{0};
+        std::string label;
+        [[nodiscard]] bool operator==(const Item& other) const noexcept
+        {
+            return id == other.id && label == other.label;
+        }
+        [[nodiscard]] bool operator!=(const Item& other) const noexcept { return !(*this == other); }
+    };
+
+    wui::State<std::vector<Item>> items{{{1, "one"}, {2, "two"}}};
+    int built = 0;
+    std::unique_ptr<wui::Node> node = KeyedForEach<Item>(
+        items,
+        [](const Item& item) { return std::to_string(item.id); },
+        [&built](const Item& item) {
+            ++built;
+            return Text(item.label);
+        });
+    auto* list = dynamic_cast<wui::ForEachNode*>(node.get());
+    expect(list != nullptr && list->children().size() == 2, "KeyedForEach should build its initial rows");
+    wui::Node* one = list->children()[0].get();
+    wui::Node* two = list->children()[1].get();
+
+    items.set({{1, "one"}, {2, "TWO"}, {3, "three"}});
+    wui::flushStructuralUpdates();
+    expect(list->children().size() == 3, "KeyedForEach should add only the new row");
+    expect(list->children()[0].get() == one, "An unchanged keyed row must retain its node");
+    const auto* refreshed = dynamic_cast<const wui::Text*>(list->children()[1].get());
+    expect(refreshed != nullptr && refreshed->value() == "TWO",
+           "A changed keyed row must refresh its rendered value");
+    expect(built == 4, "Only changed and inserted keyed rows should be rebuilt");
+
+    wui::Node* three = list->children()[2].get();
+    items.set({{3, "three"}, {1, "one"}, {2, "TWO"}});
+    wui::flushStructuralUpdates();
+    expect(list->children()[0].get() == three && list->children()[1].get() == one,
+           "Keyed reordering must retain row nodes without reconstruction");
+    expect(built == 4, "Reordering stable keys must not rebuild rows");
+}
+
 void testListActionCanRemoveItsOwnRow()
 {
     using namespace wui::ui;
@@ -828,6 +872,7 @@ int main()
     testStructuralIf();
     testDestroyedStructuralNodeSkipsQueuedUpdate();
     testStructuralForEach();
+    testKeyedForEachRetainsUnchangedRows();
     testListActionCanRemoveItsOwnRow();
     testPluggableTextMeasurement();
     testPaintContextScaleFactor();

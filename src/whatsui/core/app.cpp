@@ -236,9 +236,24 @@ void UiWindow::layout()
 {
     const auto metrics = platformWindow_->metrics();
     const RectF bounds{0.0f, 0.0f, metrics.logicalSize.width, metrics.logicalSize.height};
+    const RectF previousBounds = uiRoot_.bounds();
+    const bool boundsChanged = previousBounds.x != bounds.x || previousBounds.y != bounds.y
+        || previousBounds.width != bounds.width || previousBounds.height != bounds.height;
+    const bool pageNeedsLayout = boundsChanged
+        || (uiRoot_.content() != nullptr && uiRoot_.content()->isDirty(DirtyFlag::Layout));
+    const bool overlaysNeedLayout = boundsChanged || std::any_of(
+        overlayHost_.overlays().begin(), overlayHost_.overlays().end(),
+        [](const OverlayEntry& overlay) {
+            return overlay.content != nullptr && overlay.content->isDirty(DirtyFlag::Layout);
+        });
+
+    if (!pageNeedsLayout && !overlaysNeedLayout) {
+        frameStats_.layoutMilliseconds = 0.0;
+        return;
+    }
     frameStats_.layoutMilliseconds = measureMilliseconds([&] {
-        uiRoot_.layout(bounds);
-        overlayHost_.layout(bounds);
+        if (pageNeedsLayout) uiRoot_.layout(bounds);
+        if (overlaysNeedLayout) overlayHost_.layout(bounds);
     });
 }
 
