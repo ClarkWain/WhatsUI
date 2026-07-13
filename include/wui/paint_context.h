@@ -36,6 +36,31 @@ public:
         return scaleFactor_;
     }
 
+    // WhatsCanvas exposes TOP/MIDDLE/BOTTOM text anchors rather than a
+    // typographic baseline. WhatsUI therefore uses BOTTOM consistently: this
+    // returns the draw y that vertically centres the renderer's real line box
+    // in `lineBox`. It is intentionally shared by buttons, inputs and toggle
+    // labels so Fluent controls cannot drift apart when Windows resolves a
+    // different font metric than the nominal point size.
+    [[nodiscard]] float centeredTextBottom(const std::string& text, const RectF& lineBox,
+                                           float textSize) const noexcept
+    {
+        float lineHeight = textSize * 1.25f;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ != nullptr && !text.empty()) {
+            wsc::Paint paint;
+            paint.setTextSize(textSize * scaleFactor_);
+            paint.setFontFamily("Segoe UI");
+            const auto metrics = canvas_->measureTextMetrics(text, paint);
+            const float physicalHeight = metrics.lineHeight > 0.0f ? metrics.lineHeight : metrics.height;
+            if (physicalHeight > 0.0f) {
+                lineHeight = physicalHeight / scaleFactor_;
+            }
+        }
+#endif
+        return lineBox.y + (lineBox.height + lineHeight) * 0.5f;
+    }
+
     void setScaleFactor(float scaleFactor) noexcept
     {
         scaleFactor_ = scaleFactor > 0.0f ? scaleFactor : 1.0f;

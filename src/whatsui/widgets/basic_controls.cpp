@@ -125,7 +125,7 @@ void Radio::paint(PaintContext& context)
         context.fillRoundRect({indicator.x + (indicator.width - dot) * 0.5f, indicator.y + (indicator.height - dot) * 0.5f, dot, dot}, current.radius.pill, current.colors.onAccent);
     }
     if (!label_.empty()) context.drawText(label_, indicator.x + indicator.width + kLabelGap,
-                                          bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f,
+                                          context.centeredTextBottom(label_, bounds(), current.typography.body),
                                           current.typography.body, text);
     clearDirty(DirtyFlag::Paint);
 }
@@ -190,7 +190,7 @@ void Switch::paint(PaintContext& context)
     const float thumbX = on ? track.x + track.width - thumbSize - 3.0f : track.x + 3.0f;
     context.fillRoundRect({thumbX, track.y + (track.height - thumbSize) * 0.5f, thumbSize, thumbSize}, current.radius.pill, thumb);
     if (!label_.empty()) context.drawText(label_, track.x + track.width + kLabelGap,
-                                          bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f,
+                                          context.centeredTextBottom(label_, bounds(), current.typography.body),
                                           current.typography.body, text);
     clearDirty(DirtyFlag::Paint);
 }

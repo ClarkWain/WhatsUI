@@ -362,6 +362,45 @@ void testTextInputPointerSelectionAndClipboard()
     expect(input->controller().text() == "alpha ", "GLFW Ctrl+Backspace should delete the preceding word");
 }
 
+class VariableWidthTextMeasurer final : public wui::TextMeasurer {
+public:
+    [[nodiscard]] wui::TextExtents measureText(const std::string& text, float fontSize) const override
+    {
+        float width = 0.0f;
+        for (const char character : text) {
+            width += character == 'W' ? fontSize : fontSize * 0.25f;
+        }
+        return {width, fontSize * 1.25f, fontSize * 0.8f, fontSize * 0.2f};
+    }
+};
+
+void testTextInputUsesMeasuredGlyphPositions()
+{
+    VariableWidthTextMeasurer measurer;
+    wui::TextMeasurer* const previousMeasurer = wui::textMeasurer();
+    wui::setTextMeasurer(&measurer);
+
+    auto input = std::make_unique<wui::TextInput>();
+    input->text("Wi");
+    input->layout({0.0f, 0.0f, 160.0f, 32.0f});
+    wui::FocusManager focusManager;
+    wui::InputRouter router(&focusManager);
+    router.setRoot(input.get());
+
+    // The old fixed-width model would place this x coordinate after two
+    // characters. The renderer gives W a full em and i a quarter-em, so it
+    // lies unambiguously within W and must place the caret after its first
+    // glyph instead.
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                                 wui::MouseButton::Left,
+                                 {wui::theme().controls.horizontalPadding + 12.0f, 12.0f}, 0};
+    expect(router.dispatchPointer(down), "TextInput should accept a measured caret hit test");
+    expect(input->controller().selection().start == 1,
+           "TextInput caret hit testing must follow measured variable-width glyph advances");
+
+    wui::setTextMeasurer(previousMeasurer);
+}
+
 void testInputRouterAndButton()
 {
     auto button = std::make_unique<wui::Button>("Open");
@@ -861,6 +900,7 @@ int main()
     testNavigatorPageRetention();
     testTextInputModel();
     testTextInputPointerSelectionAndClipboard();
+    testTextInputUsesMeasuredGlyphPositions();
     testInputRouterAndButton();
     testPointerCaptureTargetBubbleRoutingContract();
     testCheckboxPointerKeyboardBindingAndDisabledState();

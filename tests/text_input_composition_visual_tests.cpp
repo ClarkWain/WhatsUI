@@ -61,6 +61,19 @@ bool hasColorInRect(const std::vector<unsigned char>& pixels, int left, int top,
     return false;
 }
 
+bool hasHorizontalColorRun(const std::vector<unsigned char>& pixels, int left, int top, int right, int bottom,
+                           wui::Color color, int minimumLength)
+{
+    for (int y = top; y < bottom; ++y) {
+        int run = 0;
+        for (int x = left; x < right; ++x) {
+            run = isColor(pixels, x, y, color) ? run + 1 : 0;
+            if (run >= minimumLength) return true;
+        }
+    }
+    return false;
+}
+
 bool isTransparentInRect(const std::vector<unsigned char>& pixels, int left, int top, int right, int bottom)
 {
     for (int y = top; y < bottom; ++y) {
@@ -88,10 +101,10 @@ void testCompositionUsesUnderlineAndClearsOnEnd()
 
     const auto active = render(input);
     const auto& colors = wui::theme().colors;
-    // TextInput places its baseline at y=25 for these fixed bounds and the
-    // composition marker at baseline + focusInset.  The pre-edit span starts
-    // after one 14px Fluent body glyph (x~24) and ends after two more (x~39).
-    expect(hasColorInRect(active, 22, 26, 39, 30, colors.focus),
+    // The marker follows the measured Segoe UI line box, rather than a
+    // hard-coded nominal-font baseline. The pre-edit span starts after one
+    // Fluent body glyph and ends after two more.
+    expect(hasHorizontalColorRun(active, 20, 28, 44, 34, colors.focus, 4),
            "Active composition must paint a focused underline under its pre-edit span");
     // The upper text band is intentionally outside the underline. A normal
     // selection fill would paint the whole control height here; pre-edit must
@@ -108,7 +121,7 @@ void testCompositionUsesUnderlineAndClearsOnEnd()
     const auto ended = render(input);
     // Exclude the collapsed caret at the pre-edit end; only the former span
     // itself is relevant to verifying underline cleanup.
-    expect(!hasColorInRect(ended, 22, 26, 39, 30, colors.focus),
+    expect(!hasHorizontalColorRun(ended, 20, 28, 44, 34, colors.focus, 4),
            "Composition underline must clear after the pre-edit session ends");
     expect(!hasColorInRect(ended, 22, 8, 39, 20, colors.focus),
            "Ended composition must not leave a selection-style pre-edit highlight behind");

@@ -189,7 +189,6 @@ void Text::paint(PaintContext& context)
     if (!lines.empty()) {
         const Color color = hasColor_ ? color_ : theme().colors.text;
         const float lineHeight = effectiveLineHeight();
-        const float baseline = bounds().y + baselineOffset();
         // Most text is already contained by wrapping/ellipsis, so adding a
         // clip for every run is redundant. More importantly, the Software
         // backend batches glyph-atlas draws after paint has returned; a large
@@ -219,7 +218,10 @@ void Text::paint(PaintContext& context)
                               bounds().height + fontSize_ * 2.0f});
         }
         for (std::size_t index = 0; index < lines.size(); ++index) {
-            context.drawText(lines[index], bounds().x, baseline + lineHeight * static_cast<float>(index), fontSize_, color);
+            const RectF lineBox{bounds().x, bounds().y + lineHeight * static_cast<float>(index),
+                                bounds().width, lineHeight};
+            context.drawText(lines[index], bounds().x,
+                             context.centeredTextBottom(lines[index], lineBox, fontSize_), fontSize_, color);
         }
         if (needsClip) {
             context.restore();

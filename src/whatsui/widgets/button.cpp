@@ -99,7 +99,7 @@ void Button::paint(PaintContext& context)
     context.fillRoundRect(bounds(), current.radius.md, background);
     if (!label_.empty()) {
         context.drawText(label_, bounds().x + current.controls.horizontalPadding,
-                         bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f,
+                         context.centeredTextBottom(label_, bounds(), current.typography.body),
                          current.typography.body, foreground);
     }
     ContainerNode::paint(context);
@@ -222,7 +222,7 @@ void Checkbox::paint(PaintContext& context)
     }
     if (!label_.empty()) {
         context.drawText(label_, bounds().x + indicatorSize + current.spacing.sm,
-                         bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f,
+                         context.centeredTextBottom(label_, bounds(), current.typography.body),
                          current.typography.body, text);
     }
     clearDirty(DirtyFlag::Paint);
