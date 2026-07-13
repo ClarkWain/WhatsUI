@@ -41,12 +41,26 @@ struct RendererCounter {
     }
 };
 
+// Framework paint commands recorded by PaintContext for one UiWindow paint
+// pass. These are backend-neutral requested operations, not GPU draw calls:
+// a single command can batch into a draw call (or be ignored by a headless
+// context), so tools must use RenderStats::drawCalls for completed renderer
+// work when that renderer counter is available.
+struct PaintOperationStats {
+    std::size_t commandCount{0};
+    std::size_t fillRectCalls{0};
+    std::size_t fillRoundRectCalls{0};
+    std::size_t textDrawCalls{0};
+    std::size_t clipRectCalls{0};
+};
+
 struct RenderStats {
     // These two are framework tree diagnostics, available on every backend.
     // paintTraversalNodes is the number of nodes eligible for the completed
     // frame's paint traversal; it is not a GPU draw-call count.
     std::size_t paintTraversalNodes{0};
     std::size_t textNodes{0};
+    PaintOperationStats paintOperations{};
 
     // Explicitly unavailable without backend instrumentation. Keeping them
     // typed rather than silently reporting zero prevents tools from treating

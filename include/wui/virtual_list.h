@@ -80,6 +80,7 @@ private:
     [[nodiscard]] int rowAt(PointF point) const noexcept;
     [[nodiscard]] int normalizedSelection(int index) const noexcept;
     void reconcile();
+    void reconcileOnce();
     void layoutMountedChildren();
     void unmount(std::size_t mountedIndex);
     [[nodiscard]] std::unique_ptr<Node> takePooled(const Key& key);
@@ -98,6 +99,8 @@ private:
     SelectionHandler onSelectionChanged_;
     std::vector<Mounted> mounted_;
     std::vector<Pooled> pool_;
+    bool reconciling_{false};
+    bool reconcilePending_{false};
 };
 
 } // namespace wui

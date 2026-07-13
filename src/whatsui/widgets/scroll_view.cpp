@@ -49,7 +49,7 @@ SizeF ScrollView::measure(const Constraints& constraints) const
     if (children().empty()) return constraints.clamp({});
     const bool horizontal = axis_ == ScrollAxis::Horizontal || axis_ == ScrollAxis::Both;
     const bool vertical = axis_ == ScrollAxis::Vertical || axis_ == ScrollAxis::Both;
-    const SizeF content = children().front()->measure({0.0f,
+    const SizeF content = children().front()->measureWithConstraints({0.0f,
                                                         horizontal ? std::numeric_limits<float>::infinity() : constraints.maxWidth,
                                                         0.0f,
                                                         vertical ? std::numeric_limits<float>::infinity() : constraints.maxHeight});
@@ -64,7 +64,7 @@ void ScrollView::layout(const RectF& bounds)
         Node* content = children().front().get();
         const bool horizontal = axis_ == ScrollAxis::Horizontal || axis_ == ScrollAxis::Both;
         const bool vertical = axis_ == ScrollAxis::Vertical || axis_ == ScrollAxis::Both;
-        contentSize_ = content->measure({0.0f,
+        contentSize_ = content->measureWithConstraints({0.0f,
                                           horizontal ? std::numeric_limits<float>::infinity() : bounds.width,
                                           0.0f,
                                           vertical ? std::numeric_limits<float>::infinity() : bounds.height});

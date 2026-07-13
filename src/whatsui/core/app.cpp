@@ -244,6 +244,7 @@ void UiWindow::layout()
 
 void UiWindow::paint(PaintContext& context)
 {
+    context.resetPaintStats();
     frameStats_.paintMilliseconds = measureMilliseconds([&] {
         uiRoot_.paint(context);
         overlayHost_.paint(context);
@@ -255,6 +256,7 @@ void UiWindow::paint(PaintContext& context)
     // its render-surface frame through captureCompletedRendererStats().
     frameStats_.render.paintTraversalNodes = frameStats_.page.nodes + frameStats_.overlays.nodes;
     frameStats_.render.textNodes = frameStats_.page.textNodes + frameStats_.overlays.textNodes;
+    frameStats_.render.paintOperations = context.paintStats();
 }
 
 void UiWindow::captureCompletedRendererStats(PaintContext& context)

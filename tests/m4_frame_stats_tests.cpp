@@ -83,6 +83,12 @@ void testFrameStatsCoverPipelineAndTree()
     expect(stats.overlays.nodes == 0, "an empty overlay host must report no overlay nodes");
     expect(stats.page.textNodes == 1 && stats.render.textNodes == 1 && stats.render.paintTraversalNodes == 2,
            "backend-neutral diagnostics must report text and paint traversal candidates");
+    expect(stats.render.paintOperations.commandCount == 1 &&
+               stats.render.paintOperations.textDrawCalls == 1 &&
+               stats.render.paintOperations.fillRectCalls == 0 &&
+               stats.render.paintOperations.fillRoundRectCalls == 0 &&
+               stats.render.paintOperations.clipRectCalls == 0,
+           "PaintContext must snapshot real framework text commands independently of backend draw calls");
     expect(!stats.render.drawCalls.isAvailable() && !stats.render.textDrawCalls.isAvailable() &&
                !stats.render.textCacheHits.isAvailable() && !stats.render.textCacheMisses.isAvailable(),
            "renderer command and cache counters must be explicitly unavailable without backend instrumentation");
@@ -101,6 +107,25 @@ void testFrameStatsCoverPipelineAndTree()
     expect(dirtyStats.page.layoutDirty == 0 && dirtyStats.page.paintDirty == 0 &&
                dirtyStats.page.compositingDirty == 0,
            "per-flag diagnostics must distinguish style dirtiness from cleared layout and paint work");
+}
+
+void testPaintContextOperationResetAndSnapshot()
+{
+    wui::PaintContext context;
+    context.fillRect({0.0f, 0.0f, 10.0f, 10.0f}, {1, 2, 3, 255});
+    context.fillRoundRect({1.0f, 1.0f, 8.0f, 8.0f}, 2.0f, {4, 5, 6, 255});
+    context.drawText("stats", 2.0f, 8.0f, 12.0f, {7, 8, 9, 255});
+    context.clipRect({0.0f, 0.0f, 4.0f, 4.0f});
+    const auto snapshot = context.paintStats();
+    expect(snapshot.commandCount == 4 && snapshot.fillRectCalls == 1 &&
+               snapshot.fillRoundRectCalls == 1 && snapshot.textDrawCalls == 1 &&
+               snapshot.clipRectCalls == 1,
+           "PaintContext must count every primitive, text and clip operation in a headless frame");
+    context.resetPaintStats();
+    const auto reset = context.paintStats();
+    expect(reset.commandCount == 0 && reset.fillRectCalls == 0 && reset.fillRoundRectCalls == 0 &&
+               reset.textDrawCalls == 0 && reset.clipRectCalls == 0,
+           "Resetting PaintContext stats must start an independent frame sample");
 }
 
 #ifdef WHATSUI_HAS_WHATSCANVAS
@@ -144,6 +169,7 @@ void testWhatsCanvasCompletedFrameCounters()
 int main()
 {
     testFrameStatsCoverPipelineAndTree();
+    testPaintContextOperationResetAndSnapshot();
 #ifdef WHATSUI_HAS_WHATSCANVAS
     testWhatsCanvasCompletedFrameCounters();
 #endif

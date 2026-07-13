@@ -10,6 +10,14 @@ namespace wui {
 namespace {
 float finiteOr(float value, float fallback) noexcept { return std::isfinite(value) ? value : fallback; }
 float clampPanel(float value, float limit) noexcept { return std::max(0.0f, std::min(value, std::max(0.0f, limit))); }
+void drawFocusRing(PaintContext& context, const RectF& bounds, const Theme& current, bool focused)
+{
+    if (!focused) return;
+    const float inset = current.controls.focusInset;
+    context.fillRoundRect({bounds.x - inset, bounds.y - inset,
+                           bounds.width + inset * 2.0f, bounds.height + inset * 2.0f},
+                          current.radius.md + inset, current.colors.focus);
+}
 } // namespace
 
 Popup& Popup::content(std::unique_ptr<Node> content) { clearChildren(); if (content) appendChild(std::move(content)); return *this; }
@@ -27,7 +35,7 @@ SizeF Popup::measure(const Constraints& constraints) const
 {
     SizeF desired = preferredSize_;
     if (!children().empty()) {
-        const auto child = children().front()->measure({0.0f, constraints.maxWidth, 0.0f, constraints.maxHeight});
+        const auto child = children().front()->measureWithConstraints({0.0f, constraints.maxWidth, 0.0f, constraints.maxHeight});
         if (desired.width <= 0.0f) desired.width = child.width;
         if (desired.height <= 0.0f) desired.height = child.height;
     }
@@ -155,7 +163,9 @@ SizeF IconButton::measure(const Constraints& constraints) const { const float si
 void IconButton::paint(PaintContext& context)
 {
     const auto& current = theme(); Color background{0, 0, 0, 0};
+    const bool focused = isEnabled() && (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     if (!isEnabled()) background = current.colors.disabled; else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) background = current.colors.surfacePressed; else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) background = current.colors.surfaceHover;
+    drawFocusRing(context, bounds(), current, focused);
     if (background.a != 0) context.fillRoundRect(bounds(), current.radius.md, background);
     if (!icon_.empty()) { const float width = static_cast<float>(icon_.size()) * current.typography.body * 0.56f; context.drawText(icon_, bounds().x + (bounds().width - width) * 0.5f, bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f, current.typography.body, isEnabled() ? current.colors.text : current.colors.textDisabled); }
     clearDirty(DirtyFlag::Paint);

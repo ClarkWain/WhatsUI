@@ -7,6 +7,7 @@ namespace {
 
 using whatsui::todo::TodoActionStatus;
 using whatsui::todo::TodoController;
+using whatsui::todo::TodoFilter;
 using whatsui::todo::TodoInteraction;
 using whatsui::todo::TodoValidationField;
 
@@ -68,6 +69,28 @@ void testDueDateValidationDoesNotOfferUndo()
     expect(interaction.undoPresentation().visible, "Successful due-date update should expose Undo");
 }
 
+void testFilterPresentationAndEditCancellation()
+{
+    TodoController controller;
+    const int activeId = controller.add("Draft Windows search").recordId;
+    const int doneId = controller.add("Ship Windows Todo").recordId;
+    (void)controller.toggle(doneId);
+    TodoInteraction interaction(controller);
+
+    const auto activeSearch = interaction.filtered(TodoFilter::Active, "SEARCH");
+    const auto completed = interaction.filtered(TodoFilter::Completed);
+    expect(activeSearch.size() == 1 && activeSearch.front().id == activeId,
+           "Interaction filtering should preserve the controller's active search result");
+    expect(completed.size() == 1 && completed.front().id == doneId,
+           "Interaction filtering should expose the completed view without changing model order");
+
+    (void)interaction.beginEdit(activeId);
+    interaction.setEditDraft("temporary draft");
+    interaction.cancelEdit();
+    expect(!interaction.editingId() && interaction.editDraft().empty() && !interaction.validation().visible(),
+           "Cancelling an edit must discard only presentation draft and validation state");
+}
+
 } // namespace
 
 int main()
@@ -75,5 +98,6 @@ int main()
     testAddValidationAndUndoPresentation();
     testEditDraftAndInlineDuplicateError();
     testDueDateValidationDoesNotOfferUndo();
+    testFilterPresentationAndEditCancellation();
     return 0;
 }

@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "wui/frame_stats.h"
 #include "wui/types.h"
 
 #ifdef WHATSUI_HAS_WHATSCANVAS
@@ -60,8 +61,24 @@ public:
 #endif
     }
 
+    // Starts a fresh framework paint-command sample. UiWindow calls this once
+    // for every paint pass; standalone renderers can reset/snapshot around
+    // their own subtree paint as well. Counts represent requested operations
+    // at this abstraction, independent of backend batching or availability.
+    void resetPaintStats() noexcept
+    {
+        paintStats_ = {};
+    }
+
+    [[nodiscard]] PaintOperationStats paintStats() const noexcept
+    {
+        return paintStats_;
+    }
+
     void fillRect(const RectF& rect, Color color)
     {
+        ++paintStats_.commandCount;
+        ++paintStats_.fillRectCalls;
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ == nullptr) {
             return;
@@ -78,6 +95,8 @@ public:
 
     void fillRoundRect(const RectF& rect, float radius, Color color)
     {
+        ++paintStats_.commandCount;
+        ++paintStats_.fillRoundRectCalls;
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ == nullptr) {
             return;
@@ -98,6 +117,8 @@ public:
 
     void drawText(const std::string& text, float x, float y, float textSize, Color color)
     {
+        ++paintStats_.commandCount;
+        ++paintStats_.textDrawCalls;
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ == nullptr) {
             return;
@@ -164,6 +185,8 @@ public:
 
     void clipRect(const RectF& rect) noexcept
     {
+        ++paintStats_.commandCount;
+        ++paintStats_.clipRectCalls;
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ != nullptr) {
             canvas_->clipRect(wsc::RectF(rect.x * scaleFactor_, rect.y * scaleFactor_,
@@ -187,6 +210,7 @@ public:
 private:
     float scaleFactor_{1.0f};
     int saveCount_{1};
+    PaintOperationStats paintStats_{};
 
 #ifdef WHATSUI_HAS_WHATSCANVAS
     wsc::Canvas* canvas_{nullptr};

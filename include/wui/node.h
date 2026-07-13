@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "wui/events.h"
@@ -73,6 +74,14 @@ public:
     void setInvalidationHandler(std::function<void()> handler);
 
     [[nodiscard]] virtual SizeF measure(const Constraints& constraints) const = 0;
+    // Layout containers call this instead of measure() when they size a
+    // child. It preserves the exact most-recent constraint envelope for
+    // read-only diagnostics without changing the virtual measurement API.
+    [[nodiscard]] SizeF measureWithConstraints(const Constraints& constraints) const;
+    [[nodiscard]] const std::optional<Constraints>& lastMeasuredConstraints() const noexcept
+    {
+        return lastMeasuredConstraints_;
+    }
     [[nodiscard]] virtual float baselineOffset() const noexcept;
     // Prepare backend resources before beginFrame(). The default implementation
     // walks children so leaf widgets only override when they own resources.
@@ -164,6 +173,7 @@ private:
     float flex_{0.0f};
     bool attached_{false};
     DirtyFlags dirtyFlags_{toMask(DirtyFlag::Layout) | toMask(DirtyFlag::Paint)};
+    mutable std::optional<Constraints> lastMeasuredConstraints_;
 };
 
 class ContainerNode : public Node {

@@ -3,7 +3,9 @@
 #include <string>
 #include <typeinfo>
 
+#include "wui/theme.h"
 #include "wui/ui_inspector.h"
+#include "wui/widgets.h"
 
 namespace {
 
@@ -12,6 +14,11 @@ void expect(bool condition, const std::string& message)
     if (!condition) {
         throw std::runtime_error(message);
     }
+}
+
+bool sameColor(wui::Color left, wui::Color right)
+{
+    return left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a;
 }
 
 class InspectLeaf final : public wui::Node {
@@ -107,11 +114,76 @@ void testHitPathAndDirtySummary()
            "Dirty summary must count each pending flag and report repaint work");
 }
 
+void testMeasuredConstraintsAndResolvedStyle()
+{
+    wui::Column root;
+    auto button = std::make_unique<wui::Button>("Save");
+    button->setVariant(wui::ButtonVariant::Ghost);
+    button->setVisualState(wui::ControlVisualState::Hovered, true);
+    root.appendChild(std::move(button));
+    root.layout({0.0f, 0.0f, 180.0f, 60.0f});
+
+    const auto snapshot = wui::inspectUiTree(root);
+    expect(snapshot.size() == 2 && snapshot[1].measuredConstraints,
+           "Framework layout measurement must record an honest child constraint envelope");
+    expect(snapshot[1].measuredConstraints->maxWidth == 180.0f,
+           "Recorded child constraints must preserve the layout container width");
+    expect(snapshot[1].resolvedStyle && snapshot[1].resolvedStyle->role == "Button",
+           "Supported Fluent controls must expose a resolved style role");
+    expect(snapshot[1].resolvedStyle->background && sameColor(*snapshot[1].resolvedStyle->background, wui::theme().colors.surfaceHover),
+           "Resolved ghost button style must apply the live hovered theme token");
+    expect(snapshot[1].resolvedStyle->border && sameColor(*snapshot[1].resolvedStyle->border, wui::theme().colors.border),
+           "Resolved ghost button style must include its Fluent border token");
+}
+
+void testRepaintOverlayRetainsIndependentParentAndChildDirtyRegions()
+{
+    wui::UiInspectorSnapshot snapshot;
+    snapshot.push_back({{}, 0, "Root", {0.0f, 0.0f, 100.0f, 50.0f}, std::nullopt,
+                        wui::toMask(wui::DirtyFlag::Layout), std::nullopt, 1, std::nullopt});
+    snapshot.push_back({{0}, 1, "Child", {10.0f, 10.0f, 20.0f, 20.0f}, std::nullopt,
+                        wui::toMask(wui::DirtyFlag::Paint), std::nullopt, 0, std::nullopt});
+
+    const auto overlay = wui::buildUiRepaintOverlayModel(snapshot);
+    expect(overlay.regions.size() == 2 && overlay.regions[0].path.empty() &&
+               overlay.regions[1].path == std::vector<std::size_t>{0},
+           "A conservative repaint overlay must retain parent and child dirty regions independently");
+    expect(overlay.unionBounds && overlay.unionBounds->x == 0.0f && overlay.unionBounds->y == 0.0f &&
+               overlay.unionBounds->width == 100.0f && overlay.unionBounds->height == 50.0f,
+           "Repaint overlay union must include every retained independent dirty region");
+    expect((overlay.regions[0].dirtyFlags & wui::toMask(wui::DirtyFlag::Layout)) != 0 &&
+               (overlay.regions[1].dirtyFlags & wui::toMask(wui::DirtyFlag::Paint)) != 0,
+           "Repaint overlay must preserve each region's dirty reason");
+}
+
+void testRepaintOverlayScalesLinearlyWithLargeFlatSnapshot()
+{
+    // No timing assertion is used: the data shape itself makes a quadratic
+    // descendant scan impractical while keeping this deterministic test about
+    // output completeness, not the speed of the current machine.
+    constexpr std::size_t kEntries = 10000;
+    wui::UiInspectorSnapshot snapshot;
+    snapshot.reserve(kEntries);
+    for (std::size_t index = 0; index < kEntries; ++index) {
+        snapshot.push_back({{index}, 1, "Leaf", {static_cast<float>(index), 0.0f, 1.0f, 1.0f},
+                            std::nullopt, wui::toMask(wui::DirtyFlag::Paint), std::nullopt, 0, std::nullopt});
+    }
+    const auto overlay = wui::buildUiRepaintOverlayModel(snapshot);
+    expect(overlay.regions.size() == kEntries && overlay.regions.front().path == std::vector<std::size_t>{0} &&
+               overlay.regions.back().path == std::vector<std::size_t>{kEntries - 1},
+           "Large flat snapshots must retain every dirty region in stable traversal order");
+    expect(overlay.unionBounds && overlay.unionBounds->x == 0.0f && overlay.unionBounds->width == static_cast<float>(kEntries),
+           "Large flat snapshot union must be accumulated in one pass");
+}
+
 } // namespace
 
 int main()
 {
     testPreorderAndControlMetadata();
     testHitPathAndDirtySummary();
+    testMeasuredConstraintsAndResolvedStyle();
+    testRepaintOverlayRetainsIndependentParentAndChildDirtyRegions();
+    testRepaintOverlayScalesLinearlyWithLargeFlatSnapshot();
     return 0;
 }

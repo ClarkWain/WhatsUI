@@ -29,6 +29,12 @@ float Node::baselineOffset() const noexcept
     return -1.0f;
 }
 
+SizeF Node::measureWithConstraints(const Constraints& constraints) const
+{
+    lastMeasuredConstraints_ = constraints;
+    return measure(constraints);
+}
+
 void Node::appendChild(std::unique_ptr<Node> child)
 {
     if (!child) {

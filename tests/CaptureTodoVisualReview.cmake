@@ -24,9 +24,9 @@ set(review_pixel_sizes 720x1440 1280x1440 2360x1520)
 # scene at every responsive breakpoint.  A valid-size PPM alone cannot catch
 # a leaked backend clip that reduces labels to glyph fragments.
 set(review_final_hashes
-    "dad6a0c73abcb4fd8e159f43b263ee0a3ab6327dddedc44b8f5ec556325f746c"
-    "9ed83d863b98ae2c0da8c759d525822a6a59ab82976315a3e1c3bf9f87061417"
-    "52b6e8c8a3d795b601db6f5cfad480e8d7331c0e2f0919ba634b8d7bcc07f228")
+    "3b0126eaa6b6a9c83c7545d2dd78c2c3de06e064ea0f5cfcb2843ec4a919faa3"
+    "4de074b1858febf7d972e05056447dbb1556a7e9da651a96a30c8f80a9eb7eec"
+    "1ccc94d0f5241b9ab0e20e35b95430ce24b0ba57f58afbbc5f6a0506eeeda04b")
 
 file(REMOVE_RECURSE "${WHATSUI_TODO_REVIEW_OUTPUT_DIR}")
 

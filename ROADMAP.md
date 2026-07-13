@@ -73,28 +73,35 @@ all be true.
 ### M4 — Performance and Inspector (`v0.5-performance-preview`)
 
 - [x] Keyed virtual ListView and item reuse.
-- [ ] Frame/layout/paint/dirty/draw-call/text-cache instrumentation.
+- [x] Frame/layout/paint/dirty instrumentation, with backend draw-call and
+  text-cache counters reported as available only when the renderer can measure
+  them.
 - [x] UiInspector snapshot: node tree, final rect, dirty flags, hit path, and
   repaint summary.
-- [ ] Inspector constraints, resolved style values, and repaint-region overlays.
+- [x] Inspector constraints, resolved style values for built-in Fluent controls,
+  and conservative repaint-region overlays.
 - [x] Benchmarks: 1,000 controls, 100,000-row logical list, 10,000 text nodes,
   mutation storm, and overlay stress.
 
-### M5 — Stable Windows 1.0
+### M5 — Windows 1.0 release groundwork
 
-- [x] Stable source API policy, documented no-ABI guarantee before 1.0, then
-  explicit compatibility policy.
+- [x] Pre-1.0 source API policy documenting the no-ABI-guarantee preview
+  contract.
+- [ ] 1.0 source/ABI compatibility policy, deprecation policy, and release
+  owner approval. These are release-candidate gates, not preview claims.
 - [x] Windows package exports for core + WhatsCanvas/GLFW path and clean
   external consumer smoke.
-- [x] Release legal metadata (MIT LICENSE/NOTICE), changelog, and release
-  archive hashes.
+- [x] Release groundwork: first-party MIT LICENSE/NOTICE, changelog, and
+  reproducible archive-hash rehearsal.
 - [x] Windows support matrix, known limitations, upgrade guide, and contributor
   documentation.
 - [x] Three maintained reference applications: Todo, Settings, and Debug
   Inspector.
+- [ ] Release-candidate approval: tagged clean checkout, native application and
+  IME/DPI matrix, artifact review, and third-party legal/SBOM sign-off. These
+  are deliberately kept outside automated completion claims.
 
 ## Current active focus
 
-The immediate sequence is M4 performance/inspector work, followed by the
-Windows release contract. New components must
-not bypass the runtime, input, and Windows text contracts.
+The remaining release work is release-candidate validation and owner approval.
+New components must not bypass the runtime, input, and Windows text contracts.

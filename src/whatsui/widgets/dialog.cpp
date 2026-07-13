@@ -40,7 +40,7 @@ void Dialog::layout(const RectF& bounds)
         const float availableWidth = std::max(0.0f, bounds.width - horizontalMargin * 2.0f);
         const float availableHeight = std::max(0.0f, bounds.height - verticalMargin * 2.0f);
         const float width = std::min(availableWidth, maxWidth_);
-        auto size = children().front()->measure({0.0f, width, 0.0f, availableHeight});
+        auto size = children().front()->measureWithConstraints({0.0f, width, 0.0f, availableHeight});
         size.width = std::min(size.width, width);
         size.height = std::min(size.height, availableHeight);
         children().front()->layout({bounds.x + (bounds.width - size.width) * 0.5f,

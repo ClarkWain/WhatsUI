@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "wui/virtual_list.h"
+#include "wui/runtime.h"
 
 namespace {
 
@@ -12,7 +13,7 @@ void expect(bool condition, const std::string& message)
     if (!condition) throw std::runtime_error(message);
 }
 
-class ProbeRow final : public wui::Node {
+class ProbeRow : public wui::Node {
 public:
     explicit ProbeRow(std::string key) : key(std::move(key)) {}
 
@@ -20,6 +21,26 @@ public:
     void paint(wui::PaintContext&) override {}
 
     std::string key;
+};
+
+class ReentrantDetachRow final : public ProbeRow {
+public:
+    ReentrantDetachRow(std::string key, wui::VirtualList* owner, int* detached)
+        : ProbeRow(std::move(key)), owner_(owner), detached_(detached) {}
+
+protected:
+    void onDetach() noexcept override
+    {
+        ++*detached_;
+        // This is representative of a row releasing a subscription that asks
+        // its view to refresh. The list must defer it until the current
+        // unmount pass has no stale mounted indices left.
+        owner_->refresh();
+    }
+
+private:
+    wui::VirtualList* owner_{nullptr};
+    int* detached_{nullptr};
 };
 
 void configureList(wui::VirtualList& list, std::vector<std::string>& keys)
@@ -98,6 +119,53 @@ void testPointerAndKeyboardSelectionScrollIntoView()
            "Home should restore the first row and its viewport position");
 }
 
+void testRecyclePoolSurvivesHighChurnAndDestruction()
+{
+    std::vector<std::string> keys;
+    for (int index = 0; index < 512; ++index) keys.push_back("key-" + std::to_string(index));
+    {
+        wui::VirtualList list;
+        configureList(list, keys);
+        for (int iteration = 0; iteration < 2000; ++iteration) {
+            const int logicalRow = (iteration * 37) % static_cast<int>(keys.size());
+            list.setScrollOffset(static_cast<float>(logicalRow * 36));
+            if (iteration % 17 == 0) {
+                // Refresh is the normal model-notification path: all keys are
+                // stable, but the active window is repeatedly reconciled.
+                list.refresh();
+            }
+            expect(list.mountedCount() <= 9 && list.pooledCount() <= 18,
+                   "Virtual list recycling must stay bounded during high-churn scroll reconciliation");
+        }
+    }
+    // Scope exit destroys a populated recycler pool. This is intentionally a
+    // sanitizer regression: ASan must observe every unique_ptr exactly once.
+}
+
+void testDetachRefreshIsDeferredUntilUnmountPassCompletes()
+{
+    std::vector<std::string> keys;
+    for (int index = 0; index < 80; ++index) keys.push_back("reentrant-" + std::to_string(index));
+    int detached = 0;
+    auto list = std::make_unique<wui::VirtualList>();
+    auto* raw = list.get();
+    raw->setKeyProvider([&keys](wui::VirtualList::Index index) { return keys[index]; });
+    raw->setItemBuilder([raw, &detached](wui::VirtualList::Index, const std::string& key) {
+        return std::make_unique<ReentrantDetachRow>(key, raw, &detached);
+    });
+    raw->setItemCount(keys.size());
+
+    wui::UiRoot root;
+    root.setContent(std::move(list));
+    root.layout({0.0f, 0.0f, 240.0f, 180.0f});
+    for (int iteration = 0; iteration < 120; ++iteration) {
+        raw->setScrollOffset(static_cast<float>(((iteration * 19) % 70) * 36));
+        expect(raw->mountedCount() <= 9 && raw->pooledCount() <= 18,
+               "Detach-triggered refresh must converge without stale mounted indices or unbounded reuse");
+    }
+    expect(detached > 0, "Reentry regression must actually detach rows from an attached tree");
+}
+
 } // namespace
 
 int main()
@@ -105,5 +173,7 @@ int main()
     testLargeLogicalModelKeepsMountedRowsBounded();
     testStableKeysPreserveMountedIdentityAfterInsertion();
     testPointerAndKeyboardSelectionScrollIntoView();
+    testRecyclePoolSurvivesHighChurnAndDestruction();
+    testDetachRefreshIsDeferredUntilUnmountPassCompletes();
     return 0;
 }

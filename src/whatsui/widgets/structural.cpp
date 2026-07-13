@@ -41,7 +41,7 @@ SizeF IfNode::measure(const Constraints& constraints) const
     if (childNodes.empty()) {
         return constraints.clamp({0.0f, 0.0f});
     }
-    return constraints.clamp(childNodes.front()->measure(constraints));
+    return constraints.clamp(childNodes.front()->measureWithConstraints(constraints));
 }
 
 void IfNode::layout(const RectF& bounds)
@@ -131,7 +131,7 @@ SizeF ForEachNode::measure(const Constraints& constraints) const
     float crossSize = 0.0f;
 
     for (std::size_t i = 0; i < childNodes.size(); ++i) {
-        const auto childSize = childNodes[i]->measure(constraints);
+        const auto childSize = childNodes[i]->measureWithConstraints(constraints);
         if (direction_ == ForEachDirection::Vertical) {
             mainSize += childSize.height;
             crossSize = std::max(crossSize, childSize.width);
@@ -168,7 +168,7 @@ void ForEachNode::layout(const RectF& bounds)
             if (childNodes[i]->flex() > 0.0f) {
                 totalFlex += childNodes[i]->flex();
             } else {
-                sizes[i] = childNodes[i]->measure(loose);
+                sizes[i] = childNodes[i]->measureWithConstraints(loose);
                 fixedHeight += sizes[i].height;
             }
             if (i + 1 < childNodes.size()) {
@@ -183,7 +183,7 @@ void ForEachNode::layout(const RectF& bounds)
             SizeF childSize = sizes[i];
             if (child->flex() > 0.0f) {
                 const float allocated = totalFlex > 0.0f ? remaining * (child->flex() / totalFlex) : 0.0f;
-                childSize = child->measure(Constraints{0.0f, innerWidth, 0.0f, allocated});
+                childSize = child->measureWithConstraints(Constraints{0.0f, innerWidth, 0.0f, allocated});
                 childSize.height = allocated;
             }
             float childX = bounds.x + padding_.left;
@@ -213,7 +213,7 @@ void ForEachNode::layout(const RectF& bounds)
             if (childNodes[i]->flex() > 0.0f) {
                 totalFlex += childNodes[i]->flex();
             } else {
-                sizes[i] = childNodes[i]->measure(loose);
+                sizes[i] = childNodes[i]->measureWithConstraints(loose);
                 fixedWidth += sizes[i].width;
             }
             if (i + 1 < childNodes.size()) {
@@ -228,7 +228,7 @@ void ForEachNode::layout(const RectF& bounds)
             SizeF childSize = sizes[i];
             if (child->flex() > 0.0f) {
                 const float allocated = totalFlex > 0.0f ? remaining * (child->flex() / totalFlex) : 0.0f;
-                childSize = child->measure(Constraints{0.0f, allocated, 0.0f, innerHeight});
+                childSize = child->measureWithConstraints(Constraints{0.0f, allocated, 0.0f, innerHeight});
                 childSize.width = allocated;
             }
             float childY = bounds.y + padding_.top;

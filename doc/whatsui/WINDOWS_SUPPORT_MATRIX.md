@@ -11,7 +11,7 @@ is verified in the source tree and what still requires a release gate.
 | Language and build system | C++17 with CMake 3.20 or newer. The CI Windows job uses the Visual Studio/MSVC generator supplied by `windows-latest`. | Configure, Debug build, and CTest in CI. | Exact MSVC toolset/CRT compatibility is not yet a 1.0 promise. Rebuild consumers with the same WhatsUI source/release. |
 | Core runtime | Headless `WhatsUI::WhatsUI`, with `WHATSUI_WITH_WHATSCANVAS=OFF`. | Unit, layout, state, window, lifecycle, component, virtual-list, inspector, benchmark, and storage tests. | This path has no platform window backend or renderer. It is a runtime/developer-preview package, not an end-user GUI by itself. |
 | Deterministic rendering | WhatsCanvas Software backend with `WHATSUI_WITH_WHATSCANVAS=ON`. | Text, composition, Todo, and Settings Software captures; Todo visual hash and responsive-review tests. | A matching visual result is not proof of native window, GPU, screen-reader, or IME candidate-window behavior. |
-| Interactive desktop host | WhatsUI GLFW host + WhatsCanvas OpenGL. | Todo, Settings, Command Palette, and Hello Window reference targets. | It is the Windows reference host. Direct Win32, WinUI, Qt, and other host integrations are not supplied. |
+| Interactive desktop host | WhatsUI GLFW host + WhatsCanvas OpenGL. | Todo, Settings, Command Palette, and Hello Window reference targets; an external package consumer links the installed `WhatsUI::Glfw` target on Windows/MSVC. | The package smoke is link/run coverage without opening a native window. Direct Win32, WinUI, Qt, and other host integrations are not supplied. |
 | Sanitizers | MSVC AddressSanitizer for the headless runtime. | `WHATSUI_ENABLE_SANITIZERS=ON` CI job. | MSVC does not supply UBSan; third-party WhatsCanvas integration is outside this sanitizer gate. |
 
 The Linux/Clang ASan+UBSan job is a portability/memory-safety check for the
@@ -50,20 +50,18 @@ promise Narrator/screen-reader support. Applications must not describe the
 current preview as screen-reader accessible until a Windows accessibility
 bridge and its manual validation matrix are delivered.
 
-## Package and export limitation
+## Package/export status and limitation
 
-The install/export path currently supports the headless core only. When
-`WHATSUI_WITH_WHATSCANVAS=ON`, CMake explicitly warns that install/export is
-unavailable because WhatsCanvas/GLFW are consumed as in-tree subprojects.
+The Windows static export path supports the core, WhatsCanvas Software/OpenGL,
+the bundled advanced-text dependencies used by the selected build, GLFW, and
+`WhatsUI::Glfw`. A fresh Windows/MSVC external consumer has been verified with
+`find_package(WhatsUI)` and the installed GLFW target.
 
-Therefore the following M5 deliverable is **unimplemented**:
-
-- a clean Windows package export that includes the WhatsCanvas Software/OpenGL
-  and GLFW integration, plus an external consumer smoke test of that path.
-
-Use a source checkout with initialized submodules for interactive Windows
-applications. Do not present the headless developer-preview package as a
-redistributable GLFW/WhatsCanvas SDK.
+This remains preview engineering evidence, not a redistributable release
+claim. The current package verification does not launch a native window, test
+GPU drivers, sign binaries, create a release archive, or complete third-party
+attribution/legal review. Consumers using another compiler, CRT, architecture,
+or package manager must validate their own configuration.
 
 ## Windows commands
 

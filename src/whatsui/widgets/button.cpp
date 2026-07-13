@@ -5,6 +5,18 @@
 #include "wui/theme.h"
 
 namespace wui {
+namespace {
+
+void drawFocusRing(PaintContext& context, const RectF& bounds, const Theme& current, bool focused)
+{
+    if (!focused) return;
+    const float inset = current.controls.focusInset;
+    context.fillRoundRect({bounds.x - inset, bounds.y - inset,
+                           bounds.width + inset * 2.0f, bounds.height + inset * 2.0f},
+                          current.radius.md + inset, current.colors.focus);
+}
+
+} // namespace
 
 Button::Button(std::string label)
     : label_(std::move(label))
@@ -71,6 +83,7 @@ void Button::paint(PaintContext& context)
     }
     const bool ghost = variant_ == ButtonVariant::Ghost;
     const bool disabled = !isEnabled();
+    const bool focused = !disabled && (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     if (disabled) {
         background = current.colors.disabled;
         foreground = current.colors.textDisabled;
@@ -81,6 +94,7 @@ void Button::paint(PaintContext& context)
     }
     // A two-pass rounded rectangle provides a crisp one-pixel Fluent-style
     // stroke without exposing backend-specific stroke APIs.
+    drawFocusRing(context, bounds(), current, focused);
     if (ghost && !disabled) context.fillRoundRect(bounds(), current.radius.md, current.colors.border);
     context.fillRoundRect(bounds(), current.radius.md, background);
     if (!label_.empty()) {
@@ -177,6 +191,7 @@ void Checkbox::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const bool enabled = isEnabled();
+    const bool focused = enabled && (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     Color box = isChecked() ? current.colors.accent : current.colors.surface;
     Color border = isChecked() ? current.colors.accent : current.colors.borderStrong;
     Color text = current.colors.text;
@@ -191,6 +206,7 @@ void Checkbox::paint(PaintContext& context)
     }
     const float indicatorSize = current.controls.checkboxSize;
     const RectF indicator{bounds().x, bounds().y + (bounds().height - indicatorSize) / 2.0f, indicatorSize, indicatorSize};
+    drawFocusRing(context, bounds(), current, focused);
     context.fillRoundRect(indicator, current.radius.sm, border);
     context.fillRoundRect({indicator.x + 1.0f, indicator.y + 1.0f, indicatorSize - 2.0f, indicatorSize - 2.0f}, current.radius.sm, box);
     if (isChecked()) {

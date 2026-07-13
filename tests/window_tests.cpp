@@ -171,6 +171,39 @@ public:
     }
 };
 
+class DestructionProbeButton final : public wui::Button {
+public:
+    explicit DestructionProbeButton(int& destructions)
+        : wui::Button("ownership probe")
+        , destructions_(destructions)
+    {
+    }
+
+    ~DestructionProbeButton() override
+    {
+        ++destructions_;
+    }
+
+private:
+    int& destructions_;
+};
+
+void testButtonPolymorphicOwnershipDestroysDynamicType()
+{
+    int destructions = 0;
+    {
+        // Widgets are deliberately stored in retained trees as Node. This
+        // direct ownership conversion is the exact deletion path exercised
+        // by roots, overlays and declarative builders; ASan must therefore
+        // see the derived allocation and virtual deleting destructor agree.
+        std::unique_ptr<wui::Node> retained = std::make_unique<DestructionProbeButton>(destructions);
+        expect(dynamic_cast<wui::Button*>(retained.get()) != nullptr,
+               "Retained base ownership must preserve the concrete Button type");
+    }
+    expect(destructions == 1,
+           "Destroying a Button through Node ownership must run its dynamic destructor exactly once");
+}
+
 void testPointerCaptureCancelsForWindowOverlayAndDetach()
 {
     wui::UiApp app(std::make_unique<FakeHost>());
@@ -512,6 +545,7 @@ int main()
 {
     try {
         testWindowRoutesTopOverlayAndRequestsRedraw();
+        testButtonPolymorphicOwnershipDestroysDynamicType();
         testPointerCaptureCancelsForWindowOverlayAndDetach();
         testWindowCoordinatesTextInputSession();
         testHighDpiImeCaretCompositionAndClipboardContract();

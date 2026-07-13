@@ -66,7 +66,7 @@ SizeF Container::measure(const Constraints& constraints) const
     const Constraints innerConstraints = constraints.deflate(padding_);
     SizeF content{};
     for (const auto& child : children()) {
-        const auto childSize = child->measure(innerConstraints);
+        const auto childSize = child->measureWithConstraints(innerConstraints);
         content.width = std::max(content.width, childSize.width);
         content.height = std::max(content.height, childSize.height);
     }
@@ -88,7 +88,7 @@ void Container::layout(const RectF& bounds)
                               std::max(0.0f, bounds.width - padding_.horizontal()),
                               std::max(0.0f, bounds.height - padding_.vertical())};
     for (const auto& child : children()) {
-        SizeF childSize = child->measure({0.0f, contentBounds.width, 0.0f, contentBounds.height});
+        SizeF childSize = child->measureWithConstraints({0.0f, contentBounds.width, 0.0f, contentBounds.height});
         float childX = contentBounds.x;
         float childY = contentBounds.y;
         switch (horizontalAlignment_) {
@@ -188,7 +188,7 @@ SizeF Row::measure(const Constraints& constraints) const
     for (std::size_t index = 0; index < childNodes.size(); ++index) {
         const float usedGaps = gap_ * static_cast<float>(childNodes.size() > 0 ? childNodes.size() - 1 : 0);
         const float remainingWidth = std::max(0.0f, inner.maxWidth - width - usedGaps);
-        const auto childSize = childNodes[index]->measure({0.0f, remainingWidth, 0.0f, inner.maxHeight});
+        const auto childSize = childNodes[index]->measureWithConstraints({0.0f, remainingWidth, 0.0f, inner.maxHeight});
         width += childSize.width;
         height = std::max(height, childSize.height);
         if (align_ == Alignment::Baseline) {
@@ -229,7 +229,7 @@ void Row::layout(const RectF& bounds)
         if (childNodes[i]->flex() > 0.0f) {
             totalFlex += childNodes[i]->flex();
         } else {
-            sizes[i] = childNodes[i]->measure(loose);
+            sizes[i] = childNodes[i]->measureWithConstraints(loose);
             fixedWidth += sizes[i].width;
         }
         if (i + 1 < childNodes.size()) {
@@ -254,7 +254,7 @@ void Row::layout(const RectF& bounds)
         SizeF childSize = sizes[i];
         if (child->flex() > 0.0f) {
             const float allocated = totalFlex > 0.0f ? remaining * (child->flex() / totalFlex) : 0.0f;
-            childSize = child->measure(Constraints{0.0f, allocated, 0.0f, innerHeight});
+            childSize = child->measureWithConstraints(Constraints{0.0f, allocated, 0.0f, innerHeight});
             childSize.width = allocated;
         }
         float childY = bounds.y + padding_.top;
@@ -353,7 +353,7 @@ SizeF Column::measure(const Constraints& constraints) const
     const auto& childNodes = children();
     for (std::size_t index = 0; index < childNodes.size(); ++index) {
         const float remainingHeight = std::max(0.0f, inner.maxHeight - height);
-        const auto childSize = childNodes[index]->measure({0.0f, inner.maxWidth, 0.0f, remainingHeight});
+        const auto childSize = childNodes[index]->measureWithConstraints({0.0f, inner.maxWidth, 0.0f, remainingHeight});
         width = std::max(width, childSize.width);
         height += childSize.height;
         if (index + 1 < childNodes.size()) {
@@ -381,7 +381,7 @@ void Column::layout(const RectF& bounds)
         if (childNodes[i]->flex() > 0.0f) {
             totalFlex += childNodes[i]->flex();
         } else {
-            sizes[i] = childNodes[i]->measure(loose);
+            sizes[i] = childNodes[i]->measureWithConstraints(loose);
             fixedHeight += sizes[i].height;
         }
         if (i + 1 < childNodes.size()) {
@@ -397,7 +397,7 @@ void Column::layout(const RectF& bounds)
         SizeF childSize = sizes[i];
         if (child->flex() > 0.0f) {
             const float allocated = totalFlex > 0.0f ? remaining * (child->flex() / totalFlex) : 0.0f;
-            childSize = child->measure(Constraints{0.0f, innerWidth, 0.0f, allocated});
+            childSize = child->measureWithConstraints(Constraints{0.0f, innerWidth, 0.0f, allocated});
             childSize.height = allocated;
         }
         float childX = bounds.x + padding_.left;

@@ -725,6 +725,36 @@ void testTextInputRouting()
     expect(input->model().text() == "a", "TextInput backspace should delete one character");
 }
 
+void testFocusedControlsPaintAFluentFocusRing()
+{
+    auto focusedRoundRectCount = [](wui::Node& node) {
+        wui::PaintContext context;
+        node.paint(context);
+        return context.paintStats().fillRoundRectCalls;
+    };
+
+    wui::Button button("Save");
+    button.layout({10.0f, 10.0f, 80.0f, 32.0f});
+    const auto buttonRest = focusedRoundRectCount(button);
+    button.setVisualState(wui::ControlVisualState::Focused, true);
+    expect(focusedRoundRectCount(button) == buttonRest + 1,
+           "Focused Button must paint one additional Fluent focus ring");
+
+    wui::Checkbox checkbox("Complete");
+    checkbox.layout({10.0f, 10.0f, 120.0f, 24.0f});
+    const auto checkboxRest = focusedRoundRectCount(checkbox);
+    checkbox.setVisualState(wui::ControlVisualState::Focused, true);
+    expect(focusedRoundRectCount(checkbox) == checkboxRest + 1,
+           "Focused Checkbox must paint one additional Fluent focus ring");
+
+    wui::IconButton icon(".", "More actions");
+    icon.layout({10.0f, 10.0f, 32.0f, 32.0f});
+    const auto iconRest = focusedRoundRectCount(icon);
+    icon.setVisualState(wui::ControlVisualState::Focused, true);
+    expect(focusedRoundRectCount(icon) == iconRest + 1,
+           "Focused IconButton must paint one additional Fluent focus ring");
+}
+
 void testKeyboardFocusTraversalAndControlActivation()
 {
     auto root = std::make_unique<wui::Column>();
@@ -805,6 +835,7 @@ int main()
     testAnimationUsesElapsedTime();
     testLayoutFlexAndAlign();
     testTextInputRouting();
+    testFocusedControlsPaintAFluentFocusRing();
     testKeyboardFocusTraversalAndControlActivation();
     } catch (const std::exception& error) {
         std::fprintf(stderr, "WhatsUISmokeTests failed: %s\\n", error.what());

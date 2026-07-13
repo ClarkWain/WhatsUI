@@ -27,6 +27,24 @@ bool isWordCharacter(char character) noexcept
 
 constexpr std::size_t kMaximumUndoEntries = 100;
 
+[[nodiscard]] RectF textViewport(const RectF& bounds, const Theme& current, bool focused) noexcept
+{
+    const float borderInset = focused ? current.controls.focusWidth : 1.0f;
+    const float horizontalPadding = current.controls.horizontalPadding;
+    return {bounds.x + horizontalPadding, bounds.y + borderInset,
+            std::max(0.0f, bounds.width - horizontalPadding * 2.0f),
+            std::max(0.0f, bounds.height - borderInset * 2.0f)};
+}
+
+// This is a single-line field. Keep the active caret inside the viewport so
+// long text remains editable without leaking into neighbouring controls.
+[[nodiscard]] float horizontalTextOffset(std::size_t caret, float characterWidth,
+                                         float viewportWidth) noexcept
+{
+    if (viewportWidth <= 1.0f) return static_cast<float>(caret) * characterWidth;
+    return std::max(0.0f, static_cast<float>(caret) * characterWidth - (viewportWidth - 1.0f));
+}
+
 } // namespace
 
 const EditingValue& TextEditingController::value() const noexcept
@@ -364,11 +382,13 @@ void TextInput::syncSession(TextInputSession& session, const RectF& caretRect) c
 
 RectF TextInput::caretRect() const noexcept
 {
-    const float kHorizontalPadding = theme().controls.horizontalPadding;
-    const float kCharacterWidth = theme().typography.body * 0.56f;
-    const auto caret = static_cast<float>(controller_.selection().end);
-    return {bounds().x + kHorizontalPadding + caret * kCharacterWidth,
-            bounds().y + 6.0f, 1.0f, std::max(1.0f, bounds().height - 12.0f)};
+    const auto& current = theme();
+    const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
+    const RectF viewport = textViewport(bounds(), current, focused);
+    const float characterWidth = current.typography.body * 0.56f;
+    const float offset = horizontalTextOffset(controller_.selection().end, characterWidth, viewport.width);
+    return {viewport.x + static_cast<float>(controller_.selection().end) * characterWidth - offset,
+            viewport.y, 1.0f, std::max(1.0f, viewport.height)};
 }
 
 SizeF TextInput::measure(const Constraints& constraints) const
@@ -393,6 +413,11 @@ void TextInput::paint(PaintContext& context)
     const float characterWidth = current.typography.body * 0.56f;
     const auto selection = controller_.selection();
     const auto composition = controller_.composition();
+    const RectF viewport = textViewport(bounds(), current, focused);
+    const float horizontalOffset = showPlaceholder ? 0.0f
+        : horizontalTextOffset(selection.end, characterWidth, viewport.width);
+    const int checkpoint = context.save();
+    context.clipRect(viewport);
     // Win32 pre-edit text carries a selection covering its composition span.
     // That is editing state, not a user selection: rendering it with the
     // normal translucent selection fill makes active IME input look selected
@@ -403,20 +428,18 @@ void TextInput::paint(PaintContext& context)
         && selection.start == composition.start
         && selection.end == composition.end;
     if (focused && !selection.empty() && !selectionIsComposition) {
-        const float selectionX = bounds().x + current.controls.horizontalPadding + static_cast<float>(selection.start) * characterWidth;
+        const float selectionX = viewport.x + static_cast<float>(selection.start) * characterWidth - horizontalOffset;
         const float selectionWidth = static_cast<float>(selection.end - selection.start) * characterWidth;
         const auto selectionColor = Color{current.colors.focus.r, current.colors.focus.g, current.colors.focus.b, 72};
-        context.fillRect({selectionX, bounds().y + current.controls.focusInset,
-                          selectionWidth, std::max(0.0f, bounds().height - current.controls.focusInset * 2.0f)}, selectionColor);
+        context.fillRect({selectionX, viewport.y, selectionWidth, viewport.height}, selectionColor);
     }
     if (!text.empty()) {
-        context.drawText(text, bounds().x + current.controls.horizontalPadding,
+        context.drawText(text, viewport.x - horizontalOffset,
             bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f, current.typography.body,
             showPlaceholder ? current.colors.textMuted : current.colors.text);
     }
     if (focused && !composition.empty()) {
-        const float compositionX = bounds().x + current.controls.horizontalPadding
-            + static_cast<float>(composition.start) * characterWidth;
+        const float compositionX = viewport.x + static_cast<float>(composition.start) * characterWidth - horizontalOffset;
         const float compositionWidth = static_cast<float>(composition.end - composition.start) * characterWidth;
         const float baseline = bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f;
         // Keep the marker close to the glyph baseline (rather than at the
@@ -426,17 +449,20 @@ void TextInput::paint(PaintContext& context)
                           std::max(1.0f, compositionWidth), 1.0f}, current.colors.focus);
     }
     if (focused && selection.empty()) {
-        const float caretX = bounds().x + current.controls.horizontalPadding + static_cast<float>(selection.end) * characterWidth;
-        context.fillRect({caretX, bounds().y + current.controls.focusInset, 1.0f,
-                          std::max(1.0f, bounds().height - current.controls.focusInset * 2.0f)}, current.colors.focus);
+        const float caretX = viewport.x + static_cast<float>(selection.end) * characterWidth - horizontalOffset;
+        context.fillRect({caretX, viewport.y, 1.0f, std::max(1.0f, viewport.height)}, current.colors.focus);
     }
+    context.restoreTo(checkpoint);
     clearDirty(DirtyFlag::Paint);
 }
 
 std::size_t TextInput::caretAt(PointF point) const noexcept
 {
     const float characterWidth = theme().typography.body * 0.56f;
-    const float localX = std::max(0.0f, point.x - bounds().x - theme().controls.horizontalPadding);
+    const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
+    const RectF viewport = textViewport(bounds(), theme(), focused);
+    const float offset = horizontalTextOffset(controller_.selection().end, characterWidth, viewport.width);
+    const float localX = std::max(0.0f, point.x - viewport.x + offset);
     const auto index = static_cast<std::size_t>(localX / std::max(1.0f, characterWidth) + 0.5f);
     return std::min(index, controller_.text().size());
 }

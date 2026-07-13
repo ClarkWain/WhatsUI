@@ -61,6 +61,17 @@ bool hasColorInRect(const std::vector<unsigned char>& pixels, int left, int top,
     return false;
 }
 
+bool isTransparentInRect(const std::vector<unsigned char>& pixels, int left, int top, int right, int bottom)
+{
+    for (int y = top; y < bottom; ++y) {
+        for (int x = left; x < right; ++x) {
+            const auto offset = static_cast<std::size_t>((y * kWidth + x) * 4);
+            if (offset + 3 < pixels.size() && pixels[offset + 3] != 0) return false;
+        }
+    }
+    return true;
+}
+
 void testCompositionUsesUnderlineAndClearsOnEnd()
 {
     wui::TextInput input;
@@ -103,12 +114,35 @@ void testCompositionUsesUnderlineAndClearsOnEnd()
            "Ended composition must not leave a selection-style pre-edit highlight behind");
 }
 
+void testLongTextClipsAndKeepsCaretVisible()
+{
+    wui::TextInput input;
+    input.text("A long task title that must stay inside this compact field");
+    input.layout({4.0f, 4.0f, 72.0f, 32.0f});
+    input.setVisualState(wui::ControlVisualState::Focused, true);
+    input.controller().moveToEnd();
+
+    const auto pixels = render(input);
+    // The control ends at x=76. Any text/caret escaping its clipped inner
+    // viewport would leave non-transparent pixels in this untouched canvas.
+    expect(isTransparentInRect(pixels, 76, 4, kWidth, 36),
+           "Long TextInput content must not paint beyond its outer bounds");
+    const auto& colors = wui::theme().colors;
+    expect(hasColorInRect(pixels, 56, 6, 65, 34, colors.focus),
+           "Long TextInput must horizontally reveal the active caret near the viewport edge");
+
+    const auto caret = input.caretRect();
+    expect(caret.x >= 16.0f && caret.x <= 64.0f,
+           "IME caret rectangle must use the same clipped horizontal viewport as painting");
+}
+
 } // namespace
 
 int main()
 {
     try {
         testCompositionUsesUnderlineAndClearsOnEnd();
+        testLongTextClipsAndKeepsCaretVisible();
         std::cout << "WhatsUI TextInput composition visual tests passed\n";
         return 0;
     } catch (const std::exception& error) {

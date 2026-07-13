@@ -42,13 +42,17 @@ with this guide before updating a consumer or sending a change.
 
 ### Package/export boundary
 
-The headless developer-preview package can be installed and consumed through
-`find_package(WhatsUI CONFIG REQUIRED)`. The renderer/GLFW path cannot yet be
-installed/exported cleanly: it depends on the in-tree WhatsCanvas subproject.
-An application using `WHATSUI_WITH_WHATSCANVAS=ON` must currently build from a
-source checkout with initialized submodules. Do not treat this limitation as a
-transient warning that has already been solved; Windows renderer package export
-is an open M5 release item.
+The Windows static developer-preview package can export the headless core and,
+when configured with `WHATSUI_WITH_WHATSCANVAS=ON`, WhatsCanvas
+Software/OpenGL, the selected bundled text dependencies, GLFW, and
+`WhatsUI::Glfw`. A fresh Windows/MSVC external consumer is covered for both
+the core and GLFW target.
+
+This is not cross-toolchain or release-distribution certification. The package
+smoke does not open a GLFW window, test a GPU driver, or satisfy the manual
+IME/DPI, release-archive, signed-binary, or third-party legal/notice gates.
+Keep a source checkout with initialized submodules available for development
+and revalidate the package with the compiler/CRT and architecture you ship.
 
 ## Contributor setup
 
@@ -92,8 +96,9 @@ before marking a Windows milestone/release task complete.
   pointer-capture contracts. A UI sample that looks correct is not sufficient
   evidence when it changes these runtime boundaries.
 - Document an intentional limitation at the public boundary. Do not advertise
-  an unimplemented Windows UI Automation bridge, TSF support, packaged
-  WhatsCanvas/GLFW integration, ABI stability, or cross-platform parity.
+  a Windows UI Automation bridge, TSF support, ABI stability, cross-platform
+  parity, or release-grade GLFW behavior beyond the documented Windows/MSVC
+  static package smoke.
 - Use semantic Fluent tokens and documented component states rather than
   hard-coded per-screen rendering behavior when changing product UI.
 

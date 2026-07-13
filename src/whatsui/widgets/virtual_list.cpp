@@ -284,6 +284,24 @@ int VirtualList::normalizedSelection(int index) const noexcept
 
 void VirtualList::reconcile()
 {
+    // Reconciliation removes children, and removal may synchronously invoke a
+    // user detach callback. A callback is allowed to refresh its model, but
+    // must not restart this traversal while its mounted indices are live.
+    if (reconciling_) {
+        reconcilePending_ = true;
+        return;
+    }
+
+    reconciling_ = true;
+    do {
+        reconcilePending_ = false;
+        reconcileOnce();
+    } while (reconcilePending_);
+    reconciling_ = false;
+}
+
+void VirtualList::reconcileOnce()
+{
     const Range desiredRange = mountedRange();
     std::vector<std::pair<Index, Key>> desired;
     desired.reserve(desiredRange.size());
@@ -330,16 +348,24 @@ void VirtualList::layoutMountedChildren()
 
 void VirtualList::unmount(std::size_t mountedIndex)
 {
+    if (mountedIndex >= mounted_.size()) return;
     Mounted mounted = std::move(mounted_[mountedIndex]);
-    const auto& nodes = children();
-    const auto child = std::find_if(nodes.begin(), nodes.end(), [&mounted](const std::unique_ptr<Node>& node) {
-        return node.get() == mounted.node;
-    });
-    if (child != nodes.end()) {
-        const auto position = static_cast<std::size_t>(std::distance(nodes.begin(), child));
-        addToPool(std::move(mounted.key), removeChild(position));
-    }
+    // Remove bookkeeping before detaching the child. Detach callbacks are
+    // user code and may inspect or reconcile the list; they must never see a
+    // mounted record whose raw node is already being removed.
     mounted_.erase(mounted_.begin() + static_cast<std::ptrdiff_t>(mountedIndex));
+
+    std::size_t childPosition = children().size();
+    for (std::size_t index = 0; index < children().size(); ++index) {
+        if (children()[index].get() == mounted.node) {
+            childPosition = index;
+            break;
+        }
+    }
+    if (childPosition == children().size()) return;
+
+    std::unique_ptr<Node> node = removeChild(childPosition);
+    addToPool(std::move(mounted.key), std::move(node));
 }
 
 std::unique_ptr<Node> VirtualList::takePooled(const Key& key)
@@ -353,7 +379,13 @@ std::unique_ptr<Node> VirtualList::takePooled(const Key& key)
 
 void VirtualList::addToPool(Key key, std::unique_ptr<Node> node)
 {
-    if (node) pool_.push_back({std::move(key), std::move(node)});
+    if (!node) return;
+    // Construct the destination in the vector first. This avoids retaining a
+    // reference/iterator into either owned vector while a unique_ptr changes
+    // owners, and keeps ASan's container annotations precise during recycle.
+    pool_.emplace_back();
+    pool_.back().key = std::move(key);
+    pool_.back().node = std::move(node);
 }
 
 void VirtualList::trimPool()
