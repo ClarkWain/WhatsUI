@@ -85,6 +85,15 @@ public:
         const int w = static_cast<int>(framebufferSize.width);
         const int h = static_cast<int>(framebufferSize.height);
         if (w > 0 && h > 0) {
+            // GLFW resizes the default framebuffer but intentionally does not
+            // update OpenGL's viewport. Canvas::setSize updates its logical
+            // projection; without this matching viewport update the new
+            // projection is rasterised into the old lower-left viewport,
+            // leaving a black band above the Todo UI after a window resize.
+            using GlViewportProc = void (*)(int, int, int, int);
+            if (const auto glViewport = reinterpret_cast<GlViewportProc>(glfwGetProcAddress("glViewport"))) {
+                glViewport(0, 0, w, h);
+            }
             canvas_->setSize(w, h);
             canvas_->resizeOutput(w, h);
             fbSize_ = framebufferSize;
