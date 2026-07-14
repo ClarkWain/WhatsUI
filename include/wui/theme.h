@@ -49,21 +49,23 @@ struct RadiusTokens {
 };
 
 struct TypographyTokens {
-    float caption{12.0f};
-    float body{14.0f};
-    float bodyLarge{16.0f};
-    float subtitle{20.0f};
-    float title{28.0f};
-    float bodyLineHeight{20.0f};
+    // Windows desktop defaults use even logical sizes so common fractional
+    // scales (notably 150%) land on whole physical-pixel font heights.
+    float caption{14.0f};
+    float body{16.0f};
+    float bodyLarge{18.0f};
+    float subtitle{22.0f};
+    float title{32.0f};
+    float bodyLineHeight{24.0f};
 };
 
 struct ControlTokens {
-    float height{32.0f};
-    float compactHeight{24.0f};
-    float horizontalPadding{12.0f};
+    float height{36.0f};
+    float compactHeight{28.0f};
+    float horizontalPadding{14.0f};
     float focusInset{2.0f};
     float focusWidth{2.0f};
-    float checkboxSize{18.0f};
+    float checkboxSize{20.0f};
 };
 
 struct Theme {

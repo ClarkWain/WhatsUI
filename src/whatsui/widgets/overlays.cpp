@@ -1,5 +1,6 @@
 #include "wui/overlays.h"
 
+#include "wui/text_metrics.h"
 #include "wui/theme.h"
 
 #include <algorithm>
@@ -10,6 +11,13 @@ namespace wui {
 namespace {
 float finiteOr(float value, float fallback) noexcept { return std::isfinite(value) ? value : fallback; }
 float clampPanel(float value, float limit) noexcept { return std::max(0.0f, std::min(value, std::max(0.0f, limit))); }
+float measuredTextWidth(const std::string& value, float textSize) noexcept
+{
+    if (const auto* measurer = textMeasurer()) return measurer->measureText(value, textSize).width;
+    std::size_t codepoints = 0;
+    for (const unsigned char character : value) if ((character & 0xC0u) != 0x80u) ++codepoints;
+    return static_cast<float>(codepoints) * textSize * 0.5f;
+}
 void drawFocusRing(PaintContext& context, const RectF& bounds, const Theme& current, bool focused)
 {
     if (!focused) return;
@@ -167,7 +175,11 @@ void IconButton::paint(PaintContext& context)
     if (!isEnabled()) background = current.colors.disabled; else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) background = current.colors.surfacePressed; else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) background = current.colors.surfaceHover;
     drawFocusRing(context, bounds(), current, focused);
     if (background.a != 0) context.fillRoundRect(bounds(), current.radius.md, background);
-    if (!icon_.empty()) { const float width = static_cast<float>(icon_.size()) * current.typography.body * 0.56f; context.drawText(icon_, bounds().x + (bounds().width - width) * 0.5f, bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f, current.typography.body, isEnabled() ? current.colors.text : current.colors.textDisabled); }
+    if (!icon_.empty()) {
+        context.drawText(icon_, bounds().x + (bounds().width - measuredTextWidth(icon_, current.typography.body)) * 0.5f,
+                         context.centeredTextBottom(icon_, bounds(), current.typography.body), current.typography.body,
+                         isEnabled() ? current.colors.text : current.colors.textDisabled);
+    }
     clearDirty(DirtyFlag::Paint);
 }
 bool IconButton::onPointerEvent(const PointerEvent& event)

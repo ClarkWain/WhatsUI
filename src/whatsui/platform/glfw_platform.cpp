@@ -18,7 +18,10 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <stdexcept>
+#include <string_view>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -33,6 +36,68 @@
 
 namespace wui {
 
+namespace {
+
+float windowContentScale(GLFWwindow* window) noexcept
+{
+#if defined(_WIN32)
+    float xScale = 1.0f;
+    float yScale = 1.0f;
+    glfwGetWindowContentScale(window, &xScale, &yScale);
+    if (xScale > 0.0f && std::isfinite(xScale)) {
+        return xScale;
+    }
+#else
+    (void)window;
+#endif
+    return 1.0f;
+}
+
+PointF logicalPointerPosition(GLFWwindow* window, double x, double y) noexcept
+{
+    const float scale = windowContentScale(window);
+    return {static_cast<float>(x) / scale, static_cast<float>(y) / scale};
+}
+
+} // namespace
+
+#if defined(_WIN32)
+// DirectWrite currently rasterizes every requested text run through a WIC/D2D
+// bitmap on the latest WhatsCanvas release. That gives us better Windows font
+// hinting, but its no-cache implementation is too expensive for an interactive
+// Todo frame. Keep the integration available for visual evaluation without
+// making it the product default until WhatsCanvas supplies a retained text-run
+// cache. The portable backend remains the safe default.
+[[nodiscard]] bool directWriteOptInRequested() noexcept
+{
+    const char* value = std::getenv("WHATSUI_TEXT_BACKEND");
+    return value != nullptr && std::string_view(value) == "directwrite";
+}
+
+// ClearType is deliberately a second explicit opt-in.  It is useful for
+// visual comparison on a known opaque desktop surface, but RGB subpixel
+// coverage is not generally safe after alpha compositing.
+[[nodiscard]] bool clearTypeOptInRequested() noexcept
+{
+    const char* value = std::getenv("WHATSUI_TEXT_RENDER_MODE");
+    return value != nullptr && std::string_view(value) == "cleartype";
+}
+
+// GLFW only reports a framebuffer scale greater than one when the process is
+// DPI aware. Without this declaration Windows bitmap-scales the entire OpenGL
+// window on a 125%/150% desktop, which makes even correctly rasterized text
+// blurry. Do this before glfwInit creates any HWND. A host that already chose
+// an awareness context simply rejects the call; that is safe and intentional.
+void enablePerMonitorV2DpiAwareness() noexcept
+{
+#if defined(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+    (void)SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+#else
+    (void)SetProcessDPIAware();
+#endif
+}
+#endif
+
 // --- GlfwRenderSurface ---
 
 class GlfwRenderSurface : public RenderSurface {
@@ -45,6 +110,17 @@ public:
         canvas_->initializeContext();
 
 #if defined(_WIN32)
+        if (directWriteOptInRequested()) {
+            // ClearType remains an explicit diagnostic opt-in.  It must never
+            // become the product default until the native Todo regression has
+            // verified the complete command stream at fractional DPI.
+            // WhatsCanvas reports a portable fallback if DirectWrite fails.
+            directWriteActive_ = canvas_->setTextBackend(
+                wsc::Canvas::TextBackend::DirectWrite,
+                clearTypeOptInRequested() ? wsc::Canvas::TextRenderMode::ClearType
+                                           : wsc::Canvas::TextRenderMode::Grayscale);
+        }
+
         wsc::NativeSurface surface;
         surface.platform = wsc::NativeSurface::Platform::Win32;
         surface.window = glfwGetWin32Window(window);
@@ -73,6 +149,15 @@ public:
     void endFrame() override
     {
         canvas_->endFrame();
+        // Native visual diagnostics: when explicitly requested, retain the
+        // exact Canvas framebuffer before it is handed to WGL.  This keeps a
+        // real Todo frame inspectable even when desktop capture is blocked by
+        // a different Windows session or by an overlapping native window.
+        // It has no cost and no file-system effect in ordinary runs.
+        if (const char* capturePath = std::getenv("WHATSUI_DEBUG_CAPTURE_PPM");
+            capturePath != nullptr && capturePath[0] != '\0') {
+            (void)canvas_->savePixelsPPM(capturePath);
+        }
         if (canPresent_) {
             canvas_->present();
         } else {
@@ -102,10 +187,20 @@ public:
 
     [[nodiscard]] wsc::Canvas& canvas() noexcept { return *canvas_; }
 
+    // The Canvas framebuffer is physical pixels while WhatsUI layout remains
+    // in logical coordinates.  Let Canvas carry this transform exactly once.
+    void setDevicePixelRatio(float ratio) noexcept
+    {
+        canvas_->setDevicePixelRatio(ratio);
+    }
+
+    [[nodiscard]] bool isUsingDirectWrite() const noexcept { return directWriteActive_; }
+
 private:
     GLFWwindow* window_{nullptr};
     std::unique_ptr<wsc::Canvas> canvas_;
     bool canPresent_{false};
+    bool directWriteActive_{false};
     SizeF fbSize_{};
 };
 
@@ -351,17 +446,16 @@ private:
     {
         RECT client{};
         GetClientRect(nativeWindow_, &client);
-        int logicalWidth = 0;
-        int logicalHeight = 0;
-        glfwGetWindowSize(window_, &logicalWidth, &logicalHeight);
-        const float scaleX = logicalWidth > 0
-            ? static_cast<float>(client.right - client.left) / static_cast<float>(logicalWidth)
-            : 1.0f;
-        const float scaleY = logicalHeight > 0
-            ? static_cast<float>(client.bottom - client.top) / static_cast<float>(logicalHeight)
-            : 1.0f;
-        return {static_cast<LONG>(std::lround(caretRect_.x * scaleX)),
-                static_cast<LONG>(std::lround((caretRect_.y + caretRect_.height) * scaleY))};
+        int windowWidth = 0;
+        int windowHeight = 0;
+        glfwGetWindowSize(window_, &windowWidth, &windowHeight);
+        const float contentScale = windowContentScale(window_);
+        const PointF point = projectLogicalCaretToClientPixels(
+            caretRect_,
+            {static_cast<float>(windowWidth) / contentScale,
+             static_cast<float>(windowHeight) / contentScale},
+            {static_cast<float>(client.right - client.left), static_cast<float>(client.bottom - client.top)});
+        return {static_cast<LONG>(point.x), static_cast<LONG>(point.y)};
     }
 
     void updateImeWindows() noexcept
@@ -469,9 +563,10 @@ private:
 
 class GlfwPlatformWindow : public PlatformWindow {
 public:
-    GlfwPlatformWindow(GLFWwindow* window, WindowId id)
+    GlfwPlatformWindow(GLFWwindow* window, WindowId id, std::string title)
         : window_(window)
         , id_(id)
+        , title_(std::move(title))
         , clipboard_(window)
         , cursorService_(window)
         , textInputSession_(window, id)
@@ -512,9 +607,19 @@ public:
         int w, h, fbw, fbh;
         glfwGetWindowSize(window_, &w, &h);
         glfwGetFramebufferSize(window_, &fbw, &fbh);
+        const float contentScale = windowContentScale(window_);
+#if defined(_WIN32)
+        // Win32 GLFW window/framebuffer sizes are both physical pixels.  The
+        // monitor content scale is the logical-DIP conversion; fb/window is
+        // always 1 and silently disabled 125%/150% text rasterization.
+        m.logicalSize = {static_cast<float>(w) / contentScale,
+                         static_cast<float>(h) / contentScale};
+        m.scaleFactor = contentScale;
+#else
         m.logicalSize = {static_cast<float>(w), static_cast<float>(h)};
-        m.framebufferSize = {static_cast<float>(fbw), static_cast<float>(fbh)};
         m.scaleFactor = w > 0 ? static_cast<float>(fbw) / static_cast<float>(w) : 1.0f;
+#endif
+        m.framebufferSize = {static_cast<float>(fbw), static_cast<float>(fbh)};
         return m;
     }
 
@@ -533,8 +638,11 @@ public:
 
     void setTitle(std::string_view title) override
     {
-        glfwSetWindowTitle(window_, std::string(title).c_str());
+        title_.assign(title.data(), title.size());
+        glfwSetWindowTitle(window_, title_.c_str());
     }
+
+    [[nodiscard]] std::string title() const override { return title_; }
 
     void requestRedraw() override { needsRedraw_ = true; }
 
@@ -574,6 +682,7 @@ public:
 private:
     GLFWwindow* window_;
     WindowId id_;
+    std::string title_;
     std::unique_ptr<GlfwRenderSurface> surface_;
     GlfwClipboard clipboard_;
     GlfwCursorService cursorService_;
@@ -588,9 +697,17 @@ class GlfwPlatformHost : public PlatformHost {
 public:
     GlfwPlatformHost()
     {
+#if defined(_WIN32)
+        enablePerMonitorV2DpiAwareness();
+#endif
         if (!glfwInit()) {
             throw std::runtime_error("glfwInit() failed");
         }
+#if defined(_WIN32) && defined(GLFW_SCALE_TO_MONITOR)
+        // Treat the requested window size as logical DIPs. GLFW expands the
+        // Win32 client area to physical pixels for the current monitor.
+        glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+#endif
     }
 
     ~GlfwPlatformHost() override
@@ -621,7 +738,7 @@ public:
             glLoaded_ = true;
         }
 
-        auto window = std::make_unique<GlfwPlatformWindow>(glfwWindow, nextWindowId_++);
+        auto window = std::make_unique<GlfwPlatformWindow>(glfwWindow, nextWindowId_++, title);
         window->initSurface();
 
         installCallbacks(glfwWindow);
@@ -726,7 +843,7 @@ private:
             event.pointerType = PointerType::Mouse;
             event.action = PointerAction::Move;
             event.button = MouseButton::None;
-            event.position = {static_cast<float>(x), static_cast<float>(y)};
+            event.position = logicalPointerPosition(w, x, y);
             event.modifiers = modifiersFor(w);
             if (pw->onPointerEvent) pw->onPointerEvent(event);
         });
@@ -740,7 +857,7 @@ private:
             event.windowId = pw->id();
             event.pointerType = PointerType::Mouse;
             event.action = entered == GLFW_TRUE ? PointerAction::Enter : PointerAction::Leave;
-            event.position = {static_cast<float>(x), static_cast<float>(y)};
+            event.position = logicalPointerPosition(w, x, y);
             event.modifiers = modifiersFor(w);
             if (pw->onPointerEvent) pw->onPointerEvent(event);
         });
@@ -760,7 +877,7 @@ private:
             case GLFW_MOUSE_BUTTON_MIDDLE: event.button = MouseButton::Middle; break;
             default: event.button = MouseButton::None; break;
             }
-            event.position = {static_cast<float>(x), static_cast<float>(y)};
+            event.position = logicalPointerPosition(w, x, y);
             event.modifiers = modifiersFromGlfw(mods);
             if (pw->onPointerEvent) pw->onPointerEvent(event);
         });
@@ -774,7 +891,7 @@ private:
             event.windowId = pw->id();
             event.pointerType = PointerType::Mouse;
             event.action = PointerAction::Scroll;
-            event.position = {static_cast<float>(x), static_cast<float>(y)};
+            event.position = logicalPointerPosition(w, x, y);
             event.modifiers = modifiersFor(w);
             // GLFW reports abstract wheel "steps". Convert to the framework's
             // logical-pixel convention so all backends expose the same API.
@@ -839,6 +956,17 @@ private:
             }
             pw->requestRedraw();
         });
+
+#if defined(_WIN32)
+        glfwSetWindowContentScaleCallback(window, [](GLFWwindow* w, float, float) {
+            auto* pw = GlfwPlatformWindow::fromGlfw(w);
+            if (!pw) return;
+            // The framebuffer callback owns physical surface resize. This
+            // callback invalidates logical layout/text even when the driver
+            // reports the same framebuffer dimensions during monitor moves.
+            pw->requestRedraw();
+        });
+#endif
 
         (void)pw;
     }
@@ -934,12 +1062,16 @@ int runGlfwApp(std::string title, SizeF size, GlfwRootFactory rootFactory)
             // Measure, layout and paint against the same font backend and DPR.
             auto m = platformWin.metrics();
             auto& glfwSurface = static_cast<GlfwRenderSurface&>(platformWin.surface());
-            glfwWin->textMeasurer().setScaleFactor(m.scaleFactor);
+            // WhatsCanvas now owns DPR in its root transform.  Text layout
+            // metrics therefore stay in logical coordinates while drawText
+            // is rasterized at the physical DPR by Canvas.
+            glfwSurface.setDevicePixelRatio(m.scaleFactor);
+            glfwWin->textMeasurer().setScaleFactor(1.0f);
             setTextMeasurer(&glfwWin->textMeasurer());
             win.layout();
 
             // Paint
-            PaintContext ctx(glfwSurface.canvas(), m.scaleFactor);
+            PaintContext ctx(glfwSurface.canvas(), m.scaleFactor, true);
             win.prepare(ctx);
             platformWin.surface().beginFrame();
 

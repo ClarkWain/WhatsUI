@@ -1,8 +1,11 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "wui/accessibility.h"
+#include "wui/text_input.h"
+#include "wui/widgets.h"
 
 namespace {
 
@@ -70,11 +73,43 @@ void testSnapshotTraversal()
            "Path lookup must return null for a missing semantic entry");
 }
 
+void testVisualControlSnapshot()
+{
+    auto root = std::make_unique<wui::Column>();
+    auto task = std::make_unique<wui::Checkbox>("Buy groceries", false);
+    auto* taskRaw = task.get();
+    auto input = std::make_unique<wui::TextInput>("Add a task");
+    input->text("Milk");
+    auto action = std::make_unique<wui::Button>("Add");
+    action->setEnabled(false);
+    root->child(std::move(task));
+    root->child(std::move(input));
+    root->child(std::move(action));
+    root->layout({0.0f, 0.0f, 320.0f, 160.0f});
+
+    const auto snapshot = wui::snapshotAccessibilityTree(*root, taskRaw);
+    expect(snapshot.size() == 3, "Visual snapshot must omit decorative layout nodes");
+    expect(snapshot[0].path == std::vector<std::size_t>{0} &&
+               snapshot[0].properties.role == wui::AccessibilityRole::CheckBox &&
+               snapshot[0].properties.label == "Buy groceries" &&
+               snapshot[0].properties.checked && !*snapshot[0].properties.checked &&
+               snapshot[0].properties.focused && snapshot[0].properties.bounds.has_value(),
+           "Checkbox snapshot must expose current role, name, checked, focus and bounds");
+    expect(snapshot[1].properties.role == wui::AccessibilityRole::TextField &&
+               snapshot[1].properties.label == "Add a task" &&
+               snapshot[1].properties.value && *snapshot[1].properties.value == "Milk",
+           "Text fields must expose their placeholder name and current value");
+    expect(snapshot[2].properties.role == wui::AccessibilityRole::Button &&
+               snapshot[2].properties.label == "Add" && !snapshot[2].properties.enabled,
+           "Buttons must expose their name and enabled state");
+}
+
 } // namespace
 
 int main()
 {
     testControlSemantics();
     testSnapshotTraversal();
+    testVisualControlSnapshot();
     return 0;
 }

@@ -111,6 +111,12 @@ public:
         return std::move(self());
     }
 
+    Text&& weight(int fontWeight) &&
+    {
+        node_->setFontWeight(fontWeight);
+        return std::move(self());
+    }
+
     Text&& lineHeight(float height) &&
     {
         node_->setLineHeight(height);
@@ -331,6 +337,7 @@ class Checkbox : public BuilderBase<Checkbox, wui::Checkbox> {
 public:
     explicit Checkbox(std::string label = {}, bool checked = false) : BuilderBase(std::move(label), checked) {}
     Checkbox&& label(std::string value) && { node_->setLabel(std::move(value)); return std::move(self()); }
+    Checkbox&& accessibleLabel(std::string value) && { node_->setAccessibleLabel(std::move(value)); return std::move(self()); }
     Checkbox&& checked(bool value) && { node_->setChecked(value); return std::move(self()); }
     Checkbox&& bind(wui::State<bool>& state) && { node_->bind(state); return std::move(self()); }
     Checkbox&& onChange(std::function<void(bool)> handler) && { node_->onChange(std::move(handler)); return std::move(self()); }

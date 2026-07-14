@@ -6,10 +6,10 @@ namespace wui {
 
 Node::~Node()
 {
-    // UiRoot/OverlayHost normally detach their content before releasing it.
-    // Keep this fallback for direct owners so subscriptions registered through
-    // addDetachCallback cannot outlive an attached tree by accident.
-    detachRecursively();
+    // UiRoot and OverlayHost detach owned trees before destruction, while the
+    // concrete dynamic types are still alive. Calling virtual detach hooks
+    // from this base destructor would dispatch after derived teardown and can
+    // make a child callback re-enter an owner whose vptr is already `Node`.
     for (auto& callback : teardown_) {
         if (callback) {
             callback();

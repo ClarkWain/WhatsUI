@@ -17,6 +17,8 @@ enum class PageRetention {
 
 class UiRoot {
 public:
+    ~UiRoot();
+
     void setOnInvalidate(std::function<void()> handler);
     void setContent(std::unique_ptr<Node> content) noexcept;
     void setBorrowedContent(Node* content) noexcept;
@@ -91,6 +93,8 @@ struct OverlayEntry {
 class OverlayHost {
 public:
     using ChangeHandler = std::function<void()>;
+
+    ~OverlayHost();
 
     void setOnChange(ChangeHandler handler);
     [[nodiscard]] OverlayId show(std::unique_ptr<Node> overlay);

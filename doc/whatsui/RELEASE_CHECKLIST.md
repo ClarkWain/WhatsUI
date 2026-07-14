@@ -53,6 +53,9 @@ the remaining manual/legal gates above are still required.
 - [ ] GLFW Todo, Settings, and Command Palette reference applications launch on
   the release Windows version.
 - [ ] Text input/IME manual matrix has evidence at 100%, 150%, and 200% DPI.
+- [ ] Windows UI Automation bridge plus a Narrator/screen-reader validation
+  matrix has release-owner sign-off. A platform-neutral semantic snapshot is
+  not a substitute for an OS accessibility provider.
 - [ ] Open bugs, unsupported APIs, and release caveats are included in release
   notes.
 
@@ -67,7 +70,7 @@ an automated pass.
 | --- | --- | --- | --- |
 | 2026-07-12, Windows/MSVC Debug | `cmake --build build --config Debug` then `ctest --test-dir build -C Debug --output-on-failure` | **18/18** CTest tests passed (including runtime, controls, storage, Todo interaction, virtual-list, inspector, and benchmark targets). | ASan, renderer/GLFW package, native window launch, IME/DPI, release archive, or legal review. |
 | 2026-07-12, Windows/MSVC Debug with AddressSanitizer | `cmake --build build-asan --config Debug` then `ctest --test-dir build-asan -C Debug --output-on-failure` | **18/18** CTest tests passed after a high-churn virtual-list recycle regression and polymorphic `Node` ownership regression were added. | A tagged candidate, renderer/GLFW package behavior, native window launch, IME/DPI, or release/legal approval. |
-| 2026-07-12, Windows/MSVC Debug with WhatsCanvas Software | Built `WhatsUITodoApp` and `WhatsUITodoGlfw`, then ran `whatsui_todo_visual_regression` and `whatsui_todo_visual_review`. | **2/2** passed; deterministic pixels and three 2x responsive Todo captures (360×720, 640×720, 1180×760) were accepted after visual review. | Native GLFW interaction, IME/DPI, accessibility bridge, a tagged artifact, or release approval. |
+| 2026-07-12, Windows/MSVC Debug with WhatsCanvas Software | Built `WhatsUITodoApp` and `WhatsUITodoGlfw`, then ran `whatsui_todo_visual_regression` and `whatsui_todo_visual_review`. | **2/2** passed; deterministic pixels and three 2x responsive Todo captures (360×720, 640×560, 1180×760) were accepted after visual review. | Native GLFW interaction, IME/DPI, accessibility bridge, a tagged artifact, or release approval. |
 | 2026-07-12, Windows/MSVC Release | Fresh `WHATSUI_WITH_WHATSCANVAS=ON` package configure/build/install with default advanced text, then fresh `tests/package_consumer` configured with `-DWHATSUI_PACKAGE_TARGET=Glfw`. | External consumer configured through `find_package(WhatsUI)`, linked `WhatsUI::Glfw`, and its smoke executable exited **0**. The installed prefix included WhatsUI, WhatsCanvas Software/OpenGL, GLFW, FreeType, and HarfBuzz exports. | Opening a GLFW window, GPU/driver behavior, a redistributable/signed release artifact, or third-party notice approval. |
 | 2026-07-12, Windows/MSVC Release | Fresh Software-only WhatsCanvas package, then its external `WhatsCanvas::Software` consumer smoke. | Install, `find_package(WhatsCanvas)`, link, and consumer executable all succeeded. | WhatsUI package behavior, GLFW/OpenGL, or platform UI behavior. |
 
@@ -80,9 +83,13 @@ the package/export graph, compiler toolset, or submodule revision changes.
 The following are not complete merely because a headless archive or demo was
 created:
 
-- Windows UI Automation or equivalent native accessibility bridge and
-  screen-reader sign-off.
-- Final ABI/source compatibility and deprecation policy.
+- Windows UI Automation bridge and screen-reader sign-off (the explicit
+  engineering row above requires the native provider and its validation
+  evidence).
+- Final ABI/source compatibility and deprecation policy. A proposed policy is
+  available in [COMPATIBILITY_POLICY_1_0_DRAFT.md](COMPATIBILITY_POLICY_1_0_DRAFT.md);
+  it is not final until the release owner approves the exact candidate's
+  compiler/CRT tuples and any exceptions.
 - Release archive, NOTICE/SBOM/legal review, changelog, and hashes approved by
   the release owner.
 

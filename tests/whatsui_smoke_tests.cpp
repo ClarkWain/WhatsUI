@@ -624,7 +624,7 @@ void testTheme()
 
     wui::setTheme(wui::Theme{});
     expect(wui::theme().colors.accent.r == 15, "default Fluent accent should be restored");
-    expect(wui::theme().controls.height == 32.0f && wui::theme().typography.body == 14.0f,
+    expect(wui::theme().controls.height == 36.0f && wui::theme().typography.body == 16.0f,
            "default Fluent control and typography tokens should remain stable");
 }
 

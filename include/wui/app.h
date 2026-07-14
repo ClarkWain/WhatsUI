@@ -1,10 +1,12 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "wui/frame_stats.h"
+#include "wui/accessibility.h"
 #include "wui/platform.h"
 #include "wui/runtime.h"
 
@@ -16,6 +18,7 @@ class Dialog;
 class UiWindow {
 public:
     explicit UiWindow(std::unique_ptr<PlatformWindow> platformWindow);
+    ~UiWindow();
 
     [[nodiscard]] WindowId id() const noexcept;
     [[nodiscard]] PlatformWindow& platformWindow() noexcept;
@@ -35,12 +38,20 @@ public:
     // Modal dialogs are overlays with input isolation. Escape and an enabled
     // backdrop dismissal route through this API so the prior focus is restored.
     [[nodiscard]] OverlayId showDialog(std::unique_ptr<Dialog> dialog);
+    // During a UiWindow input dispatch, destruction is deferred until the
+    // current handler has returned. In that case this returns nullptr; the
+    // modal is removed before dispatchPointer()/dispatchKey() returns.
     [[nodiscard]] std::unique_ptr<Dialog> dismissDialog(OverlayId id);
     [[nodiscard]] std::unique_ptr<Dialog> dismissTopDialog();
     [[nodiscard]] bool hasDialog() const noexcept;
 
     void setRoot(std::unique_ptr<Node> root);
     [[nodiscard]] Node* root() const noexcept;
+
+    // A frame-safe, platform-neutral projection of the active UI. The
+    // snapshot is the only supported hand-off point for native accessibility
+    // adapters; it does not by itself register a UI Automation provider.
+    [[nodiscard]] AccessibilitySnapshot accessibilitySnapshot() const;
 
     // Window-level frame pipeline. update() commits deferred structural state;
     // layout() synchronizes page and overlay geometry; paint() preserves z-order.
@@ -72,10 +83,17 @@ public:
     void onPlatformFocusChanged(bool focused) noexcept;
 
 private:
+    class EventDispatchScope;
+
     void syncActiveRoot(Node* navigationRoot = nullptr) noexcept;
     void onOverlayChanged() noexcept;
     void syncTextInputSession() noexcept;
     void deactivateTextInputSession() noexcept;
+    void beginEventDispatch() noexcept;
+    void endEventDispatch() noexcept;
+    void requestDialogDismissal(OverlayId id);
+    [[nodiscard]] std::unique_ptr<Dialog> dismissDialogImmediately(OverlayId id);
+    void flushDeferredDialogDismissals() noexcept;
     [[nodiscard]] Node* hitTest(PointF point) const;
     [[nodiscard]] Dialog* activeDialog() const noexcept;
 
@@ -88,6 +106,8 @@ private:
     TextInput* activeTextInput_{nullptr};
     struct DialogEntry { OverlayId id; Node* restoreFocus; };
     std::vector<DialogEntry> dialogs_;
+    std::size_t eventDispatchDepth_{0};
+    std::vector<OverlayId> deferredDialogDismissals_;
     FrameStats frameStats_{};
 };
 

@@ -114,19 +114,12 @@ private:
     int exitCode_{0};
 };
 
-// Mirrors the documented native-boundary projection without linking the
-// headless test to Win32.  The GLFW IMM32 backend owns this conversion using
-// GetClientRect()/glfwGetWindowSize(); this unit check proves the UiWindow
-// side supplies unscaled logical coordinates at fractional DPI.
+// Uses the same native-boundary projection as the GLFW IMM32 host without
+// creating an HWND.  This proves the UiWindow side supplies unscaled logical
+// coordinates and guards the 100%/150%/200% rounding contract in CI.
 wui::PointF projectLogicalCaretToClient(const wui::RectF& caret, const wui::WindowMetrics& metrics)
 {
-    const float scaleX = metrics.logicalSize.width > 0.0f
-        ? metrics.framebufferSize.width / metrics.logicalSize.width
-        : 1.0f;
-    const float scaleY = metrics.logicalSize.height > 0.0f
-        ? metrics.framebufferSize.height / metrics.logicalSize.height
-        : 1.0f;
-    return {std::round(caret.x * scaleX), std::round((caret.y + caret.height) * scaleY)};
+    return wui::projectLogicalCaretToClientPixels(caret, metrics.logicalSize, metrics.framebufferSize);
 }
 
 wui::PointerEvent pointer(wui::PointerAction action)
@@ -395,6 +388,31 @@ void testHighDpiImeCaretCompositionAndClipboardContract()
            "Clipboard paste must replace the same logical range after high-DPI IME composition");
 }
 
+void testImeCaretProjectionAtWindowsDpiScales()
+{
+    // Keep non-integer logical coordinates: only the 150% and 200% cases
+    // catch a regression from rounding before (rather than after) scaling.
+    const wui::RectF caret{77.25f, 45.75f, 1.0f, 19.5f};
+    struct DpiCase {
+        const char* name;
+        wui::SizeF framebuffer;
+        wui::PointF expectedClientPoint;
+    };
+    constexpr wui::SizeF logical{400.0f, 260.0f};
+    const DpiCase cases[] = {
+        {"100%", {400.0f, 260.0f}, {77.0f, 65.0f}},
+        {"150%", {600.0f, 390.0f}, {116.0f, 98.0f}},
+        {"200%", {800.0f, 520.0f}, {155.0f, 131.0f}},
+    };
+
+    for (const auto& dpi : cases) {
+        const auto projected = projectLogicalCaretToClient(caret, {logical, dpi.framebuffer,
+                                                                     dpi.framebuffer.width / logical.width});
+        expect(projected.x == dpi.expectedClientPoint.x && projected.y == dpi.expectedClientPoint.y,
+               "Logical caret must project to the documented integer client-pixel anchor at every Windows DPI scale");
+    }
+}
+
 void testWindowSuspendsAndRestoresTextInputOnPlatformFocusChange()
 {
     wui::UiApp app(std::make_unique<FakeHost>());
@@ -514,6 +532,132 @@ void testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus()
     expect(window.dismissDialog(id) == nullptr, "Dismissing an already closed dialog should be a safe no-op");
 }
 
+void testDialogConfirmationDismissalIsDeferredUntilPointerDispatchCompletes()
+{
+    wui::UiApp app(std::make_unique<FakeHost>());
+    auto& window = app.openWindow("deferred dialog dismissal", {320.0f, 180.0f});
+
+    auto page = std::make_unique<wui::Button>("Page action");
+    auto* pageButton = page.get();
+    window.setRoot(std::move(page));
+    window.layout();
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Down)),
+           "Page action should receive focus before nested dialogs open");
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Up)),
+           "Page action click should complete before nested dialogs open");
+    expect(window.focusManager().focused() == pageButton,
+           "The page action must be the focus restoration target for the outer dialog");
+
+    auto outer = std::make_unique<wui::Dialog>();
+    auto outerConfirm = std::make_unique<wui::Button>("Outer confirm");
+    auto* outerConfirmRaw = outerConfirm.get();
+    outer->content(std::move(outerConfirm));
+    (void)window.showDialog(std::move(outer));
+    window.layout();
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 9, 0, false}),
+           "Tab should focus the outer dialog action before the nested dialog opens");
+    expect(window.focusManager().focused() == outerConfirmRaw,
+           "The outer dialog action must become the nested dialog restoration target");
+
+    int innerButtonDestructions = 0;
+    bool confirmRan = false;
+    bool dismissalWasDeferred = false;
+    bool innerStillTopDuringCallback = false;
+    auto inner = std::make_unique<wui::Dialog>();
+    auto* innerRaw = inner.get();
+    auto innerConfirm = std::make_unique<DestructionProbeButton>(innerButtonDestructions);
+    auto* innerConfirmRaw = innerConfirm.get();
+    innerConfirm->onClick([&] {
+        confirmRan = true;
+        auto dismissed = window.dismissTopDialog();
+        dismissalWasDeferred = dismissed == nullptr;
+        innerStillTopDuringCallback = window.overlayHost().top() != nullptr
+            && window.overlayHost().top()->content.get() == innerRaw;
+    });
+    inner->content(std::move(innerConfirm));
+    (void)window.showDialog(std::move(inner));
+    window.layout();
+
+    const auto& bounds = innerConfirmRaw->bounds();
+    const wui::PointF center{bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f};
+    wui::PointerEvent down{window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+                           wui::MouseButton::Left, center, 0};
+    wui::PointerEvent up{window.id(), wui::PointerType::Mouse, wui::PointerAction::Up,
+                         wui::MouseButton::Left, center, 0};
+    expect(window.dispatchPointer(down), "Dialog confirm pointer down should be handled");
+    expect(window.dispatchPointer(up), "Dialog confirm pointer up should be handled without a use-after-free");
+
+    expect(confirmRan, "Dialog confirm callback must run exactly through the normal button path");
+    expect(dismissalWasDeferred && innerStillTopDuringCallback,
+           "A dialog requested from its own button callback must stay owned until pointer dispatch returns");
+    expect(innerButtonDestructions == 1,
+           "The confirming button must be destroyed once after its pointer handler has completed");
+    expect(window.overlayHost().size() == 1 && window.hasDialog(),
+           "Closing an inner dialog must retain its outer modal");
+    expect(window.focusManager().focused() == outerConfirmRaw,
+           "Closing an inner dialog must restore focus to the outer dialog action");
+
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 27, 0, false}),
+           "Escape should still close the outer dialog after an inner confirmation");
+    expect(!window.hasDialog() && window.focusManager().focused() == pageButton,
+           "Closing the final dialog must restore the page focus target");
+}
+
+void testDeferredNestedDialogDismissalsAreAlwaysTopDown()
+{
+    wui::UiApp app(std::make_unique<FakeHost>());
+    auto& window = app.openWindow("top-down dialog dismissal", {320.0f, 180.0f});
+
+    auto page = std::make_unique<wui::Button>("Page");
+    auto* pageButton = page.get();
+    window.setRoot(std::move(page));
+    window.layout();
+    expect(window.dispatchPointer(pointer(wui::PointerAction::Down)),
+           "Page must receive focus before nested modal dismissal test");
+
+    auto outer = std::make_unique<wui::Dialog>();
+    auto outerAction = std::make_unique<wui::Button>("Outer");
+    outer->content(std::move(outerAction));
+    const auto outerId = window.showDialog(std::move(outer));
+    window.layout();
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 9, 0, false}),
+           "Tab must focus the outer dialog before the inner dialog opens");
+
+    bool callbackRan = false;
+    bool requestsWereDeferred = false;
+    auto inner = std::make_unique<wui::Dialog>();
+    auto innerAction = std::make_unique<wui::Button>("Close both");
+    auto* innerActionRaw = innerAction.get();
+    innerAction->onClick([&] {
+        callbackRan = true;
+        // Deliberately request the unsafe order. The flush must reverse these
+        // by modal depth so the inner restore-focus pointer never dangles.
+        const bool outerDeferred = window.dismissDialog(outerId) == nullptr;
+        const bool innerDeferred = window.dismissTopDialog() == nullptr;
+        requestsWereDeferred = outerDeferred && innerDeferred && window.overlayHost().size() == 2;
+    });
+    inner->content(std::move(innerAction));
+    (void)window.showDialog(std::move(inner));
+    window.layout();
+
+    expect(window.dismissDialog(outerId) == nullptr && window.overlayHost().size() == 2,
+           "A non-top modal cannot be removed while its nested dialog is active");
+    const auto& bounds = innerActionRaw->bounds();
+    const wui::PointF center{bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f};
+    wui::PointerEvent down{window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+                           wui::MouseButton::Left, center, 0};
+    auto up = down;
+    up.action = wui::PointerAction::Up;
+    expect(window.dispatchPointer(down) && window.dispatchPointer(up),
+           "Nested dialog close action must complete without invalid focus access");
+    expect(callbackRan && requestsWereDeferred,
+           "Both outer-first dismissal requests must remain deferred until dispatch completes");
+    expect(!window.hasDialog() && window.overlayHost().empty(),
+           "Top-down flush must dismiss both nested dialogs");
+    expect(window.focusManager().focused() == pageButton,
+           "Top-down nested dismissal must restore the original page focus");
+}
+
 void testDeclarativeDialogBuilderProducesConcreteModal()
 {
     auto dialog = wui::ui::Dialog().maxWidth(300.0f).dismissOnBackdrop().content(
@@ -549,10 +693,13 @@ int main()
         testPointerCaptureCancelsForWindowOverlayAndDetach();
         testWindowCoordinatesTextInputSession();
         testHighDpiImeCaretCompositionAndClipboardContract();
+        testImeCaretProjectionAtWindowsDpiScales();
         testWindowSuspendsAndRestoresTextInputOnPlatformFocusChange();
         testWindowRoutesClipboardShortcutsToFocusedTextInput();
         testTextInputCallbacksSupportPaletteFilteringAndKeyboardCompletion();
         testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus();
+        testDialogConfirmationDismissalIsDeferredUntilPointerDispatchCompletes();
+        testDeferredNestedDialogDismissalsAreAlwaysTopDown();
         testDeclarativeDialogBuilderProducesConcreteModal();
         testAppReleasesClosedWindows();
         return 0;

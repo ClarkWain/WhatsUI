@@ -10,6 +10,7 @@
 #include "wsc/Canvas.h"
 
 #include "wui/widgets.h"
+#include "wui/paint_context.h"
 #include "wui/whatscanvas_text.h"
 
 namespace {
@@ -127,6 +128,40 @@ void testTextUsesBackendLineBreaking()
     wui::setTextMeasurer(nullptr);
 }
 
+void testCanvasDprOwnsNativeCoordinateScale()
+{
+    auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software, 240, 120);
+    expect(canvas && canvas->initializeContext(), "Software canvas must initialize for DPR bridge test");
+
+    wui::PaintContext lateBoundContext(1.5f);
+    lateBoundContext.setCanvas(*canvas);
+    expect(std::fabs(lateBoundContext.canvasCoordinateScale() - 1.5f) < 0.001f,
+           "A scale-only PaintContext must retain its coordinate scale when a Canvas is bound later");
+
+    canvas->setDevicePixelRatio(1.5f);
+    wui::PaintContext context(*canvas, 1.5f, true);
+    expect(std::fabs(context.scaleFactor() - 1.5f) < 0.001f,
+           "PaintContext must retain the window DPR for framework consumers");
+    expect(std::fabs(context.canvasCoordinateScale() - 1.0f) < 0.001f,
+           "Canvas DPR mode must forward logical coordinates without a second scale");
+
+    // The measure/layout adapter also uses logical font sizes when Canvas
+    // owns DPR; Canvas::drawText applies the physical raster scale itself.
+    wui::WhatsCanvasTextMeasurer measurer(*canvas, 1.0f);
+    const auto metrics = measurer.measureText("DirectWrite DPR", 14.0f);
+    expect(metrics.width > 0.0f && std::isfinite(metrics.width),
+           "logical-DPR text metrics must remain usable");
+
+    const auto entriesBeforeWeights = measurer.cacheStats().entries;
+    (void)measurer.measureText("Weighted heading", 16.0f, 400);
+    const auto entriesAfterRegular = measurer.cacheStats().entries;
+    (void)measurer.measureText("Weighted heading", 16.0f, 700);
+    const auto entriesAfterBold = measurer.cacheStats().entries;
+    expect(entriesAfterRegular == entriesBeforeWeights + 1
+               && entriesAfterBold == entriesAfterRegular + 1,
+           "text measurement cache must distinguish font weights");
+}
+
 } // namespace
 
 int main()
@@ -134,6 +169,7 @@ int main()
     try {
         testMultilingualLayoutAndCache();
         testTextUsesBackendLineBreaking();
+        testCanvasDprOwnsNativeCoordinateScale();
         std::cout << "WhatsUI text shaping tests passed\n";
         return 0;
     } catch (const std::exception& error) {

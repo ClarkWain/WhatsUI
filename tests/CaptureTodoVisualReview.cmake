@@ -16,17 +16,21 @@ endif()
 # Keep these representative of Windows app usage rather than merely sampling
 # arbitrary pixel widths: compact portrait, common desktop, and a wide desktop.
 set(review_names narrow regular wide)
-set(review_sizes 360x720 640x720 1180x760)
-set(review_pixel_sizes 720x1440 1280x1440 2360x1520)
+set(review_sizes 360x720 640x560 1180x760)
+set(review_pixel_sizes 720x1440 1280x1120 2360x1520)
 # The final scene is the important structural-transition checkpoint: it is
 # captured after a row deletion and a clear-completed operation have rebuilt
 # both the ForEach and the empty-state If.  Keep a pixel baseline for that
 # scene at every responsive breakpoint.  A valid-size PPM alone cannot catch
 # a leaked backend clip that reduces labels to glyph fragments.
+# Pin the post-structural scene at each acceptance breakpoint.  The regular
+# capture also owns a scroll-end artifact below: it proves the third task is
+# reachable at the 640x560 Windows acceptance viewport.
 set(review_final_hashes
-    "3b0126eaa6b6a9c83c7545d2dd78c2c3de06e064ea0f5cfcb2843ec4a919faa3"
-    "4de074b1858febf7d972e05056447dbb1556a7e9da651a96a30c8f80a9eb7eec"
-    "1ccc94d0f5241b9ab0e20e35b95430ce24b0ba57f58afbbc5f6a0506eeeda04b")
+    "de547745045bac9a49a243573610cb03e9a0bfe292a89ed2c8c6fc00f491a8b0"
+    "d3f02baeca5ed620bfa25ffd68f6d0f13b47b2f34774249ed0e7f73ac55d5c60"
+    "7b21e492d4fe76c8e9fc92724804596e6b4547db4a8e0d34e3bb33c1c91f884d")
+set(regular_scroll_end_hash "4d8d657496cd1d8489e5f434c9c0342104ee4313d52cc33bc63f5fbc332b946d")
 
 file(REMOVE_RECURSE "${WHATSUI_TODO_REVIEW_OUTPUT_DIR}")
 
@@ -86,6 +90,19 @@ foreach(index RANGE 0 2)
             endif()
         endif()
     endforeach()
+
+    if(name STREQUAL "regular")
+        set(scroll_end "${scene_dir}/todo_scroll_end.ppm")
+        if(NOT EXISTS "${scroll_end}")
+            message(FATAL_ERROR "Todo regular review did not produce the required scroll-end capture")
+        endif()
+        file(SHA256 "${scroll_end}" actual_scroll_end_hash)
+        if(NOT actual_scroll_end_hash STREQUAL regular_scroll_end_hash)
+            message(FATAL_ERROR
+                "Todo regular scroll-end visual regression: expected ${regular_scroll_end_hash}, "
+                "got ${actual_scroll_end_hash}. Review the 640x560 reachable-task capture.")
+        endif()
+    endif()
 endforeach()
 
 message(STATUS "Todo review captures written to ${WHATSUI_TODO_REVIEW_OUTPUT_DIR}")

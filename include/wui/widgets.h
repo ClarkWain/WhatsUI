@@ -59,6 +59,8 @@ public:
 
     [[nodiscard]] float fontSize() const noexcept;
     void setFontSize(float size) noexcept;
+    [[nodiscard]] int fontWeight() const noexcept;
+    void setFontWeight(int weight) noexcept;
     [[nodiscard]] float lineHeight() const noexcept;
     void setLineHeight(float height) noexcept;
 
@@ -88,6 +90,7 @@ private:
     [[nodiscard]] float effectiveLineHeight() const noexcept;
     std::string value_;
     float fontSize_{16.0f};
+    int fontWeight_{400};
     float lineHeight_{0.0f};
     TextWrap wrap_{TextWrap::NoWrap};
     TextOverflow overflow_{TextOverflow::Clip};
@@ -342,6 +345,13 @@ public:
     Checkbox& label(std::string label);
     void setLabel(std::string label);
 
+    // An optional semantic name for compact controls whose visible task title
+    // is rendered by a neighbouring Text node rather than by the checkbox.
+    // It never affects layout or painting.
+    [[nodiscard]] const std::string& accessibleLabel() const noexcept;
+    Checkbox& accessibleLabel(std::string label);
+    void setAccessibleLabel(std::string label);
+
     [[nodiscard]] bool isChecked() const noexcept;
     Checkbox& checked(bool value);
     void setChecked(bool value);
@@ -356,6 +366,7 @@ public:
 private:
     void toggle();
     std::string label_;
+    std::string accessibleLabel_;
     bool checked_{false};
     std::optional<Binding<bool>> binding_;
     bool hasBinding_{false};

@@ -43,7 +43,7 @@ It writes 2× DPR PPM screenshots to `build-wsc\tests\todo_visual_review`:
 | Breakpoint | Logical size | Physical screenshot | Intent |
 | --- | ---: | ---: | --- |
 | `narrow` | 360×720 | 720×1440 | Compact portrait / snapped Windows window |
-| `regular` | 640×720 | 1280×1440 | Common desktop app window |
+| `regular` | 640×560 | 1280×1120 | Common desktop app window |
 | `wide` | 1180×760 | 2360×1520 | Wide desktop window |
 
 Each directory contains the same four product states (`todo_0.ppm` through

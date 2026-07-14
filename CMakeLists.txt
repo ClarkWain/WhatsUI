@@ -17,6 +17,7 @@ set(WHATSUI_PACKAGE_REQUIRES_WHATSCANVAS OFF)
 set(WHATSUI_PACKAGE_REQUIRES_GLFW OFF)
 
 add_library(WhatsUI
+    src/whatsui/core/accessibility.cpp
     src/whatsui/core/app.cpp
     src/whatsui/core/node.cpp
     src/whatsui/core/scheduler.cpp
@@ -76,14 +77,21 @@ if(WHATSUI_WITH_WHATSCANVAS)
         )
     endif()
 
-    # WhatsUI's Windows text contract depends on the public WhatsCanvas text
-    # API. Fresh builds enable the FreeType rasterizer and HarfBuzz adapter;
-    # an explicit cache value still wins for embedders that need a smaller
-    # backend (the adapter reports the documented simple-shaping fallback).
+    # Windows Fluent UI defaults to the platform's native text rasterizer.
+    # Its ClearType hinting is materially sharper than FreeType's grayscale
+    # atlas for small desktop UI text, and the basic backend caches native
+    # bitmaps. Other platforms retain the portable FreeType default. An
+    # explicit cache value still wins for embedders that need a different
+    # text stack.
     if(WHATSUI_ENABLE_ADVANCED_TEXT)
         if(NOT DEFINED WHATSCANVAS_ENABLE_FREETYPE_RASTERIZER)
-            set(WHATSCANVAS_ENABLE_FREETYPE_RASTERIZER ON CACHE BOOL
-                "Enable FreeType rasterization for WhatsUI text" )
+            if(WIN32)
+                set(WHATSCANVAS_ENABLE_FREETYPE_RASTERIZER OFF CACHE BOOL
+                    "Enable FreeType rasterization for WhatsUI text" )
+            else()
+                set(WHATSCANVAS_ENABLE_FREETYPE_RASTERIZER ON CACHE BOOL
+                    "Enable FreeType rasterization for WhatsUI text" )
+            endif()
         endif()
         if(NOT DEFINED WHATSCANVAS_ENABLE_OPENTYPE_SHAPING)
             set(WHATSCANVAS_ENABLE_OPENTYPE_SHAPING ON CACHE BOOL
@@ -175,9 +183,9 @@ if(WHATSUI_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# Core packages may be installed either headless or with the separately
-# exported WhatsCanvas::Software dependency. GLFW/OpenGL remains source-build
-# only until its third-party dependency chain is exported as a package.
+# Core packages may be installed headless or with the selected exported
+# WhatsCanvas/GLFW dependency chain. The GLFW/OpenGL export has an external
+# consumer smoke; native-window and GPU-driver validation remain release gates.
 if(WHATSUI_INSTALL)
     set(WHATSUI_INSTALL_TARGETS WhatsUI)
     if(TARGET WhatsUIGlfw)

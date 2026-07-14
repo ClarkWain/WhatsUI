@@ -12,15 +12,19 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
+#include <iomanip>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "wsc/Canvas.h"
@@ -70,38 +74,82 @@ void collectTodoNodes(wui::Node* node, std::vector<NodeT*>& result)
     }
 }
 
+// Defined below with the shared Todo tree helpers.  The native smoke uses it
+// to exercise a below-fold task row through the real document viewport.
+wui::ScrollView* todoScrollView(wui::Node* node);
+
+// A native smoke test must never appear healthy simply because the host failed
+// to deliver a frame.  This watchdog exists only for --perf-smoke: ordinary
+// interactive windows retain their normal event-loop lifetime.  It also gives
+// CI running without a usable graphics desktop an actionable failure instead
+// of an indefinitely silent process.
+class PerfSmokeWatchdog {
+public:
+    explicit PerfSmokeWatchdog(std::chrono::milliseconds timeout)
+        : worker_([this, timeout] {
+            std::unique_lock<std::mutex> lock(mutex_);
+            if (completed_.wait_for(lock, timeout, [this] { return completedSuccessfully_; })) {
+                return;
+            }
+            std::fputs("Todo perf smoke failed: no completed native frame within 12 seconds; "
+                       "ensure a usable Windows graphics desktop is available.\n", stderr);
+            std::fflush(stderr);
+            std::_Exit(124);
+        })
+    {
+    }
+
+    PerfSmokeWatchdog(const PerfSmokeWatchdog&) = delete;
+    PerfSmokeWatchdog& operator=(const PerfSmokeWatchdog&) = delete;
+
+    ~PerfSmokeWatchdog() { complete(); }
+
+    void complete()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            completedSuccessfully_ = true;
+        }
+        completed_.notify_all();
+        if (worker_.joinable()) worker_.join();
+    }
+
+private:
+    std::mutex mutex_;
+    std::condition_variable completed_;
+    bool completedSuccessfully_{false};
+    std::thread worker_;
+};
+
 // Runs only when WhatsUITodoGlfw receives --perf-smoke. It is deliberately a
-// native GLFW/OpenGL scenario, rather than a headless approximation: focused
-// text input, per-character updates and radio activation all traverse the same
+// native GLFW/OpenGL scenario, rather than a headless approximation: composer
+// entry/submission, task toggling and radio activation all traverse the same
 // event, layout, text and present pipeline used by a person at the window.
 void installTodoPerformanceSmoke(wui::UiWindow& window)
 {
+    constexpr auto smokeTimeout = std::chrono::seconds{12};
+    auto watchdog = std::make_shared<PerfSmokeWatchdog>(smokeTimeout);
+    std::cout << "Todo perf smoke: started (native timeout=12s)" << std::endl;
+    struct ActionMetric {
+        const char* name{nullptr};
+        bool dispatched{false};
+        bool accepted{false};
+        bool sampled{false};
+        std::uint64_t sourceFrame{0};
+        std::chrono::steady_clock::time_point started{};
+        double latencyMilliseconds{0.0};
+        double layoutMilliseconds{0.0};
+        double paintMilliseconds{0.0};
+    };
     struct Sample {
-        bool typed{false};
-        bool selected{false};
         bool reported{false};
         double maxUpdate{0.0};
         double maxLayout{0.0};
         double maxPrepare{0.0};
         double maxPaint{0.0};
-        std::uint64_t inputFrame{0};
-        std::uint64_t radioFrame{0};
-        double maxInputLayout{0.0};
-        double maxInputPaint{0.0};
-        wui::PaintOperationStats inputOperations{};
-        std::size_t inputCommandCount{0};
-        std::size_t inputDrawCalls{0};
-        std::size_t inputTessellationHits{0};
-        std::size_t inputTessellationMisses{0};
-        double maxRadioLayout{0.0};
-        double maxRadioPaint{0.0};
-        wui::PaintOperationStats radioOperations{};
-        std::size_t radioCommandCount{0};
-        std::size_t radioDrawCalls{0};
-        std::size_t radioTessellationHits{0};
-        std::size_t radioTessellationMisses{0};
-        std::chrono::steady_clock::time_point inputStarted{};
-        double inputToFrameMilliseconds{0.0};
+        ActionMetric composer{"composer-submit"};
+        ActionMetric checkbox{"checkbox-toggle"};
+        ActionMetric radio{"radio-select"};
     };
     auto sample = std::make_shared<Sample>();
     wui::Animation animation(1.4f, [&window, sample](float progress) {
@@ -110,101 +158,125 @@ void installTodoPerformanceSmoke(wui::UiWindow& window)
         sample->maxLayout = std::max(sample->maxLayout, frame.layoutMilliseconds);
         sample->maxPrepare = std::max(sample->maxPrepare, frame.prepareMilliseconds);
         sample->maxPaint = std::max(sample->maxPaint, frame.paintMilliseconds);
-        if (sample->inputFrame != 0 && frame.frameNumber > sample->inputFrame
-            && frame.frameNumber <= sample->inputFrame + 4) {
-            sample->maxInputLayout = std::max(sample->maxInputLayout, frame.layoutMilliseconds);
-            if (frame.paintMilliseconds >= sample->maxInputPaint) {
-                sample->maxInputPaint = frame.paintMilliseconds;
-                sample->inputOperations = frame.render.paintOperations;
-                sample->inputCommandCount = frame.render.commandCount.value;
-                sample->inputDrawCalls = frame.render.drawCalls.value;
-                sample->inputTessellationHits = frame.render.tessellationCacheHits.value;
-                sample->inputTessellationMisses = frame.render.tessellationCacheMisses.value;
-            }
-        }
-        if (sample->radioFrame != 0 && frame.frameNumber > sample->radioFrame
-            && frame.frameNumber <= sample->radioFrame + 4) {
-            sample->maxRadioLayout = std::max(sample->maxRadioLayout, frame.layoutMilliseconds);
-            if (frame.paintMilliseconds >= sample->maxRadioPaint) {
-                sample->maxRadioPaint = frame.paintMilliseconds;
-                sample->radioOperations = frame.render.paintOperations;
-                sample->radioCommandCount = frame.render.commandCount.value;
-                sample->radioDrawCalls = frame.render.drawCalls.value;
-                sample->radioTessellationHits = frame.render.tessellationCacheHits.value;
-                sample->radioTessellationMisses = frame.render.tessellationCacheMisses.value;
-            }
-        }
+        auto sampleAction = [&frame](ActionMetric& action) {
+            if (!action.dispatched || action.sampled || frame.frameNumber <= action.sourceFrame) return;
+            action.sampled = true;
+            action.latencyMilliseconds = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - action.started).count();
+            action.layoutMilliseconds = frame.layoutMilliseconds;
+            action.paintMilliseconds = frame.paintMilliseconds;
+        };
+        sampleAction(sample->composer);
+        sampleAction(sample->checkbox);
+        sampleAction(sample->radio);
 
-        if (!sample->typed && progress >= 0.25f) {
+        if (!sample->composer.dispatched && progress >= 0.20f) {
             std::vector<wui::TextInput*> fields;
             collectTodoNodes(window.root(), fields);
-            if (fields.size() >= 2 && fields[1]->bounds().width > 0.0f) {
-                const wui::PointF point{fields[1]->bounds().x + 8.0f,
-                                        fields[1]->bounds().y + fields[1]->bounds().height * 0.5f};
-                window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
-                                        wui::MouseButton::Left, point, 0});
-                window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Up,
-                                        wui::MouseButton::Left, point, 0});
-                sample->inputStarted = std::chrono::steady_clock::now();
-                for (const char character : std::string{"release"}) {
-                    window.dispatchTextInput({window.id(), std::string(1, character)});
+            const auto composer = std::find_if(fields.begin(), fields.end(), [](const wui::TextInput* field) {
+                return field->placeholder() == "Add a task for today";
+            });
+            if (composer != fields.end() && (*composer)->bounds().width > 0.0f) {
+                const auto& bounds = (*composer)->bounds();
+                const wui::PointF point{bounds.x + 8.0f, bounds.y + bounds.height * 0.5f};
+                const bool pointerDown = window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+                                                                 wui::MouseButton::Left, point, 0});
+                const bool pointerUp = window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Up,
+                                                               wui::MouseButton::Left, point, 0});
+                const bool focused = pointerDown && pointerUp;
+                bool textAccepted = true;
+                for (const char character : std::string{"Native perf smoke task"}) {
+                    textAccepted = window.dispatchTextInput({window.id(), std::string(1, character)}) && textAccepted;
                 }
-                sample->inputFrame = frame.frameNumber;
-                sample->typed = true;
+                sample->composer.sourceFrame = frame.frameNumber;
+                sample->composer.started = std::chrono::steady_clock::now();
+                sample->composer.accepted = focused && textAccepted
+                    && window.dispatchKey({window.id(), wui::KeyAction::Down, 13, 0, false});
+                sample->composer.dispatched = true;
             }
         }
 
-        if (sample->typed && sample->inputToFrameMilliseconds == 0.0 && frame.frameNumber > 1) {
-            sample->inputToFrameMilliseconds = std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - sample->inputStarted).count();
+        if (!sample->checkbox.dispatched && sample->composer.dispatched && progress >= 0.48f) {
+            std::vector<wui::Checkbox*> checkboxes;
+            collectTodoNodes(window.root(), checkboxes);
+            // Task rows live inside the document ScrollView. Move to its end
+            // and translate the row's document bounds back into viewport
+            // coordinates before dispatching native-style pointer input.
+            // This makes the toggle path valid even at the compact 640x560
+            // window size, where a freshly submitted row begins below fold.
+            auto* scroll = todoScrollView(window.root());
+            if (scroll != nullptr) scroll->setScrollOffset(scroll->maxScrollOffset());
+            const float scrollOffset = scroll != nullptr ? scroll->scrollOffset() : 0.0f;
+            const auto checkbox = std::find_if(checkboxes.rbegin(), checkboxes.rend(), [scroll, scrollOffset](const wui::Checkbox* node) {
+                const auto& bounds = node->bounds();
+                const wui::PointF viewportPoint{bounds.x + bounds.width * 0.5f,
+                                                bounds.y + bounds.height * 0.5f - scrollOffset};
+                return bounds.width > 0.0f && (scroll == nullptr || scroll->bounds().contains(viewportPoint));
+            });
+            if (checkbox != checkboxes.rend()) {
+                const auto& bounds = (*checkbox)->bounds();
+                const wui::PointF point{bounds.x + bounds.width * 0.5f,
+                                        bounds.y + bounds.height * 0.5f - scrollOffset};
+                sample->checkbox.sourceFrame = frame.frameNumber;
+                sample->checkbox.started = std::chrono::steady_clock::now();
+                const bool pointerDown = window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+                                                                 wui::MouseButton::Left, point, 0});
+                const bool pointerUp = window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Up,
+                                                               wui::MouseButton::Left, point, 0});
+                sample->checkbox.accepted = pointerDown && pointerUp;
+                sample->checkbox.dispatched = true;
+            }
         }
 
-        if (!sample->selected && progress >= 0.65f) {
+        if (!sample->radio.dispatched && progress >= 0.70f) {
             std::vector<wui::Radio*> radios;
             collectTodoNodes(window.root(), radios);
+            if (auto* scroll = todoScrollView(window.root()); scroll != nullptr) {
+                scroll->setScrollOffset(0.0f);
+            }
             if (radios.size() >= 2 && radios[1]->bounds().width > 0.0f) {
                 const auto& bounds = radios[1]->bounds();
                 const wui::PointF point{bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f};
-                window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
-                                        wui::MouseButton::Left, point, 0});
-                window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Up,
-                                        wui::MouseButton::Left, point, 0});
-                sample->radioFrame = frame.frameNumber;
-                sample->selected = true;
+                sample->radio.sourceFrame = frame.frameNumber;
+                sample->radio.started = std::chrono::steady_clock::now();
+                const bool pointerDown = window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+                                                                 wui::MouseButton::Left, point, 0});
+                const bool pointerUp = window.dispatchPointer({window.id(), wui::PointerType::Mouse, wui::PointerAction::Up,
+                                                               wui::MouseButton::Left, point, 0});
+                sample->radio.accepted = pointerDown && pointerUp;
+                sample->radio.dispatched = true;
             }
         }
 
         if (!sample->reported && progress >= 0.9f) {
             sample->reported = true;
+            const auto printAction = [](const ActionMetric& action) {
+                std::cout << "Todo perf smoke: " << action.name << "="
+                          << (action.dispatched && action.accepted && action.sampled ? "ok" : "failed");
+                if (action.sampled) {
+                    std::cout << " latency=" << action.latencyMilliseconds
+                              << "ms layout=" << action.layoutMilliseconds
+                              << "ms paint=" << action.paintMilliseconds << "ms";
+                }
+                std::cout << std::endl;
+            };
+            std::cout << std::fixed << std::setprecision(3);
             std::cout << "Todo perf smoke: max update=" << sample->maxUpdate
                       << "ms layout=" << sample->maxLayout
                       << "ms prepare=" << sample->maxPrepare
-                      << "ms paint=" << sample->maxPaint
-                      << "ms input-to-frame=" << sample->inputToFrameMilliseconds
-                      << "ms input(layout/paint)=" << sample->maxInputLayout << "/" << sample->maxInputPaint
-                      << "ms radio(layout/paint)=" << sample->maxRadioLayout << "/" << sample->maxRadioPaint
-                      << "ms\n  input ops(rect/round/text/clip ms)="
-                      << sample->inputOperations.fillRectMilliseconds << "/"
-                      << sample->inputOperations.fillRoundRectMilliseconds << "/"
-                      << sample->inputOperations.textDrawMilliseconds << "/"
-                      << sample->inputOperations.clipRectMilliseconds
-                      << " commands/draws/tess(hit/miss)=" << sample->inputCommandCount << "/"
-                      << sample->inputDrawCalls << "/" << sample->inputTessellationHits << "/"
-                      << sample->inputTessellationMisses
-                      << "\n  radio ops(rect/round/text/clip ms)="
-                      << sample->radioOperations.fillRectMilliseconds << "/"
-                      << sample->radioOperations.fillRoundRectMilliseconds << "/"
-                      << sample->radioOperations.textDrawMilliseconds << "/"
-                      << sample->radioOperations.clipRectMilliseconds
-                      << " commands/draws/tess(hit/miss)=" << sample->radioCommandCount << "/"
-                      << sample->radioDrawCalls << "/" << sample->radioTessellationHits << "/"
-                      << sample->radioTessellationMisses << std::endl;
+                      << "ms paint=" << sample->maxPaint << "ms" << std::endl;
+            printAction(sample->composer);
+            printAction(sample->checkbox);
+            printAction(sample->radio);
         }
     });
     // Closing from the update callback leaves that callback registered for
     // the next host tick while UiWindow has already been destroyed. Close
     // only from the completion hook, after Animation::tick removes itself.
-    animation.onComplete([&window] { window.platformWindow().close(); });
+    animation.onComplete([&window, watchdog] {
+        watchdog->complete();
+        window.platformWindow().close();
+    });
     (void)wui::Ticker::instance().add(std::move(animation));
 }
 #endif
@@ -241,6 +313,20 @@ void synchronizeTodoPresentation(const std::vector<Todo>& all,
     hasStoredCompleted.set(storedCompleted);
 }
 
+// The Todo page owns one document viewport.  Keeping its lookup local to this
+// sample lets the deterministic Software walkthrough capture the bottom of a
+// compact page, which proves task rows remain reachable rather than merely
+// painted below the 640x560 viewport.
+wui::ScrollView* todoScrollView(wui::Node* node)
+{
+    if (node == nullptr) return nullptr;
+    if (auto* scroll = dynamic_cast<wui::ScrollView*>(node)) return scroll;
+    for (const auto& child : node->children()) {
+        if (auto* scroll = todoScrollView(child.get())) return scroll;
+    }
+    return nullptr;
+}
+
 #ifdef WUI_TODO_INTERACTIVE
 void showConfirmation(wui::UiWindow& window,
                       std::string title,
@@ -255,8 +341,8 @@ void showConfirmation(wui::UiWindow& window,
         Box().width(360.0f).padding(wui::InsetsF{24.0f, 20.0f, 20.0f, 20.0f}).children(
             Column().gap(16.0f).align(wui::Alignment::Stretch).children(
                 Column().gap(5.0f).children(
-                    Text(std::move(title)).size(18.0f).lineHeight(24.0f).color({36, 36, 36, 255}),
-                    Text(std::move(detail)).wrap().size(13.0f).lineHeight(19.0f).color({97, 97, 97, 255})),
+                    Text(std::move(title)).size(20.0f).lineHeight(28.0f).color({36, 36, 36, 255}),
+                    Text(std::move(detail)).wrap().size(16.0f).lineHeight(24.0f).color({97, 97, 97, 255})),
                 Row().align(wui::Alignment::Center).gap(8.0f).children(
                     Spacer().flex(1.0f),
                     Button("Cancel").variant(wui::ButtonVariant::Ghost)
@@ -287,8 +373,8 @@ void showEditDialog(wui::UiWindow& window,
 
     auto error = std::make_unique<wui::Text>();
     auto* errorRaw = error.get();
-    errorRaw->setFontSize(12.0f);
-    errorRaw->setLineHeight(18.0f);
+    errorRaw->setFontSize(14.0f);
+    errorRaw->setLineHeight(20.0f);
     errorRaw->setColor({196, 43, 28, 255});
 
     // Dialog dismissal also covers Escape and an enabled backdrop. A shared
@@ -316,8 +402,8 @@ void showEditDialog(wui::UiWindow& window,
         Box().width(420.0f).padding(wui::InsetsF{24.0f, 20.0f, 20.0f, 20.0f}).children(
             Column().gap(14.0f).align(wui::Alignment::Stretch).children(
                 Column().gap(4.0f).children(
-                    Text("Edit task").size(18.0f).lineHeight(24.0f).color({36, 36, 36, 255}),
-                    Text("Choose a clear, distinct title for My day.").size(13.0f).lineHeight(19.0f).color({97, 97, 97, 255})),
+                    Text("Edit task").size(20.0f).lineHeight(28.0f).color({36, 36, 36, 255}),
+                    Text("Choose a clear, distinct title for My day.").size(16.0f).lineHeight(24.0f).color({97, 97, 97, 255})),
                 std::move(editor),
                 std::move(error),
                 Row().align(wui::Alignment::Center).gap(8.0f).children(
@@ -404,19 +490,24 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
         .background(canvas)
         .children(Row().align(wui::Alignment::Stretch).children(
             Spacer().flex(1.0f),
-            Box().width(720.0f).children(Column()
+            Box().width(720.0f).children(
+                // The entire page scrolls as one document.  This keeps the
+                // title/composer visually coherent at desktop sizes while
+                // making every task row reachable at the 640x560 acceptance
+                // viewport and on compact portrait windows.
+                ScrollView().axis(wui::ScrollAxis::Vertical).children(Column()
         .padding(wui::InsetsF{28.0f, 24.0f, 24.0f, 24.0f})
         .gap(16.0f)
         .align(wui::Alignment::Stretch)
         .children(
             Row().align(wui::Alignment::Center).gap(12.0f).children(
                 Column().gap(3.0f).children(
-                    Text("My day").size(30.0f).lineHeight(38.0f).color(ink),
-                    Text("Plan what matters today").size(13.0f).lineHeight(18.0f).color(muted)),
+                    Text("My day").size(32.0f).weight(600).lineHeight(40.0f).color(ink),
+                    Text("Plan what matters today").size(16.0f).lineHeight(24.0f).color(muted)),
                 Spacer().flex(1.0f),
                 Box().background(blueSoft).radius(14.0f).padding({12.0f, 7.0f, 12.0f, 7.0f})
                     .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
-                    .children(Text().bind(todos, summary).size(12.0f).lineHeight(18.0f).color(blue))),
+                    .children(Text().bind(todos, summary).size(14.0f).lineHeight(20.0f).color(blue))),
             Box().background(surface).radius(12.0f).padding({12.0f, 10.0f, 10.0f, 10.0f})
                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
                     std::move(composerNode),
@@ -429,7 +520,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                 .children(SearchField("Search tasks").onChange(setSearchQuery)),
             Box().background(surface).radius(12.0f).padding({12.0f, 7.0f, 12.0f, 7.0f})
                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
-                    Text("VIEW").size(10.0f).lineHeight(14.0f).color(muted),
+                    Text("VIEW").size(12.0f).lineHeight(18.0f).color(muted),
                     Radio("All").bind(filterAll).onChange([setFilter](bool) {
                         setFilter(whatsui::todo::TodoFilter::All);
                     }),
@@ -441,32 +532,32 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                     }))),
             If(hasOperationMessage).then([&operationMessage, error = colors.danger] {
                 return Box().background({255, 235, 238, 255}).radius(8.0f).padding({12.0f, 8.0f, 12.0f, 8.0f})
-                    .children(Text().bind(operationMessage).size(12.0f).lineHeight(18.0f).color(error));
+                    .children(Text().bind(operationMessage).size(14.0f).lineHeight(20.0f).color(error));
             }),
             // A short-lived action surface turns destructive operations into a
             // recoverable workflow without moving the list or obscuring rows.
             If(hasUndo).then([&undoMessage, undo, blue, blueSoft] {
                 return Box().background(blueSoft).radius(10.0f).padding({12.0f, 7.0f, 8.0f, 7.0f})
                     .children(Row().align(wui::Alignment::Center).gap(8.0f).children(
-                        Text().bind(undoMessage).size(12.0f).lineHeight(18.0f).color(blue),
+                        Text().bind(undoMessage).size(14.0f).lineHeight(20.0f).color(blue),
                         Spacer().flex(1.0f),
                         Button("Undo").variant(wui::ButtonVariant::Ghost).onClick(undo)));
             }),
             Box().background(blueSoft).radius(12.0f).padding({18.0f, 14.0f, 18.0f, 14.0f})
                 .children(Row().align(wui::Alignment::Center).gap(12.0f).children(
                     Column().gap(2.0f).children(
-                        Text("TODAY").size(10.0f).lineHeight(14.0f).color(blue),
+                        Text("TODAY").size(12.0f).lineHeight(18.0f).color(blue),
                         Text().bind(todos, [summary](const std::vector<Todo>& values) { return summary(values) + " - keep going"; })
-                            .size(16.0f).lineHeight(22.0f).color(ink)),
+                            .size(18.0f).lineHeight(24.0f).color(ink)),
                     Spacer().flex(1.0f),
-                    Text("My day").size(12.0f).lineHeight(18.0f).color(muted))),
+                    Text("My day").size(14.0f).lineHeight(20.0f).color(muted))),
             // Keep the list header in the same content rail as the composer
             // and focus card. The list action belongs beside its heading,
             // rather than stranded at the bottom of a tall window.
             Row().align(wui::Alignment::Center).children(
                 Column().gap(1.0f).children(
-                    Text("Tasks").size(16.0f).lineHeight(22.0f).color(ink),
-                    Text("Keep the next important thing in view").size(11.0f).lineHeight(15.0f).color(muted)),
+                    Text("Tasks").size(20.0f).weight(600).lineHeight(28.0f).color(ink),
+                    Text("Keep the next important thing in view").size(14.0f).lineHeight(20.0f).color(muted)),
                 Spacer().flex(1.0f),
                 If(hasStoredCompleted).then([clearCompleted, requestConfirmation] {
                     return Button("Clear done").variant(wui::ButtonVariant::Ghost)
@@ -481,16 +572,16 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                     .height(104.0f).padding({20.0f, 24.0f, 20.0f, 24.0f})
                     .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
                     .children(Column().gap(6.0f).align(wui::Alignment::Center).children(
-                        Text("Nothing planned yet").size(16.0f).lineHeight(22.0f).color({36, 36, 36, 255}),
-                        Text("Capture the next thing that needs your attention.").size(12.0f).lineHeight(18.0f).color(muted)));
+                        Text("Nothing planned yet").size(18.0f).weight(600).lineHeight(24.0f).color({36, 36, 36, 255}),
+                        Text("Capture the next thing that needs your attention.").size(14.0f).lineHeight(20.0f).color(muted)));
             }),
             If(hasNoMatches).then([muted] {
                 return Box().background({255, 255, 255, 255}).radius(12.0f)
                     .height(104.0f).padding({20.0f, 24.0f, 20.0f, 24.0f})
                     .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
                     .children(Column().gap(6.0f).align(wui::Alignment::Center).children(
-                        Text("No matching tasks").size(16.0f).lineHeight(22.0f).color({36, 36, 36, 255}),
-                        Text("Try a different search or view.").size(12.0f).lineHeight(18.0f).color(muted)));
+                        Text("No matching tasks").size(18.0f).weight(600).lineHeight(24.0f).color({36, 36, 36, 255}),
+                        Text("Try a different search or view.").size(14.0f).lineHeight(20.0f).color(muted)));
             }),
             // A section exists only when it has rows.  In particular, an
             // all-completed list must not imply that completed work is "in
@@ -498,22 +589,26 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
             // card rather than a heading followed by whitespace.
             If(hasActive).then([&activeTodos, toggle, remove, edit, requestConfirmation] {
                 return Column().gap(10.0f).align(wui::Alignment::Stretch).children(
-                    Text("IN PROGRESS").size(10.0f).lineHeight(14.0f).color({97, 97, 97, 255}),
+                    Text("IN PROGRESS").size(12.0f).lineHeight(18.0f).color({97, 97, 97, 255}),
                     KeyedForEach<Todo>(activeTodos,
                         [](const Todo& item) { return std::to_string(item.id); },
                         [toggle, remove, edit, requestConfirmation](const Todo& item) {
                             return Box().background({255, 255, 255, 255}).radius(10.0f)
                                 .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
-                                    Checkbox("", item.completed).onChange([toggle, id = item.id](bool) { toggle(id); }),
+                                    Checkbox("", item.completed).accessibleLabel(item.title)
+                                        .onChange([toggle, id = item.id](bool) { toggle(id); }),
                                     Column().gap(0.0f).flex(1.0f).children(
-                                        Text(item.title).wrap().maxLines(2).ellipsis().size(15.0f).lineHeight(20.0f)
+                                        Text(item.title).wrap().maxLines(2).ellipsis().size(16.0f).lineHeight(22.0f)
                                             .color({36, 36, 36, 255})),
-                                    // Labelled commands remain unambiguous when a
-                                    // renderer has no icon-font fallback. Both keep
-                                    // the compact 32px Fluent control height.
+                                    // Keep Edit discoverable, but make the destructive
+                                    // command a compact secondary affordance.  At the
+                                    // 360px Windows breakpoint this leaves the task
+                                    // title, completion control and commands on one
+                                    // non-overlapping rail; the accessible label keeps
+                                    // the icon meaningful to future UIA bridges.
                                     Button("Edit").variant(wui::ButtonVariant::Ghost).onClick([edit, id = item.id] { edit(id); }),
-                                    Button("Delete").variant(wui::ButtonVariant::Ghost)
+                                    IconButton("×", "Delete task")
                                         .onClick([remove, id = item.id, requestConfirmation] {
                                             requestConfirmation("Remove this task?",
                                                                 "This task will be removed from My day.",
@@ -523,19 +618,20 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
             }),
             If(hasCompleted).then([&completedTodos, toggle, remove, edit, requestConfirmation] {
                 return Column().gap(10.0f).align(wui::Alignment::Stretch).children(
-                    Text("COMPLETED").size(10.0f).lineHeight(14.0f).color({97, 97, 97, 255}),
+                    Text("COMPLETED").size(12.0f).lineHeight(18.0f).color({97, 97, 97, 255}),
                     KeyedForEach<Todo>(completedTodos,
                         [](const Todo& item) { return std::to_string(item.id); },
                         [toggle, remove, edit, requestConfirmation](const Todo& item) {
                         return Box().background({255, 255, 255, 255}).radius(10.0f)
                             .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                             .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
-                                Checkbox("", item.completed).onChange([toggle, id = item.id](bool) { toggle(id); }),
+                                Checkbox("", item.completed).accessibleLabel(item.title)
+                                    .onChange([toggle, id = item.id](bool) { toggle(id); }),
                                 Column().gap(0.0f).flex(1.0f).children(
-                                    Text(item.title).wrap().maxLines(2).ellipsis().size(15.0f).lineHeight(20.0f)
+                                    Text(item.title).wrap().maxLines(2).ellipsis().size(16.0f).lineHeight(22.0f)
                                         .color({117, 117, 117, 255})),
                                 Button("Edit").variant(wui::ButtonVariant::Ghost).onClick([edit, id = item.id] { edit(id); }),
-                                Button("Delete").variant(wui::ButtonVariant::Ghost)
+                                IconButton("×", "Delete task")
                                     .onClick([remove, id = item.id, requestConfirmation] {
                                         requestConfirmation("Remove this task?",
                                                             "This task will be removed from My day.",
@@ -543,12 +639,13 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                     })));
                     }).gap(8.0f).align(wui::Alignment::Stretch));
             }),
-            Spacer(0.0f, 0.0f))),
+            Spacer(0.0f, 0.0f)))),
             Spacer().flex(1.0f)));
 }
 
 } // namespace
 
+#if !defined(WUI_TODO_TESTING)
 int main(int argc, char** argv)
 {
 #ifdef WUI_TODO_INTERACTIVE
@@ -816,7 +913,7 @@ int main(int argc, char** argv)
                             [](std::string, std::string, std::function<void()> confirm) { confirm(); });
 
     int frame = 0;
-    auto renderFrame = [&]() {
+    auto renderFrame = [&](const char* namedCapture = nullptr, bool scrollToEnd = false) {
         // Isolate every visual-regression scene. Reusing one Software canvas
         // across pixel readbacks can retain backend target state between scenes.
         auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software,
@@ -830,6 +927,13 @@ int main(int argc, char** argv)
 
         wui::flushStructuralUpdates();
         root->layout({0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
+        if (scrollToEnd) {
+            auto* scroll = todoScrollView(root.get());
+            if (scroll == nullptr || scroll->maxScrollOffsetY() <= 0.0f) {
+                throw std::runtime_error("Todo compact viewport did not expose a vertical scroll range");
+            }
+            scroll->setScrollOffset(scroll->maxScrollOffsetY());
+        }
         wui::PaintContext paint(*canvas, scaleFactor);
         root->prepare(paint);
         for (int pass = 0; pass < 2; ++pass) {
@@ -838,11 +942,18 @@ int main(int argc, char** argv)
             root->paint(paint);
             canvas->endFrame();
         }
-        const auto path = outputDirectory / ("todo_" + std::to_string(frame++) + ".ppm");
+        const auto path = outputDirectory / (namedCapture != nullptr
+            ? std::string{"todo_"} + namedCapture + ".ppm"
+            : "todo_" + std::to_string(frame++) + ".ppm");
         if (!canvas->savePixelsPPM(path.string())) {
             throw std::runtime_error("failed to save " + path.string());
         }
         wui::setTextMeasurer(nullptr);
+        if (scrollToEnd) {
+            // The next scripted product state starts at the same top-of-page
+            // position a user sees after an add/toggle rebuild.
+            if (auto* scroll = todoScrollView(root.get())) scroll->setScrollOffset(0.0f);
+        }
         std::cout << "wrote " << path << std::endl;
     };
 
@@ -854,6 +965,13 @@ int main(int argc, char** argv)
     addTodo("Write WhatsUI docs");
     addTodo("Ship the release");
     renderFrame();                 // three active items: IN PROGRESS only
+    if (width == 640 && height == 560) {
+        // The regular Windows acceptance viewport is deliberately shorter
+        // than the three-row walkthrough.  Capture its document end as a
+        // focused regression artifact without making wide/narrow reviews
+        // render an unnecessary duplicate scene.
+        renderFrame("scroll_end", true);
+    }
     toggle(1);
     toggle(2);
     toggle(3);
@@ -864,3 +982,4 @@ int main(int argc, char** argv)
     return 0;
 #endif
 }
+#endif // !defined(WUI_TODO_TESTING)

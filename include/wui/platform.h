@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -13,6 +14,26 @@ struct WindowMetrics {
     SizeF framebufferSize{};
     float scaleFactor{1.0f};
 };
+
+// Projects a logical TextInput caret to the coordinate space required by
+// native client-area APIs such as IMM32.  The returned point is deliberately
+// rounded because Win32 candidate/composition windows accept integer client
+// pixels.  Keep this independent of a particular window backend so the exact
+// fractional-DPI boundary can be exercised in headless tests.
+[[nodiscard]] inline PointF projectLogicalCaretToClientPixels(
+    const RectF& caret,
+    SizeF logicalWindowSize,
+    SizeF clientPixelSize) noexcept
+{
+    const float scaleX = logicalWindowSize.width > 0.0f
+        ? clientPixelSize.width / logicalWindowSize.width
+        : 1.0f;
+    const float scaleY = logicalWindowSize.height > 0.0f
+        ? clientPixelSize.height / logicalWindowSize.height
+        : 1.0f;
+    return {std::round(caret.x * scaleX),
+            std::round((caret.y + caret.height) * scaleY)};
+}
 
 class RenderSurface {
 public:
@@ -75,6 +96,9 @@ public:
     [[nodiscard]] virtual bool isFocused() const noexcept = 0;
 
     virtual void setTitle(std::string_view title) = 0;
+    // Backends that retain a native title can expose it as the accessible
+    // application name. Older/headless hosts may keep the empty default.
+    [[nodiscard]] virtual std::string title() const { return {}; }
     virtual void requestRedraw() = 0;
 
     [[nodiscard]] virtual RenderSurface& surface() = 0;
