@@ -102,14 +102,15 @@ jobs:
         run: ctest --test-dir build-wsc -C Debug --output-on-failure ${{ matrix.test_regex }}
 
       - name: Run Windows native interaction and DPI smoke
-        if: matrix.name == 'software-visual-regression'
+        if: matrix.name == 'software-visual-regression' && always()
         run: ctest --test-dir build-wsc -C Debug --output-on-failure -R '^whatsui_(glfw_resize_tests|todo_native_perf_smoke|todo_ui_interaction_smoke_tests|text_shaping_tests)$'
 
-      # Hashes catch accidental render changes.  Preserve the responsive
-      # screenshots as CI artifacts so a reviewer can judge composition,
-      # hierarchy, and clipping in the actual output.
+      # Same-run image invariants catch broken state transitions without
+      # treating machine-specific ClearType pixels as portable goldens.
+      # Preserve the responsive screenshots so a reviewer can also judge
+      # composition, hierarchy, and clipping in the actual output.
       - name: Capture responsive Todo review set
-        if: matrix.name == 'software-visual-regression'
+        if: matrix.name == 'software-visual-regression' && always()
         run: ctest --test-dir build-wsc -C Debug --output-on-failure -R ^whatsui_todo_visual_review$
 
       - name: Upload Todo visual review

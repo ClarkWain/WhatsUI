@@ -20,17 +20,11 @@ set(review_sizes 360x720 640x560 1180x760)
 set(review_pixel_sizes 720x1440 1280x1120 2360x1520)
 # The final scene is the important structural-transition checkpoint: it is
 # captured after a row deletion and a clear-completed operation have rebuilt
-# both the ForEach and the empty-state If.  Keep a pixel baseline for that
-# scene at every responsive breakpoint.  A valid-size PPM alone cannot catch
-# a leaked backend clip that reduces labels to glyph fragments.
-# Pin the post-structural scene at each acceptance breakpoint.  The regular
-# capture also owns a scroll-end artifact below: it proves the third task is
-# reachable at the 640x560 Windows acceptance viewport.
-set(review_final_hashes
-    "de547745045bac9a49a243573610cb03e9a0bfe292a89ed2c8c6fc00f491a8b0"
-    "d3f02baeca5ed620bfa25ffd68f6d0f13b47b2f34774249ed0e7f73ac55d5c60"
-    "7b21e492d4fe76c8e9fc92724804596e6b4547db4a8e0d34e3bb33c1c91f884d")
-set(regular_scroll_end_hash "4d8d657496cd1d8489e5f434c9c0342104ee4313d52cc33bc63f5fbc332b946d")
+# both the ForEach and the empty-state If. It must reproduce the initial scene
+# exactly at every breakpoint. This same-run invariant catches leaked backend
+# clip/paint state without depending on the installed Windows font revision.
+# The regular capture also owns a scroll-end artifact below: it proves the
+# third task is reachable at the 640x560 Windows acceptance viewport.
 
 file(REMOVE_RECURSE "${WHATSUI_TODO_REVIEW_OUTPUT_DIR}")
 
@@ -38,7 +32,6 @@ foreach(index RANGE 0 2)
     list(GET review_names ${index} name)
     list(GET review_sizes ${index} logical_size)
     list(GET review_pixel_sizes ${index} pixel_size)
-    list(GET review_final_hashes ${index} expected_final_hash)
     set(scene_dir "${WHATSUI_TODO_REVIEW_OUTPUT_DIR}/${name}")
 
     execute_process(
@@ -77,17 +70,23 @@ foreach(index RANGE 0 2)
             message(FATAL_ERROR "${image} is truncated (${image_bytes} bytes)")
         endif()
 
-        # `todo_3` is the post-delete/post-clear checkpoint described above.
-        # Pin it independently at each size so structural paint-state leaks
-        # cannot hide behind a successful default-size visual hash.
-        if(frame EQUAL 3)
-            file(SHA256 "${image}" actual_final_hash)
-            if(NOT actual_final_hash STREQUAL expected_final_hash)
-                message(FATAL_ERROR
-                    "Todo ${name} post-structural visual regression in todo_3.ppm: "
-                    "expected ${expected_final_hash}, got ${actual_final_hash}. "
-                    "Review the screenshot before accepting a new baseline.")
-            endif()
+        file(SHA256 "${image}" actual_hash)
+        set(actual_${name}_${frame} "${actual_hash}")
+    endforeach()
+
+    if(NOT actual_${name}_0 STREQUAL actual_${name}_3)
+        message(FATAL_ERROR
+            "Todo ${name} post-structural scene differs from its initial scene: "
+            "todo_0=${actual_${name}_0}, todo_3=${actual_${name}_3}. "
+            "Review the screenshots for leaked clip/paint/layout state.")
+    endif()
+
+    foreach(frame RANGE 0 2)
+        math(EXPR next_frame "${frame} + 1")
+        if(actual_${name}_${frame} STREQUAL actual_${name}_${next_frame})
+            message(FATAL_ERROR
+                "Todo ${name} walkthrough frames ${frame} and ${next_frame} are identical; "
+                "the scripted UI transition was not rendered.")
         endif()
     endforeach()
 
@@ -97,10 +96,10 @@ foreach(index RANGE 0 2)
             message(FATAL_ERROR "Todo regular review did not produce the required scroll-end capture")
         endif()
         file(SHA256 "${scroll_end}" actual_scroll_end_hash)
-        if(NOT actual_scroll_end_hash STREQUAL regular_scroll_end_hash)
+        if(actual_scroll_end_hash STREQUAL actual_${name}_3)
             message(FATAL_ERROR
-                "Todo regular scroll-end visual regression: expected ${regular_scroll_end_hash}, "
-                "got ${actual_scroll_end_hash}. Review the 640x560 reachable-task capture.")
+                "Todo regular scroll-end capture is identical to the final scene; "
+                "the 640x560 reachable-task transition was not rendered.")
         endif()
     endif()
 endforeach()
