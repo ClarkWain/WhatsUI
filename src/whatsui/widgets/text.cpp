@@ -42,6 +42,17 @@ void Text::setFontSize(float size) noexcept
     markDirty(DirtyFlag::Layout);
 }
 
+int Text::fontWeight() const noexcept
+{
+    return fontWeight_;
+}
+
+void Text::setFontWeight(int weight) noexcept
+{
+    fontWeight_ = std::clamp(weight, 1, 1000);
+    markDirty(DirtyFlag::Layout);
+}
+
 float Text::lineHeight() const noexcept
 {
     return lineHeight_;
@@ -84,7 +95,9 @@ SizeF Text::measure(const Constraints& constraints) const
 
 float Text::textWidth(const std::string& value) const
 {
-    if (const TextMeasurer* measurer = textMeasurer()) return measurer->measureText(value, fontSize_).width;
+    if (const TextMeasurer* measurer = textMeasurer()) {
+        return measurer->measureText(value, fontSize_, fontWeight_).width;
+    }
     // Fallback is deliberately codepoint-oriented so non-ASCII text does not
     // become wider merely because UTF-8 uses multiple bytes.
     std::size_t codepoints = 0;
@@ -105,7 +118,7 @@ std::vector<std::string> Text::layoutLines(float availableWidth) const
     const bool canWrap = wrap_ == TextWrap::Word && constrained;
     if (canWrap) {
         if (const auto* provider = dynamic_cast<const TextLayoutProvider*>(textMeasurer())) {
-            const auto resolved = provider->layoutText(value_, fontSize_, availableWidth,
+            const auto resolved = provider->layoutText(value_, fontSize_, fontWeight_, availableWidth,
                                                        effectiveLineHeight(), maxLines_,
                                                        overflow_ == TextOverflow::Ellipsis);
             std::vector<std::string> lines;
@@ -176,7 +189,7 @@ float Text::baselineOffset() const noexcept
     extents.ascent = fontSize_ * 0.8f;
     extents.descent = fontSize_ * 0.2f;
     if (const TextMeasurer* measurer = textMeasurer()) {
-        extents = measurer->measureText(value_, fontSize_);
+        extents = measurer->measureText(value_, fontSize_, fontWeight_);
     }
     const float height = lineHeight_ > 0.0f ? lineHeight_ : extents.height;
     const float glyphHeight = extents.ascent + extents.descent;
@@ -189,7 +202,6 @@ void Text::paint(PaintContext& context)
     if (!lines.empty()) {
         const Color color = hasColor_ ? color_ : theme().colors.text;
         const float lineHeight = effectiveLineHeight();
-        const float baseline = bounds().y + baselineOffset();
         // Most text is already contained by wrapping/ellipsis, so adding a
         // clip for every run is redundant. More importantly, the Software
         // backend batches glyph-atlas draws after paint has returned; a large
@@ -219,7 +231,11 @@ void Text::paint(PaintContext& context)
                               bounds().height + fontSize_ * 2.0f});
         }
         for (std::size_t index = 0; index < lines.size(); ++index) {
-            context.drawText(lines[index], bounds().x, baseline + lineHeight * static_cast<float>(index), fontSize_, color);
+            const RectF lineBox{bounds().x, bounds().y + lineHeight * static_cast<float>(index),
+                                bounds().width, lineHeight};
+            context.drawText(lines[index], bounds().x,
+                             context.centeredTextBottom(lines[index], lineBox, fontSize_, fontWeight_), fontSize_, color,
+                             fontWeight_);
         }
         if (needsClip) {
             context.restore();

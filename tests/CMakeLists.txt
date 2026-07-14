@@ -62,6 +62,34 @@ add_test(
     COMMAND WhatsUIWindowTests
 )
 
+# Native OpenGL regression for the GLFW framebuffer-size callback.  It
+# validates that RenderSurface::resize updates GL_VIEWPORT after the default
+# framebuffer changes, preventing the resized Todo window from rendering only
+# into its former lower-left area.  The test is intentionally not a headless
+# substitute: unavailable desktop OpenGL is reported by CTest as skipped.
+if(TARGET WhatsUI::Glfw)
+    add_executable(WhatsUIGlfwResizeTests
+        glfw_resize_tests.cpp
+    )
+
+    target_link_libraries(WhatsUIGlfwResizeTests
+        PRIVATE
+            WhatsUI::Glfw
+    )
+
+    target_compile_features(WhatsUIGlfwResizeTests PRIVATE cxx_std_17)
+
+    add_test(
+        NAME whatsui_glfw_resize_tests
+        COMMAND WhatsUIGlfwResizeTests
+    )
+    set_tests_properties(whatsui_glfw_resize_tests PROPERTIES
+        LABELS "native;glfw;opengl;resize"
+        SKIP_RETURN_CODE 77
+        TIMEOUT 30
+    )
+endif()
+
 add_executable(WhatsUIScrollViewTests
     scroll_view_tests.cpp
 )
@@ -312,6 +340,49 @@ add_test(
     COMMAND WhatsUITodoInteractionTests
 )
 
+# This drives the actual Todo declarative tree through UiWindow input routing.
+# The test-only definition suppresses the sample executable entry point while
+# retaining the exact buildTodoUi() implementation used by both Todo binaries.
+set(WHATSUI_TODO_CANVAS_INCLUDE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/WhatsCanvas/include")
+if(EXISTS "${WHATSUI_TODO_CANVAS_INCLUDE_DIR}/wsc/Canvas.h")
+    add_executable(WhatsUITodoUiInteractionSmokeTests
+        todo_ui_interaction_smoke_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_controller.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_interaction.cpp
+    )
+
+    target_include_directories(WhatsUITodoUiInteractionSmokeTests
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app
+            # main.cpp owns the shared Todo tree and includes Canvas.h even
+            # when this test selects its interactive (non-rendering) path.
+            ${WHATSUI_TODO_CANVAS_INCLUDE_DIR}
+    )
+
+    target_link_libraries(WhatsUITodoUiInteractionSmokeTests
+        PRIVATE
+            WhatsUI::WhatsUI
+    )
+
+    if(TARGET WhatsCanvas::Software)
+        target_link_libraries(WhatsUITodoUiInteractionSmokeTests PRIVATE WhatsCanvas::Software)
+    endif()
+
+    target_compile_features(WhatsUITodoUiInteractionSmokeTests PRIVATE cxx_std_17)
+
+    add_test(
+        NAME whatsui_todo_ui_interaction_smoke_tests
+        COMMAND WhatsUITodoUiInteractionSmokeTests
+    )
+    # This is a headless input-routing test and normally completes in a few
+    # milliseconds.  Bound it so a Debug CRT dialog or unexpected modal
+    # platform regression cannot stall an unattended full CTest run.
+    set_tests_properties(whatsui_todo_ui_interaction_smoke_tests PROPERTIES
+        TIMEOUT 30
+    )
+endif()
+
 add_executable(WhatsUIVirtualListTests
     m4_virtual_list_tests.cpp
 )
@@ -420,6 +491,28 @@ if(TARGET WhatsUITodoApp)
         # review job is intentionally comprehensive and can exceed CTest's
         # default timeout on hosted Windows runners.
         TIMEOUT 180
+    )
+endif()
+
+# Native Todo performance smoke.  Register it only when the optional GLFW
+# example exists; headless/source-only builds must not advertise a test they
+# cannot build.  The CMake runner asserts both lifecycle markers, retains all
+# child output for a diagnosable failure and makes a missing graphics desktop
+# an explicit CTest skip instead of a pass.
+if(TARGET WhatsUITodoGlfw)
+    add_test(
+        NAME whatsui_todo_native_perf_smoke
+        COMMAND ${CMAKE_COMMAND}
+            -DWHATSUI_TODO_GLFW_EXECUTABLE=$<TARGET_FILE:WhatsUITodoGlfw>
+            -DWHATSUI_TODO_NATIVE_PERF_WORKING_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/todo_native_perf_smoke
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/RunTodoNativePerfSmoke.cmake
+    )
+    set_tests_properties(whatsui_todo_native_perf_smoke PROPERTIES
+        LABELS "native;glfw;opengl;performance;todo"
+        SKIP_REGULAR_EXPRESSION "SKIP: native GLFW/OpenGL surface unavailable"
+        # The child runner has a 15-second watchdog; leave small process
+        # teardown/reporting headroom while still catching a stuck runner.
+        TIMEOUT 18
     )
 endif()
 

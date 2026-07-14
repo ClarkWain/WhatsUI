@@ -19,6 +19,7 @@
 // passed variadically (C++17 fold expression) so move-only nodes transfer
 // cleanly without the `std::initializer_list` move restriction.
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <string>
@@ -107,6 +108,12 @@ public:
     Text&& size(float fontSize) &&
     {
         node_->setFontSize(fontSize);
+        return std::move(self());
+    }
+
+    Text&& weight(int fontWeight) &&
+    {
+        node_->setFontWeight(fontWeight);
         return std::move(self());
     }
 
@@ -330,6 +337,7 @@ class Checkbox : public BuilderBase<Checkbox, wui::Checkbox> {
 public:
     explicit Checkbox(std::string label = {}, bool checked = false) : BuilderBase(std::move(label), checked) {}
     Checkbox&& label(std::string value) && { node_->setLabel(std::move(value)); return std::move(self()); }
+    Checkbox&& accessibleLabel(std::string value) && { node_->setAccessibleLabel(std::move(value)); return std::move(self()); }
     Checkbox&& checked(bool value) && { node_->setChecked(value); return std::move(self()); }
     Checkbox&& bind(wui::State<bool>& state) && { node_->bind(state); return std::move(self()); }
     Checkbox&& onChange(std::function<void(bool)> handler) && { node_->onChange(std::move(handler)); return std::move(self()); }
@@ -643,6 +651,140 @@ public:
         this->node_->setAlign(align);
         return std::move(this->self());
     }
+};
+
+// A keyed alternative to ForEach for interactive collections. Unchanged keys
+// retain their Nodes (and therefore focus, callbacks, and transient control
+// state); only inserted, removed, or value-changed entries are materialised.
+// Keys must be stable and unique within the supplied State.
+template <class T>
+class KeyedForEach : public BuilderBase<KeyedForEach<T>, wui::ForEachNode> {
+public:
+    template <class KeyProvider, class ItemBuilder>
+    KeyedForEach(wui::State<std::vector<T>>& items, KeyProvider keyProvider, ItemBuilder itemBuilder)
+        : BuilderBase<KeyedForEach<T>, wui::ForEachNode>()
+    {
+        using NodeFactory = std::function<std::unique_ptr<Node>(const T&)>;
+        using KeyFactory = std::function<std::string(const T&)>;
+
+        struct Entry {
+            std::string key;
+            T value;
+        };
+        struct Reconciler {
+            wui::ForEachNode* raw{nullptr};
+            wui::State<std::vector<T>>* state{nullptr};
+            KeyFactory keyFor;
+            NodeFactory build;
+            std::vector<Entry> entries;
+            bool reconciling{false};
+            bool pending{false};
+
+            void reconcile()
+            {
+                if (reconciling) {
+                    pending = true;
+                    return;
+                }
+                reconciling = true;
+                do {
+                    pending = false;
+                    reconcileOnce();
+                } while (pending);
+                reconciling = false;
+            }
+
+            void reconcileOnce()
+            {
+                std::vector<Entry> desired;
+                desired.reserve(state->get().size());
+                for (const T& item : state->get()) {
+                    std::string key = keyFor(item);
+                    if (key.empty()) key = std::to_string(desired.size());
+                    const auto duplicate = std::find_if(desired.begin(), desired.end(), [&key](const Entry& entry) {
+                        return entry.key == key;
+                    });
+                    if (duplicate != desired.end()) key += "#" + std::to_string(desired.size());
+                    desired.push_back({std::move(key), item});
+                }
+
+                // Destroy only removed or changed rows. A changed value keeps
+                // its key but receives a fresh row so static Text/Button
+                // properties stay truthful after an edit.
+                for (std::size_t index = entries.size(); index > 0; --index) {
+                    const Entry& previous = entries[index - 1];
+                    const auto next = std::find_if(desired.begin(), desired.end(), [&previous](const Entry& entry) {
+                        return entry.key == previous.key;
+                    });
+                    if (next == desired.end() || next->value != previous.value) {
+                        (void)raw->removeChild(index - 1);
+                        entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(index - 1));
+                    }
+                }
+
+                // Reorder retained rows without detach/reattach, then build
+                // only new rows. This makes appending, deleting and filtering
+                // proportional to the changed items instead of the list size.
+                for (std::size_t index = 0; index < desired.size(); ++index) {
+                    const Entry& next = desired[index];
+                    const auto existing = std::find_if(entries.begin(), entries.end(), [&next](const Entry& entry) {
+                        return entry.key == next.key;
+                    });
+                    if (existing == entries.end()) {
+                        raw->insertChild(index, build(next.value));
+                        entries.insert(entries.begin() + static_cast<std::ptrdiff_t>(index), next);
+                        continue;
+                    }
+                    const std::size_t current = static_cast<std::size_t>(existing - entries.begin());
+                    if (current != index) {
+                        raw->moveChild(current, index);
+                        Entry retained = std::move(entries[current]);
+                        entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(current));
+                        entries.insert(entries.begin() + static_cast<std::ptrdiff_t>(index), std::move(retained));
+                    }
+                }
+            }
+        };
+
+        auto reconciler = std::make_shared<Reconciler>();
+        reconciler->raw = this->node_.get();
+        reconciler->state = &items;
+        reconciler->keyFor = KeyFactory(std::move(keyProvider));
+        reconciler->build = [itemBuilder = std::move(itemBuilder)](const T& item) mutable {
+            return asNode(itemBuilder(item));
+        };
+        reconciler->reconcile();
+
+        struct Subscription { std::size_t id{0}; bool active{false}; };
+        auto alive = std::make_shared<bool>(true);
+        auto subscription = std::make_shared<Subscription>();
+        auto connect = [reconciler, alive, subscription] {
+            reconciler->reconcile();
+            if (subscription->active) return;
+            subscription->id = reconciler->state->subscribe([reconciler, weakAlive = std::weak_ptr<bool>(alive)](const std::vector<T>&) {
+                wui::scheduleStructuralUpdate(reconciler->raw, [reconciler, weakAlive] {
+                    const auto guard = weakAlive.lock();
+                    if (guard && *guard) reconciler->reconcile();
+                });
+            });
+            subscription->active = true;
+        };
+        auto disconnect = [reconciler, subscription] {
+            if (!subscription->active) return;
+            reconciler->state->unsubscribe(subscription->id);
+            subscription->active = false;
+        };
+        connect();
+        this->node_->addAttachCallback(connect);
+        this->node_->addDetachCallback(disconnect);
+        this->node_->addTeardown([disconnect, alive] { *alive = false; disconnect(); });
+    }
+
+    KeyedForEach<T>&& direction(ForEachDirection dir) && { this->node_->setDirection(dir); return std::move(this->self()); }
+    KeyedForEach<T>&& gap(float gap) && { this->node_->setGap(gap); return std::move(this->self()); }
+    KeyedForEach<T>&& padding(float all) && { this->node_->setPadding(InsetsF{all, all, all, all}); return std::move(this->self()); }
+    KeyedForEach<T>&& padding(InsetsF insets) && { this->node_->setPadding(insets); return std::move(this->self()); }
+    KeyedForEach<T>&& align(Alignment align) && { this->node_->setAlign(align); return std::move(this->self()); }
 };
 
 } // namespace wui::ui

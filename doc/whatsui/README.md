@@ -15,7 +15,9 @@
 7. `REACTIVITY_AND_STRUCTURE.md`
 8. `LAYOUT_MODEL.md`
 9. `TEXT_INPUT_AND_IME.md`
-10. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
+10. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
+11. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
+12. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
 
 ## 文档职责
 
@@ -28,7 +30,9 @@
 - `REACTIVITY_AND_STRUCTURE.md`：说明响应式绑定（`Text().bind`、节点 teardown 生命周期）、结构控件 `If`/`ForEach`、可插拔文本测量与新控件。
 - `LAYOUT_MODEL.md`：细化约束布局模型、容器语义、逻辑单位与滚动边界。
 - `TEXT_INPUT_AND_IME.md`：细化文本输入、组合输入、光标、选区和平台 IME 会话边界。
+- `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`：Windows 发布候选版本的 100%/150%/200% DPI 与 IME 人工证据记录模板。
 - `TESTING_AND_VALIDATION.md`：细化 golden image、布局快照、行为回归与 Software backend 验证策略。
+- `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`：记录 ClearType 双重 Alpha 衰减、Windows 150% DPR 误判、字重丢失及其端到端修复和视觉证据。
 
 ## 后续扩展建议
 
@@ -37,5 +41,3 @@
 - `TEXT_INPUT_AND_IME.md`
 - `TESTING_AND_VALIDATION.md`
 - `PERFORMANCE_AND_CACHING.md`
-
-

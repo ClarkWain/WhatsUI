@@ -362,6 +362,45 @@ void testTextInputPointerSelectionAndClipboard()
     expect(input->controller().text() == "alpha ", "GLFW Ctrl+Backspace should delete the preceding word");
 }
 
+class VariableWidthTextMeasurer final : public wui::TextMeasurer {
+public:
+    [[nodiscard]] wui::TextExtents measureText(const std::string& text, float fontSize) const override
+    {
+        float width = 0.0f;
+        for (const char character : text) {
+            width += character == 'W' ? fontSize : fontSize * 0.25f;
+        }
+        return {width, fontSize * 1.25f, fontSize * 0.8f, fontSize * 0.2f};
+    }
+};
+
+void testTextInputUsesMeasuredGlyphPositions()
+{
+    VariableWidthTextMeasurer measurer;
+    wui::TextMeasurer* const previousMeasurer = wui::textMeasurer();
+    wui::setTextMeasurer(&measurer);
+
+    auto input = std::make_unique<wui::TextInput>();
+    input->text("Wi");
+    input->layout({0.0f, 0.0f, 160.0f, 32.0f});
+    wui::FocusManager focusManager;
+    wui::InputRouter router(&focusManager);
+    router.setRoot(input.get());
+
+    // The old fixed-width model would place this x coordinate after two
+    // characters. The renderer gives W a full em and i a quarter-em, so it
+    // lies unambiguously within W and must place the caret after its first
+    // glyph instead.
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                                 wui::MouseButton::Left,
+                                 {wui::theme().controls.horizontalPadding + 12.0f, 12.0f}, 0};
+    expect(router.dispatchPointer(down), "TextInput should accept a measured caret hit test");
+    expect(input->controller().selection().start == 1,
+           "TextInput caret hit testing must follow measured variable-width glyph advances");
+
+    wui::setTextMeasurer(previousMeasurer);
+}
+
 void testInputRouterAndButton()
 {
     auto button = std::make_unique<wui::Button>("Open");
@@ -585,7 +624,7 @@ void testTheme()
 
     wui::setTheme(wui::Theme{});
     expect(wui::theme().colors.accent.r == 15, "default Fluent accent should be restored");
-    expect(wui::theme().controls.height == 32.0f && wui::theme().typography.body == 14.0f,
+    expect(wui::theme().controls.height == 36.0f && wui::theme().typography.body == 16.0f,
            "default Fluent control and typography tokens should remain stable");
 }
 
@@ -645,6 +684,50 @@ void testStructuralForEach()
     items.set({});
     wui::flushStructuralUpdates();
     expect(list->children().empty(), "ForEach should clear children for an empty list");
+}
+
+void testKeyedForEachRetainsUnchangedRows()
+{
+    using namespace wui::ui;
+    struct Item {
+        int id{0};
+        std::string label;
+        [[nodiscard]] bool operator==(const Item& other) const noexcept
+        {
+            return id == other.id && label == other.label;
+        }
+        [[nodiscard]] bool operator!=(const Item& other) const noexcept { return !(*this == other); }
+    };
+
+    wui::State<std::vector<Item>> items{{{1, "one"}, {2, "two"}}};
+    int built = 0;
+    std::unique_ptr<wui::Node> node = KeyedForEach<Item>(
+        items,
+        [](const Item& item) { return std::to_string(item.id); },
+        [&built](const Item& item) {
+            ++built;
+            return Text(item.label);
+        });
+    auto* list = dynamic_cast<wui::ForEachNode*>(node.get());
+    expect(list != nullptr && list->children().size() == 2, "KeyedForEach should build its initial rows");
+    wui::Node* one = list->children()[0].get();
+    wui::Node* two = list->children()[1].get();
+
+    items.set({{1, "one"}, {2, "TWO"}, {3, "three"}});
+    wui::flushStructuralUpdates();
+    expect(list->children().size() == 3, "KeyedForEach should add only the new row");
+    expect(list->children()[0].get() == one, "An unchanged keyed row must retain its node");
+    const auto* refreshed = dynamic_cast<const wui::Text*>(list->children()[1].get());
+    expect(refreshed != nullptr && refreshed->value() == "TWO",
+           "A changed keyed row must refresh its rendered value");
+    expect(built == 4, "Only changed and inserted keyed rows should be rebuilt");
+
+    wui::Node* three = list->children()[2].get();
+    items.set({{3, "three"}, {1, "one"}, {2, "TWO"}});
+    wui::flushStructuralUpdates();
+    expect(list->children()[0].get() == three && list->children()[1].get() == one,
+           "Keyed reordering must retain row nodes without reconstruction");
+    expect(built == 4, "Reordering stable keys must not rebuild rows");
 }
 
 void testListActionCanRemoveItsOwnRow()
@@ -817,6 +900,7 @@ int main()
     testNavigatorPageRetention();
     testTextInputModel();
     testTextInputPointerSelectionAndClipboard();
+    testTextInputUsesMeasuredGlyphPositions();
     testInputRouterAndButton();
     testPointerCaptureTargetBubbleRoutingContract();
     testCheckboxPointerKeyboardBindingAndDisabledState();
@@ -828,6 +912,7 @@ int main()
     testStructuralIf();
     testDestroyedStructuralNodeSkipsQueuedUpdate();
     testStructuralForEach();
+    testKeyedForEachRetainsUnchangedRows();
     testListActionCanRemoveItsOwnRow();
     testPluggableTextMeasurement();
     testPaintContextScaleFactor();

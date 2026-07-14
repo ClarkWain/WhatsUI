@@ -8,7 +8,7 @@ is verified in the source tree and what still requires a release gate.
 
 | Area | Supported preview configuration | Evidence / verification | Boundary |
 | --- | --- | --- | --- |
-| Language and build system | C++17 with CMake 3.20 or newer. The CI Windows job uses the Visual Studio/MSVC generator supplied by `windows-latest`. | Configure, Debug build, and CTest in CI. | Exact MSVC toolset/CRT compatibility is not yet a 1.0 promise. Rebuild consumers with the same WhatsUI source/release. |
+| Language and build system | C++17 with CMake 3.20 or newer. The CI Windows job uses the Visual Studio/MSVC generator supplied by `windows-latest`. | Configure, Debug build, and CTest in CI. | Exact MSVC toolset/CRT compatibility is not yet a 1.0 promise. Rebuild consumers with the same WhatsUI source/release. The proposed post-1.0 boundary is in [Compatibility policy draft](COMPATIBILITY_POLICY_1_0_DRAFT.md) and remains unapproved. |
 | Core runtime | Headless `WhatsUI::WhatsUI`, with `WHATSUI_WITH_WHATSCANVAS=OFF`. | Unit, layout, state, window, lifecycle, component, virtual-list, inspector, benchmark, and storage tests. | This path has no platform window backend or renderer. It is a runtime/developer-preview package, not an end-user GUI by itself. |
 | Deterministic rendering | WhatsCanvas Software backend with `WHATSUI_WITH_WHATSCANVAS=ON`. | Text, composition, Todo, and Settings Software captures; Todo visual hash and responsive-review tests. | A matching visual result is not proof of native window, GPU, screen-reader, or IME candidate-window behavior. |
 | Interactive desktop host | WhatsUI GLFW host + WhatsCanvas OpenGL. | Todo, Settings, Command Palette, and Hello Window reference targets; an external package consumer links the installed `WhatsUI::Glfw` target on Windows/MSVC. | The package smoke is link/run coverage without opening a native window. Direct Win32, WinUI, Qt, and other host integrations are not supplied. |
@@ -60,8 +60,11 @@ the bundled advanced-text dependencies used by the selected build, GLFW, and
 This remains preview engineering evidence, not a redistributable release
 claim. The current package verification does not launch a native window, test
 GPU drivers, sign binaries, create a release archive, or complete third-party
-attribution/legal review. Consumers using another compiler, CRT, architecture,
-or package manager must validate their own configuration.
+attribution/legal review. The proposed 1.0 static package profiles and their
+MSVC/CRT boundary remain unapproved; see
+[Compatibility policy draft](COMPATIBILITY_POLICY_1_0_DRAFT.md). Consumers
+using another compiler, CRT, architecture, package manager, or build profile
+must validate their own configuration.
 
 ## Windows commands
 

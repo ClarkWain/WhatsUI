@@ -88,7 +88,10 @@ all be true.
 - [x] Pre-1.0 source API policy documenting the no-ABI-guarantee preview
   contract.
 - [ ] 1.0 source/ABI compatibility policy, deprecation policy, and release
-  owner approval. These are release-candidate gates, not preview claims.
+  owner approval. The policy draft is available in
+  [COMPATIBILITY_POLICY_1_0_DRAFT.md](doc/whatsui/COMPATIBILITY_POLICY_1_0_DRAFT.md),
+  but approval and candidate-specific support tuples remain release-candidate
+  gates, not preview claims.
 - [x] Windows package exports for core + WhatsCanvas/GLFW path and clean
   external consumer smoke.
 - [x] Release groundwork: first-party MIT LICENSE/NOTICE, changelog, and

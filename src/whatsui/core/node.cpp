@@ -6,10 +6,10 @@ namespace wui {
 
 Node::~Node()
 {
-    // UiRoot/OverlayHost normally detach their content before releasing it.
-    // Keep this fallback for direct owners so subscriptions registered through
-    // addDetachCallback cannot outlive an attached tree by accident.
-    detachRecursively();
+    // UiRoot and OverlayHost detach owned trees before destruction, while the
+    // concrete dynamic types are still alive. Calling virtual detach hooks
+    // from this base destructor would dispatch after derived teardown and can
+    // make a child callback re-enter an owner whose vptr is already `Node`.
     for (auto& callback : teardown_) {
         if (callback) {
             callback();
@@ -37,16 +37,38 @@ SizeF Node::measureWithConstraints(const Constraints& constraints) const
 
 void Node::appendChild(std::unique_ptr<Node> child)
 {
+    insertChild(children_.size(), std::move(child));
+}
+
+void Node::insertChild(std::size_t index, std::unique_ptr<Node> child)
+{
     if (!child) {
         throw std::invalid_argument("child must not be null");
+    }
+    if (index > children_.size()) {
+        throw std::out_of_range("child insertion index out of range");
     }
     child->parent_ = this;
     child->setInvalidationHandler(invalidationHandler_);
     Node* const rawChild = child.get();
-    children_.push_back(std::move(child));
+    children_.insert(children_.begin() + static_cast<std::ptrdiff_t>(index), std::move(child));
     if (attached_) {
         rawChild->attachRecursively();
     }
+    markDirty(DirtyFlag::Layout);
+}
+
+void Node::moveChild(std::size_t from, std::size_t to)
+{
+    if (from >= children_.size() || to >= children_.size()) {
+        throw std::out_of_range("child move index out of range");
+    }
+    if (from == to) {
+        return;
+    }
+    auto child = std::move(children_[from]);
+    children_.erase(children_.begin() + static_cast<std::ptrdiff_t>(from));
+    children_.insert(children_.begin() + static_cast<std::ptrdiff_t>(to), std::move(child));
     markDirty(DirtyFlag::Layout);
 }
 
@@ -260,11 +282,9 @@ void ControlNode::setEnabled(bool enabled) noexcept
 void ControlNode::setVisualState(ControlVisualState state, bool value) noexcept
 {
     const auto mask = toMask(state);
-    if (value) {
-        visualStates_ |= mask;
-    } else {
-        visualStates_ &= ~mask;
-    }
+    const auto next = value ? visualStates_ | mask : visualStates_ & ~mask;
+    if (next == visualStates_) return;
+    visualStates_ = next;
     markDirty(DirtyFlag::Paint);
 }
 

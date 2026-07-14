@@ -99,7 +99,7 @@ void Button::paint(PaintContext& context)
     context.fillRoundRect(bounds(), current.radius.md, background);
     if (!label_.empty()) {
         context.drawText(label_, bounds().x + current.controls.horizontalPadding,
-                         bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f,
+                         context.centeredTextBottom(label_, bounds(), current.typography.body),
                          current.typography.body, foreground);
     }
     ContainerNode::paint(context);
@@ -155,6 +155,9 @@ Checkbox::Checkbox(std::string label, bool checked)
 const std::string& Checkbox::label() const noexcept { return label_; }
 Checkbox& Checkbox::label(std::string label) { setLabel(std::move(label)); return *this; }
 void Checkbox::setLabel(std::string label) { label_ = std::move(label); markDirty(DirtyFlag::Layout); }
+const std::string& Checkbox::accessibleLabel() const noexcept { return accessibleLabel_; }
+Checkbox& Checkbox::accessibleLabel(std::string label) { setAccessibleLabel(std::move(label)); return *this; }
+void Checkbox::setAccessibleLabel(std::string label) { accessibleLabel_ = std::move(label); }
 bool Checkbox::isChecked() const noexcept { return hasBinding_ ? binding_->get() : checked_; }
 Checkbox& Checkbox::checked(bool value) { setChecked(value); return *this; }
 void Checkbox::setChecked(bool value)
@@ -222,7 +225,7 @@ void Checkbox::paint(PaintContext& context)
     }
     if (!label_.empty()) {
         context.drawText(label_, bounds().x + indicatorSize + current.spacing.sm,
-                         bounds().y + (bounds().height + current.typography.body) * 0.5f - 2.0f,
+                         context.centeredTextBottom(label_, bounds(), current.typography.body),
                          current.typography.body, text);
     }
     clearDirty(DirtyFlag::Paint);

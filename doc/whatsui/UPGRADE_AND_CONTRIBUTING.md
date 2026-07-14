@@ -5,6 +5,15 @@ there is no binary ABI guarantee before 1.0. Read
 [Source stability and compatibility](STABILITY_AND_COMPATIBILITY.md) together
 with this guide before updating a consumer or sending a change.
 
+The [proposed 1.0 compatibility policy](COMPATIBILITY_POLICY_1_0_DRAFT.md) is
+not active for this preview. It defines the review target for future stable
+packages; do not treat it as approval to mix toolchains or CRT modes today.
+
+The current preview adds virtual methods and changes several public class
+layouts. After updating this revision, delete or reconfigure the consumer build
+tree and rebuild every WhatsUI- and WhatsCanvas-dependent target; reusing old
+object files or DLL/static-library consumers is unsupported.
+
 ## Upgrade a source consumer
 
 1. Pin a known WhatsUI release/tag and update the Git submodule revision with

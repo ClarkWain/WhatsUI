@@ -65,11 +65,20 @@ without creating an HWND:
 - The same test drives Start/End composition, verifies the retained
   composition range and synchronized surrounding selection, then checks
   Ctrl+C/Ctrl+X/Ctrl+V after the lifecycle.
+- `testImeCaretProjectionAtWindowsDpiScales` calls the same
+  `projectLogicalCaretToClientPixels` helper used by the GLFW IMM32 host. It
+  checks integer client-pixel candidate anchors at **100%, 150%, and 200%**,
+  including fractional logical coordinates that would expose rounding before
+  scaling. It does not create a candidate window or claim native IME coverage.
 
 The native `GetClientRect` and `ImmSet*Window` calls remain private to the GLFW
 backend, so they are not faked as Win32 behavior in a headless unit test. The
 fractional-DPI rows above are mandatory Windows manual verification, not a
 claim that a Software-renderer test can validate native candidate placement.
+
+Use [Windows IME/DPI evidence template](WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md)
+for each release candidate. Attach the screenshots/recordings and actual
+environment details; an empty template is not sign-off.
 
 ## Current boundary
 

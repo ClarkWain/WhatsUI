@@ -9,29 +9,65 @@
 
 namespace wui {
 
+void FocusManager::clearFocusIfCurrent(const std::weak_ptr<FocusState>& weakState, Node* node,
+                                       bool clearVisualState) noexcept
+{
+    const auto state = weakState.lock();
+    if (!state || state->focused != node) {
+        return;
+    }
+
+    // Clear the non-owning pointer before touching node state. A detach hook
+    // can invalidate its window while paint invalidation propagates, so no
+    // re-entrant caller may observe the departing node as focused.
+    state->focused = nullptr;
+    if (clearVisualState) {
+        if (auto* control = dynamic_cast<ControlNode*>(node)) {
+            control->setVisualState(ControlVisualState::Focused, false);
+        }
+    }
+}
+
 void FocusManager::setFocused(Node* node) noexcept
 {
     if (auto* control = dynamic_cast<ControlNode*>(node); control != nullptr && !control->isEnabled()) {
         node = nullptr;
     }
-    if (focused_ == node) {
+    if (state_->focused == node) {
         return;
     }
 
-    if (auto* control = dynamic_cast<ControlNode*>(focused_)) {
+    if (auto* control = dynamic_cast<ControlNode*>(state_->focused)) {
         control->setVisualState(ControlVisualState::Focused, false);
     }
 
-    focused_ = node;
+    state_->focused = node;
 
-    if (auto* control = dynamic_cast<ControlNode*>(focused_)) {
+    if (node != nullptr) {
+        const std::weak_ptr<FocusState> weakState = state_;
+        // Detach is the normal keyed-reconciliation path. It runs while the
+        // concrete ControlNode is still alive, so its visual state can be
+        // cleared as well as the raw focus pointer.
+        node->addDetachCallback([weakState, node] {
+            clearFocusIfCurrent(weakState, node, true);
+        });
+        // A detached node can also be directly owned and destroyed without
+        // ever receiving detachRecursively(). Clear the raw pointer in that
+        // final fallback too. The derived control is already gone here, so do
+        // not inspect or mutate its visual state.
+        node->addTeardown([weakState, node] {
+            clearFocusIfCurrent(weakState, node, false);
+        });
+    }
+
+    if (auto* control = dynamic_cast<ControlNode*>(state_->focused)) {
         control->setVisualState(ControlVisualState::Focused, true);
     }
 }
 
 Node* FocusManager::focused() const noexcept
 {
-    return focused_;
+    return state_->focused;
 }
 
 void FocusManager::clear() noexcept
@@ -61,7 +97,7 @@ bool FocusManager::focusNext(Node* root, bool reverse) noexcept
         return false;
     }
 
-    auto current = std::find(candidates.begin(), candidates.end(), focused_);
+    auto current = std::find(candidates.begin(), candidates.end(), state_->focused);
     if (current == candidates.end()) {
         setFocused(reverse ? candidates.back() : candidates.front());
         return true;
@@ -92,7 +128,9 @@ void InputRouter::setRoot(Node* root) noexcept
 
 void InputRouter::clearHover() noexcept
 {
-    hovered_ = nullptr;
+    // Do not synthesize Leave here. This method is also called by teardown
+    // paths, where the old node may already have been destroyed.
+    hoverState_->target = nullptr;
 }
 
 bool InputRouter::capturePointer(Node* target) noexcept
@@ -146,6 +184,33 @@ void InputRouter::cancelCaptureState(const std::shared_ptr<CaptureState>& state)
     target->onPointerEvent(cancel);
 }
 
+void InputRouter::clearHoverIfCurrent(const std::weak_ptr<HoverState>& weakState, Node* node) noexcept
+{
+    const auto state = weakState.lock();
+    if (state && state->target == node) {
+        // Clear before any later input dispatch can synthesize Leave. The
+        // detach callback runs while the node is still alive, but the next
+        // native event may arrive after its owning unique_ptr is released.
+        state->target = nullptr;
+    }
+}
+
+void InputRouter::setHovered(Node* target) noexcept
+{
+    hoverState_->target = target;
+    if (target == nullptr) {
+        return;
+    }
+
+    // Mirror pointer capture's weak-state pattern. A retained node may
+    // outlive its InputRouter during window teardown, so this callback must
+    // never capture `this`.
+    const std::weak_ptr<HoverState> state = hoverState_;
+    target->addDetachCallback([state, target] {
+        InputRouter::clearHoverIfCurrent(state, target);
+    });
+}
+
 Node* InputRouter::root() const noexcept
 {
     return root_;
@@ -153,7 +218,7 @@ Node* InputRouter::root() const noexcept
 
 Node* InputRouter::hovered() const noexcept
 {
-    return hovered_;
+    return hoverState_->target;
 }
 
 Node* InputRouter::capturedPointer() const noexcept
@@ -203,22 +268,26 @@ bool InputRouter::dispatchPointerTo(Node* target, const PointerEvent& event)
         }
     }
 
-    if (hitTarget != hovered_) {
-        if (hovered_ != nullptr) {
+    Node* const previousHover = hoverState_->target;
+    if (hitTarget != previousHover) {
+        // A Leave handler can remove or destroy itself. Clear the state
+        // before invoking it so re-entrant dispatch never observes a stale
+        // node, then register the new target before Enter for the same reason.
+        clearHover();
+        if (previousHover != nullptr) {
             auto leaveEvent = event;
             leaveEvent.action = PointerAction::Leave;
-            EventContext context(EventPhase::Target, hovered_, hovered_);
-            hovered_->onPointerEvent(leaveEvent, context);
+            EventContext context(EventPhase::Target, previousHover, previousHover);
+            previousHover->onPointerEvent(leaveEvent, context);
         }
 
         if (hitTarget != nullptr) {
+            setHovered(hitTarget);
             auto enterEvent = event;
             enterEvent.action = PointerAction::Enter;
             EventContext context(EventPhase::Target, hitTarget, hitTarget);
             hitTarget->onPointerEvent(enterEvent, context);
         }
-
-        hovered_ = hitTarget;
     }
 
     if (deliveryTarget == nullptr) {

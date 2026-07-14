@@ -39,6 +39,16 @@ public:
 
     // Measure a single run of text at the given size, in logical units.
     [[nodiscard]] virtual TextExtents measureText(const std::string& text, float fontSize) const = 0;
+
+    // Optional weighted measurement. Existing lightweight/headless measurers
+    // remain source-compatible and may use the regular metrics; native hosts
+    // override this so semibold headings measure and paint with the same face.
+    [[nodiscard]] virtual TextExtents measureText(const std::string& text, float fontSize,
+                                                  int fontWeight) const
+    {
+        (void)fontWeight;
+        return measureText(text, fontSize);
+    }
 };
 
 // Optional extension for a renderer that owns Unicode line breaking and text
@@ -60,6 +70,19 @@ public:
         float lineHeight,
         std::size_t maxLines,
         bool ellipsize) const = 0;
+
+    [[nodiscard]] virtual std::vector<TextLayoutLine> layoutText(
+        const std::string& text,
+        float fontSize,
+        int fontWeight,
+        float availableWidth,
+        float lineHeight,
+        std::size_t maxLines,
+        bool ellipsize) const
+    {
+        (void)fontWeight;
+        return layoutText(text, fontSize, availableWidth, lineHeight, maxLines, ellipsize);
+    }
 };
 
 // Install the process-wide measurer (not owned). Pass nullptr to fall back to

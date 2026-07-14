@@ -14,6 +14,8 @@
 #include <utility>
 #include <vector>
 
+#include "wui/types.h"
+
 namespace wui {
 
 enum class AccessibilityRole {
@@ -46,6 +48,13 @@ struct AccessibilityProperties {
     std::string label;
     std::string description;
     bool enabled{true};
+    // Focus is a snapshot of the framework focus manager, rather than a
+    // mutable property maintained by every individual widget.
+    bool focused{false};
+    // Logical client coordinates recorded during layout. Native adapters are
+    // responsible for converting this rectangle to their required coordinate
+    // system (for example, screen pixels for Windows UI Automation).
+    std::optional<RectF> bounds;
     std::optional<bool> checked;
     std::optional<std::string> value;
 
@@ -60,6 +69,8 @@ struct AccessibilityProperties {
                role == AccessibilityRole::Switch;
     }
 };
+
+class Node;
 
 // A semantic tree deliberately separated from the visual Node tree.  This
 // keeps the core model usable in headless tests and lets a platform adapter
@@ -176,6 +187,14 @@ struct AccessibilitySnapshotEntry {
 };
 
 using AccessibilitySnapshot = std::vector<AccessibilitySnapshotEntry>;
+
+// Builds a platform-neutral snapshot from a rendered Node tree. Controls
+// contribute their current label/value/state; the optional focused node is
+// projected as AccessibilityProperties::focused. This is deliberately a
+// read-only projection: it does not claim that a platform accessibility API
+// (such as Windows UI Automation) has registered a provider.
+[[nodiscard]] AccessibilitySnapshot snapshotAccessibilityTree(const Node& root,
+                                                               const Node* focused = nullptr);
 
 namespace detail {
 

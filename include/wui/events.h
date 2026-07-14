@@ -179,7 +179,18 @@ public:
     bool focusNext(Node* root, bool reverse = false) noexcept;
 
 private:
-    Node* focused_{nullptr};
+    // Nodes are owned by the tree, while the focus manager is owned by its
+    // window. Detach callbacks therefore retain only a weak handle to this
+    // state: a retained node may outlive its window without being able to
+    // call into a destroyed FocusManager.
+    struct FocusState {
+        Node* focused{nullptr};
+    };
+
+    static void clearFocusIfCurrent(const std::weak_ptr<FocusState>& state, Node* node,
+                                    bool clearVisualState) noexcept;
+
+    std::shared_ptr<FocusState> state_{std::make_shared<FocusState>()};
 };
 
 class InputRouter {
@@ -216,12 +227,21 @@ private:
         Node* target{nullptr};
     };
 
+    // Hover, like capture and focus, is a non-owning reference into the
+    // routed tree. Keep its mutable target in a shared state object so node
+    // detach callbacks can hold only a weak reference to the router.
+    struct HoverState {
+        Node* target{nullptr};
+    };
+
     static void cancelCaptureState(const std::shared_ptr<CaptureState>& state) noexcept;
+    static void clearHoverIfCurrent(const std::weak_ptr<HoverState>& state, Node* node) noexcept;
+    void setHovered(Node* target) noexcept;
 
     Node* root_{nullptr};
-    Node* hovered_{nullptr};
     FocusManager* focusManager_{nullptr};
     std::shared_ptr<CaptureState> captureState_{std::make_shared<CaptureState>()};
+    std::shared_ptr<HoverState> hoverState_{std::make_shared<HoverState>()};
 };
 
 } // namespace wui

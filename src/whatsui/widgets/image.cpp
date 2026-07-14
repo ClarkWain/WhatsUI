@@ -224,7 +224,7 @@ void Image::paint(PaintContext& context)
             // be opaque white across backends.
             paint.setColor(wsc::Color(255, 255, 255, 255));
             paint.setImageSampling(wsc::Paint::ImageSampling::LINEAR);
-            const float scale = context.scaleFactor();
+            const float scale = context.canvasCoordinateScale();
             const wsc::RectF destination(bounds().x * scale, bounds().y * scale,
                                           bounds().width * scale, bounds().height * scale);
             wsc::Canvas::ImageFit canvasFit = wsc::Canvas::ImageFit::CONTAIN;

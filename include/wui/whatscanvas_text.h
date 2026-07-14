@@ -96,7 +96,13 @@ public:
 
     [[nodiscard]] TextExtents measureText(const std::string& text, float fontSize) const override
     {
-        const MeasureKey key{text, fontSize};
+        return measureText(text, fontSize, 400);
+    }
+
+    [[nodiscard]] TextExtents measureText(const std::string& text, float fontSize,
+                                          int fontWeight) const override
+    {
+        const MeasureKey key{text, fontSize, fontWeight};
         if (const auto found = measureCache_.find(key); found != measureCache_.end()) {
             ++cacheHits_;
             return found->second;
@@ -104,6 +110,10 @@ public:
         ++cacheMisses_;
         wsc::Paint paint;
         paint.setTextSize(fontSize * scaleFactor_);
+        paint.setFontWeight(fontWeight);
+#if defined(_WIN32)
+        paint.setFontFamily("Segoe UI");
+#endif
         const wsc::Canvas::TextMetrics metrics = canvas_->measureTextMetrics(text, paint);
         TextExtents extents;
         extents.width = metrics.width / scaleFactor_;
@@ -131,8 +141,20 @@ public:
         std::size_t maxLines,
         bool ellipsize) const override
     {
+        return layoutText(text, fontSize, 400, availableWidth, lineHeight, maxLines, ellipsize);
+    }
+
+    [[nodiscard]] std::vector<TextLayoutLine> layoutText(
+        const std::string& text,
+        float fontSize,
+        int fontWeight,
+        float availableWidth,
+        float lineHeight,
+        std::size_t maxLines,
+        bool ellipsize) const override
+    {
         if (canvas_ == nullptr || !std::isfinite(availableWidth) || availableWidth <= 0.0f) return {};
-        const LayoutKey key{text, fontSize, availableWidth, lineHeight, maxLines, ellipsize};
+        const LayoutKey key{text, fontSize, fontWeight, availableWidth, lineHeight, maxLines, ellipsize};
         if (const auto found = layoutCache_.find(key); found != layoutCache_.end()) {
             ++cacheHits_;
             return found->second;
@@ -141,6 +163,10 @@ public:
 
         wsc::Paint paint;
         paint.setTextSize(fontSize * scaleFactor_);
+        paint.setFontWeight(fontWeight);
+#if defined(_WIN32)
+        paint.setFontFamily("Segoe UI");
+#endif
         const float physicalLineHeight = (lineHeight > 0.0f ? lineHeight : fontSize * 1.25f) * scaleFactor_;
         const float physicalHeight = std::max(physicalLineHeight,
             physicalLineHeight * static_cast<float>(maxLines == 0 ? 65536 : maxLines));
@@ -179,23 +205,26 @@ private:
     struct MeasureKey {
         std::string text;
         float fontSize{0.0f};
+        int fontWeight{400};
         [[nodiscard]] bool operator<(const MeasureKey& other) const noexcept
         {
-            return std::tie(text, fontSize) < std::tie(other.text, other.fontSize);
+            return std::tie(text, fontSize, fontWeight)
+                < std::tie(other.text, other.fontSize, other.fontWeight);
         }
     };
 
     struct LayoutKey {
         std::string text;
         float fontSize{0.0f};
+        int fontWeight{400};
         float availableWidth{0.0f};
         float lineHeight{0.0f};
         std::size_t maxLines{0};
         bool ellipsize{false};
         [[nodiscard]] bool operator<(const LayoutKey& other) const noexcept
         {
-            return std::tie(text, fontSize, availableWidth, lineHeight, maxLines, ellipsize)
-                < std::tie(other.text, other.fontSize, other.availableWidth, other.lineHeight,
+            return std::tie(text, fontSize, fontWeight, availableWidth, lineHeight, maxLines, ellipsize)
+                < std::tie(other.text, other.fontSize, other.fontWeight, other.availableWidth, other.lineHeight,
                            other.maxLines, other.ellipsize);
         }
     };

@@ -52,6 +52,15 @@ struct PaintOperationStats {
     std::size_t fillRoundRectCalls{0};
     std::size_t textDrawCalls{0};
     std::size_t clipRectCalls{0};
+
+    // CPU time spent recording each category into the active renderer. These
+    // are intentionally separate from FrameStats::paintMilliseconds: they
+    // make it possible to tell whether a slow paint pass comes from widget
+    // traversal or one particular backend operation.
+    double fillRectMilliseconds{0.0};
+    double fillRoundRectMilliseconds{0.0};
+    double textDrawMilliseconds{0.0};
+    double clipRectMilliseconds{0.0};
 };
 
 struct RenderStats {

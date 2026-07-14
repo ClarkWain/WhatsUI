@@ -5,6 +5,11 @@
 
 namespace wui {
 
+UiRoot::~UiRoot()
+{
+    setContent(nullptr);
+}
+
 void UiRoot::setContent(std::unique_ptr<Node> content) noexcept
 {
     if (content_ != nullptr) {
@@ -269,6 +274,14 @@ OverlayId OverlayHost::show(std::unique_ptr<Node> overlay)
         onChange_();
     }
     return id;
+}
+
+OverlayHost::~OverlayHost()
+{
+    // Destruction is not an observable overlay change. Detach while the
+    // concrete overlay trees are still alive, then release ownership.
+    onChange_ = {};
+    clear();
 }
 
 void OverlayHost::setOnChange(ChangeHandler handler)

@@ -67,6 +67,23 @@ double measureMilliseconds(Work&& work)
 
 } // namespace
 
+class UiWindow::EventDispatchScope {
+public:
+    explicit EventDispatchScope(UiWindow& window) noexcept
+        : window_(window)
+    {
+        window_.beginEventDispatch();
+    }
+
+    ~EventDispatchScope()
+    {
+        window_.endEventDispatch();
+    }
+
+private:
+    UiWindow& window_;
+};
+
 UiWindow::UiWindow(std::unique_ptr<PlatformWindow> platformWindow)
     : platformWindow_(std::move(platformWindow))
 {
@@ -81,6 +98,23 @@ UiWindow::UiWindow(std::unique_ptr<PlatformWindow> platformWindow)
     });
     overlayHost_.setOnChange([this] { onOverlayChanged(); });
     uiRoot_.setOnInvalidate([this] { platformWindow_->requestRedraw(); });
+}
+
+UiWindow::~UiWindow()
+{
+    // Break every non-owning tree relationship before C++ destroys members in
+    // reverse declaration order. In particular, UiRoot can borrow a page
+    // owned by Navigator, which would otherwise become dangling first.
+    navigator_.setOnChange({});
+    navigator_.setBeforeChange({});
+    overlayHost_.setOnChange({});
+    deactivateTextInputSession();
+    focusManager_.clear();
+    inputRouter_.setRoot(nullptr);
+    uiRoot_.setBorrowedContent(nullptr);
+    overlayHost_.clear();
+    dialogs_.clear();
+    navigator_.clear();
 }
 
 WindowId UiWindow::id() const noexcept
@@ -157,7 +191,7 @@ OverlayId UiWindow::showDialog(std::unique_ptr<Dialog> dialog)
     Dialog* const raw = dialog.get();
     const auto id = overlayHost_.show(std::move(dialog));
     dialogs_.push_back({id, previousFocus});
-    raw->setWindowDismissHandler([this, id] { (void)dismissDialog(id); });
+    raw->setWindowDismissHandler([this, id] { requestDialogDismissal(id); });
     // A modal must never leave a page control focused: keyboard and IME input
     // are isolated until the dialog has been closed.
     deactivateTextInputSession();
@@ -172,8 +206,23 @@ OverlayId UiWindow::showDialog(std::unique_ptr<Dialog> dialog)
 
 std::unique_ptr<Dialog> UiWindow::dismissDialog(OverlayId id)
 {
+    if (eventDispatchDepth_ != 0) {
+        requestDialogDismissal(id);
+        return nullptr;
+    }
+    return dismissDialogImmediately(id);
+}
+
+std::unique_ptr<Dialog> UiWindow::dismissDialogImmediately(OverlayId id)
+{
     auto it = std::find_if(dialogs_.begin(), dialogs_.end(), [id](const DialogEntry& entry) { return entry.id == id; });
     if (it == dialogs_.end()) {
+        return nullptr;
+    }
+    // Modal ownership is a stack. Removing a dialog beneath the active one
+    // would leave the nested dialog's restoreFocus pointing into a destroyed
+    // subtree, so only the top entry may be dismissed.
+    if (it != std::prev(dialogs_.end())) {
         return nullptr;
     }
     Node* restoreFocus = it->restoreFocus;
@@ -193,6 +242,59 @@ std::unique_ptr<Dialog> UiWindow::dismissDialog(OverlayId id)
         return dialog;
     }
     return nullptr;
+}
+
+void UiWindow::beginEventDispatch() noexcept
+{
+    ++eventDispatchDepth_;
+}
+
+void UiWindow::endEventDispatch() noexcept
+{
+    if (eventDispatchDepth_ == 0) {
+        return;
+    }
+    --eventDispatchDepth_;
+    if (eventDispatchDepth_ == 0) {
+        flushDeferredDialogDismissals();
+    }
+}
+
+void UiWindow::requestDialogDismissal(OverlayId id)
+{
+    if (eventDispatchDepth_ == 0) {
+        (void)dismissDialogImmediately(id);
+        return;
+    }
+
+    if (std::find(deferredDialogDismissals_.begin(), deferredDialogDismissals_.end(), id)
+        == deferredDialogDismissals_.end()) {
+        deferredDialogDismissals_.push_back(id);
+    }
+}
+
+void UiWindow::flushDeferredDialogDismissals() noexcept
+{
+    // A dialog's dismiss callback may request the same dialog multiple times
+    // (for example through both an author callback and its window handler).
+    // Requests are coalesced above. Sort them by current modal depth so an
+    // outer-first callback cannot destroy the focus target retained by an
+    // inner dialog. Unknown ids sort last and become safe no-ops.
+    auto pending = std::move(deferredDialogDismissals_);
+    deferredDialogDismissals_.clear();
+    const auto depth = [this](OverlayId id) {
+        const auto it = std::find_if(dialogs_.begin(), dialogs_.end(), [id](const DialogEntry& entry) {
+            return entry.id == id;
+        });
+        return it == dialogs_.end() ? std::size_t{0}
+                                    : static_cast<std::size_t>(std::distance(dialogs_.begin(), it)) + 1;
+    };
+    std::stable_sort(pending.begin(), pending.end(), [&depth](OverlayId left, OverlayId right) {
+        return depth(left) > depth(right);
+    });
+    for (const auto id : pending) {
+        (void)dismissDialogImmediately(id);
+    }
 }
 
 std::unique_ptr<Dialog> UiWindow::dismissTopDialog()
@@ -220,6 +322,36 @@ Node* UiWindow::root() const noexcept
     return uiRoot_.content();
 }
 
+AccessibilitySnapshot UiWindow::accessibilitySnapshot() const
+{
+    AccessibilitySnapshot snapshot;
+    AccessibilityProperties application;
+    application.role = AccessibilityRole::Application;
+    application.label = platformWindow_->title();
+    if (application.label.empty()) {
+        application.label = "WhatsUI application";
+    }
+    snapshot.push_back({{}, 0, std::move(application)});
+
+    // A modal is the active accessibility subtree. Exposing the dimmed page
+    // alongside it would let automation clients navigate controls that the
+    // input router deliberately blocks.
+    const Node* activeRoot = activeDialog() != nullptr
+        ? static_cast<const Node*>(activeDialog())
+        : uiRoot_.content();
+    if (activeRoot == nullptr) {
+        return snapshot;
+    }
+
+    auto visualSnapshot = snapshotAccessibilityTree(*activeRoot, focusManager_.focused());
+    for (auto& entry : visualSnapshot) {
+        entry.path.insert(entry.path.begin(), 0);
+        ++entry.depth;
+        snapshot.push_back(std::move(entry));
+    }
+    return snapshot;
+}
+
 void UiWindow::update()
 {
     ++frameStats_.frameNumber;
@@ -236,9 +368,24 @@ void UiWindow::layout()
 {
     const auto metrics = platformWindow_->metrics();
     const RectF bounds{0.0f, 0.0f, metrics.logicalSize.width, metrics.logicalSize.height};
+    const RectF previousBounds = uiRoot_.bounds();
+    const bool boundsChanged = previousBounds.x != bounds.x || previousBounds.y != bounds.y
+        || previousBounds.width != bounds.width || previousBounds.height != bounds.height;
+    const bool pageNeedsLayout = boundsChanged
+        || (uiRoot_.content() != nullptr && uiRoot_.content()->isDirty(DirtyFlag::Layout));
+    const bool overlaysNeedLayout = boundsChanged || std::any_of(
+        overlayHost_.overlays().begin(), overlayHost_.overlays().end(),
+        [](const OverlayEntry& overlay) {
+            return overlay.content != nullptr && overlay.content->isDirty(DirtyFlag::Layout);
+        });
+
+    if (!pageNeedsLayout && !overlaysNeedLayout) {
+        frameStats_.layoutMilliseconds = 0.0;
+        return;
+    }
     frameStats_.layoutMilliseconds = measureMilliseconds([&] {
-        uiRoot_.layout(bounds);
-        overlayHost_.layout(bounds);
+        if (pageNeedsLayout) uiRoot_.layout(bounds);
+        if (overlaysNeedLayout) overlayHost_.layout(bounds);
     });
 }
 
@@ -307,65 +454,80 @@ Node* UiWindow::hitTest(PointF point) const
 
 bool UiWindow::dispatchPointer(const PointerEvent& event)
 {
-    const bool handled = inputRouter_.dispatchPointerTo(hitTest(event.position), event);
+    bool handled = false;
+    {
+        EventDispatchScope dispatchScope(*this);
+        handled = inputRouter_.dispatchPointerTo(hitTest(event.position), event);
+    }
     syncTextInputSession();
     return handled;
 }
 
 bool UiWindow::dispatchKey(const KeyEvent& event)
 {
-    if (event.action == KeyAction::Down && event.keyCode == 27) {
-        if (auto* dialog = activeDialog()) {
-            dialog->dismiss();
-            return true;
-        }
-    }
-
-    // Clipboard ownership is a platform concern, while selection ownership is
-    // a text-control concern. Keep this small bridge at the window boundary
-    // so TextInput remains usable in headless/unit-test trees and native
-    // backends never need widget-specific shortcut handling.
-    if (event.action == KeyAction::Down && (event.modifiers & KeyModifierControl) != 0) {
-        if (auto* input = dynamic_cast<TextInput*>(focusManager_.focused())) {
-            switch (event.keyCode) {
-            case 67: // Ctrl+C
-                if (input->copySelection(platformWindow_->clipboard())) {
-                    syncTextInputSession();
-                    return true;
-                }
-                break;
-            case 88: // Ctrl+X
-                if (input->cutSelection(platformWindow_->clipboard())) {
-                    syncTextInputSession();
-                    return true;
-                }
-                break;
-            case 86: // Ctrl+V
-                if (input->paste(platformWindow_->clipboard())) {
-                    syncTextInputSession();
-                    return true;
-                }
-                break;
-            default:
-                break;
+    bool handled = false;
+    {
+        EventDispatchScope dispatchScope(*this);
+        if (event.action == KeyAction::Down && event.keyCode == 27) {
+            if (auto* dialog = activeDialog()) {
+                dialog->dismiss();
+                handled = true;
             }
         }
+
+        // Clipboard ownership is a platform concern, while selection ownership is
+        // a text-control concern. Keep this small bridge at the window boundary
+        // so TextInput remains usable in headless/unit-test trees and native
+        // backends never need widget-specific shortcut handling.
+        if (!handled && event.action == KeyAction::Down && (event.modifiers & KeyModifierControl) != 0) {
+            if (auto* input = dynamic_cast<TextInput*>(focusManager_.focused())) {
+                switch (event.keyCode) {
+                case 67: // Ctrl+C
+                    if (input->copySelection(platformWindow_->clipboard())) {
+                        handled = true;
+                    }
+                    break;
+                case 88: // Ctrl+X
+                    if (input->cutSelection(platformWindow_->clipboard())) {
+                        handled = true;
+                    }
+                    break;
+                case 86: // Ctrl+V
+                    if (input->paste(platformWindow_->clipboard())) {
+                        handled = true;
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+        if (!handled) {
+            handled = inputRouter_.dispatchKey(event);
+        }
     }
-    const bool handled = inputRouter_.dispatchKey(event);
     syncTextInputSession();
     return handled;
 }
 
 bool UiWindow::dispatchTextInput(const TextInputEvent& event)
 {
-    const bool handled = inputRouter_.dispatchTextInput(event);
+    bool handled = false;
+    {
+        EventDispatchScope dispatchScope(*this);
+        handled = inputRouter_.dispatchTextInput(event);
+    }
     syncTextInputSession();
     return handled;
 }
 
 bool UiWindow::dispatchComposition(const CompositionInputEvent& event)
 {
-    const bool handled = inputRouter_.dispatchComposition(event);
+    bool handled = false;
+    {
+        EventDispatchScope dispatchScope(*this);
+        handled = inputRouter_.dispatchComposition(event);
+    }
     syncTextInputSession();
     return handled;
 }
