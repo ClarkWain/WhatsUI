@@ -98,6 +98,10 @@ UiWindow::UiWindow(std::unique_ptr<PlatformWindow> platformWindow)
     });
     overlayHost_.setOnChange([this] { onOverlayChanged(); });
     uiRoot_.setOnInvalidate([this] { platformWindow_->requestRedraw(); });
+    platformWindow_->setAccessibilityActionHandler(
+        [this](const AccessibilityActionRequest& request) {
+            return performAccessibilityAction(request);
+        });
 }
 
 UiWindow::~UiWindow()
@@ -105,6 +109,7 @@ UiWindow::~UiWindow()
     // Break every non-owning tree relationship before C++ destroys members in
     // reverse declaration order. In particular, UiRoot can borrow a page
     // owned by Navigator, which would otherwise become dangling first.
+    platformWindow_->setAccessibilityActionHandler({});
     navigator_.setOnChange({});
     navigator_.setBeforeChange({});
     overlayHost_.setOnChange({});
@@ -354,6 +359,59 @@ AccessibilitySnapshot UiWindow::accessibilitySnapshot() const
         snapshot.push_back(std::move(entry));
     }
     return snapshot;
+}
+
+AccessibilityActionStatus UiWindow::performAccessibilityAction(
+    const AccessibilityActionRequest& request)
+{
+    const auto currentSnapshot = accessibilitySnapshot();
+    const auto* semantic = findAccessibilitySnapshotEntry(currentSnapshot, request.path);
+    if (semantic == nullptr || semantic->properties.role != request.expectedRole
+        || (!request.automationId.empty()
+            && semantic->properties.automationId != request.automationId)
+        || (request.automationId.empty()
+            && semantic->properties.label != request.expectedLabel)) {
+        return AccessibilityActionStatus::ElementNotAvailable;
+    }
+    if (!semantic->properties.enabled) {
+        return AccessibilityActionStatus::ElementNotEnabled;
+    }
+
+    // UiWindow snapshots prefix the active visual root with 0 beneath the
+    // synthetic Application entry. Resolve only that active page/modal, so a
+    // retained provider can never operate a background page behind a dialog.
+    if (request.path.empty() || request.path.front() != 0) {
+        return AccessibilityActionStatus::ElementNotAvailable;
+    }
+    Node* target = activeDialog() != nullptr
+        ? static_cast<Node*>(activeDialog()) : uiRoot_.content();
+    if (target == nullptr) return AccessibilityActionStatus::ElementNotAvailable;
+    for (std::size_t offset = 1; offset < request.path.size(); ++offset) {
+        const auto index = request.path[offset];
+        if (index >= target->children().size() || !target->children()[index]) {
+            return AccessibilityActionStatus::ElementNotAvailable;
+        }
+        target = target->children()[index].get();
+    }
+
+    if (request.kind == AccessibilityActionKind::SetFocus) {
+        if (!semantic->properties.actions.focus) return AccessibilityActionStatus::NotSupported;
+        focusManager_.setFocused(target);
+        syncTextInputSession();
+        platformWindow_->requestRedraw();
+        return AccessibilityActionStatus::Succeeded;
+    }
+
+    AccessibilityActionStatus status = AccessibilityActionStatus::Failed;
+    {
+        EventDispatchScope dispatchScope(*this);
+        status = target->performAccessibilityAction(request.kind, request.value);
+    }
+    syncTextInputSession();
+    if (status == AccessibilityActionStatus::Succeeded) {
+        platformWindow_->requestRedraw();
+    }
+    return status;
 }
 
 void UiWindow::update()

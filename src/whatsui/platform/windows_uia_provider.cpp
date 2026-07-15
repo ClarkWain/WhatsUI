@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <mutex>
 #include <new>
@@ -37,6 +38,20 @@ std::wstring utf8ToWide(const std::string& value)
     MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
                         static_cast<int>(value.size()), result.data(), length);
     return result;
+}
+
+std::optional<std::string> wideToUtf8(const wchar_t* value)
+{
+    if (!value) return std::nullopt;
+    if (!*value) return std::string{};
+    const int length = static_cast<int>(std::wcslen(value));
+    const int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, length,
+                                          nullptr, 0, nullptr, nullptr);
+    if (bytes <= 0) return std::nullopt;
+    std::string result(static_cast<std::size_t>(bytes), '\0');
+    WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, length, result.data(), bytes,
+                        nullptr, nullptr);
+    return std::optional<std::string>{std::move(result)};
 }
 
 HRESULT setBstrVariant(const std::string& value, VARIANT* result) noexcept
@@ -78,6 +93,8 @@ struct SnapshotModel {
     AccessibilitySnapshot entries;
     float scaleX{1.0f};
     float scaleY{1.0f};
+    POINT clientOrigin{};
+    UiaRect windowBounds{};
     std::vector<std::optional<std::size_t>> parents;
     std::vector<std::vector<std::size_t>> children;
     std::optional<std::size_t> semanticRoot;
@@ -102,6 +119,14 @@ struct SnapshotModel {
             ? metrics.scaleFactor : 1.0f;
         if (!(scaleX > 0.0f) || !std::isfinite(scaleX)) scaleX = fallbackScale;
         if (!(scaleY > 0.0f) || !std::isfinite(scaleY)) scaleY = fallbackScale;
+        (void)ClientToScreen(window, &clientOrigin);
+        RECT nativeWindowBounds{};
+        if (GetWindowRect(window, &nativeWindowBounds)) {
+            windowBounds.left = nativeWindowBounds.left;
+            windowBounds.top = nativeWindowBounds.top;
+            windowBounds.width = nativeWindowBounds.right - nativeWindowBounds.left;
+            windowBounds.height = nativeWindowBounds.bottom - nativeWindowBounds.top;
+        }
         wchar_t title[512]{};
         const int titleLength = GetWindowTextW(window, title, static_cast<int>(std::size(title)));
         if (titleLength > 0) {
@@ -144,35 +169,69 @@ struct SnapshotModel {
     {
         UiaRect result{};
         if (index == kSyntheticRoot) {
-            RECT rect{};
-            if (GetWindowRect(window, &rect)) {
-                result.left = rect.left;
-                result.top = rect.top;
-                result.width = rect.right - rect.left;
-                result.height = rect.bottom - rect.top;
-            }
-            return result;
+            return windowBounds;
         }
         const auto& bounds = entries[index].properties.bounds;
         if (!bounds) {
             return result;
         }
-        POINT origin{};
-        ClientToScreen(window, &origin);
-        result.left = origin.x + static_cast<double>(bounds->x * scaleX);
-        result.top = origin.y + static_cast<double>(bounds->y * scaleY);
+        result.left = clientOrigin.x + static_cast<double>(bounds->x * scaleX);
+        result.top = clientOrigin.y + static_cast<double>(bounds->y * scaleY);
         result.width = static_cast<double>(std::max(0.0f, bounds->width) * scaleX);
         result.height = static_cast<double>(std::max(0.0f, bounds->height) * scaleY);
         return result;
     }
 };
 
+struct ElementKey {
+    bool root{false};
+    std::string automationId;
+    std::vector<std::size_t> path;
+    AccessibilityRole role{AccessibilityRole::Unknown};
+};
+
+struct ProviderState {
+    HWND window{};
+    mutable std::mutex mutex;
+    std::shared_ptr<const SnapshotModel> latest;
+    std::shared_ptr<UiaActionQueue> actions;
+    bool detached{false};
+
+    [[nodiscard]] std::optional<std::pair<std::shared_ptr<const SnapshotModel>, std::size_t>>
+    resolve(const ElementKey& key) const
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (detached || !latest) return std::nullopt;
+        if (key.root) return std::pair{latest, kSyntheticRoot};
+        const auto found = std::find_if(latest->entries.begin(), latest->entries.end(),
+            [&key](const AccessibilitySnapshotEntry& entry) {
+                if (!key.automationId.empty()) {
+                    return entry.properties.automationId == key.automationId;
+                }
+                return entry.path == key.path && entry.properties.role == key.role;
+            });
+        if (found == latest->entries.end()) return std::nullopt;
+        return std::pair{latest,
+            static_cast<std::size_t>(std::distance(latest->entries.begin(), found))};
+    }
+};
+
+ElementKey keyFor(const SnapshotModel& model, std::size_t index)
+{
+    if (index == kSyntheticRoot) return {true, {}, {}, AccessibilityRole::Application};
+    const auto& entry = model.entries[index];
+    return {false, entry.properties.automationId, entry.path, entry.properties.role};
+}
+
 class SnapshotProvider final : public IRawElementProviderSimple,
                                public IRawElementProviderFragment,
-                               public IRawElementProviderFragmentRoot {
+                               public IRawElementProviderFragmentRoot,
+                               public IInvokeProvider,
+                               public IToggleProvider,
+                               public IValueProvider {
 public:
-    SnapshotProvider(std::shared_ptr<const SnapshotModel> model, std::size_t index)
-        : model_(std::move(model)), index_(index)
+    SnapshotProvider(std::shared_ptr<ProviderState> state, ElementKey key)
+        : state_(std::move(state)), key_(std::move(key))
     {
     }
 
@@ -184,8 +243,14 @@ public:
             *object = static_cast<IRawElementProviderSimple*>(this);
         } else if (iid == __uuidof(IRawElementProviderFragment)) {
             *object = static_cast<IRawElementProviderFragment*>(this);
-        } else if (iid == __uuidof(IRawElementProviderFragmentRoot) && index_ == kSyntheticRoot) {
+        } else if (iid == __uuidof(IRawElementProviderFragmentRoot) && key_.root) {
             *object = static_cast<IRawElementProviderFragmentRoot*>(this);
+        } else if (iid == __uuidof(IInvokeProvider) && supportsInvoke()) {
+            *object = static_cast<IInvokeProvider*>(this);
+        } else if (iid == __uuidof(IToggleProvider) && supportsToggle()) {
+            *object = static_cast<IToggleProvider*>(this);
+        } else if (iid == __uuidof(IValueProvider) && supportsValue()) {
+            *object = static_cast<IValueProvider*>(this);
         } else {
             return E_NOINTERFACE;
         }
@@ -209,10 +274,99 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE GetPatternProvider(PATTERNID, IUnknown** provider) override
+    HRESULT STDMETHODCALLTYPE GetPatternProvider(PATTERNID pattern, IUnknown** provider) override
     {
         if (!provider) return E_POINTER;
         *provider = nullptr;
+        if (pattern == UIA_InvokePatternId && supportsInvoke()) {
+            return QueryInterface(__uuidof(IInvokeProvider), reinterpret_cast<void**>(provider));
+        }
+        if (pattern == UIA_TogglePatternId && supportsToggle()) {
+            return QueryInterface(__uuidof(IToggleProvider), reinterpret_cast<void**>(provider));
+        }
+        if (pattern == UIA_ValuePatternId && supportsValue()) {
+            return QueryInterface(__uuidof(IValueProvider), reinterpret_cast<void**>(provider));
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Invoke() override
+    {
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsInvoke(*resolved)) return UIA_E_NOTSUPPORTED;
+        const auto& entry = resolved->first->entries[resolved->second];
+        if (!entry.properties.enabled) return UIA_E_ELEMENTNOTENABLED;
+        AccessibilityActionRequest request;
+        request.kind = AccessibilityActionKind::Invoke;
+        return enqueue(*resolved, std::move(request));
+    }
+
+    HRESULT STDMETHODCALLTYPE Toggle() override
+    {
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsToggle(*resolved)) return UIA_E_NOTSUPPORTED;
+        if (!resolved->first->entries[resolved->second].properties.enabled) {
+            return UIA_E_ELEMENTNOTENABLED;
+        }
+        AccessibilityActionRequest request;
+        request.kind = AccessibilityActionKind::Toggle;
+        return enqueue(*resolved, std::move(request));
+    }
+
+    HRESULT STDMETHODCALLTYPE get_ToggleState(ToggleState* state) override
+    {
+        if (!state) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsToggle(*resolved)) return UIA_E_NOTSUPPORTED;
+        *state = *resolved->first->entries[resolved->second].properties.checked
+            ? ToggleState_On : ToggleState_Off;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetValue(LPCWSTR value) override
+    {
+        if (!value) return E_INVALIDARG;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        if (resolved->first->entries[resolved->second].properties.actions.valueReadOnly) {
+            return UIA_E_INVALIDOPERATION;
+        }
+        if (!resolved->first->entries[resolved->second].properties.enabled) {
+            return UIA_E_ELEMENTNOTENABLED;
+        }
+        AccessibilityActionRequest request;
+        request.kind = AccessibilityActionKind::SetValue;
+        auto converted = wideToUtf8(value);
+        if (!converted) return E_INVALIDARG;
+        request.value = std::move(*converted);
+        return enqueue(*resolved, std::move(request));
+    }
+
+    HRESULT STDMETHODCALLTYPE get_Value(BSTR* value) override
+    {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        const std::wstring wide = utf8ToWide(
+            *resolved->first->entries[resolved->second].properties.value);
+        *value = SysAllocStringLen(wide.data(), static_cast<UINT>(wide.size()));
+        return *value || wide.empty() ? S_OK : E_OUTOFMEMORY;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_IsReadOnly(BOOL* readOnly) override
+    {
+        if (!readOnly) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        *readOnly = resolved->first->entries[resolved->second].properties.actions.valueReadOnly
+            ? TRUE : FALSE;
         return S_OK;
     }
 
@@ -220,24 +374,28 @@ public:
     {
         if (!value) return E_POINTER;
         VariantInit(value);
-        const AccessibilityProperties* properties = index_ == kSyntheticRoot
-            ? (model_->semanticRoot ? &model_->entries[*model_->semanticRoot].properties : nullptr)
-            : &model_->entries[index_].properties;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        const auto& model = *resolved->first;
+        const std::size_t index = resolved->second;
+        const AccessibilityProperties* properties = index == kSyntheticRoot
+            ? (model.semanticRoot ? &model.entries[*model.semanticRoot].properties : nullptr)
+            : &model.entries[index].properties;
         switch (id) {
         case UIA_ControlTypePropertyId:
             value->vt = VT_I4;
-            value->lVal = index_ == kSyntheticRoot ? UIA_WindowControlTypeId
+            value->lVal = index == kSyntheticRoot ? UIA_WindowControlTypeId
                                                    : controlType(properties->role);
             return S_OK;
         case UIA_NamePropertyId:
-            if (index_ == kSyntheticRoot && (!properties || properties->label.empty())) {
-                return setBstrVariant(model_->windowTitle, value);
+            if (index == kSyntheticRoot && (!properties || properties->label.empty())) {
+                return setBstrVariant(model.windowTitle, value);
             }
             return setBstrVariant(properties ? properties->label : std::string{}, value);
         case UIA_HelpTextPropertyId:
             return setBstrVariant(properties ? properties->description : std::string{}, value);
         case UIA_AutomationIdPropertyId:
-            return setBstrVariant(automationId(), value);
+            return setBstrVariant(automationId(model, index), value);
         case UIA_ValueValuePropertyId:
             if (properties && properties->value) return setBstrVariant(*properties->value, value);
             return S_OK;
@@ -251,7 +409,8 @@ public:
             return S_OK;
         case UIA_IsKeyboardFocusablePropertyId:
             value->vt = VT_BOOL;
-            value->boolVal = properties && isFocusable(properties->role) ? VARIANT_TRUE : VARIANT_FALSE;
+            value->boolVal = properties && properties->enabled && properties->actions.focus
+                ? VARIANT_TRUE : VARIANT_FALSE;
             return S_OK;
         case UIA_IsControlElementPropertyId:
         case UIA_IsContentElementPropertyId:
@@ -273,7 +432,7 @@ public:
         case UIA_FrameworkIdPropertyId:
             return setBstrVariant("WhatsUI", value);
         case UIA_ClassNamePropertyId:
-            return setBstrVariant(index_ == kSyntheticRoot ? "WhatsUI.Window" : "WhatsUI.Node", value);
+            return setBstrVariant(index == kSyntheticRoot ? "WhatsUI.Window" : "WhatsUI.Node", value);
         default:
             return S_OK;
         }
@@ -283,7 +442,10 @@ public:
     {
         if (!provider) return E_POINTER;
         *provider = nullptr;
-        return index_ == kSyntheticRoot ? UiaHostProviderFromHwnd(model_->window, provider) : S_OK;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        return resolved->second == kSyntheticRoot
+            ? UiaHostProviderFromHwnd(resolved->first->window, provider) : S_OK;
     }
 
     HRESULT STDMETHODCALLTYPE Navigate(NavigateDirection direction,
@@ -291,43 +453,49 @@ public:
     {
         if (!result) return E_POINTER;
         *result = nullptr;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        const auto& model = *resolved->first;
+        const std::size_t index = resolved->second;
         std::optional<std::size_t> target;
         if (direction == NavigateDirection_Parent) {
-            if (index_ != kSyntheticRoot) {
-                const std::size_t parent = model_->parents[index_].value_or(kSyntheticRoot);
-                target = model_->semanticRoot && parent == *model_->semanticRoot
+            if (index != kSyntheticRoot) {
+                const std::size_t parent = model.parents[index].value_or(kSyntheticRoot);
+                target = model.semanticRoot && parent == *model.semanticRoot
                     ? kSyntheticRoot : parent;
             }
         } else if (direction == NavigateDirection_FirstChild ||
                    direction == NavigateDirection_LastChild) {
-            const auto& children = model_->childIndices(index_);
+            const auto& children = model.childIndices(index);
             if (!children.empty()) target = direction == NavigateDirection_FirstChild
                 ? children.front() : children.back();
-        } else if (index_ != kSyntheticRoot) {
-            std::size_t parent = model_->parents[index_].value_or(kSyntheticRoot);
-            if (model_->semanticRoot && parent == *model_->semanticRoot) parent = kSyntheticRoot;
-            const auto& siblings = model_->childIndices(parent);
-            const auto position = std::find(siblings.begin(), siblings.end(), index_);
+        } else if (index != kSyntheticRoot) {
+            std::size_t parent = model.parents[index].value_or(kSyntheticRoot);
+            if (model.semanticRoot && parent == *model.semanticRoot) parent = kSyntheticRoot;
+            const auto& siblings = model.childIndices(parent);
+            const auto position = std::find(siblings.begin(), siblings.end(), index);
             if (direction == NavigateDirection_NextSibling && position != siblings.end() &&
                 std::next(position) != siblings.end()) target = *std::next(position);
             if (direction == NavigateDirection_PreviousSibling && position != siblings.begin() &&
                 position != siblings.end()) target = *std::prev(position);
         }
-        if (target) return make(*target, result);
+        if (target) return make(model, *target, result);
         return S_OK;
     }
 
     HRESULT STDMETHODCALLTYPE GetRuntimeId(SAFEARRAY** runtimeId) override
     {
         if (!runtimeId) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
         *runtimeId = SafeArrayCreateVector(VT_I4, 0, 3);
         if (!*runtimeId) return E_OUTOFMEMORY;
         LONG* values = nullptr;
         HRESULT hr = SafeArrayAccessData(*runtimeId, reinterpret_cast<void**>(&values));
         if (FAILED(hr)) { SafeArrayDestroy(*runtimeId); *runtimeId = nullptr; return hr; }
         values[0] = UiaAppendRuntimeId;
-        values[1] = static_cast<LONG>(reinterpret_cast<std::uintptr_t>(model_->window) & 0x7fffffffU);
-        values[2] = runtimeComponent();
+        values[1] = static_cast<LONG>(reinterpret_cast<std::uintptr_t>(resolved->first->window) & 0x7fffffffU);
+        values[2] = runtimeComponent(*resolved->first, resolved->second);
         SafeArrayUnaccessData(*runtimeId);
         return S_OK;
     }
@@ -335,7 +503,9 @@ public:
     HRESULT STDMETHODCALLTYPE get_BoundingRectangle(UiaRect* rectangle) override
     {
         if (!rectangle) return E_POINTER;
-        *rectangle = model_->screenBounds(index_);
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        *rectangle = resolved->first->screenBounds(resolved->second);
         return S_OK;
     }
 
@@ -346,7 +516,18 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE SetFocus() override { return UIA_E_NOTSUPPORTED; }
+    HRESULT STDMETHODCALLTYPE SetFocus() override
+    {
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (resolved->second == kSyntheticRoot) return UIA_E_NOTSUPPORTED;
+        const auto& properties = resolved->first->entries[resolved->second].properties;
+        if (!properties.actions.focus) return UIA_E_NOTSUPPORTED;
+        if (!properties.enabled) return UIA_E_ELEMENTNOTENABLED;
+        AccessibilityActionRequest request;
+        request.kind = AccessibilityActionKind::SetFocus;
+        return enqueue(*resolved, std::move(request));
+    }
 
     HRESULT STDMETHODCALLTYPE get_FragmentRoot(IRawElementProviderFragmentRoot** root) override
     {
@@ -359,71 +540,130 @@ public:
     {
         if (!provider) return E_POINTER;
         *provider = nullptr;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        const auto& model = *resolved->first;
         std::size_t selected = kSyntheticRoot;
         std::size_t bestDepth = 0;
-        for (std::size_t index = 0; index < model_->entries.size(); ++index) {
-            const UiaRect bounds = model_->screenBounds(index);
+        for (std::size_t index = 0; index < model.entries.size(); ++index) {
+            const UiaRect bounds = model.screenBounds(index);
             if (bounds.width > 0.0 && bounds.height > 0.0 && x >= bounds.left && y >= bounds.top &&
                 x <= bounds.left + bounds.width && y <= bounds.top + bounds.height &&
-                (selected == kSyntheticRoot || model_->entries[index].depth >= bestDepth)) {
+                (selected == kSyntheticRoot || model.entries[index].depth >= bestDepth)) {
                 selected = index;
-                bestDepth = model_->entries[index].depth;
+                bestDepth = model.entries[index].depth;
             }
         }
-        return make(selected, provider);
+        return make(model, selected, provider);
     }
 
     HRESULT STDMETHODCALLTYPE GetFocus(IRawElementProviderFragment** provider) override
     {
         if (!provider) return E_POINTER;
         *provider = nullptr;
-        const auto focused = std::find_if(model_->entries.begin(), model_->entries.end(),
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        const auto& model = *resolved->first;
+        const auto focused = std::find_if(model.entries.begin(), model.entries.end(),
             [](const AccessibilitySnapshotEntry& entry) { return entry.properties.focused; });
-        if (focused == model_->entries.end()) return S_OK;
-        return make(static_cast<std::size_t>(std::distance(model_->entries.begin(), focused)), provider);
+        if (focused == model.entries.end()) return S_OK;
+        return make(model, static_cast<std::size_t>(std::distance(model.entries.begin(), focused)), provider);
     }
 
 private:
-    static bool isFocusable(AccessibilityRole role) noexcept
+    using Resolution = std::pair<std::shared_ptr<const SnapshotModel>, std::size_t>;
+
+    [[nodiscard]] std::optional<Resolution> resolve() const
     {
-        switch (role) {
-        case AccessibilityRole::Button:
-        case AccessibilityRole::CheckBox:
-        case AccessibilityRole::RadioButton:
-        case AccessibilityRole::Switch:
-        case AccessibilityRole::Slider:
-        case AccessibilityRole::TextField:
-        case AccessibilityRole::MenuItem: return true;
-        default: return false;
-        }
+        return state_->resolve(key_);
     }
 
-    LONG runtimeComponent() const noexcept
+    [[nodiscard]] static bool supportsInvoke(const Resolution& resolved) noexcept
     {
-        if (index_ == kSyntheticRoot) return 1;
+        if (resolved.second == kSyntheticRoot) return false;
+        return resolved.first->entries[resolved.second].properties.actions.invoke;
+    }
+
+    [[nodiscard]] bool supportsInvoke() const noexcept
+    {
+        const auto resolved = resolve();
+        return resolved && supportsInvoke(*resolved);
+    }
+
+    [[nodiscard]] static bool supportsToggle(const Resolution& resolved) noexcept
+    {
+        if (resolved.second == kSyntheticRoot) return false;
+        const auto& properties = resolved.first->entries[resolved.second].properties;
+        return properties.checked && properties.actions.toggle;
+    }
+
+    [[nodiscard]] bool supportsToggle() const noexcept
+    {
+        const auto resolved = resolve();
+        return resolved && supportsToggle(*resolved);
+    }
+
+    [[nodiscard]] static bool supportsValue(const Resolution& resolved) noexcept
+    {
+        if (resolved.second == kSyntheticRoot) return false;
+        const auto& properties = resolved.first->entries[resolved.second].properties;
+        return properties.value.has_value() &&
+               (properties.actions.setValue || properties.actions.valueReadOnly);
+    }
+
+    [[nodiscard]] bool supportsValue() const noexcept
+    {
+        const auto resolved = resolve();
+        return resolved && supportsValue(*resolved);
+    }
+
+    HRESULT enqueue(const Resolution& resolved, AccessibilityActionRequest request) noexcept
+    {
+        const auto& entry = resolved.first->entries[resolved.second];
+        request.path = entry.path;
+        request.expectedRole = entry.properties.role;
+        request.automationId = entry.properties.automationId;
+        request.expectedLabel = entry.properties.label;
+        return state_->actions->submit(
+            state_->window, UiaSnapshotBridge::actionMessageId(), std::move(request));
+    }
+
+    static LONG runtimeComponent(const SnapshotModel& model, std::size_t index) noexcept
+    {
+        if (index == kSyntheticRoot) return 1;
         std::uint32_t hash = 2166136261U;
-        for (const std::size_t part : model_->entries[index_].path) {
+        const auto& entry = model.entries[index];
+        if (!entry.properties.automationId.empty()) {
+            for (const unsigned char part : entry.properties.automationId) {
+                hash ^= part;
+                hash *= 16777619U;
+            }
+        } else for (const std::size_t part : entry.path) {
             hash ^= static_cast<std::uint32_t>(part + 1U);
             hash *= 16777619U;
         }
-        hash ^= static_cast<std::uint32_t>(model_->entries[index_].properties.role) + 1U;
+        hash ^= static_cast<std::uint32_t>(entry.properties.role) + 1U;
         return static_cast<LONG>((hash & 0x7fffffffU) + 2U);
     }
 
-    std::string automationId() const
+    static std::string automationId(const SnapshotModel& model, std::size_t index)
     {
-        if (index_ == kSyntheticRoot) return "window";
+        if (index == kSyntheticRoot) return "window";
+        if (!model.entries[index].properties.automationId.empty()) {
+            return model.entries[index].properties.automationId;
+        }
         std::string result{"node"};
-        for (const std::size_t part : model_->entries[index_].path) {
+        for (const std::size_t part : model.entries[index].path) {
             result.push_back('.');
             result += std::to_string(part);
         }
         return result;
     }
 
-    HRESULT make(std::size_t index, IRawElementProviderFragment** result) const noexcept
+    HRESULT make(const SnapshotModel& model, std::size_t index,
+                 IRawElementProviderFragment** result) const noexcept
     {
-        auto* provider = new (std::nothrow) SnapshotProvider(model_, index);
+        auto* provider = new (std::nothrow) SnapshotProvider(state_, keyFor(model, index));
         if (!provider) return E_OUTOFMEMORY;
         *result = static_cast<IRawElementProviderFragment*>(provider);
         return S_OK;
@@ -431,30 +671,156 @@ private:
 
     HRESULT makeRoot(IRawElementProviderFragmentRoot** result) const noexcept
     {
-        auto* provider = new (std::nothrow) SnapshotProvider(model_, kSyntheticRoot);
+        auto* provider = new (std::nothrow) SnapshotProvider(
+            state_, ElementKey{true, {}, {}, AccessibilityRole::Application});
         if (!provider) return E_OUTOFMEMORY;
         *result = static_cast<IRawElementProviderFragmentRoot*>(provider);
         return S_OK;
     }
 
     std::atomic<ULONG> references_{1};
-    std::shared_ptr<const SnapshotModel> model_;
-    std::size_t index_{kSyntheticRoot};
+    std::shared_ptr<ProviderState> state_;
+    ElementKey key_;
 };
 
 } // namespace
 
+struct UiaActionQueue::Impl {
+    static constexpr std::size_t kMaximumPending = 1024;
+    struct Pending {
+        enum class Phase { Queued, Started, Completed, Cancelled };
+        explicit Pending(AccessibilityActionRequest action) : request(std::move(action)) {}
+        AccessibilityActionRequest request;
+        std::atomic<AccessibilityActionStatus> status{AccessibilityActionStatus::Failed};
+        std::atomic<Phase> phase{Phase::Queued};
+    };
+    std::mutex mutex;
+    std::deque<std::shared_ptr<Pending>> pending;
+    AccessibilityActionHandler callback;
+    bool attached{false};
+};
+
+UiaActionQueue::UiaActionQueue() : impl_(std::make_unique<Impl>()) {}
+UiaActionQueue::~UiaActionQueue() = default;
+
+void UiaActionQueue::setCallback(AccessibilityActionHandler callback)
+{
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    impl_->callback = std::move(callback);
+    impl_->attached = static_cast<bool>(impl_->callback);
+    if (!impl_->attached) {
+        for (const auto& pending : impl_->pending) {
+            pending->status = AccessibilityActionStatus::ElementNotAvailable;
+            pending->phase = Impl::Pending::Phase::Completed;
+        }
+        impl_->pending.clear();
+    }
+}
+
+namespace {
+HRESULT actionStatusResult(AccessibilityActionStatus status) noexcept
+{
+    switch (status) {
+    case AccessibilityActionStatus::Succeeded: return S_OK;
+    case AccessibilityActionStatus::ElementNotAvailable:
+    case AccessibilityActionStatus::WindowClosed: return UIA_E_ELEMENTNOTAVAILABLE;
+    case AccessibilityActionStatus::ElementNotEnabled: return UIA_E_ELEMENTNOTENABLED;
+    case AccessibilityActionStatus::NotSupported: return UIA_E_NOTSUPPORTED;
+    case AccessibilityActionStatus::InvalidValue: return E_INVALIDARG;
+    case AccessibilityActionStatus::TimedOut: return UIA_E_TIMEOUT;
+    case AccessibilityActionStatus::Failed: return E_FAIL;
+    }
+    return E_FAIL;
+}
+} // namespace
+
+HRESULT UiaActionQueue::submit(HWND window, UINT message,
+                               AccessibilityActionRequest request) noexcept
+{
+    std::shared_ptr<Impl::Pending> pending;
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        if (!impl_->attached) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (impl_->pending.size() >= Impl::kMaximumPending) return E_OUTOFMEMORY;
+        pending = std::make_shared<Impl::Pending>(std::move(request));
+        impl_->pending.push_back(pending);
+    } catch (...) {
+        return E_OUTOFMEMORY;
+    }
+
+    DWORD_PTR ignored = 0;
+    SetLastError(ERROR_SUCCESS);
+    if (!SendMessageTimeoutW(window, message, 0, 0,
+                             SMTO_ABORTIFHUNG | SMTO_BLOCK | SMTO_NOTIMEOUTIFNOTHUNG,
+                             5000, &ignored)) {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        auto expected = Impl::Pending::Phase::Queued;
+        (void)pending->phase.compare_exchange_strong(
+            expected, Impl::Pending::Phase::Cancelled);
+        const auto queued = std::find(impl_->pending.begin(), impl_->pending.end(), pending);
+        if (queued != impl_->pending.end()) impl_->pending.erase(queued);
+        return UIA_E_TIMEOUT;
+    }
+    if (pending->phase.load() != Impl::Pending::Phase::Completed) return E_FAIL;
+    return actionStatusResult(pending->status.load());
+}
+
+std::size_t UiaActionQueue::dispatchPending()
+{
+    std::deque<std::shared_ptr<Impl::Pending>> pending;
+    AccessibilityActionHandler callback;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        pending.swap(impl_->pending);
+        callback = impl_->callback;
+    }
+    if (!callback) return 0;
+    for (const auto& action : pending) {
+        auto expected = Impl::Pending::Phase::Queued;
+        if (!action->phase.compare_exchange_strong(
+                expected, Impl::Pending::Phase::Started)) {
+            continue;
+        }
+        try {
+            action->status = callback(action->request);
+        } catch (...) {
+            action->status = AccessibilityActionStatus::Failed;
+        }
+        action->phase = Impl::Pending::Phase::Completed;
+    }
+    return pending.size();
+}
+
 HRESULT createUiaSnapshotProvider(HWND window, AccessibilitySnapshot snapshot,
                                   WindowMetrics metrics,
+                                  IRawElementProviderFragmentRoot** provider) noexcept
+{
+    try {
+        return createUiaSnapshotProvider(window, std::move(snapshot), metrics,
+                                         std::make_shared<UiaActionQueue>(), provider);
+    } catch (...) {
+        if (provider) *provider = nullptr;
+        return E_OUTOFMEMORY;
+    }
+}
+
+HRESULT createUiaSnapshotProvider(HWND window, AccessibilitySnapshot snapshot,
+                                  WindowMetrics metrics,
+                                  std::shared_ptr<UiaActionQueue> actions,
                                   IRawElementProviderFragmentRoot** provider) noexcept
 {
     if (!provider) return E_POINTER;
     *provider = nullptr;
     if (!IsWindow(window)) return E_INVALIDARG;
     try {
-        auto model = std::make_shared<const SnapshotModel>(
+        if (!actions) actions = std::make_shared<UiaActionQueue>();
+        auto state = std::make_shared<ProviderState>();
+        state->window = window;
+        state->actions = std::move(actions);
+        state->latest = std::make_shared<const SnapshotModel>(
             window, std::move(snapshot), metrics);
-        auto* created = new (std::nothrow) SnapshotProvider(std::move(model), kSyntheticRoot);
+        auto* created = new (std::nothrow) SnapshotProvider(
+            std::move(state), ElementKey{true, {}, {}, AccessibilityRole::Application});
         if (!created) return E_OUTOFMEMORY;
         *provider = static_cast<IRawElementProviderFragmentRoot*>(created);
         return S_OK;
@@ -466,11 +832,17 @@ HRESULT createUiaSnapshotProvider(HWND window, AccessibilitySnapshot snapshot,
 }
 
 struct UiaSnapshotBridge::Impl {
-    explicit Impl(HWND nativeWindow) noexcept : window(nativeWindow) {}
+    explicit Impl(HWND nativeWindow)
+        : window(nativeWindow), state(std::make_shared<ProviderState>())
+    {
+        state->window = window;
+        state->actions = std::make_shared<UiaActionQueue>();
+        root = new SnapshotProvider(
+            state, ElementKey{true, {}, {}, AccessibilityRole::Application});
+    }
     HWND window{};
-    std::mutex mutex;
-    AccessibilitySnapshot snapshot;
-    WindowMetrics metrics{};
+    std::shared_ptr<ProviderState> state;
+    IRawElementProviderFragmentRoot* root{};
 };
 
 UiaSnapshotBridge::UiaSnapshotBridge(HWND window)
@@ -478,13 +850,46 @@ UiaSnapshotBridge::UiaSnapshotBridge(HWND window)
 {
 }
 
-UiaSnapshotBridge::~UiaSnapshotBridge() = default;
+UiaSnapshotBridge::~UiaSnapshotBridge()
+{
+    impl_->state->actions->setCallback({});
+    {
+        std::lock_guard<std::mutex> lock(impl_->state->mutex);
+        impl_->state->detached = true;
+        impl_->state->latest.reset();
+    }
+    if (impl_->root) impl_->root->Release();
+}
 
 void UiaSnapshotBridge::publish(AccessibilitySnapshot snapshot, WindowMetrics metrics)
 {
-    std::lock_guard<std::mutex> lock(impl_->mutex);
-    impl_->snapshot = std::move(snapshot);
-    impl_->metrics = metrics;
+    auto latest = std::make_shared<const SnapshotModel>(
+        impl_->window, std::move(snapshot), metrics);
+    std::lock_guard<std::mutex> lock(impl_->state->mutex);
+    if (!impl_->state->detached) impl_->state->latest = std::move(latest);
+}
+
+void UiaSnapshotBridge::setActionCallback(AccessibilityActionHandler callback)
+{
+    impl_->state->actions->setCallback(std::move(callback));
+}
+
+std::size_t UiaSnapshotBridge::dispatchPendingActions()
+{
+    return impl_->state->actions->dispatchPending();
+}
+
+UINT UiaSnapshotBridge::actionMessageId() noexcept
+{
+    static const UINT message = RegisterWindowMessageW(L"WhatsUI.UIAutomation.Action");
+    return message;
+}
+
+bool UiaSnapshotBridge::handleActionMessage(UINT message)
+{
+    if (message != actionMessageId()) return false;
+    (void)dispatchPendingActions();
+    return true;
 }
 
 std::optional<LRESULT> UiaSnapshotBridge::handleWmGetObject(WPARAM wParam,
@@ -492,28 +897,13 @@ std::optional<LRESULT> UiaSnapshotBridge::handleWmGetObject(WPARAM wParam,
 {
     if (static_cast<LONG>(lParam) != UiaRootObjectId) return std::nullopt;
 
-    AccessibilitySnapshot snapshot;
-    WindowMetrics metrics;
-    try {
-        std::lock_guard<std::mutex> lock(impl_->mutex);
-        snapshot = impl_->snapshot;
-        metrics = impl_->metrics;
-    } catch (...) {
-        return static_cast<LRESULT>(0);
-    }
-    IRawElementProviderFragmentRoot* root = nullptr;
-    const HRESULT hr = createUiaSnapshotProvider(
-        impl_->window, std::move(snapshot), metrics, &root);
-    if (FAILED(hr)) return static_cast<LRESULT>(0);
     IRawElementProviderSimple* simple = nullptr;
-    const HRESULT queryResult = root->QueryInterface(IID_PPV_ARGS(&simple));
+    const HRESULT queryResult = impl_->root->QueryInterface(IID_PPV_ARGS(&simple));
     if (FAILED(queryResult)) {
-        root->Release();
         return static_cast<LRESULT>(0);
     }
     const LRESULT result = UiaReturnRawElementProvider(impl_->window, wParam, lParam, simple);
     simple->Release();
-    root->Release();
     return result;
 }
 

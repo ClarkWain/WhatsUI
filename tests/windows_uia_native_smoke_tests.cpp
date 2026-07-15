@@ -53,6 +53,15 @@ public:
 
     ComPtr(const ComPtr&) = delete;
     ComPtr& operator=(const ComPtr&) = delete;
+    ComPtr(ComPtr&& other) noexcept : value_(std::exchange(other.value_, nullptr)) {}
+    ComPtr& operator=(ComPtr&& other) noexcept
+    {
+        if (this != &other) {
+            reset();
+            value_ = std::exchange(other.value_, nullptr);
+        }
+        return *this;
+    }
 
     T* get() const noexcept { return value_; }
     T** put() noexcept
@@ -127,6 +136,42 @@ std::wstring currentFrameworkId(IUIAutomationElement& element)
     return result;
 }
 
+ComPtr<IUIAutomationElement> findNamedControl(IUIAutomation& automation,
+                                              IUIAutomationElement& root,
+                                              CONTROLTYPEID type,
+                                              const wchar_t* name)
+{
+    VARIANT expectedType{};
+    expectedType.vt = VT_I4;
+    expectedType.lVal = type;
+    ComPtr<IUIAutomationCondition> typeCondition;
+    expectSucceeded(automation.CreatePropertyCondition(UIA_ControlTypePropertyId,
+                                                       expectedType,
+                                                       typeCondition.put()),
+                    "Unable to create the UIA control-type condition");
+
+    VARIANT expectedName{};
+    expectedName.vt = VT_BSTR;
+    expectedName.bstrVal = SysAllocString(name);
+    expect(expectedName.bstrVal != nullptr,
+           "Unable to allocate the UIA control-name condition");
+    ComPtr<IUIAutomationCondition> nameCondition;
+    const HRESULT nameResult = automation.CreatePropertyCondition(
+        UIA_NamePropertyId, expectedName, nameCondition.put());
+    VariantClear(&expectedName);
+    expectSucceeded(nameResult, "Unable to create the UIA control-name condition");
+
+    ComPtr<IUIAutomationCondition> combined;
+    expectSucceeded(automation.CreateAndCondition(typeCondition.get(), nameCondition.get(),
+                                                  combined.put()),
+                    "Unable to combine the UIA named-control conditions");
+
+    ComPtr<IUIAutomationElement> element;
+    expectSucceeded(root.FindFirst(TreeScope_Descendants, combined.get(), element.put()),
+                    "UIA named-control lookup failed");
+    return element;
+}
+
 bool hasInteractiveDesktop()
 {
     // OpenInputDesktop can be denied to an otherwise interactive process by
@@ -178,35 +223,8 @@ void expectBoundsMatchWindow(IUIAutomationElement& element, HWND hwnd)
 void expectWhatsUiChildProvider(IUIAutomation& automation, IUIAutomationElement& root,
                                 HWND hwnd, const RECT& expectedBounds)
 {
-    VARIANT expectedType{};
-    expectedType.vt = VT_I4;
-    expectedType.lVal = UIA_ButtonControlTypeId;
-
-    ComPtr<IUIAutomationCondition> condition;
-    expectSucceeded(automation.CreatePropertyCondition(UIA_ControlTypePropertyId,
-                                                       expectedType,
-                                                       condition.put()),
-                    "Unable to create the UIA Button condition");
-
-    VARIANT expectedName{};
-    expectedName.vt = VT_BSTR;
-    expectedName.bstrVal = SysAllocString(L"Native action");
-    expect(expectedName.bstrVal != nullptr,
-           "Unable to allocate the UIA action-name condition");
-    ComPtr<IUIAutomationCondition> nameCondition;
-    const HRESULT nameResult = automation.CreatePropertyCondition(
-        UIA_NamePropertyId, expectedName, nameCondition.put());
-    VariantClear(&expectedName);
-    expectSucceeded(nameResult, "Unable to create the UIA action-name condition");
-
-    ComPtr<IUIAutomationCondition> actionCondition;
-    expectSucceeded(automation.CreateAndCondition(condition.get(), nameCondition.get(),
-                                                  actionCondition.put()),
-                    "Unable to combine the UIA action conditions");
-
-    ComPtr<IUIAutomationElement> button;
-    expectSucceeded(root.FindFirst(TreeScope_Descendants, actionCondition.get(), button.put()),
-                    "UIA descendant lookup failed");
+    auto button = findNamedControl(
+        automation, root, UIA_ButtonControlTypeId, L"Native action");
     expect(static_cast<bool>(button),
            "The native provider must project the WhatsUI Native action Button");
 
@@ -291,6 +309,210 @@ void queryNativeUia(HWND hwnd, bool validateFocus, RECT expectedButtonBounds)
         *automation.get(), *root.get(), hwnd, expectedButtonBounds);
 }
 
+struct NativeActionState {
+    int invokeCount{0};
+    bool checked{false};
+    std::string value;
+    std::thread::id uiThread{std::this_thread::get_id()};
+    std::thread::id invokeThread;
+    std::thread::id toggleThread;
+    std::thread::id valueThread;
+};
+
+void invokeNativeUiaActions(HWND hwnd)
+{
+    ScopedCom com;
+    expectSucceeded(com.result(), "COM initialization failed for UIA actions");
+    ComPtr<IUIAutomation> automation;
+    expectSucceeded(CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
+                                     IID_PPV_ARGS(automation.put())),
+                    "Unable to create the UI Automation action client");
+    ComPtr<IUIAutomationElement> root;
+    expectSucceeded(automation->ElementFromHandle(hwnd, root.put()),
+                    "ElementFromHandle failed for UIA actions");
+
+    auto button = findNamedControl(
+        *automation.get(), *root.get(), UIA_ButtonControlTypeId, L"Native action");
+    auto checkbox = findNamedControl(
+        *automation.get(), *root.get(), UIA_CheckBoxControlTypeId, L"Native toggle");
+    auto textInput = findNamedControl(
+        *automation.get(), *root.get(), UIA_EditControlTypeId, L"Native value");
+    expect(static_cast<bool>(button) && static_cast<bool>(checkbox) && static_cast<bool>(textInput),
+           "The native provider must project the actionable UIA fixture controls");
+
+    ComPtr<IUIAutomationInvokePattern> invokePattern;
+    expectSucceeded(button->GetCurrentPatternAs(
+                        UIA_InvokePatternId, __uuidof(IUIAutomationInvokePattern),
+                        reinterpret_cast<void**>(invokePattern.put())),
+                    "Native action must expose the UIA Invoke pattern");
+    expect(static_cast<bool>(invokePattern),
+           "Native action returned no UIA Invoke pattern provider");
+    expectSucceeded(invokePattern->Invoke(), "UIA Invoke failed for Native action");
+
+    ComPtr<IUIAutomationTogglePattern> togglePattern;
+    expectSucceeded(checkbox->GetCurrentPatternAs(
+                        UIA_TogglePatternId, __uuidof(IUIAutomationTogglePattern),
+                        reinterpret_cast<void**>(togglePattern.put())),
+                    "Native toggle must expose the UIA Toggle pattern");
+    expect(static_cast<bool>(togglePattern),
+           "Native toggle returned no UIA Toggle pattern provider");
+    expectSucceeded(togglePattern->Toggle(), "UIA Toggle failed for Native toggle");
+
+    ComPtr<IUIAutomationValuePattern> valuePattern;
+    expectSucceeded(textInput->GetCurrentPatternAs(
+                        UIA_ValuePatternId, __uuidof(IUIAutomationValuePattern),
+                        reinterpret_cast<void**>(valuePattern.put())),
+                    "Native value must expose the UIA Value pattern");
+    expect(static_cast<bool>(valuePattern),
+           "Native value returned no UIA Value pattern provider");
+    expectSucceeded(valuePattern->SetValue(L"Updated through UIA"),
+                    "UIA SetValue failed for Native value");
+    // Keep this last: UI Automation may focus an edit before setting Value.
+    expectSucceeded(checkbox->SetFocus(),
+                    "UIA SetFocus failed for Native toggle");
+
+    // Keep the original COM elements/patterns alive across the UI-thread
+    // action and subsequent snapshot publication. They must resolve the
+    // bridge's latest immutable model rather than remaining frozen forever.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    bool observedToggle = false;
+    bool observedValue = false;
+    do {
+        ToggleState state = ToggleState_Indeterminate;
+        if (SUCCEEDED(togglePattern->get_CurrentToggleState(&state))) {
+            observedToggle = state == ToggleState_On;
+        }
+        BSTR value = nullptr;
+        if (SUCCEEDED(valuePattern->get_CurrentValue(&value))) {
+            const std::wstring current = value != nullptr
+                ? std::wstring(value, SysStringLen(value)) : std::wstring{};
+            observedValue = current == L"Updated through UIA";
+        }
+        SysFreeString(value);
+        if (observedToggle && observedValue) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    } while (std::chrono::steady_clock::now() < deadline);
+    expect(observedToggle && observedValue,
+           "Retained UIA patterns must resolve the latest published snapshot");
+}
+
+void expectNativeUiaActionState(HWND hwnd)
+{
+    ScopedCom com;
+    expectSucceeded(com.result(), "COM initialization failed for UIA action verification");
+    ComPtr<IUIAutomation> automation;
+    expectSucceeded(CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
+                                     IID_PPV_ARGS(automation.put())),
+                    "Unable to create the UI Automation verification client");
+    ComPtr<IUIAutomationElement> root;
+    expectSucceeded(automation->ElementFromHandle(hwnd, root.put()),
+                    "ElementFromHandle failed for UIA action verification");
+
+    auto checkbox = findNamedControl(
+        *automation.get(), *root.get(), UIA_CheckBoxControlTypeId, L"Native toggle");
+    auto textInput = findNamedControl(
+        *automation.get(), *root.get(), UIA_EditControlTypeId, L"Native value");
+    expect(static_cast<bool>(checkbox) && static_cast<bool>(textInput),
+           "Updated native controls must remain discoverable through UIA");
+
+    ComPtr<IUIAutomationTogglePattern> togglePattern;
+    expectSucceeded(checkbox->GetCurrentPatternAs(
+                        UIA_TogglePatternId, __uuidof(IUIAutomationTogglePattern),
+                        reinterpret_cast<void**>(togglePattern.put())),
+                    "Updated Native toggle must retain the UIA Toggle pattern");
+    expect(static_cast<bool>(togglePattern),
+           "Updated Native toggle returned no UIA Toggle pattern provider");
+    ToggleState toggleState = ToggleState_Indeterminate;
+    expectSucceeded(togglePattern->get_CurrentToggleState(&toggleState),
+                    "Unable to read the updated UIA toggle state");
+    expect(toggleState == ToggleState_On,
+           "Native toggle must publish its post-action checked state");
+
+    ComPtr<IUIAutomationValuePattern> valuePattern;
+    expectSucceeded(textInput->GetCurrentPatternAs(
+                        UIA_ValuePatternId, __uuidof(IUIAutomationValuePattern),
+                        reinterpret_cast<void**>(valuePattern.put())),
+                    "Updated Native value must retain the UIA Value pattern");
+    expect(static_cast<bool>(valuePattern),
+           "Updated Native value returned no UIA Value pattern provider");
+    BSTR value = nullptr;
+    expectSucceeded(valuePattern->get_CurrentValue(&value),
+                    "Unable to read the updated UIA text value");
+    const std::wstring current = value != nullptr
+        ? std::wstring(value, SysStringLen(value))
+        : std::wstring{};
+    SysFreeString(value);
+    expect(current == L"Updated through UIA",
+           "Native value must publish its post-action text");
+}
+
+void pumpNativeUi(wui::UiWindow& window)
+{
+    glfwPollEvents();
+    window.update();
+    window.layout();
+}
+
+template <typename Work>
+void runUiaWorkOffUiThread(wui::UiWindow& window, Work work, const char* timeoutMessage)
+{
+    std::packaged_task<void()> task(std::move(work));
+    auto result = task.get_future();
+    std::thread worker(std::move(task));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (result.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+        pumpNativeUi(window);
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::fprintf(stderr, "FAIL: %s\n", timeoutMessage);
+            std::fflush(stderr);
+            std::quick_exit(1);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    worker.join();
+    result.get();
+}
+
+void exerciseNativeUiaActions(wui::UiWindow& window, HWND hwnd,
+                              const NativeActionState& state)
+{
+    runUiaWorkOffUiThread(window, [hwnd] { invokeNativeUiaActions(hwnd); },
+                          "UIA action dispatch timed out");
+    // The last synchronous provider call can complete after the message-pump
+    // iteration that published the previous action's state.
+    pumpNativeUi(window);
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while ((state.invokeCount != 1 || !state.checked || state.value != "Updated through UIA")
+           && std::chrono::steady_clock::now() < deadline) {
+        pumpNativeUi(window);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    expect(state.invokeCount == 1,
+           "UIA Invoke must execute the Button callback exactly once on the UI thread");
+    expect(state.checked,
+           "UIA Toggle must update the Checkbox through its UI-thread callback");
+    expect(state.value == "Updated through UIA",
+           "UIA SetValue must update TextInput through its UI-thread callback");
+    expect(state.invokeThread == state.uiThread
+               && state.toggleThread == state.uiThread
+               && state.valueThread == state.uiThread,
+           "Native UIA actions must execute control callbacks on the GLFW UI thread");
+    std::size_t focusedIndex = 999;
+    if (window.root()) {
+        for (std::size_t i = 0; i < window.root()->children().size(); ++i) {
+            if (window.focusManager().focused() == window.root()->children()[i].get()) focusedIndex = i;
+        }
+    }
+    expect(window.root() != nullptr && window.root()->children().size() > 2
+               && focusedIndex == 2,
+           "UIA SetFocus must update the WhatsUI focus manager");
+
+    // A fresh client must observe the same state as the retained providers.
+    runUiaWorkOffUiThread(window, [hwnd] { expectNativeUiaActionState(hwnd); },
+                          "UIA post-action state query timed out");
+}
+
 void runUiaClientOffUiThread(HWND hwnd, bool validateFocus, RECT expectedButtonBounds)
 {
     // Microsoft recommends keeping UIA client calls off the thread that owns
@@ -323,16 +545,30 @@ void testNativeUiaRoot()
     auto host = wui::createGlfwPlatformHost();
     wui::UiApp app(std::move(host));
     auto& window = app.openWindow("WhatsUI native UIA smoke", {560.0f, 320.0f});
+    NativeActionState actionState;
     window.setRoot(wui::ui::Column()
                        .padding(24)
                        .gap(12)
                        .children(wui::ui::Text("Native accessibility boundary"),
-                                 wui::ui::Button("Native action"))
+                                 wui::ui::Button("Native action").accessibilityId("native.action").onClick([&actionState] {
+                                     ++actionState.invokeCount;
+                                     actionState.invokeThread = std::this_thread::get_id();
+                                 }),
+                                 wui::ui::Checkbox("Native toggle").accessibilityId("native.toggle").onChange(
+                                     [&actionState](bool checked) {
+                                         actionState.checked = checked;
+                                         actionState.toggleThread = std::this_thread::get_id();
+                                     }),
+                                 wui::ui::TextField("Native value").accessibilityId("native.value").onChange(
+                                     [&actionState](const std::string& value) {
+                                         actionState.value = value;
+                                         actionState.valueThread = std::this_thread::get_id();
+                                     }))
                        .intoNode());
     window.update();
     window.layout();
-    expect(window.root() != nullptr && window.root()->children().size() == 2,
-           "The native UIA fixture must retain its action node");
+    expect(window.root() != nullptr && window.root()->children().size() == 4,
+           "The native UIA fixture must retain its action controls");
     window.focusManager().setFocused(window.root()->children()[1].get());
     // Focus is semantic state, not a layout invalidation. Republish the
     // immutable native snapshot after changing it so GetFocusedElement sees
@@ -379,6 +615,7 @@ void testNativeUiaRoot()
 
     runUiaClientOffUiThread(
         hwnd, nativeFocusAcquired, expectedButtonBounds);
+    exerciseNativeUiaActions(window, hwnd, actionState);
 }
 
 } // namespace

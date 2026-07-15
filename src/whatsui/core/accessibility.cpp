@@ -60,9 +60,12 @@ AccessibilityProperties propertiesForNode(const Node& node, const Node* focused)
         return properties;
     }
 
+    properties.actions = node.accessibilityActions();
     if (const auto* control = dynamic_cast<const ControlNode*>(&node)) {
         properties.enabled = control->isEnabled();
+        properties.actions.focus = true;
     }
+    properties.automationId = node.accessibilityId();
     properties.focused = &node == focused;
     properties.bounds = node.bounds();
     return properties;

@@ -52,6 +52,8 @@ public:
     // snapshot is the only supported hand-off point for native accessibility
     // adapters; it does not by itself register a UI Automation provider.
     [[nodiscard]] AccessibilitySnapshot accessibilitySnapshot() const;
+    [[nodiscard]] AccessibilityActionStatus performAccessibilityAction(
+        const AccessibilityActionRequest& request);
 
     // Window-level frame pipeline. update() commits deferred structural state;
     // layout() synchronizes page and overlay geometry; paint() preserves z-order.

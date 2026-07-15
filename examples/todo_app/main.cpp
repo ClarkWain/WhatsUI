@@ -347,9 +347,9 @@ void showConfirmation(wui::UiWindow& window,
                     Text(std::move(detail)).wrap().size(16.0f).lineHeight(24.0f).color({97, 97, 97, 255})),
                 Row().align(wui::Alignment::Center).gap(8.0f).children(
                     Spacer().flex(1.0f),
-                    Button("Cancel").variant(wui::ButtonVariant::Ghost)
+                    Button("Cancel").accessibilityId("todo.confirm.cancel").variant(wui::ButtonVariant::Ghost)
                         .onClick([&window] { (void)window.dismissTopDialog(); }),
-                    Button("Remove").variant(wui::ButtonVariant::Danger)
+                    Button("Remove").accessibilityId("todo.confirm.remove").variant(wui::ButtonVariant::Danger)
                         .onClick([&window, confirm = std::move(confirm)]() mutable {
                             // Restore focus and detach the modal before the
                             // state mutation can remove its invoking row.
@@ -373,14 +373,17 @@ void showEditDialog(wui::UiWindow& window,
     using namespace wui::ui;
     auto editor = std::make_unique<wui::TextInput>("Task title");
     auto* editorRaw = editor.get();
+    editorRaw->setAccessibilityId("todo.edit.title");
     editorRaw->text(std::move(initialTitle));
     editorRaw->setFlex(1.0f);
 
     auto important = std::make_unique<wui::Checkbox>("Important", initialImportant);
     auto* importantRaw = important.get();
+    importantRaw->setAccessibilityId("todo.edit.important");
 
     auto dueDate = std::make_unique<wui::TextInput>("YYYY-MM-DD (optional)");
     auto* dueDateRaw = dueDate.get();
+    dueDateRaw->setAccessibilityId("todo.edit.due-date");
     dueDateRaw->text(initialDueDate.value_or(""));
     dueDateRaw->setFlex(1.0f);
 
@@ -433,9 +436,9 @@ void showEditDialog(wui::UiWindow& window,
                 std::move(error),
                 Row().align(wui::Alignment::Center).gap(8.0f).children(
                     Spacer().flex(1.0f),
-                    Button("Cancel").variant(wui::ButtonVariant::Ghost)
+                    Button("Cancel").accessibilityId("todo.edit.cancel").variant(wui::ButtonVariant::Ghost)
                         .onClick([&window] { (void)window.dismissTopDialog(); }),
-                    Button("Save").variant(wui::ButtonVariant::Primary).onClick(std::move(submit)))))).intoDialog();
+                    Button("Save").accessibilityId("todo.edit.save").variant(wui::ButtonVariant::Primary).onClick(std::move(submit)))))).intoDialog();
     (void)window.showDialog(std::move(dialog));
     // Start the modal in its only editable field so the Windows text session
     // and IME candidate placement are immediately associated with the task.
@@ -498,6 +501,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
     // gives the Add button access to the live IME-backed model.
     auto composer = std::make_unique<wui::TextInput>("Add a task for today");
     auto* composerRaw = composer.get();
+    composerRaw->setAccessibilityId("todo.composer");
     composerRaw->setFlex(1.0f);
     auto submit = [addTodo, composerRaw] {
         const std::string value = composerRaw->model().text();
@@ -538,13 +542,13 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
             Box().background(surface).radius(12.0f).padding({12.0f, 10.0f, 10.0f, 10.0f})
                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
                     std::move(composerNode),
-                    Button("Add").variant(wui::ButtonVariant::Primary).onClick(submit))),
+                    Button("Add").accessibilityId("todo.add").variant(wui::ButtonVariant::Primary).onClick(submit))),
             // Search stays on its own rail above the compact view selector.
             // This prevents the filter choice from competing with the composer
             // at portrait widths, while keeping both controls within one tab
             // sequence on Windows keyboard and IME workflows.
             Box().background(surface).radius(12.0f).padding({12.0f, 8.0f, 12.0f, 8.0f})
-                .children(SearchField("Search tasks").onChange(setSearchQuery)),
+                .children(SearchField("Search tasks").accessibilityId("todo.search").onChange(setSearchQuery)),
             Box().background(surface).radius(12.0f).padding({12.0f, 7.0f, 12.0f, 7.0f})
                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
                     Text("VIEW").size(12.0f).lineHeight(18.0f).color(muted),
@@ -568,7 +572,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                     .children(Row().align(wui::Alignment::Center).gap(8.0f).children(
                         Text().bind(undoMessage).size(14.0f).lineHeight(20.0f).color(blue),
                         Spacer().flex(1.0f),
-                        Button("Undo").variant(wui::ButtonVariant::Ghost).onClick(undo)));
+                        Button("Undo").accessibilityId("todo.undo").variant(wui::ButtonVariant::Ghost).onClick(undo)));
             }),
             Box().background(blueSoft).radius(12.0f).padding({18.0f, 14.0f, 18.0f, 14.0f})
                 .children(Row().align(wui::Alignment::Center).gap(12.0f).children(
@@ -587,7 +591,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                     Text("Keep the next important thing in view").size(14.0f).lineHeight(20.0f).color(muted)),
                 Spacer().flex(1.0f),
                 If(hasStoredCompleted).then([clearCompleted, requestConfirmation] {
-                    return Button("Clear done").variant(wui::ButtonVariant::Ghost)
+                    return Button("Clear done").accessibilityId("todo.clear-completed").variant(wui::ButtonVariant::Ghost)
                         .onClick([clearCompleted, requestConfirmation] {
                             requestConfirmation("Clear completed tasks?",
                                                 "Completed tasks will be removed from My day.",
@@ -621,12 +625,13 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                         [](const Todo& item) { return std::to_string(item.id); },
                         [toggle, remove, setImportant, edit, requestConfirmation](const Todo& item) {
                             const std::string metadata = item.dueDateIso ? "Due " + *item.dueDateIso : std::string{};
+                            const std::string automationPrefix = "todo.task." + std::to_string(item.id);
                             return Box().background({255, 255, 255, 255}).radius(10.0f)
                                 .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                                 .children(Row().align(wui::Alignment::Start).gap(10.0f).children(
                                     Box().height(40.0f)
                                         .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
-                                        .children(Checkbox("", item.completed).accessibleLabel(item.title)
+                                        .children(Checkbox("", item.completed).accessibilityId(automationPrefix + ".complete").accessibleLabel(item.title)
                                             .onChange([toggle, id = item.id](bool) { toggle(id); })),
                                     Column().gap(4.0f).align(wui::Alignment::Stretch).flex(1.0f).children(
                                         Row().align(wui::Alignment::Center).gap(8.0f).children(
@@ -634,6 +639,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                                 .color({36, 36, 36, 255}).flex(1.0f),
                                             IconButton(item.important ? "\xE2\x98\x85" : "\xE2\x98\x86",
                                                        (item.important ? "Remove important from " : "Mark important: ") + item.title)
+                                                .accessibilityId(automationPrefix + ".important")
                                                 .checked(item.important)
                                                 .onClick([setImportant, id = item.id, important = item.important] {
                                                     setImportant(id, !important);
@@ -644,9 +650,9 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                         Row().align(wui::Alignment::Center).gap(6.0f).children(
                                             Text(metadata).maxLines(1).ellipsis().size(13.0f).lineHeight(18.0f)
                                                 .color(item.important ? wui::Color{0, 95, 184, 255} : wui::Color{97, 97, 97, 255}).flex(1.0f),
-                                            Button("Edit").variant(wui::ButtonVariant::Ghost)
+                                            Button("Edit").accessibilityId(automationPrefix + ".edit").variant(wui::ButtonVariant::Ghost)
                                                 .onClick([edit, id = item.id] { edit(id); }),
-                                            IconButton("×", "Delete task")
+                                            IconButton("×", "Delete task").accessibilityId(automationPrefix + ".delete")
                                                 .onClick([remove, id = item.id, requestConfirmation] {
                                                     requestConfirmation("Remove this task?",
                                                                         "This task will be removed from My day.",
@@ -661,12 +667,13 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                         [](const Todo& item) { return std::to_string(item.id); },
                         [toggle, remove, setImportant, edit, requestConfirmation](const Todo& item) {
                         const std::string metadata = item.dueDateIso ? "Due " + *item.dueDateIso : std::string{};
+                        const std::string automationPrefix = "todo.task." + std::to_string(item.id);
                         return Box().background({255, 255, 255, 255}).radius(10.0f)
                             .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                             .children(Row().align(wui::Alignment::Start).gap(10.0f).children(
                                 Box().height(40.0f)
                                     .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
-                                    .children(Checkbox("", item.completed).accessibleLabel(item.title)
+                                    .children(Checkbox("", item.completed).accessibilityId(automationPrefix + ".complete").accessibleLabel(item.title)
                                         .onChange([toggle, id = item.id](bool) { toggle(id); })),
                                 Column().gap(4.0f).align(wui::Alignment::Stretch).flex(1.0f).children(
                                     Row().align(wui::Alignment::Center).gap(8.0f).children(
@@ -674,6 +681,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                             .color({117, 117, 117, 255}).flex(1.0f),
                                         IconButton(item.important ? "\xE2\x98\x85" : "\xE2\x98\x86",
                                                    (item.important ? "Remove important from " : "Mark important: ") + item.title)
+                                            .accessibilityId(automationPrefix + ".important")
                                             .checked(item.important)
                                             .onClick([setImportant, id = item.id, important = item.important] {
                                                 setImportant(id, !important);
@@ -681,9 +689,9 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                     Row().align(wui::Alignment::Center).gap(6.0f).children(
                                         Text(metadata).maxLines(1).ellipsis().size(13.0f).lineHeight(18.0f)
                                             .color({117, 117, 117, 255}).flex(1.0f),
-                                        Button("Edit").variant(wui::ButtonVariant::Ghost)
+                                        Button("Edit").accessibilityId(automationPrefix + ".edit").variant(wui::ButtonVariant::Ghost)
                                             .onClick([edit, id = item.id] { edit(id); }),
-                                        IconButton("×", "Delete task")
+                                        IconButton("×", "Delete task").accessibilityId(automationPrefix + ".delete")
                                             .onClick([remove, id = item.id, requestConfirmation] {
                                                 requestConfirmation("Remove this task?",
                                                                     "This task will be removed from My day.",

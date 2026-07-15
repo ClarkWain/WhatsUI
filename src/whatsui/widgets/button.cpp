@@ -146,6 +146,24 @@ bool Button::onPointerEvent(const PointerEvent& event)
     return false;
 }
 
+AccessibilityActionCapabilities Button::accessibilityActions() const noexcept
+{
+    AccessibilityActionCapabilities actions;
+    actions.invoke = static_cast<bool>(onClick_);
+    return actions;
+}
+
+AccessibilityActionStatus Button::performAccessibilityAction(
+    AccessibilityActionKind kind, std::string_view value)
+{
+    (void)value;
+    if (kind != AccessibilityActionKind::Invoke) return AccessibilityActionStatus::NotSupported;
+    if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
+    if (!onClick_) return AccessibilityActionStatus::NotSupported;
+    onClick_();
+    return AccessibilityActionStatus::Succeeded;
+}
+
 Checkbox::Checkbox(std::string label, bool checked)
     : label_(std::move(label))
     , checked_(checked)
@@ -266,6 +284,23 @@ bool Checkbox::onKeyEvent(const KeyEvent& event)
     if (!isEnabled() || event.action != KeyAction::Down || (event.keyCode != 32 && event.keyCode != 13)) return false;
     toggle();
     return true;
+}
+
+AccessibilityActionCapabilities Checkbox::accessibilityActions() const noexcept
+{
+    AccessibilityActionCapabilities actions;
+    actions.toggle = true;
+    return actions;
+}
+
+AccessibilityActionStatus Checkbox::performAccessibilityAction(
+    AccessibilityActionKind kind, std::string_view value)
+{
+    (void)value;
+    if (kind != AccessibilityActionKind::Toggle) return AccessibilityActionStatus::NotSupported;
+    if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
+    toggle();
+    return AccessibilityActionStatus::Succeeded;
 }
 
 } // namespace wui

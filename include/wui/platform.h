@@ -109,6 +109,10 @@ public:
     {
         (void)snapshot;
     }
+    virtual void setAccessibilityActionHandler(AccessibilityActionHandler handler)
+    {
+        (void)handler;
+    }
 
     [[nodiscard]] virtual RenderSurface& surface() = 0;
     [[nodiscard]] virtual Clipboard& clipboard() = 0;

@@ -671,6 +671,22 @@ bool TextInput::onCompositionInput(const CompositionInputEvent& event)
     return true;
 }
 
+AccessibilityActionCapabilities TextInput::accessibilityActions() const noexcept
+{
+    AccessibilityActionCapabilities actions;
+    actions.setValue = true;
+    return actions;
+}
+
+AccessibilityActionStatus TextInput::performAccessibilityAction(
+    AccessibilityActionKind kind, std::string_view value)
+{
+    if (kind != AccessibilityActionKind::SetValue) return AccessibilityActionStatus::NotSupported;
+    if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
+    text(std::string(value));
+    return AccessibilityActionStatus::Succeeded;
+}
+
 bool TextInput::copySelection(Clipboard& clipboard) const
 {
     const auto selected = controller_.selectedText();

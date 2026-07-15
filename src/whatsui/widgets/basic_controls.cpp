@@ -207,6 +207,8 @@ bool Switch::onPointerEvent(const PointerEvent& event)
     return event.action == PointerAction::Enter || event.action == PointerAction::Move || event.action == PointerAction::Leave || event.action == PointerAction::Cancel;
 }
 bool Switch::onKeyEvent(const KeyEvent& event) { if (!isEnabled() || !isActivationKey(event)) return false; toggle(); return true; }
+AccessibilityActionCapabilities Switch::accessibilityActions() const noexcept { AccessibilityActionCapabilities actions; actions.toggle = true; return actions; }
+AccessibilityActionStatus Switch::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value) { (void)value; if (kind != AccessibilityActionKind::Toggle) return AccessibilityActionStatus::NotSupported; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; toggle(); return AccessibilityActionStatus::Succeeded; }
 
 Slider::Slider(float minimum, float maximum, float value) { setRange(minimum, maximum); value_ = normalizedAndSnapped(value); }
 float Slider::minimum() const noexcept { return minimum_; }

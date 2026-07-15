@@ -41,13 +41,15 @@ native Windows counterpart. In particular, full automation peers, native
 screen-reader interoperability, high-contrast policy, motion preferences,
 and every localized input scenario remain release validation work.
 
-### Accessibility limitation — read-only Windows bridge
+### Accessibility limitation — interactive Windows bridge preview
 
-The GLFW host registers a native read-only Windows UI Automation fragment tree
+The GLFW host registers a native Windows UI Automation fragment tree
 from `wui/accessibility.h` snapshots. A real-HWND test verifies discovery of a
 named, focused WhatsUI Button, its framework/control type, and screen bounds
 without reading mutable UI nodes from the UIA client thread. Invoke, Toggle,
-editable Value/Text patterns, UIA change events, high-contrast policy, and the
+editable Value, and focus actions are synchronously marshalled to the UI thread
+and verified against refreshed native state. Rich text ranges, UIA change
+events, high-contrast policy, and the
 100%/150%/200% Narrator validation matrix remain incomplete. Applications must
 not describe the current preview as fully screen-reader accessible yet.
 

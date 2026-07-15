@@ -223,6 +223,19 @@ bool Node::onCompositionInput(const CompositionInputEvent& event)
     return false;
 }
 
+AccessibilityActionCapabilities Node::accessibilityActions() const noexcept
+{
+    return {};
+}
+
+AccessibilityActionStatus Node::performAccessibilityAction(
+    AccessibilityActionKind kind, std::string_view value)
+{
+    (void)kind;
+    (void)value;
+    return AccessibilityActionStatus::NotSupported;
+}
+
 void Node::markDirty(DirtyFlag flag) noexcept
 {
     dirtyFlags_ |= toMask(flag);

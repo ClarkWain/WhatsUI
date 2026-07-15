@@ -166,7 +166,7 @@ IconButton& IconButton::checked(bool value) { setChecked(value); return *this; }
 IconButton& IconButton::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
 void IconButton::setIcon(std::string value) { icon_ = std::move(value); markDirty(DirtyFlag::Layout); }
 void IconButton::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); }
-void IconButton::setChecked(std::optional<bool> value) noexcept { checked_ = value; }
+void IconButton::setChecked(std::optional<bool> value) noexcept { if (checked_ != value) { checked_ = value; markDirty(DirtyFlag::Paint); } }
 const std::string& IconButton::icon() const noexcept { return icon_; }
 const std::string& IconButton::accessibleLabel() const noexcept { return accessibleLabel_; }
 std::optional<bool> IconButton::checked() const noexcept { return checked_; }
@@ -195,6 +195,28 @@ bool IconButton::onKeyEvent(const KeyEvent& event)
     if (!isEnabled() || event.action != KeyAction::Down || (event.keyCode != 13 && event.keyCode != 32 && event.keyCode != 257)) return false;
     if (onClick_) onClick_();
     return true;
+}
+AccessibilityActionCapabilities IconButton::accessibilityActions() const noexcept
+{
+    AccessibilityActionCapabilities actions;
+    actions.toggle = checked_.has_value();
+    actions.invoke = !checked_.has_value() && static_cast<bool>(onClick_);
+    return actions;
+}
+AccessibilityActionStatus IconButton::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
+{
+    (void)value;
+    if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
+    if (kind == AccessibilityActionKind::Invoke && !checked_) {
+        if (!onClick_) return AccessibilityActionStatus::NotSupported;
+        onClick_();
+        return AccessibilityActionStatus::Succeeded;
+    }
+    if (kind == AccessibilityActionKind::Toggle && checked_) {
+        if (onClick_) onClick_(); else setChecked(!*checked_);
+        return AccessibilityActionStatus::Succeeded;
+    }
+    return AccessibilityActionStatus::NotSupported;
 }
 
 SearchField::SearchField(std::string placeholder) : TextInput(std::move(placeholder)) {}

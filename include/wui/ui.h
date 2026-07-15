@@ -78,6 +78,14 @@ public:
         return std::move(self());
     }
 
+    // Stable native-automation identity, especially important for keyed rows
+    // whose visual Node instances may be reconstructed after state changes.
+    Self&& accessibilityId(std::string id) &&
+    {
+        node_->setAccessibilityId(std::move(id));
+        return std::move(self());
+    }
+
     // Hand ownership to a parent or to setContent().
     std::unique_ptr<Node> intoNode() { return std::move(node_); }
     operator std::unique_ptr<Node>() { return std::move(node_); }

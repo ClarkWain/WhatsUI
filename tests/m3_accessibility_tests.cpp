@@ -112,6 +112,39 @@ void testVisualControlSnapshot()
            "Two-state IconButtons must expose their current checked state");
 }
 
+void testControlAccessibilityActions()
+{
+    int invocations = 0;
+    wui::Button button{"Run"};
+    button.onClick([&] { ++invocations; });
+    expect(button.accessibilityActions().invoke,
+           "Button must advertise its direct Invoke capability");
+    expect(button.performAccessibilityAction(wui::AccessibilityActionKind::Invoke, {})
+               == wui::AccessibilityActionStatus::Succeeded
+               && invocations == 1,
+           "Button accessibility Invoke must reuse the real click handler");
+
+    bool changed = false;
+    wui::Checkbox checkbox{"Done", false};
+    checkbox.onChange([&](bool value) { changed = value; });
+    expect(checkbox.accessibilityActions().toggle
+               && checkbox.performAccessibilityAction(
+                      wui::AccessibilityActionKind::Toggle, {})
+                   == wui::AccessibilityActionStatus::Succeeded
+               && checkbox.isChecked() && changed,
+           "Checkbox accessibility Toggle must reuse binding/change semantics");
+
+    std::string edited;
+    wui::TextInput input{"Title"};
+    input.onChange([&](const std::string& value) { edited = value; });
+    expect(input.accessibilityActions().setValue
+               && input.performAccessibilityAction(
+                      wui::AccessibilityActionKind::SetValue, "Updated")
+                   == wui::AccessibilityActionStatus::Succeeded
+               && input.controller().text() == "Updated" && edited == "Updated",
+           "TextInput accessibility SetValue must use the editing change path");
+}
+
 } // namespace
 
 int main()
@@ -119,5 +152,6 @@ int main()
     testControlSemantics();
     testSnapshotTraversal();
     testVisualControlSnapshot();
+    testControlAccessibilityActions();
     return 0;
 }

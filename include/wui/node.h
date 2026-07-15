@@ -5,8 +5,11 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <vector>
 
+#include "wui/accessibility.h"
 #include "wui/events.h"
 #include "wui/paint_context.h"
 #include "wui/types.h"
@@ -101,6 +104,21 @@ public:
     virtual bool onKeyEvent(const KeyEvent& event);
     virtual bool onTextInput(const TextInputEvent& event);
     virtual bool onCompositionInput(const CompositionInputEvent& event);
+    // Called only on the owning UI thread after a native adapter has resolved
+    // and validated an immutable accessibility request.
+    [[nodiscard]] virtual AccessibilityActionCapabilities accessibilityActions() const noexcept;
+    virtual AccessibilityActionStatus performAccessibilityAction(
+        AccessibilityActionKind kind, std::string_view value);
+
+    [[nodiscard]] const std::string& accessibilityId() const noexcept
+    {
+        return accessibilityId_;
+    }
+
+    void setAccessibilityId(std::string id)
+    {
+        accessibilityId_ = std::move(id);
+    }
 
     // A layout change also changes the pixels occupied by this node and its
     // ancestors, so it implicitly invalidates paint up to the root boundary.
@@ -175,6 +193,7 @@ private:
     std::function<void()> invalidationHandler_;
     RectF bounds_{};
     float flex_{0.0f};
+    std::string accessibilityId_;
     bool attached_{false};
     DirtyFlags dirtyFlags_{toMask(DirtyFlag::Layout) | toMask(DirtyFlag::Paint)};
     mutable std::optional<Constraints> lastMeasuredConstraints_;

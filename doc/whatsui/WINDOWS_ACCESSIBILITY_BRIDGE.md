@@ -3,10 +3,12 @@
 ## Status
 
 WhatsUI now projects its platform-neutral semantic snapshot into a native,
-read-only Windows UI Automation (UIA) fragment tree for the GLFW host. Native
+Windows UI Automation (UIA) fragment tree for the GLFW host. Native
 clients can discover named controls, roles, bounds, enabled/focused state,
-values, and checked state. Interactive UIA patterns, change events, rich text
-ranges, and the Narrator validation matrix are not complete, so full
+values, and checked state. Buttons expose Invoke, checkboxes/switches expose
+Toggle, editable text exposes Value, and focus requests are marshalled to the
+UI thread. UIA change events, rich text ranges, and the Narrator validation
+matrix are not complete, so full
 screen-reader support must not yet be claimed.
 
 The semantic projection is now a real runtime boundary rather than a
@@ -42,9 +44,10 @@ UIA needs a real provider object that implements at least:
    `GetRuntimeId`, focus, and point hit testing.
 3. `IRawElementProviderFragmentRoot` for `ElementProviderFromPoint` and
    `GetFocus`.
-4. The next phase adds `IInvokeProvider` for buttons, `IToggleProvider` for
-   checkbox/radio/switch, and `IValueProvider` for editable text fields. A
-   read-only value is not a substitute for text editing.
+4. `IInvokeProvider` for buttons, `IToggleProvider` for checkbox/switch/icon
+   toggles, and `IValueProvider` for editable text fields. Radio selection is
+   deliberately reserved for `SelectionItem`, rather than misrepresented as a
+   toggle. A Value pattern is not a substitute for rich text ranges.
 
 Fragment parents are calculated using the longest exposed visual-path prefix.
 This is important because non-semantic visual containers are absent from the
@@ -73,8 +76,10 @@ on each axis, then `ClientToScreen`, avoiding a second 150% DPI scale.
 
 ### C. Interactive controls and events
 
-- [ ] Route Invoke/Toggle/Value actions to the UI thread through explicit
+- [x] Route Invoke/Toggle/Value/focus actions to the UI thread through explicit
       `UiWindow` accessibility actions. Do not synthesize mouse coordinates.
+- [x] Keep retained provider identities stable across published snapshots,
+      preferring explicit automation IDs for keyed/dynamic controls.
 - [ ] Raise focus/property/structure notifications after UI state changes.
 - [ ] Add TextInput selection and document-range support before claiming full
       text editing support to Narrator.
@@ -87,8 +92,10 @@ on each axis, then `ClientToScreen`, avoiding a second 150% DPI scale.
 - [ ] Assert root name and every common Todo control's Name, ControlType,
       IsEnabled, ToggleState/Value, and bounding rectangle at 100%, 150%, and
       200% DPI.
-- [ ] Invoke a button and toggle a task through UIA, then assert the rendered
-      state and UIA property event.
+- [x] Invoke a button, toggle a checkbox, edit text, and move focus through UIA;
+      assert callbacks run on the GLFW UI thread and retained providers observe
+      the newly published state.
+- [ ] Assert the corresponding UIA property and focus events.
 - [ ] Run a short Narrator smoke test manually only after the automated UIA
       checks pass.
 

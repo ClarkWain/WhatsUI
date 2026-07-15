@@ -363,6 +363,13 @@ public:
             accessibilityBridge_->publish(std::move(snapshot), metrics);
         }
     }
+
+    void setAccessibilityActionHandler(AccessibilityActionHandler handler)
+    {
+        if (accessibilityBridge_) {
+            accessibilityBridge_->setActionCallback(std::move(handler));
+        }
+    }
 #endif
 
     void activate() override
@@ -497,6 +504,9 @@ private:
 
     LRESULT handleImeMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
+        if (accessibilityBridge_ && accessibilityBridge_->handleActionMessage(message)) {
+            return 0;
+        }
         if (message == WM_GETOBJECT && static_cast<LONG>(lParam) == UiaRootObjectId) {
             if (accessibilityBridge_) {
                 if (const auto result = accessibilityBridge_->handleWmGetObject(wParam, lParam)) {
@@ -674,6 +684,15 @@ public:
         textInputSession_.publishAccessibilitySnapshot(std::move(snapshot), metrics());
 #else
         (void)snapshot;
+#endif
+    }
+
+    void setAccessibilityActionHandler(AccessibilityActionHandler handler) override
+    {
+#if defined(_WIN32)
+        textInputSession_.setAccessibilityActionHandler(std::move(handler));
+#else
+        (void)handler;
 #endif
     }
 

@@ -9,6 +9,7 @@
 // Platform backends can adapt AccessibilityNode snapshots to their native API.
 
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -40,6 +41,32 @@ enum class AccessibilityRole {
     Separator,
 };
 
+enum class AccessibilityActionKind {
+    Invoke,
+    Toggle,
+    SetValue,
+    SetFocus,
+};
+
+struct AccessibilityActionCapabilities {
+    bool invoke{false};
+    bool toggle{false};
+    bool setValue{false};
+    bool focus{false};
+    bool valueReadOnly{false};
+};
+
+enum class AccessibilityActionStatus {
+    Succeeded,
+    ElementNotAvailable,
+    ElementNotEnabled,
+    NotSupported,
+    InvalidValue,
+    WindowClosed,
+    TimedOut,
+    Failed,
+};
+
 // Semantic data belonging to one control or logical content node.  Labels and
 // descriptions are plain UTF-8 text; value is deliberately optional because a
 // Button normally has no value while a Slider or editable TextField does.
@@ -47,6 +74,11 @@ struct AccessibilityProperties {
     AccessibilityRole role{AccessibilityRole::Unknown};
     std::string label;
     std::string description;
+    // Author-supplied, window-unique stable identity for native automation.
+    // Dynamic/keyed collections should set this so an OS-retained element
+    // survives reorder and row reconstruction. Empty falls back to the visual
+    // snapshot path.
+    std::string automationId;
     bool enabled{true};
     // Focus is a snapshot of the framework focus manager, rather than a
     // mutable property maintained by every individual widget.
@@ -57,6 +89,7 @@ struct AccessibilityProperties {
     std::optional<RectF> bounds;
     std::optional<bool> checked;
     std::optional<std::string> value;
+    AccessibilityActionCapabilities actions{};
 
     [[nodiscard]] bool hasAccessibleName() const noexcept
     {
@@ -69,6 +102,21 @@ struct AccessibilityProperties {
                role == AccessibilityRole::Switch;
     }
 };
+
+// Cross-thread native adapters enqueue this value-only request. The UI thread
+// resolves path against the current active semantic tree and verifies the
+// expected role/name before invoking a mutable Node.
+struct AccessibilityActionRequest {
+    AccessibilityActionKind kind{AccessibilityActionKind::Invoke};
+    std::vector<std::size_t> path;
+    AccessibilityRole expectedRole{AccessibilityRole::Unknown};
+    std::string automationId;
+    std::string expectedLabel;
+    std::string value;
+};
+
+using AccessibilityActionHandler =
+    std::function<AccessibilityActionStatus(const AccessibilityActionRequest&)>;
 
 class Node;
 
@@ -115,6 +163,12 @@ public:
     AccessibilityNode& setDescription(std::string description)
     {
         properties_.description = std::move(description);
+        return *this;
+    }
+
+    AccessibilityNode& setAutomationId(std::string automationId)
+    {
+        properties_.automationId = std::move(automationId);
         return *this;
     }
 

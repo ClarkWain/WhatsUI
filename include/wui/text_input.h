@@ -137,6 +137,9 @@ public:
     bool onKeyEvent(const KeyEvent& event) override;
     bool onTextInput(const TextInputEvent& event) override;
     bool onCompositionInput(const CompositionInputEvent& event) override;
+    [[nodiscard]] AccessibilityActionCapabilities accessibilityActions() const noexcept override;
+    AccessibilityActionStatus performAccessibilityAction(
+        AccessibilityActionKind kind, std::string_view value) override;
 
 private:
     [[nodiscard]] std::size_t caretAt(PointF point) const noexcept;

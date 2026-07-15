@@ -326,6 +326,9 @@ public:
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
     bool onPointerEvent(const PointerEvent& event) override;
+    [[nodiscard]] AccessibilityActionCapabilities accessibilityActions() const noexcept override;
+    AccessibilityActionStatus performAccessibilityAction(
+        AccessibilityActionKind kind, std::string_view value) override;
 
 private:
     std::string label_;
@@ -362,6 +365,9 @@ public:
     void paint(PaintContext& context) override;
     bool onPointerEvent(const PointerEvent& event) override;
     bool onKeyEvent(const KeyEvent& event) override;
+    [[nodiscard]] AccessibilityActionCapabilities accessibilityActions() const noexcept override;
+    AccessibilityActionStatus performAccessibilityAction(
+        AccessibilityActionKind kind, std::string_view value) override;
 
 private:
     void toggle();
