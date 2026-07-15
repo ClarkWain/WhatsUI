@@ -187,6 +187,7 @@ endif()
 # WhatsCanvas/GLFW dependency chain. The GLFW/OpenGL export has an external
 # consumer smoke; native-window and GPU-driver validation remain release gates.
 if(WHATSUI_INSTALL)
+    set(WHATSUI_INSTALL_LICENSEDIR "${CMAKE_INSTALL_DATADIR}/licenses/WhatsUI")
     set(WHATSUI_INSTALL_TARGETS WhatsUI)
     if(TARGET WhatsUIGlfw)
         list(APPEND WHATSUI_INSTALL_TARGETS WhatsUIGlfw)
@@ -201,6 +202,18 @@ if(WHATSUI_INSTALL)
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/wui"
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
+    install(FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+        "${CMAKE_CURRENT_SOURCE_DIR}/NOTICE"
+        "${CMAKE_CURRENT_SOURCE_DIR}/doc/whatsui/SBOM.md"
+        "${CMAKE_CURRENT_SOURCE_DIR}/doc/whatsui/RELEASE_CHECKLIST.md"
+        DESTINATION "${WHATSUI_INSTALL_LICENSEDIR}"
+    )
+    if(WHATSUI_WITH_WHATSCANVAS)
+        install(FILES "${WHATSUI_WHATSCANVAS_ROOT}/LICENSE"
+            DESTINATION "${WHATSUI_INSTALL_LICENSEDIR}/third_party/WhatsCanvas"
+        )
+    endif()
 
     install(EXPORT WhatsUITargets
         FILE WhatsUITargets.cmake
@@ -212,6 +225,7 @@ if(WHATSUI_INSTALL)
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WhatsUIConfig.cmake.in"
         "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfig.cmake"
         INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/WhatsUI"
+        PATH_VARS WHATSUI_INSTALL_LICENSEDIR
     )
     write_basic_package_version_file(
         "${CMAKE_CURRENT_BINARY_DIR}/WhatsUIConfigVersion.cmake"

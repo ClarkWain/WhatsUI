@@ -11,7 +11,7 @@ select a project license. See [Release checklist](RELEASE_CHECKLIST.md).
 | Component | Location | Distribution status | License/notice decision |
 | --- | --- | --- | --- |
 | WhatsUI runtime, public headers, examples, tests, documentation | Repository root excluding `third_party/` | Core and Windows renderer/GLFW CMake exports are validated. | MIT; see root `LICENSE`. |
-| Todo local-store format | `examples/todo_app/` | Example/application code; not a separate package. | Pending with project decision. |
+| Todo local-store format | `examples/todo_app/` | Example/application code; not a separate package. | MIT as first-party WhatsUI source; see root `LICENSE`. |
 
 ## Known third-party source dependencies
 

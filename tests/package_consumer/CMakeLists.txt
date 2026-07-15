@@ -4,6 +4,20 @@ project(WhatsUIConsumerSmoke LANGUAGES CXX)
 
 find_package(WhatsUI 0.1 CONFIG REQUIRED)
 
+foreach(_whatsui_release_file IN ITEMS LICENSE NOTICE SBOM.md RELEASE_CHECKLIST.md)
+    if(NOT EXISTS "${WhatsUI_LICENSE_DIR}/${_whatsui_release_file}")
+        message(FATAL_ERROR
+            "Installed WhatsUI package is missing release metadata: "
+            "${WhatsUI_LICENSE_DIR}/${_whatsui_release_file}")
+    endif()
+endforeach()
+if(WhatsUI_WITH_WHATSCANVAS AND
+   NOT EXISTS "${WhatsUI_LICENSE_DIR}/third_party/WhatsCanvas/LICENSE")
+    message(FATAL_ERROR
+        "Installed WhatsUI package is missing the WhatsCanvas license: "
+        "${WhatsUI_LICENSE_DIR}/third_party/WhatsCanvas/LICENSE")
+endif()
+
 add_executable(whatsui_consumer_smoke main.cpp)
 set(WHATSUI_PACKAGE_TARGET "Core" CACHE STRING "Installed WhatsUI target to consume (Core or Glfw)")
 set_property(CACHE WHATSUI_PACKAGE_TARGET PROPERTY STRINGS Core Glfw)

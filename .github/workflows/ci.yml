@@ -46,6 +46,124 @@ jobs:
       - name: Run MSVC AddressSanitizer tests
         run: ctest --test-dir build-asan -C Debug --output-on-failure
 
+  release-package:
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: Core
+            with_whatscanvas: 'OFF'
+          - package: Glfw
+            with_whatscanvas: 'ON'
+
+    steps:
+      - name: Checkout clean release source
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Verify clean recursive checkout
+        shell: pwsh
+        run: |
+          $worktree = @(git status --porcelain=v1 --untracked-files=all)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not inspect the WhatsUI worktree."
+          }
+          if ($worktree.Count -ne 0) {
+            throw "Release checkout is dirty:`n$($worktree -join "`n")"
+          }
+
+          $submodules = @(git submodule status --recursive)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not inspect recursive submodules."
+          }
+          $invalidSubmodules = @($submodules | Where-Object { $_ -match '^[+\-U]' })
+          if ($invalidSubmodules.Count -ne 0) {
+            throw "Submodules are uninitialized, conflicted, or not at their pinned revisions:`n$($invalidSubmodules -join "`n")"
+          }
+
+      - name: Validate Release ${{ matrix.package }} package
+        shell: pwsh
+        run: |
+          function Assert-NativeSuccess([string] $stage) {
+            if ($LASTEXITCODE -ne 0) {
+              throw "$stage failed with exit code $LASTEXITCODE."
+            }
+          }
+
+          $package = '${{ matrix.package }}'
+          $withWhatsCanvas = '${{ matrix.with_whatscanvas }}'
+          $packageSlug = $package.ToLowerInvariant()
+          $releaseRoot = Join-Path $env:RUNNER_TEMP "whatsui-release-package-$packageSlug"
+          cmake -E remove_directory "$releaseRoot"
+          Assert-NativeSuccess "Cleaning the release-package workspace"
+          cmake -E make_directory "$releaseRoot"
+          Assert-NativeSuccess "Creating the release-package workspace"
+
+          $packageBuild = Join-Path $releaseRoot "package-build"
+          $packagePrefix = Join-Path $releaseRoot "package-prefix"
+          $consumerBuild = Join-Path $releaseRoot "consumer-build"
+          $configureArguments = @(
+            '-S', '.', '-B', $packageBuild,
+            "-DWHATSUI_WITH_WHATSCANVAS=$withWhatsCanvas",
+            '-DWHATSUI_BUILD_TESTS=OFF',
+            '-DWHATSUI_BUILD_EXAMPLES=OFF',
+            '-DWHATSUI_INSTALL=ON',
+            "-DCMAKE_INSTALL_PREFIX=$packagePrefix"
+          )
+          if ($withWhatsCanvas -eq 'ON') {
+            $configureArguments += @(
+              '-DBUILD_TESTING=OFF',
+              '-DWHATSCANVAS_BUILD_DEMO=OFF',
+              '-DWHATSCANVAS_BUILD_BENCHMARKS=OFF'
+            )
+          }
+
+          & cmake @configureArguments
+          Assert-NativeSuccess "Configuring the $package package"
+          cmake --build "$packageBuild" --config Release
+          Assert-NativeSuccess "Building the $package package"
+          cmake --install "$packageBuild" --config Release
+          Assert-NativeSuccess "Installing the $package package"
+          cmake -S tests/package_consumer -B "$consumerBuild" `
+            "-DCMAKE_PREFIX_PATH=$packagePrefix" `
+            "-DWHATSUI_PACKAGE_TARGET=$package"
+          Assert-NativeSuccess "Configuring the external $package consumer"
+          cmake --build "$consumerBuild" --config Release
+          Assert-NativeSuccess "Building the external $package consumer"
+          $consumerExecutable = Join-Path $consumerBuild "Release\whatsui_consumer_smoke.exe"
+          if (-not (Test-Path -LiteralPath $consumerExecutable -PathType Leaf)) {
+            throw "$package consumer executable was not produced: $consumerExecutable"
+          }
+          & "$consumerExecutable"
+          Assert-NativeSuccess "Running the external $package consumer"
+
+      - name: Verify release validation did not modify sources
+        if: always()
+        shell: pwsh
+        run: |
+          $worktree = @(git status --porcelain=v1 --untracked-files=all)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not inspect the WhatsUI worktree after package validation."
+          }
+          if ($worktree.Count -ne 0) {
+            throw "Release validation modified the checkout:`n$($worktree -join "`n")"
+          }
+
+          $submodules = @(git submodule status --recursive)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not inspect recursive submodules after package validation."
+          }
+          $invalidSubmodules = @($submodules | Where-Object { $_ -match '^[+\-U]' })
+          if ($invalidSubmodules.Count -ne 0) {
+            throw "Release validation changed recursive submodule revisions:`n$($invalidSubmodules -join "`n")"
+          }
+
   clang-asan-ubsan:
     runs-on: ubuntu-latest
     env:

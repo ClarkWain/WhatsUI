@@ -93,9 +93,11 @@ all be true.
   but approval and candidate-specific support tuples remain release-candidate
   gates, not preview claims.
 - [x] Windows package exports for core + WhatsCanvas/GLFW path and clean
-  external consumer smoke.
+  external consumer smoke, enforced by a fresh-prefix Release CI matrix.
 - [x] Release groundwork: first-party MIT LICENSE/NOTICE, changelog, and
-  reproducible archive-hash rehearsal.
+  reproducible archive-hash rehearsal. Installed packages carry the
+  first-party release documents and the pinned WhatsCanvas license; final
+  transitive-license approval remains an RC gate.
 - [x] Windows support matrix, known limitations, upgrade guide, and contributor
   documentation.
 - [x] Three maintained reference applications: Todo, Settings, and Debug
@@ -119,6 +121,9 @@ all be true.
 
 ## Current active focus
 
-The Todo reference-product work is complete. The remaining release work is
-release-candidate validation and owner approval. New components must not bypass
-the runtime, input, and Windows text contracts.
+The Todo reference-product work is complete. Automated release work now covers
+fresh Core/GLFW installs and consumers, package legal-material presence, and
+the real GLFW resize callback chain. The remaining release work is the native
+IME/DPI/UIA matrix, transitive legal/SBOM review, candidate tagging, and owner
+approval. New components must not bypass the runtime, input, and Windows text
+contracts.

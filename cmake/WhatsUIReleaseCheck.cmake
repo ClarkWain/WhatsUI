@@ -1,9 +1,9 @@
 # Invoke from a committed checkout, for example:
 # cmake -DWHATSUI_SOURCE_DIR=$PWD -DWHATSUI_RELEASE_OUTPUT_DIR=$PWD/release-check -P cmake/WhatsUIReleaseCheck.cmake
 #
-# This verifies the releasable *headless* developer-preview package only. It
-# intentionally does not claim that the in-tree WhatsCanvas/GLFW integration
-# is distributable; that M5 package/export work remains open.
+# This script verifies the releasable *headless* developer-preview package.
+# The Windows CI release-package matrix separately validates a clean Release
+# install and external consumer for both Core and WhatsCanvas/GLFW profiles.
 
 cmake_minimum_required(VERSION 3.20)
 
@@ -101,6 +101,14 @@ execute_process(COMMAND "${CMAKE_COMMAND}" --install "${_package_build}" --confi
 if(NOT _install_result EQUAL 0)
     message(FATAL_ERROR "Headless package install failed")
 endif()
+set(_installed_license_dir "${_install_prefix}/share/licenses/WhatsUI")
+foreach(_installed_release_file IN ITEMS LICENSE NOTICE SBOM.md RELEASE_CHECKLIST.md)
+    if(NOT EXISTS "${_installed_license_dir}/${_installed_release_file}")
+        message(FATAL_ERROR
+            "Headless package is missing installed release metadata: "
+            "${_installed_license_dir}/${_installed_release_file}")
+    endif()
+endforeach()
 execute_process(COMMAND "${CMAKE_COMMAND}" -S "${_source}/tests/package_consumer" -B "${_consumer_build}"
                         "-DCMAKE_PREFIX_PATH=${_install_prefix}"
                 RESULT_VARIABLE _consumer_configure_result)

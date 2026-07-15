@@ -2,6 +2,9 @@
 
 include(CMakeFindDependencyMacro)
 
+set_and_check(WhatsUI_LICENSE_DIR "@PACKAGE_WHATSUI_INSTALL_LICENSEDIR@")
+set(WhatsUI_WITH_WHATSCANVAS @WHATSUI_PACKAGE_REQUIRES_WHATSCANVAS@)
+
 if (@WHATSUI_PACKAGE_REQUIRES_WHATSCANVAS@)
     find_dependency(WhatsCanvas CONFIG)
 endif()
