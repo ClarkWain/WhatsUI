@@ -48,6 +48,8 @@ public:
     void setEditDraft(std::string value);
     void cancelEdit() noexcept;
     [[nodiscard]] TodoActionResult commitEdit();
+    [[nodiscard]] TodoActionResult commitEditDetails(bool important,
+                                                     std::optional<std::string> dueDateIso);
 
     [[nodiscard]] TodoActionResult addTask(std::string title);
     [[nodiscard]] TodoActionResult toggleTask(int id);

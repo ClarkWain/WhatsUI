@@ -107,6 +107,28 @@ TodoActionResult TodoController::editTitle(int id, std::string title)
     return result(TodoActionStatus::Success, id);
 }
 
+TodoActionResult TodoController::updateDetails(int id, std::string title, bool important,
+                                               std::optional<std::string> dueDateIso)
+{
+    title = trim(std::move(title));
+    if (title.empty()) return result(TodoActionStatus::EmptyTitle, id);
+    const auto item = find(id);
+    if (item == records_.end()) return result(TodoActionStatus::NotFound, id);
+    if (titleExists(title, id)) return result(TodoActionStatus::DuplicateTitle, id);
+    if (dueDateIso) {
+        *dueDateIso = trim(std::move(*dueDateIso));
+        if (!isDueDateValid(*dueDateIso)) return result(TodoActionStatus::InvalidDueDate, id);
+    }
+    if (item->title == title && item->important == important && item->dueDateIso == dueDateIso) {
+        return result(TodoActionStatus::NoChange, id);
+    }
+    rememberForUndo();
+    item->title = std::move(title);
+    item->important = important;
+    item->dueDateIso = std::move(dueDateIso);
+    return result(TodoActionStatus::Success, id);
+}
+
 TodoActionResult TodoController::setImportant(int id, bool important)
 {
     const auto item = find(id);

@@ -59,6 +59,26 @@ TodoActionResult TodoInteraction::commitEdit()
     return presented;
 }
 
+TodoActionResult TodoInteraction::commitEditDetails(bool important,
+                                                    std::optional<std::string> dueDateIso)
+{
+    if (!editingId_) {
+        const TodoActionResult action{TodoActionStatus::NotFound, 0, "Choose a task to edit."};
+        showValidation(TodoValidationField::EditTitle, action);
+        return action;
+    }
+    const TodoActionResult action = controller_->updateDetails(
+        *editingId_, editDraft_, important, std::move(dueDateIso));
+    const TodoValidationField field = action.status == TodoActionStatus::InvalidDueDate
+        ? TodoValidationField::DueDate
+        : TodoValidationField::EditTitle;
+    const auto presented = present(action, field, "Task details updated");
+    if (presented.status == TodoActionStatus::Success || presented.status == TodoActionStatus::NoChange) {
+        cancelEdit();
+    }
+    return presented;
+}
+
 TodoActionResult TodoInteraction::addTask(std::string title)
 {
     return present(controller_->add(std::move(title)), TodoValidationField::NewTitle, "Task added");

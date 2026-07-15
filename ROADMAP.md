@@ -104,7 +104,21 @@ all be true.
   IME/DPI matrix, artifact review, and third-party legal/SBOM sign-off. These
   are deliberately kept outside automated completion claims.
 
+### M6 — Todo reference product completion
+
+- [x] Important and optional ISO due-date metadata are available in the task
+  rows and the edit dialog, with persistent storage and filtering retention.
+- [x] Title, important state, and due date commit as one validated mutation and
+  one Undo checkpoint; invalid input cannot partially update a task.
+- [x] Compact task rows use a two-level layout at the 360 DIP breakpoint, with
+  named important actions and accessibility snapshot coverage.
+- [x] Collapsed conditional content does not reserve Row/Column gaps, with
+  layout regression tests and narrow/regular/wide visual review captures.
+- [x] Controller, interaction, storage, UI smoke, visual regression, and visual
+  review tests cover the delivered metadata workflow.
+
 ## Current active focus
 
-The remaining release work is release-candidate validation and owner approval.
-New components must not bypass the runtime, input, and Windows text contracts.
+The Todo reference-product work is complete. The remaining release work is
+release-candidate validation and owner approval. New components must not bypass
+the runtime, input, and Windows text contracts.

@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -138,12 +139,17 @@ public:
 
     IconButton& icon(std::string value);
     IconButton& accessibleLabel(std::string value);
+    // When present, the compact action is exposed as a two-state semantic
+    // control while retaining IconButton visuals.
+    IconButton& checked(bool value);
     IconButton& onClick(ClickHandler handler);
     void setIcon(std::string value);
     void setAccessibleLabel(std::string value);
+    void setChecked(std::optional<bool> value) noexcept;
 
     [[nodiscard]] const std::string& icon() const noexcept;
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
+    [[nodiscard]] std::optional<bool> checked() const noexcept;
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
     bool onPointerEvent(const PointerEvent& event) override;
@@ -152,6 +158,7 @@ public:
 private:
     std::string icon_;
     std::string accessibleLabel_;
+    std::optional<bool> checked_;
     ClickHandler onClick_;
 };
 

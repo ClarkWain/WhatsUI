@@ -53,6 +53,61 @@ void testRowMeasureWithPadding()
     expect(approx(size.height, 70.0f), "Row height should be 40 + 10(top) + 20(bottom) = 70");
 }
 
+void testRowGapSkipsZeroSizeChildren()
+{
+    wui::Row row;
+    row.setGap(10.0f);
+    auto first = std::make_unique<wui::Spacer>(wui::SizeF{20.0f, 20.0f});
+    auto hidden = std::make_unique<wui::Spacer>();
+    auto last = std::make_unique<wui::Spacer>(wui::SizeF{30.0f, 20.0f});
+    auto* hiddenPtr = hidden.get();
+    auto* lastPtr = last.get();
+    row.appendChild(std::move(first));
+    row.appendChild(std::move(hidden));
+    row.appendChild(std::move(last));
+
+    const auto size = row.measure({0.0f, 200.0f, 0.0f, 100.0f});
+    expect(approx(size.width, 60.0f), "Zero-size Row children must not reserve an extra gap");
+    row.layout({0.0f, 0.0f, size.width, size.height});
+    expect(approx(hiddenPtr->bounds().width, 0.0f), "Zero-size Row child should remain collapsed");
+    expect(approx(lastPtr->bounds().x, 30.0f), "Visible Row children should have exactly one gap");
+}
+
+void testRowCollapsedGapEdgesAndFlexContract()
+{
+    wui::Row row;
+    row.setGap(5.0f);
+    auto leading = std::make_unique<wui::Spacer>();
+    auto first = std::make_unique<wui::Spacer>(wui::SizeF{10.0f, 10.0f});
+    auto middleA = std::make_unique<wui::Spacer>();
+    auto middleB = std::make_unique<wui::Spacer>();
+    auto last = std::make_unique<wui::Spacer>(wui::SizeF{10.0f, 10.0f});
+    auto trailing = std::make_unique<wui::Spacer>();
+    auto* lastPtr = last.get();
+    row.appendChild(std::move(leading));
+    row.appendChild(std::move(first));
+    row.appendChild(std::move(middleA));
+    row.appendChild(std::move(middleB));
+    row.appendChild(std::move(last));
+    row.appendChild(std::move(trailing));
+    const auto size = row.measure({0.0f, 100.0f, 0.0f, 100.0f});
+    expect(approx(size.width, 25.0f), "Leading, trailing and consecutive collapsed Row children must not add gaps");
+    row.layout({0.0f, 0.0f, size.width, size.height});
+    expect(approx(lastPtr->bounds().x, 15.0f), "Collapsed Row edges must preserve one visible-child gap");
+
+    wui::Row flexRow;
+    flexRow.setGap(5.0f);
+    auto fixed = std::make_unique<wui::Spacer>(wui::SizeF{10.0f, 10.0f});
+    auto flex = std::make_unique<wui::Spacer>();
+    flex->setFlex(1.0f);
+    auto* flexPtr = flex.get();
+    flexRow.appendChild(std::move(fixed));
+    flexRow.appendChild(std::move(flex));
+    flexRow.layout({0.0f, 0.0f, 15.0f, 10.0f});
+    expect(approx(flexPtr->bounds().width, 0.0f) && approx(flexPtr->bounds().x, 15.0f),
+           "A zero-allocation flex child remains an intentional layout participant after its gap");
+}
+
 void testRowLayoutFlexDistribution()
 {
     wui::Row row;
@@ -162,6 +217,58 @@ void testColumnMeasureWithPadding()
     auto size = col.measure(wui::Constraints{0.0f, 500.0f, 0.0f, 500.0f});
     expect(approx(size.width, 76.0f), "Column width should be 60 + 8 + 8 = 76");
     expect(approx(size.height, 74.0f), "Column height should be 50 + 12 + 12 = 74");
+}
+
+void testColumnGapSkipsZeroSizeChildren()
+{
+    wui::Column column;
+    column.setGap(10.0f);
+    auto first = std::make_unique<wui::Spacer>(wui::SizeF{20.0f, 20.0f});
+    auto hidden = std::make_unique<wui::Spacer>();
+    auto last = std::make_unique<wui::Spacer>(wui::SizeF{20.0f, 30.0f});
+    auto* hiddenPtr = hidden.get();
+    auto* lastPtr = last.get();
+    column.appendChild(std::move(first));
+    column.appendChild(std::move(hidden));
+    column.appendChild(std::move(last));
+
+    const auto size = column.measure({0.0f, 100.0f, 0.0f, 200.0f});
+    expect(approx(size.height, 60.0f), "Zero-size Column children must not reserve an extra gap");
+    column.layout({0.0f, 0.0f, size.width, size.height});
+    expect(approx(hiddenPtr->bounds().height, 0.0f), "Zero-size Column child should remain collapsed");
+    expect(approx(lastPtr->bounds().y, 30.0f), "Visible Column children should have exactly one gap");
+}
+
+void testColumnCollapsedGapEdgesAndDynamicVisibility()
+{
+    wui::Column column;
+    column.setGap(5.0f);
+    auto leading = std::make_unique<wui::Spacer>();
+    auto first = std::make_unique<wui::Spacer>(wui::SizeF{10.0f, 10.0f});
+    auto middle = std::make_unique<wui::Spacer>();
+    auto last = std::make_unique<wui::Spacer>(wui::SizeF{10.0f, 10.0f});
+    auto trailing = std::make_unique<wui::Spacer>();
+    auto* middlePtr = middle.get();
+    auto* lastPtr = last.get();
+    column.appendChild(std::move(leading));
+    column.appendChild(std::move(first));
+    column.appendChild(std::move(middle));
+    column.appendChild(std::move(last));
+    column.appendChild(std::move(trailing));
+    auto size = column.measure({0.0f, 100.0f, 0.0f, 100.0f});
+    expect(approx(size.height, 25.0f), "Collapsed Column edge children must not add gaps");
+    column.layout({0.0f, 0.0f, size.width, size.height});
+    expect(approx(lastPtr->bounds().y, 15.0f), "Collapsed middle Column child must preserve one gap");
+
+    middlePtr->setSize({10.0f, 10.0f});
+    size = column.measure({0.0f, 100.0f, 0.0f, 100.0f});
+    expect(approx(size.height, 40.0f), "A formerly collapsed Column child must rejoin layout with two gaps");
+    column.layout({0.0f, 0.0f, size.width, size.height});
+    expect(approx(lastPtr->bounds().y, 30.0f), "Dynamic visibility must update subsequent Column placement");
+
+    middlePtr->setSize({0.0f, 0.0f});
+    size = column.measure({0.0f, 100.0f, 0.0f, 100.0f});
+    expect(approx(size.height, 25.0f), "A dynamically collapsed Column child must release its gaps again");
 }
 
 void testColumnLayoutFlexDistribution()
@@ -523,6 +630,8 @@ int main()
     testRowMeasureNoChildren();
     testRowMeasureWithGap();
     testRowMeasureWithPadding();
+    testRowGapSkipsZeroSizeChildren();
+    testRowCollapsedGapEdgesAndFlexContract();
     testRowLayoutFlexDistribution();
     testRowLayoutAlignCenter();
     testRowLayoutAlignEnd();
@@ -532,6 +641,8 @@ int main()
     testColumnMeasureNoChildren();
     testColumnMeasureWithGap();
     testColumnMeasureWithPadding();
+    testColumnGapSkipsZeroSizeChildren();
+    testColumnCollapsedGapEdgesAndDynamicVisibility();
     testColumnLayoutFlexDistribution();
     testColumnLayoutAlignCenter();
     testColumnLayoutAlignStretch();

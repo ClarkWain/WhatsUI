@@ -69,6 +69,46 @@ void testDueDateValidationDoesNotOfferUndo()
     expect(interaction.undoPresentation().visible, "Successful due-date update should expose Undo");
 }
 
+void testMetadataPresentationNoChangeAndUndo()
+{
+    TodoController controller({{1, "Metadata presentation", false, false, std::nullopt}});
+    TodoInteraction interaction(controller);
+
+    expect(interaction.setImportant(1, true).status == TodoActionStatus::Success,
+           "Interaction should forward a successful important update");
+    expect(controller.records()[0].important
+               && interaction.undoPresentation().visible
+               && interaction.undoPresentation().message == "Task marked important",
+           "Important updates should mutate the model and expose their specific Undo message");
+    expect(interaction.setImportant(1, true).status == TodoActionStatus::NoChange,
+           "Repeating the current important state should report NoChange");
+    expect(interaction.undoPresentation().visible
+               && interaction.undoPresentation().message == "Task marked important",
+           "An important NoChange should not replace the preceding valid Undo presentation");
+    expect(interaction.undo().status == TodoActionStatus::Success
+               && !controller.records()[0].important
+               && !interaction.undoPresentation().visible,
+           "Interaction Undo should restore important metadata and consume its presentation");
+
+    expect(interaction.setDueDate(1, std::string(" 2028-02-29 ")).status == TodoActionStatus::Success,
+           "Interaction should accept a trimmed valid due date");
+    expect(controller.records()[0].dueDateIso == std::optional<std::string>{"2028-02-29"}
+               && interaction.undoPresentation().message == "Due date updated",
+           "A due-date update should store its canonical value and expose Undo");
+    expect(interaction.setDueDate(1, std::string("2028-02-29")).status == TodoActionStatus::NoChange,
+           "Repeating a due date should report NoChange");
+    expect(interaction.setDueDate(1, std::string("2028-04-31")).status == TodoActionStatus::InvalidDueDate,
+           "Interaction should expose invalid calendar dates");
+    expect(interaction.validation().field == TodoValidationField::DueDate
+               && interaction.undoPresentation().visible
+               && interaction.undoPresentation().message == "Due date updated",
+           "Invalid metadata input must retain the prior successful Undo action while showing inline validation");
+    expect(interaction.undo().status == TodoActionStatus::Success
+               && !controller.records()[0].dueDateIso
+               && !interaction.validation().visible(),
+           "Undo after invalid input should restore the previous due date and clear validation");
+}
+
 void testFilterPresentationAndEditCancellation()
 {
     TodoController controller;
@@ -84,11 +124,49 @@ void testFilterPresentationAndEditCancellation()
     expect(completed.size() == 1 && completed.front().id == doneId,
            "Interaction filtering should expose the completed view without changing model order");
 
+    expect(interaction.setImportant(activeId, true).status == TodoActionStatus::Success,
+           "Metadata setup should succeed before filtering");
+    expect(interaction.setDueDate(activeId, std::string("2027-05-06")).status == TodoActionStatus::Success,
+           "Due-date setup should succeed before filtering");
+    const auto metadataSearch = interaction.filtered(TodoFilter::Active, "draft");
+    expect(metadataSearch.size() == 1 && metadataSearch.front().important
+               && metadataSearch.front().dueDateIso == std::optional<std::string>{"2027-05-06"},
+           "Interaction filtering should preserve important and due-date presentation metadata");
+
     (void)interaction.beginEdit(activeId);
     interaction.setEditDraft("temporary draft");
     interaction.cancelEdit();
     expect(!interaction.editingId() && interaction.editDraft().empty() && !interaction.validation().visible(),
            "Cancelling an edit must discard only presentation draft and validation state");
+}
+
+void testDetailsEditIsAtomicAndKeepsInvalidDraftOpen()
+{
+    TodoController controller({{1, "Original", false, false, std::nullopt}});
+    TodoInteraction interaction(controller);
+    expect(interaction.beginEdit(1).succeeded(), "Details fixture should enter edit mode");
+    interaction.setEditDraft("Revised");
+    expect(interaction.commitEditDetails(true, std::string("2023-02-29")).status
+               == TodoActionStatus::InvalidDueDate,
+           "Invalid dialog details should surface due-date validation");
+    expect(interaction.editingId() == std::optional<int>{1}
+               && interaction.editDraft() == "Revised"
+               && interaction.validation().field == TodoValidationField::DueDate,
+           "Invalid due date should keep the complete edit draft and dialog context active");
+    expect(controller.records()[0].title == "Original" && !controller.records()[0].important
+               && !controller.records()[0].dueDateIso,
+           "Invalid dialog details must not partially mutate the model");
+
+    expect(interaction.commitEditDetails(true, std::string("2026-07-15")).status
+               == TodoActionStatus::Success,
+           "Corrected dialog details should commit successfully");
+    expect(!interaction.editingId() && interaction.undoPresentation().visible
+               && interaction.undoPresentation().message == "Task details updated",
+           "Successful detail Save should close editing and expose one coherent Undo action");
+    (void)interaction.undo();
+    expect(controller.records()[0].title == "Original" && !controller.records()[0].important
+               && !controller.records()[0].dueDateIso,
+           "Detail-edit Undo should restore all fields together");
 }
 
 } // namespace
@@ -98,6 +176,8 @@ int main()
     testAddValidationAndUndoPresentation();
     testEditDraftAndInlineDuplicateError();
     testDueDateValidationDoesNotOfferUndo();
+    testMetadataPresentationNoChangeAndUndo();
     testFilterPresentationAndEditCancellation();
+    testDetailsEditIsAtomicAndKeepsInvalidDraftOpen();
     return 0;
 }

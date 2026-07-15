@@ -162,11 +162,14 @@ Node* Tooltip::hitTest(PointF point) { (void)point; return nullptr; }
 IconButton::IconButton(std::string icon, std::string accessibleLabel) : icon_(std::move(icon)), accessibleLabel_(std::move(accessibleLabel)) {}
 IconButton& IconButton::icon(std::string value) { setIcon(std::move(value)); return *this; }
 IconButton& IconButton::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+IconButton& IconButton::checked(bool value) { setChecked(value); return *this; }
 IconButton& IconButton::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
 void IconButton::setIcon(std::string value) { icon_ = std::move(value); markDirty(DirtyFlag::Layout); }
 void IconButton::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); }
+void IconButton::setChecked(std::optional<bool> value) noexcept { checked_ = value; }
 const std::string& IconButton::icon() const noexcept { return icon_; }
 const std::string& IconButton::accessibleLabel() const noexcept { return accessibleLabel_; }
+std::optional<bool> IconButton::checked() const noexcept { return checked_; }
 SizeF IconButton::measure(const Constraints& constraints) const { const float side = std::max(theme().controls.height, 32.0f); return constraints.clamp({side, side}); }
 void IconButton::paint(PaintContext& context)
 {

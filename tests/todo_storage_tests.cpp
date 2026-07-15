@@ -50,6 +50,31 @@ void roundTripAndMissing()
     expect(result.records == expected, "storage round trip should preserve every field");
 }
 
+void metadataReplacementRoundTrip()
+{
+    TemporaryDirectory directory;
+    whatsui::todo::TodoStorage storage(directory.path() / "nested" / "todos.store");
+    const std::vector<whatsui::todo::TodoRecord> initial{
+        {11, "Initially dated", false, false, std::string{"2026-08-09"}},
+        {12, "Initially important", true, true, std::nullopt},
+    };
+    expect(storage.save(initial), "metadata setup save should succeed");
+
+    const std::vector<whatsui::todo::TodoRecord> updated{
+        {11, "Initially dated", false, true, std::nullopt},
+        {12, "Initially important", true, false, std::string{"2027-10-11"}},
+    };
+    std::string error = "stale error";
+    expect(storage.save(updated, &error), "metadata replacement save should succeed");
+    const auto loaded = storage.load();
+    expect(loaded.status == whatsui::todo::TodoLoadStatus::Loaded,
+           "a replaced metadata store should load normally");
+    expect(loaded.records == updated,
+           "replacement round trip should preserve changed important flags, added dates, and cleared dates exactly");
+    expect(!std::filesystem::exists(std::filesystem::path(storage.filePath().string() + ".bak")),
+           "a successful metadata replacement should not leave a stale backup");
+}
+
 void malformedStoreIsPreserved()
 {
     TemporaryDirectory directory;
@@ -80,6 +105,7 @@ int main()
 {
     try {
         roundTripAndMissing();
+        metadataReplacementRoundTrip();
         malformedStoreIsPreserved();
         backupIsRestored();
         return EXIT_SUCCESS;

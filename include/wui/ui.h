@@ -394,6 +394,7 @@ public:
 class IconButton : public BuilderBase<IconButton, wui::IconButton> {
 public:
     explicit IconButton(std::string icon = {}, std::string accessibleLabel = {}) : BuilderBase(std::move(icon), std::move(accessibleLabel)) {}
+    IconButton&& checked(bool value) && { node_->setChecked(value); return std::move(self()); }
     IconButton&& onClick(std::function<void()> handler) && { node_->onClick(std::move(handler)); return std::move(self()); }
 };
 

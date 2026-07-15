@@ -22,6 +22,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -62,6 +63,7 @@ using ConfirmationRequest = std::function<void(std::string title,
                                                std::string detail,
                                                std::function<void()> confirm)>;
 using EditRequest = std::function<void(int)>;
+using ImportantRequest = std::function<void(int, bool)>;
 
 #ifdef WUI_TODO_INTERACTIVE
 template <class NodeT>
@@ -362,7 +364,10 @@ void showConfirmation(wui::UiWindow& window,
 // and makes Save / Cancel equally discoverable on touch and desktop input.
 void showEditDialog(wui::UiWindow& window,
                     std::string initialTitle,
-                    std::function<whatsui::todo::TodoActionResult(std::string)> save,
+                    bool initialImportant,
+                    std::optional<std::string> initialDueDate,
+                    std::function<whatsui::todo::TodoActionResult(
+                        std::string, bool, std::optional<std::string>)> save,
                     std::function<void()> cancel)
 {
     using namespace wui::ui;
@@ -370,6 +375,14 @@ void showEditDialog(wui::UiWindow& window,
     auto* editorRaw = editor.get();
     editorRaw->text(std::move(initialTitle));
     editorRaw->setFlex(1.0f);
+
+    auto important = std::make_unique<wui::Checkbox>("Important", initialImportant);
+    auto* importantRaw = important.get();
+
+    auto dueDate = std::make_unique<wui::TextInput>("YYYY-MM-DD (optional)");
+    auto* dueDateRaw = dueDate.get();
+    dueDateRaw->text(initialDueDate.value_or(""));
+    dueDateRaw->setFlex(1.0f);
 
     auto error = std::make_unique<wui::Text>();
     auto* errorRaw = error.get();
@@ -381,8 +394,15 @@ void showEditDialog(wui::UiWindow& window,
     // completion marker prevents a successful Save from being interpreted as
     // cancellation when it dismisses the modal through the same window API.
     auto saved = std::make_shared<bool>(false);
-    auto submit = [&window, editorRaw, errorRaw, saved, save = std::move(save)]() mutable {
-        const auto result = save(editorRaw->model().text());
+    auto submit = [&window, editorRaw, importantRaw, dueDateRaw, errorRaw, saved, save = std::move(save)]() mutable {
+        const std::string dueDateText = dueDateRaw->model().text();
+        const auto first = dueDateText.find_first_not_of(" \t\r\n");
+        std::optional<std::string> dueDateValue;
+        if (first != std::string::npos) {
+            const auto last = dueDateText.find_last_not_of(" \t\r\n");
+            dueDateValue = dueDateText.substr(first, last - first + 1);
+        }
+        const auto result = save(editorRaw->model().text(), importantRaw->isChecked(), std::move(dueDateValue));
         if (result.succeeded()) {
             *saved = true;
             (void)window.dismissTopDialog();
@@ -393,18 +413,23 @@ void showEditDialog(wui::UiWindow& window,
         errorRaw->setValue(result.message);
     };
     editorRaw->onSubmit(submit);
+    dueDateRaw->onSubmit(submit);
 
     auto dialog = Dialog().maxWidth(420.0f)
         .onDismiss([saved, cancel] {
             if (!*saved) cancel();
         })
         .content(
-        Box().width(420.0f).padding(wui::InsetsF{24.0f, 20.0f, 20.0f, 20.0f}).children(
+        Box().width(320.0f).padding(wui::InsetsF{20.0f, 18.0f, 18.0f, 18.0f}).children(
             Column().gap(14.0f).align(wui::Alignment::Stretch).children(
                 Column().gap(4.0f).children(
                     Text("Edit task").size(20.0f).lineHeight(28.0f).color({36, 36, 36, 255}),
-                    Text("Choose a clear, distinct title for My day.").size(16.0f).lineHeight(24.0f).color({97, 97, 97, 255})),
+                    Text("Update its title, priority, and due date.").wrap().size(16.0f).lineHeight(24.0f).color({97, 97, 97, 255})),
                 std::move(editor),
+                std::move(important),
+                Column().gap(4.0f).align(wui::Alignment::Stretch).children(
+                    Text("DUE DATE").size(12.0f).lineHeight(18.0f).color({97, 97, 97, 255}),
+                    std::move(dueDate)),
                 std::move(error),
                 Row().align(wui::Alignment::Center).gap(8.0f).children(
                     Spacer().flex(1.0f),
@@ -445,9 +470,11 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                        std::function<void(whatsui::todo::TodoFilter)> setFilter,
                                        std::function<void(std::string)> setSearchQuery,
                                        EditRequest edit,
-                                       ConfirmationRequest requestConfirmation)
+                                       ConfirmationRequest requestConfirmation,
+                                       ImportantRequest setImportant = {})
 {
     using namespace wui::ui;
+    if (!setImportant) setImportant = [](int, bool) {};
     auto summary = [](const std::vector<Todo>& items) {
         int done = 0;
         for (const auto& item : items) {
@@ -587,56 +614,81 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
             // all-completed list must not imply that completed work is "in
             // progress", and an empty list must remain a calm empty-state
             // card rather than a heading followed by whitespace.
-            If(hasActive).then([&activeTodos, toggle, remove, edit, requestConfirmation] {
+            If(hasActive).then([&activeTodos, toggle, remove, setImportant, edit, requestConfirmation] {
                 return Column().gap(10.0f).align(wui::Alignment::Stretch).children(
                     Text("IN PROGRESS").size(12.0f).lineHeight(18.0f).color({97, 97, 97, 255}),
                     KeyedForEach<Todo>(activeTodos,
                         [](const Todo& item) { return std::to_string(item.id); },
-                        [toggle, remove, edit, requestConfirmation](const Todo& item) {
+                        [toggle, remove, setImportant, edit, requestConfirmation](const Todo& item) {
+                            const std::string metadata = item.dueDateIso ? "Due " + *item.dueDateIso : std::string{};
                             return Box().background({255, 255, 255, 255}).radius(10.0f)
                                 .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
-                                .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
-                                    Checkbox("", item.completed).accessibleLabel(item.title)
-                                        .onChange([toggle, id = item.id](bool) { toggle(id); }),
-                                    Column().gap(0.0f).flex(1.0f).children(
-                                        Text(item.title).wrap().maxLines(2).ellipsis().size(16.0f).lineHeight(22.0f)
-                                            .color({36, 36, 36, 255})),
-                                    // Keep Edit discoverable, but make the destructive
-                                    // command a compact secondary affordance.  At the
-                                    // 360px Windows breakpoint this leaves the task
-                                    // title, completion control and commands on one
-                                    // non-overlapping rail; the accessible label keeps
-                                    // the icon meaningful to future UIA bridges.
-                                    Button("Edit").variant(wui::ButtonVariant::Ghost).onClick([edit, id = item.id] { edit(id); }),
-                                    IconButton("×", "Delete task")
-                                        .onClick([remove, id = item.id, requestConfirmation] {
-                                            requestConfirmation("Remove this task?",
-                                                                "This task will be removed from My day.",
-                                                                [remove, id] { remove(id); });
-                                        })));
+                                .children(Row().align(wui::Alignment::Start).gap(10.0f).children(
+                                    Box().height(40.0f)
+                                        .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
+                                        .children(Checkbox("", item.completed).accessibleLabel(item.title)
+                                            .onChange([toggle, id = item.id](bool) { toggle(id); })),
+                                    Column().gap(4.0f).align(wui::Alignment::Stretch).flex(1.0f).children(
+                                        Row().align(wui::Alignment::Center).gap(8.0f).children(
+                                            Text(item.title).wrap().maxLines(2).ellipsis().size(16.0f).lineHeight(22.0f)
+                                                .color({36, 36, 36, 255}).flex(1.0f),
+                                            IconButton(item.important ? "\xE2\x98\x85" : "\xE2\x98\x86",
+                                                       (item.important ? "Remove important from " : "Mark important: ") + item.title)
+                                                .checked(item.important)
+                                                .onClick([setImportant, id = item.id, important = item.important] {
+                                                    setImportant(id, !important);
+                                                })),
+                                        // Keep secondary actions on their own compact
+                                        // rail so a 360px window never squeezes the
+                                        // title and completion affordance into slivers.
+                                        Row().align(wui::Alignment::Center).gap(6.0f).children(
+                                            Text(metadata).maxLines(1).ellipsis().size(13.0f).lineHeight(18.0f)
+                                                .color(item.important ? wui::Color{0, 95, 184, 255} : wui::Color{97, 97, 97, 255}).flex(1.0f),
+                                            Button("Edit").variant(wui::ButtonVariant::Ghost)
+                                                .onClick([edit, id = item.id] { edit(id); }),
+                                            IconButton("×", "Delete task")
+                                                .onClick([remove, id = item.id, requestConfirmation] {
+                                                    requestConfirmation("Remove this task?",
+                                                                        "This task will be removed from My day.",
+                                                                        [remove, id] { remove(id); });
+                                                })))));
                     }).gap(8.0f).align(wui::Alignment::Stretch));
             }),
-            If(hasCompleted).then([&completedTodos, toggle, remove, edit, requestConfirmation] {
+            If(hasCompleted).then([&completedTodos, toggle, remove, setImportant, edit, requestConfirmation] {
                 return Column().gap(10.0f).align(wui::Alignment::Stretch).children(
                     Text("COMPLETED").size(12.0f).lineHeight(18.0f).color({97, 97, 97, 255}),
                     KeyedForEach<Todo>(completedTodos,
                         [](const Todo& item) { return std::to_string(item.id); },
-                        [toggle, remove, edit, requestConfirmation](const Todo& item) {
+                        [toggle, remove, setImportant, edit, requestConfirmation](const Todo& item) {
+                        const std::string metadata = item.dueDateIso ? "Due " + *item.dueDateIso : std::string{};
                         return Box().background({255, 255, 255, 255}).radius(10.0f)
                             .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
-                            .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
-                                Checkbox("", item.completed).accessibleLabel(item.title)
-                                    .onChange([toggle, id = item.id](bool) { toggle(id); }),
-                                Column().gap(0.0f).flex(1.0f).children(
-                                    Text(item.title).wrap().maxLines(2).ellipsis().size(16.0f).lineHeight(22.0f)
-                                        .color({117, 117, 117, 255})),
-                                Button("Edit").variant(wui::ButtonVariant::Ghost).onClick([edit, id = item.id] { edit(id); }),
-                                IconButton("×", "Delete task")
-                                    .onClick([remove, id = item.id, requestConfirmation] {
-                                        requestConfirmation("Remove this task?",
-                                                            "This task will be removed from My day.",
-                                                            [remove, id] { remove(id); });
-                                    })));
+                            .children(Row().align(wui::Alignment::Start).gap(10.0f).children(
+                                Box().height(40.0f)
+                                    .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
+                                    .children(Checkbox("", item.completed).accessibleLabel(item.title)
+                                        .onChange([toggle, id = item.id](bool) { toggle(id); })),
+                                Column().gap(4.0f).align(wui::Alignment::Stretch).flex(1.0f).children(
+                                    Row().align(wui::Alignment::Center).gap(8.0f).children(
+                                        Text(item.title).wrap().maxLines(2).ellipsis().size(16.0f).lineHeight(22.0f)
+                                            .color({117, 117, 117, 255}).flex(1.0f),
+                                        IconButton(item.important ? "\xE2\x98\x85" : "\xE2\x98\x86",
+                                                   (item.important ? "Remove important from " : "Mark important: ") + item.title)
+                                            .checked(item.important)
+                                            .onClick([setImportant, id = item.id, important = item.important] {
+                                                setImportant(id, !important);
+                                            })),
+                                    Row().align(wui::Alignment::Center).gap(6.0f).children(
+                                        Text(metadata).maxLines(1).ellipsis().size(13.0f).lineHeight(18.0f)
+                                            .color({117, 117, 117, 255}).flex(1.0f),
+                                        Button("Edit").variant(wui::ButtonVariant::Ghost)
+                                            .onClick([edit, id = item.id] { edit(id); }),
+                                        IconButton("×", "Delete task")
+                                            .onClick([remove, id = item.id, requestConfirmation] {
+                                                requestConfirmation("Remove this task?",
+                                                                    "This task will be removed from My day.",
+                                                                    [remove, id] { remove(id); });
+                                            })))));
                     }).gap(8.0f).align(wui::Alignment::Stretch));
             }),
             Spacer(0.0f, 0.0f)))),
@@ -735,6 +787,9 @@ int main(int argc, char** argv)
     std::function<void(int)> remove = [&interaction, &apply](int id) {
         (void)apply(interaction.removeTask(id));
     };
+    ImportantRequest setImportant = [&interaction, &apply](int id, bool important) {
+        (void)apply(interaction.setImportant(id, important));
+    };
     std::function<void()> clearCompleted = [&interaction, &apply] {
         (void)apply(interaction.clearCompleted());
     };
@@ -751,23 +806,29 @@ int main(int argc, char** argv)
                                  &filterAll, &filterActive, &filterCompleted,
                                  &hasOperationMessage, &operationMessage,
                                  &hasUndo, &undoMessage,
-                                 addTodo, toggle, remove, clearCompleted, undo, setFilter, setSearchQuery, &interaction, &apply, perfSmoke](wui::UiWindow& window) {
+                                 addTodo, toggle, remove, setImportant, clearCompleted, undo, setFilter, setSearchQuery,
+                                 &controller, &interaction, &apply, perfSmoke](wui::UiWindow& window) {
             auto root = buildTodoUi(todos, isEmpty, hasNoMatches, activeTodos, completedTodos, hasActive, hasCompleted, hasStoredCompleted,
                                filterAll, filterActive, filterCompleted,
                                hasOperationMessage, operationMessage, hasUndo, undoMessage,
                                addTodo, toggle, remove, clearCompleted, undo, setFilter, setSearchQuery,
-                               [&window, &interaction, &apply, &hasOperationMessage, &operationMessage](int id) {
+                               [&window, &controller, &interaction, &apply, &hasOperationMessage, &operationMessage](int id) {
+                                   const auto current = std::find_if(controller.records().begin(), controller.records().end(),
+                                                                     [id](const Todo& item) { return item.id == id; });
+                                   if (current == controller.records().end()) return;
+                                   const Todo snapshot = *current;
                                    const auto begin = interaction.beginEdit(id);
                                    if (!begin.succeeded()) {
                                        (void)apply(begin);
                                        return;
                                    }
-                                   showEditDialog(window, interaction.editDraft(),
-                                                  [&interaction, &apply](std::string title) {
-                                                      const auto result = [&interaction, title = std::move(title)]() mutable {
-                                                          interaction.setEditDraft(std::move(title));
-                                                          return interaction.commitEdit();
-                                                      }();
+                                   showEditDialog(window, interaction.editDraft(), snapshot.important, snapshot.dueDateIso,
+                                                  [&interaction, &apply](std::string title,
+                                                                         bool important,
+                                                                         std::optional<std::string> dueDate) {
+                                                      interaction.setEditDraft(std::move(title));
+                                                      const auto result = interaction.commitEditDetails(
+                                                          important, std::move(dueDate));
                                                       (void)apply(result);
                                                       return result;
                                                   },
@@ -779,7 +840,8 @@ int main(int argc, char** argv)
                                },
                                [&window](std::string title, std::string detail, std::function<void()> confirm) {
                                    showConfirmation(window, std::move(title), std::move(detail), std::move(confirm));
-                               });
+                               },
+                               setImportant);
             if (perfSmoke) installTodoPerformanceSmoke(window);
             return root;
         });
@@ -910,7 +972,8 @@ int main(int argc, char** argv)
                             filterAll, filterActive, filterCompleted,
                             hasOperationMessage, operationMessage, hasUndo, undoMessage,
                             addTodo, toggle, remove, clearCompleted, [] {}, setFilter, setSearchQuery, [](int) {},
-                            [](std::string, std::string, std::function<void()> confirm) { confirm(); });
+                            [](std::string, std::string, std::function<void()> confirm) { confirm(); },
+                            [](int, bool) {});
 
     int frame = 0;
     auto renderFrame = [&](const char* namedCapture = nullptr, bool scrollToEnd = false) {
@@ -964,6 +1027,17 @@ int main(int argc, char** argv)
     addTodo("Buy milk");
     addTodo("Write WhatsUI docs");
     addTodo("Ship the release");
+    // Keep priority and due-date presentation in every visual-review matrix
+    // (360/640/1180), rather than limiting metadata coverage to an interactive
+    // dialog that the headless walkthrough cannot open.
+    {
+        auto items = todos.get();
+        items[0].important = true;
+        items[0].dueDateIso = "2026-07-15";
+        items[1].dueDateIso = "2026-07-18";
+        todos.set(std::move(items));
+        synchronize();
+    }
     renderFrame();                 // three active items: IN PROGRESS only
     if (width == 640 && height == 560) {
         // The regular Windows acceptance viewport is deliberately shorter

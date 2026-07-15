@@ -153,6 +153,16 @@ wui::IconButton* deleteButton(wui::Node* root)
     return nullptr;
 }
 
+wui::IconButton* importantButton(wui::Node* root, const std::string& label)
+{
+    std::vector<wui::IconButton*> buttons;
+    collect(root, buttons);
+    for (auto* candidate : buttons) {
+        if (candidate->accessibleLabel() == label) return candidate;
+    }
+    return nullptr;
+}
+
 wui::Node* dialogRoot(wui::UiWindow& window)
 {
     const auto* top = window.overlayHost().top();
@@ -250,10 +260,26 @@ struct TodoUiHarness {
                 filterCompleted.set(value == whatsui::todo::TodoFilter::Completed);
                 synchronize();
             },
-            [](std::string) {}, [](int) {},
+            [](std::string) {},
+            [this, &window](int id) {
+                const auto current = std::find_if(controller.records().begin(), controller.records().end(),
+                                                  [id](const Todo& item) { return item.id == id; });
+                if (current == controller.records().end() || !interaction.beginEdit(id).succeeded()) return;
+                const Todo snapshot = *current;
+                showEditDialog(window, interaction.editDraft(), snapshot.important, snapshot.dueDateIso,
+                               [this](std::string title, bool important,
+                                      std::optional<std::string> dueDate) {
+                                   interaction.setEditDraft(std::move(title));
+                                   const auto result = interaction.commitEditDetails(important, std::move(dueDate));
+                                   (void)apply(result);
+                                   return result;
+                               },
+                               [this] { interaction.cancelEdit(); });
+            },
             [&window](std::string title, std::string detail, std::function<void()> confirm) {
                 showConfirmation(window, std::move(title), std::move(detail), std::move(confirm));
-            });
+            },
+            [this](int id, bool important) { (void)apply(interaction.setImportant(id, important)); });
     }
 };
 
@@ -278,6 +304,68 @@ void testTodoUiTreeInputAndDestructiveConfirmation()
            "Composer input plus Enter should add through the Todo UI callback");
     expect(containsText(window.root(), "0 of 1 done"),
            "Todo summary text should reflect the added task through the rendered tree");
+
+    auto* markImportant = importantButton(window.root(), "Mark important: Review Windows Todo");
+    expect(markImportant != nullptr, "A new Todo should expose a named important toggle");
+    click(window, *markImportant);
+    commitFrame(window);
+    expect(harness.controller.records().front().important,
+           "Important toggle should update Todo data through the real row callback");
+    auto* removeImportant = importantButton(window.root(), "Remove important from Review Windows Todo");
+    expect(removeImportant != nullptr,
+           "An important Todo should rebuild its toggle with the current accessible action");
+    window.focusManager().setFocused(removeImportant);
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 32, 0, false}),
+           "Focused important toggle should activate from Space");
+    commitFrame(window);
+    expect(!harness.controller.records().front().important,
+           "Keyboard activation should remove the important state through the real row callback");
+
+    auto* editDetails = button(window.root(), "Edit");
+    expect(editDetails != nullptr, "Todo row should expose its details editor");
+    click(window, *editDetails);
+    commitFrame(window);
+    expect(window.hasDialog(), "Edit should open the real Todo details dialog");
+    std::vector<wui::TextInput*> detailFields;
+    collect(dialogRoot(window), detailFields);
+    auto* dueDateField = static_cast<wui::TextInput*>(nullptr);
+    for (auto* field : detailFields) {
+        if (field->placeholder() == "YYYY-MM-DD (optional)") dueDateField = field;
+    }
+    expect(dueDateField != nullptr, "Todo details dialog should expose its due-date field");
+    dueDateField->text("2023-02-29");
+    std::vector<wui::Checkbox*> dialogChecks;
+    collect(dialogRoot(window), dialogChecks);
+    expect(dialogChecks.size() == 1 && dialogChecks.front()->label() == "Important",
+           "Todo details dialog should expose one named Important checkbox");
+    click(window, *dialogChecks.front());
+    auto* saveDetails = dialogButton(window, "Save");
+    expect(saveDetails != nullptr, "Todo details dialog should expose Save");
+    click(window, *saveDetails);
+    expect(window.hasDialog() && containsText(dialogRoot(window), "Use a valid date in YYYY-MM-DD format."),
+           "Invalid due date should keep the details dialog open with inline validation");
+    expect(harness.controller.records().front().title == "Review Windows Todo"
+               && !harness.controller.records().front().important
+               && !harness.controller.records().front().dueDateIso,
+           "Invalid details Save must not partially commit any task field");
+    dueDateField->text("2026-07-20");
+    window.focusManager().setFocused(dueDateField);
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 13, 0, false}),
+           "Due-date Enter should submit the complete task details form");
+    commitFrame(window);
+    expect(!window.hasDialog() && harness.controller.records().front().important
+               && harness.controller.records().front().dueDateIso
+               == std::optional<std::string>{"2026-07-20"},
+           "Corrected details should commit priority and due date together and close the dialog");
+    expect(containsText(window.root(), "Due 2026-07-20"),
+           "Committed due date should appear in the real task row metadata rail");
+    auto* undoDetails = button(window.root(), "Undo");
+    expect(undoDetails != nullptr, "Atomic details Save should expose one Undo action");
+    click(window, *undoDetails);
+    commitFrame(window);
+    expect(!harness.controller.records().front().important
+               && !harness.controller.records().front().dueDateIso,
+           "One Todo Undo should restore all details changed by the dialog Save");
 
     // Exercise the real primary Todo command rather than an isolated Button.
     // The pressed gesture deliberately ends outside the control: this is the
@@ -538,6 +626,22 @@ void testTodoAccessibilityProjectionUsesRealTaskTree()
            "Todo task checkbox should expose a task-name semantic label and unchecked state");
     expect(semanticEntry(snapshot, wui::AccessibilityRole::Button, "Delete task") != nullptr,
            "Todo compact delete affordance should retain its accessible command name");
+    const auto* importantEntry = semanticEntry(snapshot, wui::AccessibilityRole::CheckBox,
+                                                "Mark important: Accessible Todo task");
+    expect(importantEntry != nullptr && importantEntry->properties.checked
+               && !*importantEntry->properties.checked,
+           "Todo important affordance should expose a task-specific name and unchecked state");
+
+    auto* important = importantButton(window.root(), "Mark important: Accessible Todo task");
+    expect(important != nullptr, "Accessibility fixture should expose the real important affordance");
+    click(window, *important);
+    commitFrame(window);
+    snapshot = window.accessibilitySnapshot();
+    importantEntry = semanticEntry(snapshot, wui::AccessibilityRole::CheckBox,
+                                   "Remove important from Accessible Todo task");
+    expect(importantEntry != nullptr && importantEntry->properties.checked
+               && *importantEntry->properties.checked,
+           "Important state changes should update the accessible name and checked state");
 
     std::vector<wui::Checkbox*> checkboxes;
     collect(window.root(), checkboxes);

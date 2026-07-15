@@ -183,13 +183,18 @@ SizeF Row::measure(const Constraints& constraints) const
     float height = 0.0f;
     float maxBaseline = 0.0f;
     float maxBelowBaseline = 0.0f;
+    bool hasActiveChild = false;
 
     const auto& childNodes = children();
     for (std::size_t index = 0; index < childNodes.size(); ++index) {
-        const float usedGaps = gap_ * static_cast<float>(childNodes.size() > 0 ? childNodes.size() - 1 : 0);
-        const float remainingWidth = std::max(0.0f, inner.maxWidth - width - usedGaps);
+        const float leadingGap = hasActiveChild ? gap_ : 0.0f;
+        const float remainingWidth = std::max(0.0f, inner.maxWidth - width - leadingGap);
         const auto childSize = childNodes[index]->measureWithConstraints({0.0f, remainingWidth, 0.0f, inner.maxHeight});
-        width += childSize.width;
+        const bool active = childNodes[index]->flex() > 0.0f || childSize.width > 0.0f || childSize.height > 0.0f;
+        if (active) {
+            width += leadingGap + childSize.width;
+            hasActiveChild = true;
+        }
         height = std::max(height, childSize.height);
         if (align_ == Alignment::Baseline) {
             const float baseline = childNodes[index]->baselineOffset();
@@ -199,9 +204,6 @@ SizeF Row::measure(const Constraints& constraints) const
             } else {
                 maxBelowBaseline = std::max(maxBelowBaseline, childSize.height);
             }
-        }
-        if (index + 1 < childNodes.size()) {
-            width += gap_;
         }
     }
 
@@ -223,18 +225,27 @@ void Row::layout(const RectF& bounds)
 
     // Pass 1: measure fixed children; accumulate width and total flex weight.
     std::vector<SizeF> sizes(childNodes.size());
+    std::vector<bool> active(childNodes.size(), false);
     float fixedWidth = 0.0f;
     float totalFlex = 0.0f;
+    std::size_t activeCount = 0;
     for (std::size_t i = 0; i < childNodes.size(); ++i) {
         if (childNodes[i]->flex() > 0.0f) {
             totalFlex += childNodes[i]->flex();
+            active[i] = true;
         } else {
             sizes[i] = childNodes[i]->measureWithConstraints(loose);
-            fixedWidth += sizes[i].width;
+            active[i] = sizes[i].width > 0.0f || sizes[i].height > 0.0f;
+            if (active[i]) {
+                fixedWidth += sizes[i].width;
+            }
         }
-        if (i + 1 < childNodes.size()) {
-            fixedWidth += gap_;
+        if (active[i]) {
+            ++activeCount;
         }
+    }
+    if (activeCount > 1) {
+        fixedWidth += gap_ * static_cast<float>(activeCount - 1);
     }
     const float remaining = std::max(0.0f, innerWidth - fixedWidth);
 
@@ -249,6 +260,7 @@ void Row::layout(const RectF& bounds)
 
     // Pass 2: size flex children from the remainder, then place with cross align.
     float cursorX = bounds.x + padding_.left;
+    bool placedActiveChild = false;
     for (std::size_t i = 0; i < childNodes.size(); ++i) {
         Node* child = childNodes[i].get();
         SizeF childSize = sizes[i];
@@ -256,6 +268,9 @@ void Row::layout(const RectF& bounds)
             const float allocated = totalFlex > 0.0f ? remaining * (child->flex() / totalFlex) : 0.0f;
             childSize = child->measureWithConstraints(Constraints{0.0f, allocated, 0.0f, innerHeight});
             childSize.width = allocated;
+        }
+        if (active[i] && placedActiveChild) {
+            cursorX += gap_;
         }
         float childY = bounds.y + padding_.top;
         switch (align_) {
@@ -282,7 +297,10 @@ void Row::layout(const RectF& bounds)
             break;
         }
         child->layout({cursorX, childY, childSize.width, childSize.height});
-        cursorX += childSize.width + gap_;
+        if (active[i]) {
+            cursorX += childSize.width;
+            placedActiveChild = true;
+        }
     }
     clearLayoutDirtyRecursively();
 }
@@ -349,15 +367,18 @@ SizeF Column::measure(const Constraints& constraints) const
     const Constraints inner = constraints.deflate(padding_);
     float width = 0.0f;
     float height = 0.0f;
+    bool hasActiveChild = false;
 
     const auto& childNodes = children();
     for (std::size_t index = 0; index < childNodes.size(); ++index) {
-        const float remainingHeight = std::max(0.0f, inner.maxHeight - height);
+        const float leadingGap = hasActiveChild ? gap_ : 0.0f;
+        const float remainingHeight = std::max(0.0f, inner.maxHeight - height - leadingGap);
         const auto childSize = childNodes[index]->measureWithConstraints({0.0f, inner.maxWidth, 0.0f, remainingHeight});
         width = std::max(width, childSize.width);
-        height += childSize.height;
-        if (index + 1 < childNodes.size()) {
-            height += gap_;
+        const bool active = childNodes[index]->flex() > 0.0f || childSize.width > 0.0f || childSize.height > 0.0f;
+        if (active) {
+            height += leadingGap + childSize.height;
+            hasActiveChild = true;
         }
     }
 
@@ -375,23 +396,33 @@ void Column::layout(const RectF& bounds)
 
     // Pass 1: measure fixed children; accumulate height and total flex weight.
     std::vector<SizeF> sizes(childNodes.size());
+    std::vector<bool> active(childNodes.size(), false);
     float fixedHeight = 0.0f;
     float totalFlex = 0.0f;
+    std::size_t activeCount = 0;
     for (std::size_t i = 0; i < childNodes.size(); ++i) {
         if (childNodes[i]->flex() > 0.0f) {
             totalFlex += childNodes[i]->flex();
+            active[i] = true;
         } else {
             sizes[i] = childNodes[i]->measureWithConstraints(loose);
-            fixedHeight += sizes[i].height;
+            active[i] = sizes[i].width > 0.0f || sizes[i].height > 0.0f;
+            if (active[i]) {
+                fixedHeight += sizes[i].height;
+            }
         }
-        if (i + 1 < childNodes.size()) {
-            fixedHeight += gap_;
+        if (active[i]) {
+            ++activeCount;
         }
+    }
+    if (activeCount > 1) {
+        fixedHeight += gap_ * static_cast<float>(activeCount - 1);
     }
     const float remaining = std::max(0.0f, innerHeight - fixedHeight);
 
     // Pass 2: size flex children from the remainder, then place with cross align.
     float cursorY = bounds.y + padding_.top;
+    bool placedActiveChild = false;
     for (std::size_t i = 0; i < childNodes.size(); ++i) {
         Node* child = childNodes[i].get();
         SizeF childSize = sizes[i];
@@ -399,6 +430,9 @@ void Column::layout(const RectF& bounds)
             const float allocated = totalFlex > 0.0f ? remaining * (child->flex() / totalFlex) : 0.0f;
             childSize = child->measureWithConstraints(Constraints{0.0f, innerWidth, 0.0f, allocated});
             childSize.height = allocated;
+        }
+        if (active[i] && placedActiveChild) {
+            cursorY += gap_;
         }
         float childX = bounds.x + padding_.left;
         switch (align_) {
@@ -418,7 +452,10 @@ void Column::layout(const RectF& bounds)
             break;
         }
         child->layout({childX, cursorY, childSize.width, childSize.height});
-        cursorY += childSize.height + gap_;
+        if (active[i]) {
+            cursorY += childSize.height;
+            placedActiveChild = true;
+        }
     }
     clearLayoutDirtyRecursively();
 }

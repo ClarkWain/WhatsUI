@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "wui/accessibility.h"
+#include "wui/overlays.h"
 #include "wui/text_input.h"
 #include "wui/widgets.h"
 
@@ -82,13 +83,16 @@ void testVisualControlSnapshot()
     input->text("Milk");
     auto action = std::make_unique<wui::Button>("Add");
     action->setEnabled(false);
+    auto important = std::make_unique<wui::IconButton>("*", "Mark task important");
+    important->setChecked(false);
     root->child(std::move(task));
     root->child(std::move(input));
     root->child(std::move(action));
+    root->child(std::move(important));
     root->layout({0.0f, 0.0f, 320.0f, 160.0f});
 
     const auto snapshot = wui::snapshotAccessibilityTree(*root, taskRaw);
-    expect(snapshot.size() == 3, "Visual snapshot must omit decorative layout nodes");
+    expect(snapshot.size() == 4, "Visual snapshot must omit decorative layout nodes");
     expect(snapshot[0].path == std::vector<std::size_t>{0} &&
                snapshot[0].properties.role == wui::AccessibilityRole::CheckBox &&
                snapshot[0].properties.label == "Buy groceries" &&
@@ -102,6 +106,10 @@ void testVisualControlSnapshot()
     expect(snapshot[2].properties.role == wui::AccessibilityRole::Button &&
                snapshot[2].properties.label == "Add" && !snapshot[2].properties.enabled,
            "Buttons must expose their name and enabled state");
+    expect(snapshot[3].properties.role == wui::AccessibilityRole::CheckBox &&
+               snapshot[3].properties.label == "Mark task important" &&
+               snapshot[3].properties.checked && !*snapshot[3].properties.checked,
+           "Two-state IconButtons must expose their current checked state");
 }
 
 } // namespace

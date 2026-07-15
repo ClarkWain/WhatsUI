@@ -66,7 +66,17 @@ validated by the CTest harness. Approve only when all of the following hold:
 .\build-wsc\examples\Debug\WhatsUITodoGlfw.exe
 ```
 
-The window starts in the mixed state and supports the same Add task, Done /
-Reopen, Delete, and Clear completed actions exercised by the capture script.
-It requires a desktop OpenGL/GLFW environment; the headless capture remains the
-automation-friendly validation entry point.
+The window starts in the mixed state and supports Add task, Done / Reopen,
+Important, optional `YYYY-MM-DD` due dates, search/filter, atomic task editing,
+Undo, Delete, and Clear completed. Editing title, importance, and due date is a
+single validated operation: an invalid date or title leaves the entire task
+unchanged, and one Undo restores all edited fields.
+
+Task cards intentionally use two levels. The checkbox and title begin on the
+first level with the named Important action at the trailing edge; due-date
+metadata and secondary Edit/Delete actions occupy the second level. This keeps
+the 360 DIP layout readable without changing the information hierarchy at
+regular and wide breakpoints.
+
+The interactive target requires a desktop OpenGL/GLFW environment; the
+headless capture remains the automation-friendly validation entry point.

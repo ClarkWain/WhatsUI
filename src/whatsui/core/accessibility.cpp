@@ -18,8 +18,11 @@ AccessibilityProperties propertiesForNode(const Node& node, const Node* focused)
         properties.role = AccessibilityRole::Button;
         properties.label = button->label();
     } else if (const auto* iconButton = dynamic_cast<const IconButton*>(&node)) {
-        properties.role = AccessibilityRole::Button;
+        properties.role = iconButton->checked().has_value()
+            ? AccessibilityRole::CheckBox
+            : AccessibilityRole::Button;
         properties.label = iconButton->accessibleLabel();
+        properties.checked = iconButton->checked();
     } else if (const auto* checkbox = dynamic_cast<const Checkbox*>(&node)) {
         properties.role = AccessibilityRole::CheckBox;
         properties.label = checkbox->accessibleLabel().empty()

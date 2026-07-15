@@ -53,6 +53,11 @@ public:
     [[nodiscard]] TodoActionResult remove(int id);
     [[nodiscard]] TodoActionResult clearCompleted();
     [[nodiscard]] TodoActionResult editTitle(int id, std::string title);
+    // Validates and commits all editable task details as one mutation. This
+    // prevents a dialog Save from partially updating fields and gives the
+    // complete edit one Undo checkpoint.
+    [[nodiscard]] TodoActionResult updateDetails(int id, std::string title, bool important,
+                                                 std::optional<std::string> dueDateIso);
     [[nodiscard]] TodoActionResult setImportant(int id, bool important);
     // A missing value clears the due date. Present dates must be calendar-only
     // ISO-8601 values in YYYY-MM-DD form.
