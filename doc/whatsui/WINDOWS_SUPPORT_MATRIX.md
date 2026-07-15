@@ -48,8 +48,9 @@ from `wui/accessibility.h` snapshots. A real-HWND test verifies discovery of a
 named, focused WhatsUI Button, its framework/control type, and screen bounds
 without reading mutable UI nodes from the UIA client thread. Invoke, Toggle,
 editable Value, and focus actions are synchronously marshalled to the UI thread
-and verified against refreshed native state. Rich text ranges, UIA change
-events, high-contrast policy, and the
+and verified against refreshed native state. Native property, focus, bounds,
+and structure events are verified from an MTA UIA subscriber. Rich text
+ranges, Selection patterns, high-contrast policy, and the
 100%/150%/200% Narrator validation matrix remain incomplete. Applications must
 not describe the current preview as fully screen-reader accessible yet.
 

@@ -7,8 +7,9 @@ Windows UI Automation (UIA) fragment tree for the GLFW host. Native
 clients can discover named controls, roles, bounds, enabled/focused state,
 values, and checked state. Buttons expose Invoke, checkboxes/switches expose
 Toggle, editable text exposes Value, and focus requests are marshalled to the
-UI thread. UIA change events, rich text ranges, and the Narrator validation
-matrix are not complete, so full
+UI thread. Name, enabled, toggle, value, focus, bounds, and structure changes
+raise native UIA events. Rich text ranges, Selection patterns, and the Narrator
+validation matrix are not complete, so full
 screen-reader support must not yet be claimed.
 
 The semantic projection is now a real runtime boundary rather than a
@@ -80,7 +81,9 @@ on each axis, then `ClientToScreen`, avoiding a second 150% DPI scale.
       `UiWindow` accessibility actions. Do not synthesize mouse coordinates.
 - [x] Keep retained provider identities stable across published snapshots,
       preferring explicit automation IDs for keyed/dynamic controls.
-- [ ] Raise focus/property/structure notifications after UI state changes.
+- [x] Raise focus, Name, IsEnabled, ToggleState, Value, BoundingRectangle, and
+      structure notifications after UI state changes. Event delivery is
+      posted back to the UI thread so an action COM call cannot be re-entered.
 - [ ] Add TextInput selection and document-range support before claiming full
       text editing support to Narrator.
 
@@ -95,7 +98,9 @@ on each axis, then `ClientToScreen`, avoiding a second 150% DPI scale.
 - [x] Invoke a button, toggle a checkbox, edit text, and move focus through UIA;
       assert callbacks run on the GLFW UI thread and retained providers observe
       the newly published state.
-- [ ] Assert the corresponding UIA property and focus events.
+- [x] Subscribe from an MTA UIA client and assert property, focus, bounds, and
+      structure events, stable retained RuntimeIds, and zero duplicate events
+      for identical snapshot republishes.
 - [ ] Run a short Narrator smoke test manually only after the automated UIA
       checks pass.
 

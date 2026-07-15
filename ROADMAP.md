@@ -126,7 +126,8 @@ fresh Core/GLFW installs and consumers, package legal-material presence, and
 the real GLFW resize callback chain. A native Windows UI Automation
 tree is now verified against a real GLFW HWND. Invoke/Toggle/Value/focus actions
 are routed to the UI thread and retained providers track the latest immutable
-state; events, text ranges, Selection patterns, and the Narrator/DPI matrix
+state. Native property/focus/bounds/structure events are delivered without COM
+action re-entry; text ranges, Selection patterns, and the Narrator/DPI matrix
 remain. The other
 release work is the native IME/DPI matrix, transitive legal/SBOM review,
 candidate tagging, and owner approval. New components must not bypass the

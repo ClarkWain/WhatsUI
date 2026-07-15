@@ -81,6 +81,7 @@ public:
                                                            LPARAM lParam) noexcept;
 
 private:
+    [[nodiscard]] static UINT eventFlushMessageId() noexcept;
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

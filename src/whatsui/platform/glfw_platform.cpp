@@ -997,6 +997,15 @@ private:
             if (pw->onFocusChanged) pw->onFocusChanged(focused == GLFW_TRUE);
         });
 
+        glfwSetWindowPosCallback(window, [](GLFWwindow* w, int, int) {
+            auto* pw = GlfwPlatformWindow::fromGlfw(w);
+            if (!pw) return;
+            // Native accessibility bounds are screen-relative. A pure move
+            // does not resize or dirty layout, but it must republish the
+            // immutable snapshot with the new client origin.
+            pw->requestRedraw();
+        });
+
         glfwSetFramebufferSizeCallback(window, [](GLFWwindow* w, int width, int height) {
             auto* pw = GlfwPlatformWindow::fromGlfw(w);
             if (!pw) return;

@@ -16,6 +16,7 @@
 #include <optional>
 #include <iterator>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -99,6 +100,7 @@ struct SnapshotModel {
     std::vector<std::vector<std::size_t>> children;
     std::optional<std::size_t> semanticRoot;
     std::string windowTitle;
+    std::unordered_map<std::string, std::size_t> automationIdCounts;
 
     SnapshotModel(HWND hwnd, AccessibilitySnapshot snapshot, WindowMetrics metrics)
         : window(hwnd), entries(std::move(snapshot)),
@@ -139,6 +141,11 @@ struct SnapshotModel {
         if (!entries.empty() && entries.front().path.empty() &&
             entries.front().properties.role == AccessibilityRole::Application) {
             semanticRoot = 0;
+        }
+        for (const auto& entry : entries) {
+            if (!entry.properties.automationId.empty()) {
+                ++automationIdCounts[entry.properties.automationId];
+            }
         }
         for (std::size_t index = 0; index < entries.size(); ++index) {
             std::optional<std::size_t> parent;
@@ -181,6 +188,13 @@ struct SnapshotModel {
         result.height = static_cast<double>(std::max(0.0f, bounds->height) * scaleY);
         return result;
     }
+
+    [[nodiscard]] bool hasUniqueAutomationId(const std::string& value) const noexcept
+    {
+        if (value.empty()) return false;
+        const auto found = automationIdCounts.find(value);
+        return found != automationIdCounts.end() && found->second == 1;
+    }
 };
 
 struct ElementKey {
@@ -191,11 +205,18 @@ struct ElementKey {
 };
 
 struct ProviderState {
+    struct RuntimeRegistration {
+        ElementKey key;
+        LONG component{};
+    };
+
     HWND window{};
     mutable std::mutex mutex;
     std::shared_ptr<const SnapshotModel> latest;
     std::shared_ptr<UiaActionQueue> actions;
     bool detached{false};
+    std::vector<RuntimeRegistration> runtimeRegistrations;
+    LONG nextRuntimeComponent{2};
 
     [[nodiscard]] std::optional<std::pair<std::shared_ptr<const SnapshotModel>, std::size_t>>
     resolve(const ElementKey& key) const
@@ -203,16 +224,46 @@ struct ProviderState {
         std::lock_guard<std::mutex> lock(mutex);
         if (detached || !latest) return std::nullopt;
         if (key.root) return std::pair{latest, kSyntheticRoot};
-        const auto found = std::find_if(latest->entries.begin(), latest->entries.end(),
-            [&key](const AccessibilitySnapshotEntry& entry) {
-                if (!key.automationId.empty()) {
-                    return entry.properties.automationId == key.automationId;
+        std::optional<std::size_t> match;
+        for (std::size_t index = 0; index < latest->entries.size(); ++index) {
+            const auto& entry = latest->entries[index];
+            const bool matches = !key.automationId.empty()
+                ? entry.properties.automationId == key.automationId
+                : entry.path == key.path && entry.properties.role == key.role;
+            if (!matches) continue;
+            // Ambiguous author IDs (or a malformed duplicate path) must never
+            // silently retarget a retained provider to the first match.
+            if (match) return std::nullopt;
+            match = index;
+        }
+        if (!match) return std::nullopt;
+        return std::pair{latest, *match};
+    }
+
+    [[nodiscard]] LONG runtimeComponent(const ElementKey& key) noexcept
+    {
+        if (key.root) return 1;
+        try {
+            std::lock_guard<std::mutex> lock(mutex);
+            const auto sameKey = [&key](const RuntimeRegistration& registration) {
+                if (registration.key.root != key.root) return false;
+                if (!registration.key.automationId.empty() || !key.automationId.empty()) {
+                    return !registration.key.automationId.empty() &&
+                           registration.key.automationId == key.automationId;
                 }
-                return entry.path == key.path && entry.properties.role == key.role;
-            });
-        if (found == latest->entries.end()) return std::nullopt;
-        return std::pair{latest,
-            static_cast<std::size_t>(std::distance(latest->entries.begin(), found))};
+                return registration.key.path == key.path &&
+                       registration.key.role == key.role;
+            };
+            const auto found = std::find_if(
+                runtimeRegistrations.begin(), runtimeRegistrations.end(), sameKey);
+            if (found != runtimeRegistrations.end()) return found->component;
+            if (nextRuntimeComponent == std::numeric_limits<LONG>::max()) return 0;
+            const LONG component = nextRuntimeComponent++;
+            runtimeRegistrations.push_back(RuntimeRegistration{key, component});
+            return component;
+        } catch (...) {
+            return 0;
+        }
     }
 };
 
@@ -220,7 +271,11 @@ ElementKey keyFor(const SnapshotModel& model, std::size_t index)
 {
     if (index == kSyntheticRoot) return {true, {}, {}, AccessibilityRole::Application};
     const auto& entry = model.entries[index];
-    return {false, entry.properties.automationId, entry.path, entry.properties.role};
+    return {false,
+            model.hasUniqueAutomationId(entry.properties.automationId)
+                ? entry.properties.automationId : std::string{},
+            entry.path,
+            entry.properties.role};
 }
 
 class SnapshotProvider final : public IRawElementProviderSimple,
@@ -495,7 +550,13 @@ public:
         if (FAILED(hr)) { SafeArrayDestroy(*runtimeId); *runtimeId = nullptr; return hr; }
         values[0] = UiaAppendRuntimeId;
         values[1] = static_cast<LONG>(reinterpret_cast<std::uintptr_t>(resolved->first->window) & 0x7fffffffU);
-        values[2] = runtimeComponent(*resolved->first, resolved->second);
+        values[2] = state_->runtimeComponent(key_);
+        if (values[2] == 0) {
+            SafeArrayUnaccessData(*runtimeId);
+            SafeArrayDestroy(*runtimeId);
+            *runtimeId = nullptr;
+            return E_OUTOFMEMORY;
+        }
         SafeArrayUnaccessData(*runtimeId);
         return S_OK;
     }
@@ -628,28 +689,11 @@ private:
             state_->window, UiaSnapshotBridge::actionMessageId(), std::move(request));
     }
 
-    static LONG runtimeComponent(const SnapshotModel& model, std::size_t index) noexcept
-    {
-        if (index == kSyntheticRoot) return 1;
-        std::uint32_t hash = 2166136261U;
-        const auto& entry = model.entries[index];
-        if (!entry.properties.automationId.empty()) {
-            for (const unsigned char part : entry.properties.automationId) {
-                hash ^= part;
-                hash *= 16777619U;
-            }
-        } else for (const std::size_t part : entry.path) {
-            hash ^= static_cast<std::uint32_t>(part + 1U);
-            hash *= 16777619U;
-        }
-        hash ^= static_cast<std::uint32_t>(entry.properties.role) + 1U;
-        return static_cast<LONG>((hash & 0x7fffffffU) + 2U);
-    }
-
     static std::string automationId(const SnapshotModel& model, std::size_t index)
     {
         if (index == kSyntheticRoot) return "window";
-        if (!model.entries[index].properties.automationId.empty()) {
+        if (model.hasUniqueAutomationId(
+                model.entries[index].properties.automationId)) {
             return model.entries[index].properties.automationId;
         }
         std::string result{"node"};
@@ -682,6 +726,349 @@ private:
     std::shared_ptr<ProviderState> state_;
     ElementKey key_;
 };
+
+std::optional<std::size_t> matchingIndex(const SnapshotModel& source,
+                                         std::size_t sourceIndex,
+                                         const SnapshotModel& target)
+{
+    const ElementKey key = keyFor(source, sourceIndex);
+    std::optional<std::size_t> match;
+    for (std::size_t index = 0; index < target.entries.size(); ++index) {
+        const auto& candidate = target.entries[index];
+        const bool matches = !key.automationId.empty()
+            ? target.hasUniqueAutomationId(candidate.properties.automationId) &&
+              candidate.properties.automationId == key.automationId
+            : candidate.path == key.path && candidate.properties.role == key.role;
+        if (!matches) continue;
+        if (match) return std::nullopt;
+        match = index;
+    }
+    return match;
+}
+
+bool sameElement(const SnapshotModel& left, std::size_t leftIndex,
+                 const SnapshotModel& right, std::size_t rightIndex)
+{
+    const auto match = matchingIndex(left, leftIndex, right);
+    return match && *match == rightIndex;
+}
+
+IRawElementProviderSimple* eventProvider(const std::shared_ptr<ProviderState>& state,
+                                         const SnapshotModel& model,
+                                         std::size_t index) noexcept
+{
+    try {
+        auto* provider = new (std::nothrow) SnapshotProvider(state, keyFor(model, index));
+        return provider ? static_cast<IRawElementProviderSimple*>(provider) : nullptr;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void raiseStringProperty(IRawElementProviderSimple* provider, PROPERTYID property,
+                         const std::string& oldValue, const std::string& newValue) noexcept
+{
+    VARIANT before;
+    VARIANT after;
+    VariantInit(&before);
+    VariantInit(&after);
+    try {
+        if (SUCCEEDED(setBstrVariant(oldValue, &before)) &&
+            SUCCEEDED(setBstrVariant(newValue, &after))) {
+            (void)UiaRaiseAutomationPropertyChangedEvent(
+                provider, property, before, after);
+        }
+    } catch (...) {
+        // Accessibility event delivery is best-effort and must never take down
+        // the UI thread under allocation pressure.
+    }
+    VariantClear(&before);
+    VariantClear(&after);
+}
+
+void raiseBoolProperty(IRawElementProviderSimple* provider, PROPERTYID property,
+                       bool oldValue, bool newValue) noexcept
+{
+    VARIANT before;
+    VARIANT after;
+    VariantInit(&before);
+    VariantInit(&after);
+    before.vt = VT_BOOL;
+    before.boolVal = oldValue ? VARIANT_TRUE : VARIANT_FALSE;
+    after.vt = VT_BOOL;
+    after.boolVal = newValue ? VARIANT_TRUE : VARIANT_FALSE;
+    (void)UiaRaiseAutomationPropertyChangedEvent(provider, property, before, after);
+}
+
+void raiseIntProperty(IRawElementProviderSimple* provider, PROPERTYID property,
+                      LONG oldValue, LONG newValue) noexcept
+{
+    VARIANT before;
+    VARIANT after;
+    VariantInit(&before);
+    VariantInit(&after);
+    before.vt = VT_I4;
+    before.lVal = oldValue;
+    after.vt = VT_I4;
+    after.lVal = newValue;
+    (void)UiaRaiseAutomationPropertyChangedEvent(provider, property, before, after);
+}
+
+bool meaningfullyDifferent(const UiaRect& left, const UiaRect& right) noexcept
+{
+    constexpr double threshold = 0.25;
+    return std::abs(left.left - right.left) > threshold ||
+           std::abs(left.top - right.top) > threshold ||
+           std::abs(left.width - right.width) > threshold ||
+           std::abs(left.height - right.height) > threshold;
+}
+
+void raiseRectProperty(IRawElementProviderSimple* provider,
+                       const UiaRect& oldValue, const UiaRect& newValue) noexcept
+{
+    VARIANT before;
+    VARIANT after;
+    VariantInit(&before);
+    VariantInit(&after);
+    before.vt = VT_ARRAY | VT_R8;
+    after.vt = VT_ARRAY | VT_R8;
+    before.parray = SafeArrayCreateVector(VT_R8, 0, 4);
+    after.parray = SafeArrayCreateVector(VT_R8, 0, 4);
+    if (before.parray && after.parray) {
+        double* oldParts = nullptr;
+        double* newParts = nullptr;
+        if (SUCCEEDED(SafeArrayAccessData(
+                before.parray, reinterpret_cast<void**>(&oldParts))) &&
+            SUCCEEDED(SafeArrayAccessData(
+                after.parray, reinterpret_cast<void**>(&newParts)))) {
+            oldParts[0] = oldValue.left;
+            oldParts[1] = oldValue.top;
+            oldParts[2] = oldValue.width;
+            oldParts[3] = oldValue.height;
+            newParts[0] = newValue.left;
+            newParts[1] = newValue.top;
+            newParts[2] = newValue.width;
+            newParts[3] = newValue.height;
+            SafeArrayUnaccessData(before.parray);
+            SafeArrayUnaccessData(after.parray);
+            (void)UiaRaiseAutomationPropertyChangedEvent(
+                provider, UIA_BoundingRectanglePropertyId, before, after);
+        } else {
+            if (oldParts) SafeArrayUnaccessData(before.parray);
+            if (newParts) SafeArrayUnaccessData(after.parray);
+        }
+    }
+    VariantClear(&before);
+    VariantClear(&after);
+}
+
+bool supportsTogglePattern(const AccessibilityProperties& properties) noexcept
+{
+    return properties.checked.has_value() && properties.actions.toggle;
+}
+
+bool supportsValuePattern(const AccessibilityProperties& properties) noexcept
+{
+    return properties.value.has_value() &&
+           (properties.actions.setValue || properties.actions.valueReadOnly);
+}
+
+bool sameChildren(const SnapshotModel& previous, std::size_t previousParent,
+                  const SnapshotModel& current, std::size_t currentParent) noexcept
+{
+    const auto& oldChildren = previous.childIndices(previousParent);
+    const auto& newChildren = current.childIndices(currentParent);
+    if (oldChildren.size() != newChildren.size()) return false;
+    for (std::size_t position = 0; position < oldChildren.size(); ++position) {
+        if (!sameElement(previous, oldChildren[position],
+                         current, newChildren[position])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool sameChildSet(const SnapshotModel& previous, std::size_t previousParent,
+                  const SnapshotModel& current, std::size_t currentParent)
+{
+    const auto& oldChildren = previous.childIndices(previousParent);
+    const auto& newChildren = current.childIndices(currentParent);
+    if (oldChildren.size() != newChildren.size()) return false;
+    for (const std::size_t oldChild : oldChildren) {
+        const auto matched = matchingIndex(previous, oldChild, current);
+        if (!matched || std::find(newChildren.begin(), newChildren.end(), *matched) ==
+                            newChildren.end()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+StructureChangeType childStructureChange(
+    const SnapshotModel& previous, std::size_t previousParent,
+    const SnapshotModel& current, std::size_t currentParent)
+{
+    return sameChildSet(previous, previousParent, current, currentParent)
+        ? StructureChangeType_ChildrenReordered
+        : StructureChangeType_ChildrenInvalidated;
+}
+
+const std::string& rootName(const SnapshotModel& model) noexcept
+{
+    if (model.semanticRoot &&
+        !model.entries[*model.semanticRoot].properties.label.empty()) {
+        return model.entries[*model.semanticRoot].properties.label;
+    }
+    return model.windowTitle;
+}
+
+void raiseSnapshotEvents(const std::shared_ptr<ProviderState>& state,
+                         const SnapshotModel& previous,
+                         const SnapshotModel& current) noexcept
+{
+    if (!UiaClientsAreListening()) return;
+
+    // Structure precedes property and focus notifications so clients refresh
+    // the fragment tree before interpreting state changes on retained nodes.
+    if (!sameChildren(previous, kSyntheticRoot, current, kSyntheticRoot)) {
+        if (auto* provider = eventProvider(state, current, kSyntheticRoot)) {
+            (void)UiaRaiseStructureChangedEvent(
+                provider,
+                childStructureChange(
+                    previous, kSyntheticRoot, current, kSyntheticRoot),
+                nullptr, 0);
+            provider->Release();
+        }
+    }
+    for (std::size_t oldParent = 0; oldParent < previous.entries.size(); ++oldParent) {
+        if (previous.semanticRoot && oldParent == *previous.semanticRoot) continue;
+        const auto currentParent = matchingIndex(previous, oldParent, current);
+        if (!currentParent ||
+            (current.semanticRoot && *currentParent == *current.semanticRoot) ||
+            sameChildren(previous, oldParent, current, *currentParent)) {
+            continue;
+        }
+        if (auto* provider = eventProvider(state, current, *currentParent)) {
+            (void)UiaRaiseStructureChangedEvent(
+                provider,
+                childStructureChange(previous, oldParent, current, *currentParent),
+                nullptr, 0);
+            provider->Release();
+        }
+    }
+
+    // The synthetic fragment root represents the semantic application root.
+    // Its provider identity remains stable for the native window lifetime.
+    const bool rootNameChanged = rootName(previous) != rootName(current);
+    const bool rootBoundsChanged = meaningfullyDifferent(
+        previous.windowBounds, current.windowBounds);
+    if (rootNameChanged || rootBoundsChanged) {
+        if (auto* provider = eventProvider(state, current, kSyntheticRoot)) {
+            if (rootNameChanged) {
+                raiseStringProperty(provider, UIA_NamePropertyId,
+                                    rootName(previous), rootName(current));
+            }
+            if (rootBoundsChanged) {
+                raiseRectProperty(provider, previous.windowBounds, current.windowBounds);
+            }
+            provider->Release();
+        }
+    }
+    const bool oldRootEnabled = !previous.semanticRoot ||
+        previous.entries[*previous.semanticRoot].properties.enabled;
+    const bool newRootEnabled = !current.semanticRoot ||
+        current.entries[*current.semanticRoot].properties.enabled;
+    if (oldRootEnabled != newRootEnabled) {
+        if (auto* provider = eventProvider(state, current, kSyntheticRoot)) {
+            raiseBoolProperty(provider, UIA_IsEnabledPropertyId,
+                              oldRootEnabled, newRootEnabled);
+            provider->Release();
+        }
+    }
+
+    for (std::size_t oldIndex = 0; oldIndex < previous.entries.size(); ++oldIndex) {
+        if (previous.semanticRoot && oldIndex == *previous.semanticRoot) continue;
+        const auto currentIndex = matchingIndex(previous, oldIndex, current);
+        if (!currentIndex ||
+            (current.semanticRoot && *currentIndex == *current.semanticRoot)) {
+            continue;
+        }
+        const auto& oldProperties = previous.entries[oldIndex].properties;
+        const auto& newProperties = current.entries[*currentIndex].properties;
+        const bool nameChanged = oldProperties.label != newProperties.label;
+        const bool enabledChanged = oldProperties.enabled != newProperties.enabled;
+        const bool toggleChanged = supportsTogglePattern(oldProperties) &&
+            supportsTogglePattern(newProperties) &&
+            oldProperties.checked != newProperties.checked;
+        const bool valueChanged = supportsValuePattern(oldProperties) &&
+            supportsValuePattern(newProperties) &&
+            oldProperties.value != newProperties.value;
+        const UiaRect oldBounds = previous.screenBounds(oldIndex);
+        const UiaRect newBounds = current.screenBounds(*currentIndex);
+        const bool boundsChanged = meaningfullyDifferent(oldBounds, newBounds);
+        if (!nameChanged && !enabledChanged && !toggleChanged &&
+            !valueChanged && !boundsChanged) continue;
+
+        auto* provider = eventProvider(state, current, *currentIndex);
+        if (!provider) continue;
+        if (nameChanged) {
+            raiseStringProperty(provider, UIA_NamePropertyId,
+                                oldProperties.label, newProperties.label);
+        }
+        if (enabledChanged) {
+            raiseBoolProperty(provider, UIA_IsEnabledPropertyId,
+                              oldProperties.enabled, newProperties.enabled);
+        }
+        if (toggleChanged) {
+            raiseIntProperty(provider, UIA_ToggleToggleStatePropertyId,
+                oldProperties.checked.value_or(false) ? ToggleState_On : ToggleState_Off,
+                newProperties.checked.value_or(false) ? ToggleState_On : ToggleState_Off);
+        }
+        if (valueChanged) {
+            raiseStringProperty(provider, UIA_ValueValuePropertyId,
+                *oldProperties.value, *newProperties.value);
+        }
+        if (boundsChanged) {
+            raiseRectProperty(provider, oldBounds, newBounds);
+        }
+        provider->Release();
+    }
+
+    // Focus properties are delivered after all other property changes. The
+    // focus automation event itself is last, so its target already reports the
+    // new HasKeyboardFocus value when queried by a client callback.
+    const auto oldFocus = std::find_if(previous.entries.begin(), previous.entries.end(),
+        [](const AccessibilitySnapshotEntry& entry) { return entry.properties.focused; });
+    const auto newFocus = std::find_if(current.entries.begin(), current.entries.end(),
+        [](const AccessibilitySnapshotEntry& entry) { return entry.properties.focused; });
+    const std::optional<std::size_t> oldFocusIndex = oldFocus == previous.entries.end()
+        ? std::nullopt
+        : std::optional<std::size_t>{static_cast<std::size_t>(
+            std::distance(previous.entries.begin(), oldFocus))};
+    const std::optional<std::size_t> newFocusIndex = newFocus == current.entries.end()
+        ? std::nullopt
+        : std::optional<std::size_t>{static_cast<std::size_t>(
+            std::distance(current.entries.begin(), newFocus))};
+    const bool focusChanged = oldFocusIndex.has_value() != newFocusIndex.has_value() ||
+        (oldFocusIndex && newFocusIndex &&
+         !sameElement(previous, *oldFocusIndex, current, *newFocusIndex));
+    if (focusChanged && oldFocusIndex) {
+        const auto retainedOldFocus = matchingIndex(previous, *oldFocusIndex, current);
+        if (retainedOldFocus) {
+            if (auto* provider = eventProvider(state, current, *retainedOldFocus)) {
+                raiseBoolProperty(provider, UIA_HasKeyboardFocusPropertyId, true, false);
+                provider->Release();
+            }
+        }
+    }
+    if (focusChanged && newFocusIndex) {
+        if (auto* provider = eventProvider(state, current, *newFocusIndex)) {
+            raiseBoolProperty(provider, UIA_HasKeyboardFocusPropertyId, false, true);
+            (void)UiaRaiseAutomationEvent(provider, UIA_AutomationFocusChangedEventId);
+            provider->Release();
+        }
+    }
+}
 
 } // namespace
 
@@ -843,6 +1230,9 @@ struct UiaSnapshotBridge::Impl {
     HWND window{};
     std::shared_ptr<ProviderState> state;
     IRawElementProviderFragmentRoot* root{};
+    std::shared_ptr<const SnapshotModel> pendingEventBaseline;
+    std::shared_ptr<const SnapshotModel> pendingEventLatest;
+    bool eventFlushPosted{false};
 };
 
 UiaSnapshotBridge::UiaSnapshotBridge(HWND window)
@@ -853,10 +1243,24 @@ UiaSnapshotBridge::UiaSnapshotBridge(HWND window)
 UiaSnapshotBridge::~UiaSnapshotBridge()
 {
     impl_->state->actions->setCallback({});
+    impl_->pendingEventBaseline.reset();
+    impl_->pendingEventLatest.reset();
+    impl_->eventFlushPosted = false;
     {
         std::lock_guard<std::mutex> lock(impl_->state->mutex);
         impl_->state->detached = true;
         impl_->state->latest.reset();
+    }
+    // Disconnecting while servicing a synchronous cross-thread SendMessage
+    // can re-enter UIA/User32 in a teardown-sensitive context. Outside that
+    // context it proactively invalidates UIA's provider cache before the root
+    // releases its bridge-owned reference.
+    if (impl_->root && InSendMessageEx(nullptr) == ISMEX_NOSEND) {
+        IRawElementProviderSimple* simple = nullptr;
+        if (SUCCEEDED(impl_->root->QueryInterface(IID_PPV_ARGS(&simple)))) {
+            (void)UiaDisconnectProvider(simple);
+            simple->Release();
+        }
     }
     if (impl_->root) impl_->root->Release();
 }
@@ -865,8 +1269,26 @@ void UiaSnapshotBridge::publish(AccessibilitySnapshot snapshot, WindowMetrics me
 {
     auto latest = std::make_shared<const SnapshotModel>(
         impl_->window, std::move(snapshot), metrics);
-    std::lock_guard<std::mutex> lock(impl_->state->mutex);
-    if (!impl_->state->detached) impl_->state->latest = std::move(latest);
+    std::shared_ptr<const SnapshotModel> previous;
+    {
+        std::lock_guard<std::mutex> lock(impl_->state->mutex);
+        if (impl_->state->detached) return;
+        previous = std::exchange(impl_->state->latest, latest);
+    }
+    // publish() is called by the UI-thread layout/update path. State is made
+    // visible first so event consumers querying retained providers observe the
+    // new values. UIA event delivery is deferred to a posted message: raising
+    // synchronously can re-enter an MTA client that is still completing its
+    // Invoke/Toggle/Value/SetFocus COM call and deadlock the UI thread.
+    if (!previous) return;
+    if (!impl_->pendingEventBaseline) {
+        impl_->pendingEventBaseline = std::move(previous);
+    }
+    impl_->pendingEventLatest = latest;
+    if (!impl_->eventFlushPosted) {
+        impl_->eventFlushPosted = PostMessageW(
+            impl_->window, eventFlushMessageId(), 0, 0) != FALSE;
+    }
 }
 
 void UiaSnapshotBridge::setActionCallback(AccessibilityActionHandler callback)
@@ -885,10 +1307,30 @@ UINT UiaSnapshotBridge::actionMessageId() noexcept
     return message;
 }
 
+UINT UiaSnapshotBridge::eventFlushMessageId() noexcept
+{
+    static const UINT message = RegisterWindowMessageW(
+        L"WhatsUI.UIAutomation.EventFlush");
+    return message;
+}
+
 bool UiaSnapshotBridge::handleActionMessage(UINT message)
 {
-    if (message != actionMessageId()) return false;
-    (void)dispatchPendingActions();
+    if (message == actionMessageId()) {
+        (void)dispatchPendingActions();
+        return true;
+    }
+    if (message != eventFlushMessageId()) return false;
+
+    impl_->eventFlushPosted = false;
+    auto baseline = std::exchange(impl_->pendingEventBaseline, {});
+    auto latest = std::exchange(impl_->pendingEventLatest, {});
+    if (baseline && latest) {
+        // This registered message is handled by the native UI thread, after
+        // the action SendMessage stack has unwound. Consecutive publishes are
+        // coalesced from the first baseline to the newest immutable model.
+        raiseSnapshotEvents(impl_->state, *baseline, *latest);
+    }
     return true;
 }
 

@@ -22,11 +22,14 @@
 
 #include <chrono>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -319,6 +322,220 @@ struct NativeActionState {
     std::thread::id valueThread;
 };
 
+struct NativeEventState {
+    std::mutex mutex;
+    std::condition_variable changed;
+    int togglePropertyChanges{0};
+    int valuePropertyChanges{0};
+    int enabledPropertyChanges{0};
+    int namePropertyChanges{0};
+    int boundsPropertyChanges{0};
+    int valueFocusChanges{0};
+    int structureChanges{0};
+    RECT latestBounds{};
+    bool releaseSubscriber{false};
+
+    bool complete() const noexcept
+    {
+        return togglePropertyChanges > 0 && valuePropertyChanges > 0
+            && enabledPropertyChanges > 0 && namePropertyChanges > 0
+            && boundsPropertyChanges > 0
+            && valueFocusChanges > 0 && structureChanges > 0;
+    }
+
+    int totalEvents() const noexcept
+    {
+        return togglePropertyChanges + valuePropertyChanges
+            + enabledPropertyChanges + namePropertyChanges
+            + boundsPropertyChanges + valueFocusChanges + structureChanges;
+    }
+};
+
+template <typename Interface>
+class UiaEventHandlerBase : public Interface {
+public:
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++references_; }
+    ULONG STDMETHODCALLTYPE Release() override
+    {
+        const ULONG remaining = --references_;
+        if (remaining == 0) delete this;
+        return remaining;
+    }
+
+protected:
+    explicit UiaEventHandlerBase(NativeEventState& state) : state_(state) {}
+    virtual ~UiaEventHandlerBase() = default;
+
+    NativeEventState& state_;
+
+private:
+    std::atomic<ULONG> references_{1};
+};
+
+class NativePropertyChangedHandler final
+    : public UiaEventHandlerBase<IUIAutomationPropertyChangedEventHandler> {
+public:
+    explicit NativePropertyChangedHandler(NativeEventState& state)
+        : UiaEventHandlerBase(state) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** result) override
+    {
+        if (result == nullptr) return E_POINTER;
+        *result = nullptr;
+        if (iid == __uuidof(IUnknown)
+            || iid == __uuidof(IUIAutomationPropertyChangedEventHandler)) {
+            *result = static_cast<IUIAutomationPropertyChangedEventHandler*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE HandlePropertyChangedEvent(
+        IUIAutomationElement* sender, PROPERTYID propertyId, VARIANT newValue) override
+    {
+        int* counter = nullptr;
+        {
+            std::lock_guard lock(state_.mutex);
+            if (propertyId == UIA_ToggleToggleStatePropertyId
+                && newValue.vt == VT_I4 && newValue.lVal == ToggleState_Off) {
+                counter = &state_.togglePropertyChanges;
+            } else if (propertyId == UIA_ValueValuePropertyId
+                       && newValue.vt == VT_BSTR && newValue.bstrVal != nullptr
+                       && std::wstring_view{newValue.bstrVal,
+                                           SysStringLen(newValue.bstrVal)}
+                           == L"Event value") {
+                counter = &state_.valuePropertyChanges;
+            } else if (propertyId == UIA_IsEnabledPropertyId
+                       && newValue.vt == VT_BOOL
+                       && newValue.boolVal == VARIANT_FALSE) {
+                counter = &state_.enabledPropertyChanges;
+            } else if (propertyId == UIA_NamePropertyId
+                       && newValue.vt == VT_BSTR && newValue.bstrVal != nullptr
+                       && std::wstring_view{newValue.bstrVal,
+                                           SysStringLen(newValue.bstrVal)}
+                           == L"Native toggle renamed") {
+                counter = &state_.namePropertyChanges;
+            }
+            if (counter != nullptr) ++*counter;
+        }
+        if (counter != nullptr) state_.changed.notify_all();
+        return S_OK;
+    }
+};
+
+class RootBoundsChangedHandler final
+    : public UiaEventHandlerBase<IUIAutomationPropertyChangedEventHandler> {
+public:
+    explicit RootBoundsChangedHandler(NativeEventState& state)
+        : UiaEventHandlerBase(state) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** result) override
+    {
+        if (result == nullptr) return E_POINTER;
+        *result = nullptr;
+        if (iid == __uuidof(IUnknown)
+            || iid == __uuidof(IUIAutomationPropertyChangedEventHandler)) {
+            *result = static_cast<IUIAutomationPropertyChangedEventHandler*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE HandlePropertyChangedEvent(
+        IUIAutomationElement*, PROPERTYID propertyId, VARIANT newValue) override
+    {
+        if (propertyId != UIA_BoundingRectanglePropertyId
+            || newValue.vt != (VT_ARRAY | VT_R8) || newValue.parray == nullptr) {
+            return S_OK;
+        }
+        double* parts = nullptr;
+        if (FAILED(SafeArrayAccessData(
+                newValue.parray, reinterpret_cast<void**>(&parts)))) {
+            return S_OK;
+        }
+        const RECT bounds{
+            static_cast<LONG>(std::lround(parts[0])),
+            static_cast<LONG>(std::lround(parts[1])),
+            static_cast<LONG>(std::lround(parts[0] + parts[2])),
+            static_cast<LONG>(std::lround(parts[1] + parts[3]))};
+        SafeArrayUnaccessData(newValue.parray);
+        {
+            std::lock_guard lock(state_.mutex);
+            state_.latestBounds = bounds;
+            ++state_.boundsPropertyChanges;
+        }
+        state_.changed.notify_all();
+        return S_OK;
+    }
+};
+
+class FocusChangedHandler final
+    : public UiaEventHandlerBase<IUIAutomationFocusChangedEventHandler> {
+public:
+    explicit FocusChangedHandler(NativeEventState& state)
+        : UiaEventHandlerBase(state) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** result) override
+    {
+        if (result == nullptr) return E_POINTER;
+        *result = nullptr;
+        if (iid == __uuidof(IUnknown)
+            || iid == __uuidof(IUIAutomationFocusChangedEventHandler)) {
+            *result = static_cast<IUIAutomationFocusChangedEventHandler*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE HandleFocusChangedEvent(IUIAutomationElement*) override
+    {
+        {
+            std::lock_guard lock(state_.mutex);
+            ++state_.valueFocusChanges;
+        }
+        state_.changed.notify_all();
+        return S_OK;
+    }
+};
+
+class StructureChangedHandler final
+    : public UiaEventHandlerBase<IUIAutomationStructureChangedEventHandler> {
+public:
+    explicit StructureChangedHandler(NativeEventState& state)
+        : UiaEventHandlerBase(state) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** result) override
+    {
+        if (result == nullptr) return E_POINTER;
+        *result = nullptr;
+        if (iid == __uuidof(IUnknown)
+            || iid == __uuidof(IUIAutomationStructureChangedEventHandler)) {
+            *result = static_cast<IUIAutomationStructureChangedEventHandler*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE HandleStructureChangedEvent(
+        IUIAutomationElement*, StructureChangeType changeType, SAFEARRAY*) override
+    {
+        if (changeType != StructureChangeType_ChildAdded
+            && changeType != StructureChangeType_ChildrenInvalidated) {
+            return S_OK;
+        }
+        {
+            std::lock_guard lock(state_.mutex);
+            ++state_.structureChanges;
+        }
+        state_.changed.notify_all();
+        return S_OK;
+    }
+};
+
 void invokeNativeUiaActions(HWND hwnd)
 {
     ScopedCom com;
@@ -446,6 +663,138 @@ void expectNativeUiaActionState(HWND hwnd)
            "Native value must publish its post-action text");
 }
 
+std::vector<int> currentRuntimeId(IUIAutomationElement& element)
+{
+    VARIANT property{};
+    VariantInit(&property);
+    expectSucceeded(element.GetCurrentPropertyValue(UIA_RuntimeIdPropertyId, &property),
+                    "Unable to read the retained UIA RuntimeId");
+    expect(property.vt == (VT_ARRAY | VT_I4),
+           "UIA RuntimeId must be an integer SAFEARRAY");
+    SAFEARRAY* runtimeId = property.parray;
+    expect(runtimeId != nullptr, "UIA element returned no RuntimeId");
+    LONG lower = 0;
+    LONG upper = -1;
+    expectSucceeded(SafeArrayGetLBound(runtimeId, 1, &lower),
+                    "Unable to read the RuntimeId lower bound");
+    expectSucceeded(SafeArrayGetUBound(runtimeId, 1, &upper),
+                    "Unable to read the RuntimeId upper bound");
+    std::vector<int> values;
+    for (LONG index = lower; index <= upper; ++index) {
+        int value = 0;
+        expectSucceeded(SafeArrayGetElement(runtimeId, &index, &value),
+                        "Unable to read a RuntimeId component");
+        values.push_back(value);
+    }
+    VariantClear(&property);
+    return values;
+}
+
+void subscribeAndWaitForNativeUiaEvents(HWND hwnd, NativeEventState& state,
+                                        std::promise<void>& subscribed)
+{
+    ScopedCom com;
+    try {
+        expectSucceeded(com.result(), "COM initialization failed for UIA events");
+        ComPtr<IUIAutomation> automation;
+        expectSucceeded(CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
+                                         IID_PPV_ARGS(automation.put())),
+                        "Unable to create the UI Automation event client");
+        ComPtr<IUIAutomationElement> root;
+        expectSucceeded(automation->ElementFromHandle(hwnd, root.put()),
+                        "ElementFromHandle failed for UIA event subscriptions");
+        auto checkbox = findNamedControl(
+            *automation.get(), *root.get(), UIA_CheckBoxControlTypeId, L"Native toggle");
+        expect(static_cast<bool>(checkbox),
+               "The UIA event fixture must expose Native toggle");
+        const auto retainedRuntimeId = currentRuntimeId(*checkbox.get());
+
+        auto* propertyHandler = new NativePropertyChangedHandler(state);
+        auto* boundsHandler = new RootBoundsChangedHandler(state);
+        auto* focusHandler = new FocusChangedHandler(state);
+        auto* structureHandler = new StructureChangedHandler(state);
+        bool propertyRegistered = false;
+        bool boundsRegistered = false;
+        bool focusRegistered = false;
+        bool structureRegistered = false;
+        auto cleanup = [&] {
+            if (structureRegistered) {
+                automation->RemoveStructureChangedEventHandler(
+                    root.get(), structureHandler);
+            }
+            if (focusRegistered) {
+                automation->RemoveFocusChangedEventHandler(focusHandler);
+            }
+            if (boundsRegistered) {
+                automation->RemovePropertyChangedEventHandler(
+                    root.get(), boundsHandler);
+            }
+            if (propertyRegistered) {
+                automation->RemovePropertyChangedEventHandler(
+                    root.get(), propertyHandler);
+            }
+            structureHandler->Release();
+            focusHandler->Release();
+            boundsHandler->Release();
+            propertyHandler->Release();
+        };
+
+        try {
+            PROPERTYID properties[]{UIA_ToggleToggleStatePropertyId,
+                                    UIA_ValueValuePropertyId,
+                                    UIA_IsEnabledPropertyId,
+                                    UIA_NamePropertyId};
+            expectSucceeded(automation->AddPropertyChangedEventHandlerNativeArray(
+                                root.get(), TreeScope_Subtree, nullptr,
+                                propertyHandler, properties,
+                                static_cast<int>(std::size(properties))),
+                            "Unable to subscribe to native UIA property events");
+            propertyRegistered = true;
+            PROPERTYID boundsProperty[]{UIA_BoundingRectanglePropertyId};
+            expectSucceeded(automation->AddPropertyChangedEventHandlerNativeArray(
+                                root.get(), TreeScope_Element, nullptr,
+                                boundsHandler, boundsProperty, 1),
+                            "Unable to subscribe to the root UIA bounds event");
+            boundsRegistered = true;
+            expectSucceeded(automation->AddFocusChangedEventHandler(nullptr, focusHandler),
+                            "Unable to subscribe to the UIA focus event");
+            focusRegistered = true;
+            expectSucceeded(automation->AddStructureChangedEventHandler(
+                                root.get(), TreeScope_Subtree, nullptr, structureHandler),
+                            "Unable to subscribe to the UIA structure event");
+            structureRegistered = true;
+            subscribed.set_value();
+
+            std::unique_lock lock(state.mutex);
+            const bool completed = state.changed.wait_for(
+                lock, std::chrono::seconds(5), [&state] { return state.complete(); });
+            const bool released = completed && state.changed.wait_for(
+                lock, std::chrono::seconds(2),
+                [&state] { return state.releaseSubscriber; });
+            lock.unlock();
+            const auto publishedRuntimeId = currentRuntimeId(*checkbox.get());
+            cleanup();
+            expect(completed,
+                   "Timed out waiting for native UIA property/focus/structure events");
+            expect(released,
+                   "Timed out waiting to finish the native UIA event subscription");
+            expect(retainedRuntimeId == publishedRuntimeId,
+                   "A retained UIA element RuntimeId must remain stable across publishes");
+        } catch (...) {
+            cleanup();
+            throw;
+        }
+    } catch (...) {
+        try {
+            subscribed.set_exception(std::current_exception());
+        } catch (...) {
+            // The subscription-ready promise was already fulfilled; the
+            // packaged task transports this failure to the UI thread.
+        }
+        throw;
+    }
+}
+
 void pumpNativeUi(wui::UiWindow& window)
 {
     glfwPollEvents();
@@ -511,6 +860,155 @@ void exerciseNativeUiaActions(wui::UiWindow& window, HWND hwnd,
     // A fresh client must observe the same state as the retained providers.
     runUiaWorkOffUiThread(window, [hwnd] { expectNativeUiaActionState(hwnd); },
                           "UIA post-action state query timed out");
+}
+
+void exerciseNativeUiaEvents(wui::UiWindow& window, HWND hwnd)
+{
+    NativeEventState state;
+    std::promise<void> subscribed;
+    auto subscription = subscribed.get_future();
+    std::packaged_task<void()> task([hwnd, &state, &subscribed] {
+        subscribeAndWaitForNativeUiaEvents(hwnd, state, subscribed);
+    });
+    auto result = task.get_future();
+    std::thread worker(std::move(task));
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (subscription.wait_for(std::chrono::milliseconds(0))
+           != std::future_status::ready) {
+        pumpNativeUi(window);
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::fputs("FAIL: UIA event subscription timed out\n", stderr);
+            std::fflush(stderr);
+            std::quick_exit(1);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    subscription.get();
+
+    expect(window.root() != nullptr && window.root()->children().size() == 4,
+           "The native UIA event fixture must retain its controls");
+    auto* checkbox = dynamic_cast<wui::Checkbox*>(window.root()->children()[2].get());
+    expect(checkbox != nullptr, "The UIA property event fixture must be a Checkbox");
+    auto* textInput = dynamic_cast<wui::TextInput*>(window.root()->children()[3].get());
+    expect(textInput != nullptr, "The UIA value event fixture must be a TextInput");
+    checkbox->setChecked(false);
+    checkbox->setEnabled(false);
+    checkbox->setLabel("Native toggle renamed");
+    textInput->text("Event value");
+    window.focusManager().setFocused(window.root()->children()[3].get());
+    window.root()->appendChild(
+        wui::ui::Text("Native event child")
+            .accessibilityId("native.event.child")
+            .intoNode());
+    window.update();
+    window.layout();
+
+    RECT previousWindowBounds{};
+    expect(GetWindowRect(hwnd, &previousWindowBounds) != FALSE,
+           "GetWindowRect failed before the UIA bounds event fixture moved");
+    expect(SetWindowPos(hwnd, nullptr,
+                        previousWindowBounds.left + 24,
+                        previousWindowBounds.top + 18,
+                        0, 0,
+                        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
+           "SetWindowPos failed for the UIA bounds event fixture");
+    pumpNativeUi(window);
+
+    bool complete = false;
+    while (!complete) {
+        {
+            std::lock_guard lock(state.mutex);
+            complete = state.complete();
+        }
+        if (complete) break;
+        pumpNativeUi(window);
+        if (result.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+            worker.join();
+            result.get();
+            throw std::runtime_error("UIA event subscriber exited before all events arrived");
+        }
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::lock_guard lock(state.mutex);
+            std::fprintf(stderr,
+                         "FAIL: native UIA event delivery timed out "
+                         "(toggle=%d value=%d enabled=%d name=%d bounds=%d focus=%d structure=%d)\n",
+                         state.togglePropertyChanges, state.valuePropertyChanges,
+                         state.enabledPropertyChanges, state.namePropertyChanges,
+                         state.boundsPropertyChanges, state.valueFocusChanges,
+                         state.structureChanges);
+            std::fflush(stderr);
+            std::quick_exit(1);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    RECT expectedWindowBounds{};
+    expect(GetWindowRect(hwnd, &expectedWindowBounds) != FALSE,
+           "GetWindowRect failed after the UIA bounds event fixture moved");
+    // complete() becomes true as soon as the first event of every required
+    // category arrives. Drain the remainder of that same publication batch
+    // without publishing another snapshot before taking the no-op baseline.
+    const auto drainDeadline = std::chrono::steady_clock::now()
+        + std::chrono::milliseconds(100);
+    while (std::chrono::steady_clock::now() < drainDeadline) {
+        glfwPollEvents();
+        window.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    int eventCountBeforeDuplicate = 0;
+    bool boundsMatch = false;
+    {
+        std::lock_guard lock(state.mutex);
+        eventCountBeforeDuplicate = state.totalEvents();
+        const double expectedCenterX =
+            (static_cast<double>(expectedWindowBounds.left) + expectedWindowBounds.right) / 2.0;
+        const double expectedCenterY =
+            (static_cast<double>(expectedWindowBounds.top) + expectedWindowBounds.bottom) / 2.0;
+        const double actualCenterX =
+            (static_cast<double>(state.latestBounds.left) + state.latestBounds.right) / 2.0;
+        const double actualCenterY =
+            (static_cast<double>(state.latestBounds.top) + state.latestBounds.bottom) / 2.0;
+        boundsMatch = std::fabs(actualCenterX - expectedCenterX) <= 8.0
+            && std::fabs(actualCenterY - expectedCenterY) <= 8.0;
+    }
+
+    // Publishing an identical immutable model must be a true no-op for UIA
+    // clients; otherwise every frame would generate an accessibility storm.
+    const auto quietDeadline = std::chrono::steady_clock::now()
+        + std::chrono::milliseconds(200);
+    while (std::chrono::steady_clock::now() < quietDeadline) {
+        window.layout();
+        pumpNativeUi(window);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    bool duplicateFree = false;
+    {
+        std::lock_guard lock(state.mutex);
+        duplicateFree = state.totalEvents() == eventCountBeforeDuplicate;
+        state.releaseSubscriber = true;
+    }
+    state.changed.notify_all();
+
+    while (result.wait_for(std::chrono::milliseconds(0))
+           != std::future_status::ready) {
+        pumpNativeUi(window);
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::fputs("FAIL: native UIA event cleanup timed out\n", stderr);
+            std::fflush(stderr);
+            std::quick_exit(1);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    worker.join();
+    result.get();
+    std::lock_guard lock(state.mutex);
+    expect(boundsMatch,
+           "The UIA BoundingRectangle event must publish the moved HWND bounds");
+    expect(duplicateFree,
+           "Republishing an identical snapshot must not raise duplicate UIA events");
+    expect(state.complete(),
+           "Native UIA event delivery must cover property, focus, and structure changes");
 }
 
 void runUiaClientOffUiThread(HWND hwnd, bool validateFocus, RECT expectedButtonBounds)
@@ -616,6 +1114,7 @@ void testNativeUiaRoot()
     runUiaClientOffUiThread(
         hwnd, nativeFocusAcquired, expectedButtonBounds);
     exerciseNativeUiaActions(window, hwnd, actionState);
+    exerciseNativeUiaEvents(window, hwnd);
 }
 
 } // namespace
