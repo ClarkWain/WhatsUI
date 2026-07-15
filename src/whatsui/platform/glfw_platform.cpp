@@ -13,6 +13,9 @@
 #include "wui/paint_context.h"
 #include "wui/scheduler.h"
 #include "wui/whatscanvas_text.h"
+#if defined(_WIN32)
+#include "wui/windows_uia_provider.h"
+#endif
 
 #include <algorithm>
 #include <cassert>
@@ -300,6 +303,7 @@ public:
         if (nativeWindow_ == nullptr) {
             return;
         }
+        accessibilityBridge_ = std::make_unique<windows::UiaSnapshotBridge>(nativeWindow_);
 
         // GLFW uses GWLP_USERDATA itself, so a window property gives the
         // subclass procedure a private association without disturbing GLFW.
@@ -327,6 +331,7 @@ public:
     void shutdown() noexcept
     {
 #if defined(_WIN32)
+        accessibilityBridge_.reset();
         if (nativeWindow_ != nullptr) {
             // Restore only while this is still our subclass. GLFW destroys the
             // HWND after the PlatformWindow members, so this is deterministic.
@@ -350,6 +355,15 @@ public:
         onTextInput_ = std::move(onTextInput);
         onComposition_ = std::move(onComposition);
     }
+
+#if defined(_WIN32)
+    void publishAccessibilitySnapshot(AccessibilitySnapshot snapshot, WindowMetrics metrics)
+    {
+        if (accessibilityBridge_) {
+            accessibilityBridge_->publish(std::move(snapshot), metrics);
+        }
+    }
+#endif
 
     void activate() override
     {
@@ -483,6 +497,13 @@ private:
 
     LRESULT handleImeMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
+        if (message == WM_GETOBJECT && static_cast<LONG>(lParam) == UiaRootObjectId) {
+            if (accessibilityBridge_) {
+                if (const auto result = accessibilityBridge_->handleWmGetObject(wParam, lParam)) {
+                    return *result;
+                }
+            }
+        }
         if (!active_) {
             return CallWindowProcW(previousWindowProc_, hwnd, message, wParam, lParam);
         }
@@ -556,6 +577,7 @@ private:
 #if defined(_WIN32)
     HWND nativeWindow_{nullptr};
     WNDPROC previousWindowProc_{nullptr};
+    std::unique_ptr<windows::UiaSnapshotBridge> accessibilityBridge_;
 #endif
 };
 
@@ -645,6 +667,15 @@ public:
     [[nodiscard]] std::string title() const override { return title_; }
 
     void requestRedraw() override { needsRedraw_ = true; }
+
+    void publishAccessibilitySnapshot(AccessibilitySnapshot snapshot) override
+    {
+#if defined(_WIN32)
+        textInputSession_.publishAccessibilitySnapshot(std::move(snapshot), metrics());
+#else
+        (void)snapshot;
+#endif
+    }
 
     [[nodiscard]] RenderSurface& surface() override { return *surface_; }
     [[nodiscard]] Clipboard& clipboard() override { return clipboard_; }

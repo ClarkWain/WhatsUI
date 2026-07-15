@@ -161,7 +161,10 @@ if(WHATSUI_WITH_WHATSCANVAS)
     # private to the backend so headless and non-Windows consumers stay free
     # of Win32 dependencies.
     if(WIN32)
-        target_link_libraries(WhatsUIGlfw PRIVATE imm32)
+        target_sources(WhatsUIGlfw PRIVATE
+            src/whatsui/platform/windows_uia_provider.cpp
+        )
+        target_link_libraries(WhatsUIGlfw PRIVATE imm32 oleaut32 uiautomationcore)
     endif()
 
     target_include_directories(WhatsUIGlfw

@@ -75,6 +75,7 @@ an automated pass.
 | 2026-07-12, Windows/MSVC Release | Fresh Software-only WhatsCanvas package, then its external `WhatsCanvas::Software` consumer smoke. | Install, `find_package(WhatsCanvas)`, link, and consumer executable all succeeded. | WhatsUI package behavior, GLFW/OpenGL, or platform UI behavior. |
 | 2026-07-15, Windows/MSVC Release | Full WhatsUI/WhatsCanvas CTest with four workers after serializing shared-workspace script gates. | **65/65** tests passed, including DirectWrite/ClearType, Todo native performance, resize, visual review, package, and external-consumer gates. | Installed IME behavior, multi-monitor DPI movement, Narrator/UIA, tagged artifacts, or legal approval. |
 | 2026-07-15, Windows/MSVC Release | Fresh default Windows WhatsCanvas/GLFW install into an empty prefix, followed by a fresh `WhatsUI::Glfw` package consumer configure/build/run. | Default DirectWrite + HarfBuzz profile installed; external consumer configured, linked, and exited **0**. Package included WhatsUI LICENSE/NOTICE/SBOM/checklist and the WhatsCanvas license. | Complete transitive attribution, native-window launch, signed binaries, or release-owner approval. |
+| 2026-07-15, Windows/MSVC Release, native desktop | Real GLFW HWND queried from a separate MTA UI Automation client while the UI thread pumped messages, followed by the full Release suite and a fresh installed `WhatsUI::Glfw` consumer. | The named/focused WhatsUI Button, `FrameworkId`, control type, and screen bounds were verified; **67/67** CTest tests passed; the fresh external consumer linked the added Windows UIA dependencies and exited **0**. | Invoke/Toggle/editable Value patterns, UIA events/text ranges, the 100%/150%/200% Narrator matrix, or release approval. |
 
 Retain the command logs with the candidate tag before changing any engineering
 row above to checked. Re-run the matrix from a fresh output directory whenever
@@ -85,9 +86,9 @@ the package/export graph, compiler toolset, or submodule revision changes.
 The following are not complete merely because a headless archive or demo was
 created:
 
-- Windows UI Automation bridge and screen-reader sign-off (the explicit
-  engineering row above requires the native provider and its validation
-  evidence).
+- Interactive Windows UI Automation patterns/events/text ranges and
+  screen-reader sign-off. The read-only native tree and HWND smoke are now
+  engineering evidence, not Narrator release approval.
 - Final ABI/source compatibility and deprecation policy. A proposed policy is
   available in [COMPATIBILITY_POLICY_1_0_DRAFT.md](COMPATIBILITY_POLICY_1_0_DRAFT.md);
   it is not final until the release owner approves the exact candidate's

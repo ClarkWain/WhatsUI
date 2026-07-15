@@ -2,9 +2,12 @@
 
 ## Status
 
-WhatsUI has a tested, platform-neutral semantic snapshot, but **does not yet
-register a Windows UI Automation (UIA) provider**. Consequently, Narrator and
-other UIA clients must not be described as supported in this release.
+WhatsUI now projects its platform-neutral semantic snapshot into a native,
+read-only Windows UI Automation (UIA) fragment tree for the GLFW host. Native
+clients can discover named controls, roles, bounds, enabled/focused state,
+values, and checked state. Interactive UIA patterns, change events, rich text
+ranges, and the Narrator validation matrix are not complete, so full
+screen-reader support must not yet be claimed.
 
 The semantic projection is now a real runtime boundary rather than a
 hand-authored test-only tree:
@@ -18,18 +21,17 @@ hand-authored test-only tree:
   current `enabled`; controls with selection carry current `checked`; the
   focused framework node carries `focused`.
 
-This gives a Windows adapter a coherent, frame-safe input. It does not expose
-an OS accessibility tree by itself.
+`GlfwPlatformWindow` publishes this snapshot after every layout boundary. The
+Windows bridge copies it behind a mutex and constructs providers from immutable
+state, so UIA client threads never traverse mutable `Node` objects.
 
-## Why there is no truthful one-line GLFW bridge
+## Native bridge boundary
 
-The current GLFW host has no `WM_GETOBJECT` handler and does not link
-`uiautomationcore`. Its only native window subclass is owned by
-`GlfwTextInputSession`, which processes IMM32 messages then delegates to the
-previous GLFW window procedure. Returning a placeholder from `WM_GETOBJECT`,
-or returning `UiaHostProviderFromHwnd`, would expose at most the native HWND;
-it would not expose the custom-rendered WhatsUI controls. That would make
-automation clients believe accessibility exists while hiding the Todo controls.
+The existing GLFW Win32 subclass remains the single HWND message owner. It now
+multiplexes IMM32 messages and `WM_GETOBJECT`; UIA requests for
+`UiaRootObjectId` are routed to `UiaSnapshotBridge`, while unhandled messages
+continue to the previous GLFW window procedure. The backend links
+`uiautomationcore` only on Windows.
 
 UIA needs a real provider object that implements at least:
 
@@ -40,14 +42,14 @@ UIA needs a real provider object that implements at least:
    `GetRuntimeId`, focus, and point hit testing.
 3. `IRawElementProviderFragmentRoot` for `ElementProviderFromPoint` and
    `GetFocus`.
-4. `IInvokeProvider` for buttons, `IToggleProvider` for checkbox/radio/switch,
-   and `IValueProvider` for editable text fields. A read-only value is not a
-   substitute for text editing.
+4. The next phase adds `IInvokeProvider` for buttons, `IToggleProvider` for
+   checkbox/radio/switch, and `IValueProvider` for editable text fields. A
+   read-only value is not a substitute for text editing.
 
-The GLFW host must answer `WM_GETOBJECT` for `OBJID_CLIENT` with
-`UiaReturnRawElementProvider(hwnd, wParam, lParam, rootProvider)`. The IME and
-UIA handlers must be multiplexed through one owner of the HWND subclass; two
-independent `SetWindowLongPtrW(GWLP_WNDPROC, ...)` users are not safe.
+Fragment parents are calculated using the longest exposed visual-path prefix.
+This is important because non-semantic visual containers are absent from the
+snapshot. Bounds use the actual native-client/logical-size ratio independently
+on each axis, then `ClientToScreen`, avoiding a second 150% DPI scale.
 
 ## Implementation plan and acceptance gates
 
@@ -57,17 +59,17 @@ independent `SetWindowLongPtrW(GWLP_WNDPROC, ...)` users are not safe.
 - [x] Focus and modal isolation are reflected in window snapshots.
 - [x] Headless regression tests cover role/name/enabled/checked/value/focus.
 
-### B. Native read-only tree
+### B. Completed: native read-only tree
 
-- [ ] Add a Windows-only `Win32AccessibilityBridge` owned by
+- [x] Add a Windows-only `UiaSnapshotBridge` owned by
       `GlfwPlatformWindow`.
-- [ ] Add a single HWND subclass dispatcher that sends IME and `WM_GETOBJECT`
+- [x] Use the single HWND subclass path to send IME and `WM_GETOBJECT`
       to registered handlers in a defined order.
-- [ ] Keep an immutable, mutex-protected snapshot generated after layout; do
+- [x] Keep an immutable, mutex-protected snapshot generated after layout; do
       not let UIA client threads read mutable Nodes.
-- [ ] Implement UIA root/fragment navigation and map logical bounds to screen
+- [x] Implement UIA root/fragment navigation and map logical bounds to screen
       coordinates using the GLFW HWND and DPI scale.
-- [ ] Link `uiautomationcore` only on Windows.
+- [x] Link `uiautomationcore` only on Windows.
 
 ### C. Interactive controls and events
 
@@ -79,7 +81,9 @@ independent `SetWindowLongPtrW(GWLP_WNDPROC, ...)` users are not safe.
 
 ### D. Windows-native verification
 
-- [ ] Build a real GLFW Todo window and use `IUIAutomation::ElementFromHandle`.
+- [x] Build a real GLFW window and use `IUIAutomation::ElementFromHandle`; the
+      automated smoke requires a named/focused WhatsUI Button, framework id,
+      control type, and client-contained screen bounds.
 - [ ] Assert root name and every common Todo control's Name, ControlType,
       IsEnabled, ToggleState/Value, and bounding rectangle at 100%, 150%, and
       200% DPI.
@@ -88,5 +92,6 @@ independent `SetWindowLongPtrW(GWLP_WNDPROC, ...)` users are not safe.
 - [ ] Run a short Narrator smoke test manually only after the automated UIA
       checks pass.
 
-Until B is complete, the release checklist should continue to call Windows
-UIA/Narrator support a blocker rather than a delivered feature.
+Until C and the remaining D matrix are complete, the release checklist should
+continue to call Windows Narrator/screen-reader support a blocker rather than
+a delivered feature.

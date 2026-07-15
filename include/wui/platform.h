@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 
+#include "wui/accessibility.h"
 #include "wui/types.h"
 
 namespace wui {
@@ -100,6 +101,14 @@ public:
     // application name. Older/headless hosts may keep the empty default.
     [[nodiscard]] virtual std::string title() const { return {}; }
     virtual void requestRedraw() = 0;
+
+    // Native accessibility adapters consume an immutable semantic snapshot
+    // instead of reaching back into the mutable UI tree from an OS callback
+    // thread. Backends without a native bridge intentionally ignore it.
+    virtual void publishAccessibilitySnapshot(AccessibilitySnapshot snapshot)
+    {
+        (void)snapshot;
+    }
 
     [[nodiscard]] virtual RenderSurface& surface() = 0;
     [[nodiscard]] virtual Clipboard& clipboard() = 0;

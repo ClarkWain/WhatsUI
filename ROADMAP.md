@@ -123,7 +123,9 @@ all be true.
 
 The Todo reference-product work is complete. Automated release work now covers
 fresh Core/GLFW installs and consumers, package legal-material presence, and
-the real GLFW resize callback chain. The remaining release work is the native
-IME/DPI/UIA matrix, transitive legal/SBOM review, candidate tagging, and owner
-approval. New components must not bypass the runtime, input, and Windows text
-contracts.
+the real GLFW resize callback chain. A native read-only Windows UI Automation
+tree is now verified against a real GLFW HWND; interactive Invoke/Toggle/Value
+patterns, events, text ranges, and the Narrator/DPI matrix remain. The other
+release work is the native IME/DPI matrix, transitive legal/SBOM review,
+candidate tagging, and owner approval. New components must not bypass the
+runtime, input, Windows text, or accessibility snapshot contracts.

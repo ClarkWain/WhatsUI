@@ -90,6 +90,36 @@ if(TARGET WhatsUI::Glfw)
     )
 endif()
 
+# Exercise the real Win32 UI Automation client boundary against a GLFW HWND.
+# It gates the HWND root and the native projection of a named, focused child;
+# the UIA client runs away from the GLFW window thread while that thread pumps.
+if(WIN32 AND TARGET WhatsUI::Glfw)
+    add_executable(WhatsUIWindowsUiaNativeSmokeTests
+        windows_uia_native_smoke_tests.cpp
+    )
+
+    target_link_libraries(WhatsUIWindowsUiaNativeSmokeTests
+        PRIVATE
+            WhatsUI::Glfw
+            uiautomationcore
+            ole32
+            oleaut32
+            user32
+    )
+
+    target_compile_features(WhatsUIWindowsUiaNativeSmokeTests PRIVATE cxx_std_17)
+
+    add_test(
+        NAME whatsui_windows_uia_native_smoke_tests
+        COMMAND WhatsUIWindowsUiaNativeSmokeTests
+    )
+    set_tests_properties(whatsui_windows_uia_native_smoke_tests PROPERTIES
+        LABELS "native;windows;uia;accessibility;glfw"
+        SKIP_RETURN_CODE 77
+        TIMEOUT 30
+    )
+endif()
+
 add_executable(WhatsUIScrollViewTests
     scroll_view_tests.cpp
 )

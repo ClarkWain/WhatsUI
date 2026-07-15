@@ -343,7 +343,11 @@ AccessibilitySnapshot UiWindow::accessibilitySnapshot() const
         return snapshot;
     }
 
-    auto visualSnapshot = snapshotAccessibilityTree(*activeRoot, focusManager_.focused());
+    // Framework focus is retained while a native window is inactive, but UIA
+    // HasKeyboardFocus must only identify it while that HWND owns focus.
+    const Node* nativeFocusedNode = platformWindow_->isFocused()
+        ? focusManager_.focused() : nullptr;
+    auto visualSnapshot = snapshotAccessibilityTree(*activeRoot, nativeFocusedNode);
     for (auto& entry : visualSnapshot) {
         entry.path.insert(entry.path.begin(), 0);
         ++entry.depth;
@@ -381,12 +385,14 @@ void UiWindow::layout()
 
     if (!pageNeedsLayout && !overlaysNeedLayout) {
         frameStats_.layoutMilliseconds = 0.0;
+        platformWindow_->publishAccessibilitySnapshot(accessibilitySnapshot());
         return;
     }
     frameStats_.layoutMilliseconds = measureMilliseconds([&] {
         if (pageNeedsLayout) uiRoot_.layout(bounds);
         if (overlaysNeedLayout) overlayHost_.layout(bounds);
     });
+    platformWindow_->publishAccessibilitySnapshot(accessibilitySnapshot());
 }
 
 void UiWindow::paint(PaintContext& context)
