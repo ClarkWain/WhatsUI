@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "wui/runtime.h"
+#include "wui/icons.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
 
@@ -69,20 +70,9 @@ void drawFocusRing(PaintContext& context, const RectF& rect, const Theme& curren
 
 void drawChevron(PaintContext& context, float cx, float cy, Color color, bool up)
 {
-    const float direction = up ? -1.0f : 1.0f;
-    context.strokePolyline(
-        {{cx - 4.0f, cy - direction * 2.0f},
-         {cx, cy + direction * 2.0f},
-         {cx + 4.0f, cy - direction * 2.0f}},
-        theme().stroke.thick, color);
-}
-
-void drawCheck(PaintContext& context, float x, float y, Color color)
-{
-    context.strokePolyline(
-        {{x, y + 4.5f}, {x + 3.0f, y + 7.5f},
-         {x + 8.0f, y + 1.5f}},
-        theme().stroke.thick, color);
+    drawIcon(context, up ? IconName::ChevronUp : IconName::ChevronDown,
+             {cx - 8.0f, cy - 8.0f, 16.0f, 16.0f}, color,
+             IconSize::Size16);
 }
 
 [[nodiscard]] std::unique_ptr<Popup> makeListPopup(
@@ -316,7 +306,11 @@ void ListBox::paint(PaintContext& context)
                 current.typography.caption1.weight,
                 current.typography.caption1.family);
         }
-        if (selected) drawCheck(context, row.x + row.width - 20.0f, row.y + (row.height - 9.0f) * .5f, current.colors.brandForeground1);
+        if (selected)
+            drawIcon(context, IconName::Checkmark,
+                     {row.x + row.width - 28.0f,
+                      row.y + (row.height - 20.0f) * 0.5f, 20.0f, 20.0f},
+                     current.colors.brandForeground1, IconSize::Size20);
     }
     context.restoreTo(checkpoint);
     clearDirty(DirtyFlag::Paint);

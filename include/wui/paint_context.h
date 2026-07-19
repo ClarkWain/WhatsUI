@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "wui/frame_stats.h"
+#include "wui/theme_access.h"
 #include "wui/types.h"
 
 #ifdef WHATSUI_HAS_WHATSCANVAS
@@ -22,6 +23,28 @@ namespace wui {
 
 class PaintContext {
 public:
+    [[nodiscard]] std::string_view resolvedTextFamily(std::string_view requested = {}) const noexcept
+    {
+        const std::string_view fallback = activeTextFallbackFamily();
+        const std::string_view preferred = activeTextFamily().empty()
+            ? fallback : activeTextFamily();
+        if (requested.empty()) requested = preferred;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        // The portable backend registers platform files under stable
+        // WhatsCanvas aliases rather than their OS family names. Map only the
+        // theme-owned defaults; explicit custom registered families remain
+        // untouched.
+        if (canvas_ != nullptr && canvas_->textBackend() != wsc::Canvas::TextBackend::DirectWrite) {
+            if (requested == "Segoe UI Variable" || requested == "Segoe UI") {
+                return wsc::FontSystem::kDefaultPrimaryFamily;
+            }
+            if (requested == activeMonospaceFamily()) {
+                return wsc::FontSystem::kDefaultMonoFamily;
+            }
+        }
+#endif
+        return requested;
+    }
     explicit PaintContext(float scaleFactor = 1.0f) noexcept
         : scaleFactor_(scaleFactor > 0.0f ? scaleFactor : 1.0f)
         , canvasCoordinateScale_(scaleFactor_)
@@ -56,17 +79,21 @@ public:
         return canvasCoordinateScale_;
     }
 
-    // WhatsCanvas exposes TOP/MIDDLE/BOTTOM text anchors rather than a
-    // typographic baseline. WhatsUI therefore uses BOTTOM consistently: this
-    // returns the draw y that vertically centres the renderer's real line box
-    // in `lineBox`. It is intentionally shared by buttons, inputs and toggle
-    // labels so Fluent controls cannot drift apart when Windows resolves a
-    // different font metric than the nominal point size.
-    [[nodiscard]] float centeredTextBottom(const std::string& text, const RectF& lineBox,
-                                           float textSize, int fontWeight = 400,
-                                           std::string_view fontFamily = "Segoe UI") const noexcept
+    // Return the baseline which centres the font's ascent/descent box inside
+    // `lineBox`. WhatsCanvas' portable backend reports ascent above the
+    // baseline as negative, while DirectWrite reports its magnitude as
+    // positive, so normalize both before calculating the baseline.
+    //
+    // Do not centre with lineHeight / 2: that treats the entire line height as
+    // ascent magnitude, ignoring descent and line gap, and pushes 14-DIP
+    // Fluent labels down by roughly 4 DIP inside a 32-DIP control.
+    [[nodiscard]] float centeredTextBaseline(const std::string& text, const RectF& lineBox,
+                                             float textSize, int fontWeight = 400,
+                                             std::string_view fontFamily = {}) const noexcept
     {
-        float lineHeight = textSize * 1.25f;
+        fontFamily = resolvedTextFamily(fontFamily);
+        float ascent = -textSize * 0.8f;
+        float descent = textSize * 0.2f;
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ != nullptr && !text.empty()) {
             wsc::Paint paint;
@@ -74,13 +101,29 @@ public:
             paint.setFontFamily(std::string(fontFamily));
             paint.setFontWeight(fontWeight);
             const auto metrics = canvas_->measureTextMetrics(text, paint);
-            const float physicalHeight = metrics.lineHeight > 0.0f ? metrics.lineHeight : metrics.height;
-            if (physicalHeight > 0.0f) {
-                lineHeight = physicalHeight / canvasCoordinateScale_;
+            const float measuredAscent = std::abs(metrics.ascent);
+            const float measuredDescent = std::abs(metrics.descent);
+            if (measuredAscent > 0.0f) {
+                ascent = -measuredAscent / canvasCoordinateScale_;
+            }
+            if (measuredDescent > 0.0f) {
+                descent = measuredDescent / canvasCoordinateScale_;
             }
         }
 #endif
-        return lineBox.y + (lineBox.height + lineHeight) * 0.5f;
+        const float lineCenter = lineBox.y + lineBox.height * 0.5f;
+        const float fontBoxCenterFromBaseline = (ascent + descent) * 0.5f;
+        return lineCenter - fontBoxCenterFromBaseline;
+    }
+
+    // Compatibility alias retained for existing call sites. The returned
+    // coordinate has always been passed to WhatsCanvas' BOTTOM mode, whose
+    // glyph-atlas implementation treats it as the typographic baseline.
+    [[nodiscard]] float centeredTextBottom(const std::string& text, const RectF& lineBox,
+                                           float textSize, int fontWeight = 400,
+                                           std::string_view fontFamily = {}) const noexcept
+    {
+        return centeredTextBaseline(text, lineBox, textSize, fontWeight, fontFamily);
     }
 
     void setScaleFactor(float scaleFactor) noexcept
@@ -366,7 +409,7 @@ public:
     }
 
     void drawText(const std::string& text, float x, float y, float textSize, Color color,
-                  int fontWeight = 400, std::string_view fontFamily = "Segoe UI")
+                  int fontWeight = 400, std::string_view fontFamily = {})
     {
         ++paintStats_.commandCount;
         ++paintStats_.textDrawCalls;
@@ -374,6 +417,7 @@ public:
         if (canvas_ == nullptr) {
             return;
         }
+        fontFamily = resolvedTextFamily(fontFamily);
         const auto started = std::chrono::steady_clock::now();
         wsc::CanvasAdapter adapter(*canvas_);
         adapter.setFillColor(wsc::Color(color.r, color.g, color.b, color.a));

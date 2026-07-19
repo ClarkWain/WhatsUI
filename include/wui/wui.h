@@ -10,6 +10,7 @@
 #include "wui/events.h"
 #include "wui/feedback.h"
 #include "wui/form_feedback.h"
+#include "wui/icons.h"
 #include "wui/drawer.h"
 #include "wui/node.h"
 #include "wui/navigation.h"

@@ -117,6 +117,11 @@ if(WIN32 AND TARGET WhatsUI::Glfw)
         LABELS "native;windows;uia;accessibility;glfw"
         SKIP_RETURN_CODE 77
         TIMEOUT 30
+        # UI Automation observes the process-wide Windows desktop event
+        # stream. Other concurrently created GLFW HWNDs can make its
+        # duplicate-event assertion nondeterministic, so keep this native
+        # boundary test isolated even when CTest is invoked with -j.
+        RUN_SERIAL TRUE
     )
 endif()
 
@@ -283,10 +288,33 @@ add_test(NAME whatsui_avatar_group_tests COMMAND WhatsUIAvatarGroupTests)
 set_tests_properties(whatsui_avatar_group_tests PROPERTIES
     LABELS "fluent;avatar;group;presence;accessibility")
 
+add_executable(WhatsUIFluentIconsTests fluent_icons_tests.cpp)
+target_link_libraries(WhatsUIFluentIconsTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentIconsTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_icons COMMAND WhatsUIFluentIconsTests)
+set_tests_properties(whatsui_fluent_icons PROPERTIES
+    LABELS "fluent;icons;api;accessibility")
+
 # WhatsUI is a static library. When the optional WhatsCanvas bridge is enabled,
 # behavior tests that pull widget paint objects must also resolve the bridge's
 # Canvas symbols even when they do not create a real Canvas themselves.
 if(TARGET WhatsCanvasSoftware)
+    target_link_libraries(WhatsUIFluentIconsTests PRIVATE WhatsCanvas::Software)
+    add_executable(WhatsUIFluentIconsVisualTests fluent_icons_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentIconsVisualTests
+        PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentIconsVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_icons_visual
+        COMMAND WhatsUIFluentIconsVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_icons_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_icons_visual_150dpi
+        COMMAND WhatsUIFluentIconsVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_icons_review_150dpi.ppm 1.5)
+    set_tests_properties(
+        whatsui_fluent_icons_visual
+        whatsui_fluent_icons_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;icons;dpi")
+
     target_link_libraries(WhatsUIFluentFieldMessageBarTests PRIVATE WhatsCanvas::Software)
     add_executable(WhatsUIFluentFieldMessageBarVisualTests fluent_field_messagebar_visual_tests.cpp)
     target_link_libraries(WhatsUIFluentFieldMessageBarVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
@@ -520,6 +548,31 @@ if(TARGET WhatsCanvasSoftware)
     set_tests_properties(whatsui_fluent_component_visual_matrix PROPERTIES LABELS "visual;software;fluent")
     set_tests_properties(whatsui_fluent_component_visual_matrix_150dpi PROPERTIES LABELS "visual;software;fluent;dpi")
 
+    add_executable(WhatsUIFluentVisualAcceptanceTests
+        fluent_visual_acceptance_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentVisualAcceptanceTests
+        PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentVisualAcceptanceTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_visual_acceptance
+        COMMAND WhatsUIFluentVisualAcceptanceTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_visual_acceptance.ppm 1.0)
+    add_test(NAME whatsui_fluent_visual_acceptance_125dpi
+        COMMAND WhatsUIFluentVisualAcceptanceTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_visual_acceptance_125dpi.ppm 1.25)
+    add_test(NAME whatsui_fluent_visual_acceptance_150dpi
+        COMMAND WhatsUIFluentVisualAcceptanceTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_visual_acceptance_150dpi.ppm 1.5)
+    add_test(NAME whatsui_fluent_visual_acceptance_200dpi
+        COMMAND WhatsUIFluentVisualAcceptanceTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_visual_acceptance_200dpi.ppm 2.0)
+    set_tests_properties(
+        whatsui_fluent_visual_acceptance
+        whatsui_fluent_visual_acceptance_125dpi
+        whatsui_fluent_visual_acceptance_150dpi
+        whatsui_fluent_visual_acceptance_200dpi
+        PROPERTIES LABELS "visual;software;fluent;geometry;acceptance;dpi")
+
     add_executable(WhatsUITextShapingTests
         text_shaping_tests.cpp
     )
@@ -534,6 +587,29 @@ if(TARGET WhatsCanvasSoftware)
         COMMAND WhatsUITextShapingTests
     )
     set_tests_properties(whatsui_text_shaping_tests PROPERTIES LABELS "text;unicode;software")
+
+    # Unlike the deterministic Software golden tests, this selects the real
+    # Windows DirectWrite text backend inside WhatsCanvas and verifies the
+    # one-DPR Canvas contract at 100/125/150/200%. It does not need a visible
+    # GLFW window, making it reliable in Windows CI sessions without a desktop.
+    if(WIN32)
+        add_executable(WhatsUIWindowsNativeTextDpiTests
+            windows_native_text_dpi_tests.cpp
+        )
+        target_link_libraries(WhatsUIWindowsNativeTextDpiTests
+            PRIVATE
+                WhatsUI::WhatsUI
+                WhatsCanvas::Software
+                dwrite
+        )
+        target_compile_features(WhatsUIWindowsNativeTextDpiTests PRIVATE cxx_std_17)
+        add_test(NAME whatsui_windows_native_text_dpi_tests
+            COMMAND WhatsUIWindowsNativeTextDpiTests)
+        set_tests_properties(whatsui_windows_native_text_dpi_tests PROPERTIES
+            LABELS "native;windows;directwrite;text;dpi"
+            TIMEOUT 30
+        )
+    endif()
 
     add_executable(WhatsUITextInputCompositionVisualTests
         text_input_composition_visual_tests.cpp

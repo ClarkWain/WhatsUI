@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "wui/types.h"
@@ -49,6 +50,17 @@ public:
         (void)fontWeight;
         return measureText(text, fontSize);
     }
+
+    // Family-aware measurement is additive: older hosts which only implement
+    // the overloads above retain their existing behaviour, while native hosts
+    // can keep Text layout in lockstep with the exact family sent to paint.
+    [[nodiscard]] virtual TextExtents measureText(const std::string& text, float fontSize,
+                                                  int fontWeight,
+                                                  std::string_view fontFamily) const
+    {
+        (void)fontFamily;
+        return measureText(text, fontSize, fontWeight);
+    }
 };
 
 // Optional extension for a renderer that owns Unicode line breaking and text
@@ -82,6 +94,23 @@ public:
     {
         (void)fontWeight;
         return layoutText(text, fontSize, availableWidth, lineHeight, maxLines, ellipsize);
+    }
+
+    // See TextMeasurer::measureText(..., fontFamily). The family is placed at
+    // the end so existing weighted layout calls remain source-compatible.
+    [[nodiscard]] virtual std::vector<TextLayoutLine> layoutText(
+        const std::string& text,
+        float fontSize,
+        int fontWeight,
+        float availableWidth,
+        float lineHeight,
+        std::size_t maxLines,
+        bool ellipsize,
+        std::string_view fontFamily) const
+    {
+        (void)fontFamily;
+        return layoutText(text, fontSize, fontWeight, availableWidth, lineHeight, maxLines,
+                          ellipsize);
     }
 };
 

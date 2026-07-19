@@ -33,6 +33,7 @@
 #include "wui/basic_controls.h"
 #include "wui/feedback.h"
 #include "wui/form_feedback.h"
+#include "wui/icons.h"
 #include "wui/drawer.h"
 #include "wui/badge.h"
 #include "wui/date_time.h"
@@ -224,6 +225,16 @@ public:
     {
         return std::move(*this).bind(state, [](const std::string& value) { return value; });
     }
+};
+
+class Icon : public BuilderBase<Icon, wui::Icon> {
+public:
+    explicit Icon(wui::IconName name = wui::IconName::Info)
+        : BuilderBase(name) {}
+    Icon&& name(wui::IconName value) && { node_->setName(value); return std::move(self()); }
+    Icon&& size(wui::IconSize value) && { node_->setSize(value); return std::move(self()); }
+    Icon&& style(wui::IconStyle value) && { node_->setStyle(value); return std::move(self()); }
+    Icon&& color(Color value) && { node_->setColor(value); return std::move(self()); }
 };
 
 class Image : public BuilderBase<Image, wui::Image> {
@@ -924,6 +935,9 @@ public:
 class IconButton : public BuilderBase<IconButton, wui::IconButton> {
 public:
     explicit IconButton(std::string icon = {}, std::string accessibleLabel = {}) : BuilderBase(std::move(icon), std::move(accessibleLabel)) {}
+    explicit IconButton(wui::IconName icon, std::string accessibleLabel = {}) : BuilderBase(icon, std::move(accessibleLabel)) {}
+    IconButton&& icon(wui::IconName value) && { node_->setIcon(value); return std::move(self()); }
+    IconButton&& iconStyle(wui::IconStyle value) && { node_->setIconStyle(value); return std::move(self()); }
     IconButton&& checked(bool value) && { node_->setChecked(value); return std::move(self()); }
     IconButton&& onClick(std::function<void()> handler) && { node_->onClick(std::move(handler)); return std::move(self()); }
 };

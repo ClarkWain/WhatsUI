@@ -71,7 +71,7 @@ struct EditableLine {
 
 [[nodiscard]] float editableLineHeight(const Theme& current) noexcept
 {
-    return std::max(current.typography.body1.lineHeight, current.typography.body * 1.25f);
+    return current.typography.body1.lineHeight;
 }
 
 // Ask the platform shaper for exactly the same wrap decisions it uses for
@@ -586,7 +586,7 @@ float TextInput::maximumVerticalScrollOffset() const noexcept
     const auto& current = theme();
     const RectF viewport = textViewport(bounds(), current, true);
     const float lineHeight = editableLineHeight(current);
-    const auto lines = editableLines(controller_.text(), current.typography.body,
+    const auto lines = editableLines(controller_.text(), current.typography.body1.size,
                                      viewport.width, lineHeight, true);
     return maximumVerticalOffset(lines, lineHeight, viewport.height);
 }
@@ -628,12 +628,12 @@ RectF TextInput::caretRect() const noexcept
     const auto& current = theme();
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     const RectF viewport = textViewport(bounds(), current, focused);
-    const auto lines = editableLines(controller_.text(), current.typography.body, viewport.width,
+    const auto lines = editableLines(controller_.text(), current.typography.body1.size, viewport.width,
                                      editableLineHeight(current), multiline_);
     const auto lineIndex = lineIndexForOffset(lines, controller_.selection().end);
     const EditableLine line = lines.empty() ? EditableLine{} : lines[lineIndex];
     const float caretX = linePrefixWidth(controller_.text(), line, controller_.selection().end,
-                                         current.typography.body);
+                                         current.typography.body1.size);
     const float horizontalOffset = multiline_ ? 0.0f : horizontalTextOffset(caretX, viewport.width);
     const float lineHeight = editableLineHeight(current);
     float verticalOffset = 0.0f;
@@ -657,9 +657,9 @@ SizeF TextInput::measure(const Constraints& constraints) const
     const float available = std::isfinite(constraints.maxWidth)
         ? std::max(1.0f, constraints.maxWidth - current.controls.horizontalPadding * 2.0f)
         : 4096.0f;
-    const auto lines = editableLines(controller_.text(), current.typography.body, available,
+    const auto lines = editableLines(controller_.text(), current.typography.body1.size, available,
                                      editableLineHeight(current), multiline_);
-    float widest = measuredTextWidth(placeholder_, placeholder_.size(), current.typography.body);
+    float widest = measuredTextWidth(placeholder_, placeholder_.size(), current.typography.body1.size);
     for (const auto& line : lines) widest = std::max(widest, line.width);
     const float lineHeight = editableLineHeight(current);
     const float textHeight = multiline_
@@ -711,11 +711,12 @@ void TextInput::paint(PaintContext& context)
     const auto composition = controller_.composition();
     const RectF viewport = textViewport(bounds(), current, focused);
     const float lineHeight = editableLineHeight(current);
-    const auto lines = editableLines(controller_.text(), current.typography.body, viewport.width,
+    const auto lines = editableLines(controller_.text(), current.typography.body1.size, viewport.width,
                                      lineHeight, multiline_);
     const auto caretLineIndex = lineIndexForOffset(lines, selection.end);
     const EditableLine caretLine = lines.empty() ? EditableLine{} : lines[caretLineIndex];
-    const float selectionEndX = linePrefixWidth(controller_.text(), caretLine, selection.end, current.typography.body);
+    const float selectionEndX = linePrefixWidth(controller_.text(), caretLine, selection.end,
+                                                current.typography.body1.size);
     const float horizontalOffset = (!multiline_ && !showPlaceholder)
         ? horizontalTextOffset(selectionEndX, viewport.width) : 0.0f;
     float verticalOffset = 0.0f;
@@ -753,25 +754,40 @@ void TextInput::paint(PaintContext& context)
             const auto selectedStart = std::max(selection.start, line.start);
             const auto selectedEnd = std::min(selection.end, lineEnd);
             if (selectedEnd > selectedStart) {
-                const float startX = linePrefixWidth(controller_.text(), line, selectedStart, current.typography.body);
-                const float endX = linePrefixWidth(controller_.text(), line, selectedEnd, current.typography.body);
+                const float startX = linePrefixWidth(controller_.text(), line, selectedStart,
+                                                     current.typography.body1.size);
+                const float endX = linePrefixWidth(controller_.text(), line, selectedEnd,
+                                                   current.typography.body1.size);
                 context.fillRect({viewport.x + startX, multiline_ ? lineY : viewport.y,
                                   std::max(1.0f, endX - startX), multiline_ ? lineHeight : viewport.height}, selectionColor);
             }
         }
         if (!showPlaceholder && line.length > 0) {
             const std::string lineText = controller_.text().substr(line.start, line.length);
-            context.drawText(lineText, viewport.x, context.centeredTextBottom(lineText, lineBox, current.typography.body),
-                             current.typography.body, enabled ? current.colors.text : current.colors.textDisabled);
+            context.drawText(lineText, viewport.x,
+                             context.centeredTextBottom(lineText, lineBox,
+                                                        current.typography.body1.size,
+                                                        current.typography.body1.weight,
+                                                        current.typography.body1.family),
+                             current.typography.body1.size,
+                             enabled ? current.colors.text : current.colors.textDisabled,
+                             current.typography.body1.weight,
+                             current.typography.body1.family);
         }
         if (focused && enabled && !composition.empty()) {
             const auto compositionStart = std::max(composition.start, line.start);
             const auto compositionEnd = std::min(composition.end, lineEnd);
             if (compositionEnd > compositionStart) {
-                const float startX = linePrefixWidth(controller_.text(), line, compositionStart, current.typography.body);
-                const float endX = linePrefixWidth(controller_.text(), line, compositionEnd, current.typography.body);
+                const float startX = linePrefixWidth(controller_.text(), line, compositionStart,
+                                                     current.typography.body1.size);
+                const float endX = linePrefixWidth(controller_.text(), line, compositionEnd,
+                                                   current.typography.body1.size);
                 context.fillRect({viewport.x + startX,
-                                  context.centeredTextBottom("Ag", lineBox, current.typography.body) + current.controls.focusInset,
+                                  context.centeredTextBottom("Ag", lineBox,
+                                                             current.typography.body1.size,
+                                                             current.typography.body1.weight,
+                                                             current.typography.body1.family)
+                                      + current.controls.focusInset,
                                   std::max(1.0f, endX - startX), current.stroke.thin}, current.colors.brandForeground1);
             }
         }
@@ -780,8 +796,10 @@ void TextInput::paint(PaintContext& context)
         const RectF placeholderBox{viewport.x, multiline_ ? viewport.y
             : viewport.y + std::max(0.0f, (viewport.height - lineHeight) * 0.5f), viewport.width, lineHeight};
         context.drawText(placeholder_, viewport.x, context.centeredTextBottom(placeholder_, placeholderBox,
-                         current.typography.body), current.typography.body,
-                         enabled ? current.colors.textMuted : current.colors.textDisabled);
+                         current.typography.body1.size, current.typography.body1.weight,
+                         current.typography.body1.family), current.typography.body1.size,
+                         enabled ? current.colors.textMuted : current.colors.textDisabled,
+                         current.typography.body1.weight, current.typography.body1.family);
     }
     if (focused && enabled && selection.empty() && caretVisible_) {
         const float caretX = viewport.x + selectionEndX - horizontalOffset;
@@ -801,7 +819,7 @@ std::size_t TextInput::caretAt(PointF point) const noexcept
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     const RectF viewport = textViewport(bounds(), theme(), focused);
     const float lineHeight = editableLineHeight(theme());
-    const auto lines = editableLines(controller_.text(), theme().typography.body, viewport.width,
+    const auto lines = editableLines(controller_.text(), theme().typography.body1.size, viewport.width,
                                      lineHeight, multiline_);
     if (lines.empty()) return 0;
     const float verticalOffset = multiline_
@@ -814,11 +832,11 @@ std::size_t TextInput::caretAt(PointF point) const noexcept
     const auto lineIndex = std::min(localLine, lines.size() - 1);
     const auto& line = lines[lineIndex];
     const float existingCaretX = linePrefixWidth(controller_.text(), line, controller_.selection().end,
-                                                 theme().typography.body);
+                                                 theme().typography.body1.size);
     const float horizontalOffset = multiline_ ? 0.0f : horizontalTextOffset(existingCaretX, viewport.width);
     const float localX = std::max(0.0f, point.x - viewport.x + horizontalOffset);
     const auto lineText = controller_.text().substr(line.start, line.length);
-    return line.start + nearestTextOffset(lineText, localX, theme().typography.body);
+    return line.start + nearestTextOffset(lineText, localX, theme().typography.body1.size);
 }
 
 EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& context)
@@ -855,7 +873,8 @@ EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& c
         {
             const float lineHeight = editableLineHeight(theme());
             const RectF viewport = textViewport(bounds(), theme(), true);
-            const auto lines = editableLines(controller_.text(), theme().typography.body, viewport.width, lineHeight, true);
+            const auto lines = editableLines(controller_.text(), theme().typography.body1.size,
+                                             viewport.width, lineHeight, true);
             const float maximum = maximumVerticalOffset(lines, lineHeight, viewport.height);
             const float previous = verticalScrollOffset_;
             const float next = std::clamp(verticalScrollOffset_ - event.scrollDelta.y, 0.0f, maximum);
@@ -906,7 +925,7 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
         }
         const auto& current = theme();
         const RectF viewport = textViewport(bounds(), current, true);
-        const auto lines = editableLines(controller_.text(), current.typography.body, viewport.width,
+        const auto lines = editableLines(controller_.text(), current.typography.body1.size, viewport.width,
                                          editableLineHeight(current), true);
         if (lines.empty()) return;
         const auto index = lineIndexForOffset(lines, controller_.selection().end);
@@ -916,7 +935,7 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
     const auto moveVertically = [this, extendSelection](int direction) {
         const auto& current = theme();
         const RectF viewport = textViewport(bounds(), current, true);
-        const auto lines = editableLines(controller_.text(), current.typography.body, viewport.width,
+        const auto lines = editableLines(controller_.text(), current.typography.body1.size, viewport.width,
                                          editableLineHeight(current), true);
         if (lines.empty()) return;
         const auto currentIndex = lineIndexForOffset(lines, controller_.selection().end);
@@ -924,9 +943,10 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
             ? currentIndex - std::min<std::size_t>(currentIndex, 1)
             : std::min(lines.size() - 1, currentIndex + 1);
         const float x = linePrefixWidth(controller_.text(), lines[currentIndex], controller_.selection().end,
-                                        current.typography.body);
+                                        current.typography.body1.size);
         const auto lineText = controller_.text().substr(lines[targetIndex].start, lines[targetIndex].length);
-        controller_.setCaret(lines[targetIndex].start + nearestTextOffset(lineText, x, current.typography.body),
+        controller_.setCaret(lines[targetIndex].start
+                                 + nearestTextOffset(lineText, x, current.typography.body1.size),
                              extendSelection);
     };
     switch (event.keyCode) {

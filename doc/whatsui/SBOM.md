@@ -17,6 +17,7 @@ select a project license. See [Release checklist](RELEASE_CHECKLIST.md).
 
 | Component | Relationship / activation | Source location or upstream pointer | License evidence to review | Release note |
 | --- | --- | --- | --- | --- |
+| Microsoft Fluent UI System Icons 1.1.328 | Bundled default semantic icon font; Regular and Filled faces | `assets/fonts/fluent-system-icons`; upstream `microsoft/fluentui-system-icons` tag `1.1.328` | `assets/fonts/fluent-system-icons/LICENSE` and `NOTICE` (MIT) | Regular TTF SHA-256 `8ebc946d0de5ff7cd8fa653020f7c4046c71e27574ac6a9013aa727021290c32`; Filled TTF SHA-256 `348ac72ae7a3ec4755f3aaba870bba15e64ed7a3adb522e4166f2a744451ac99`. CMake rejects unreviewed font substitutions. |
 | WhatsCanvas | Git submodule; required by `WHATSUI_WITH_WHATSCANVAS=ON` | `third_party/WhatsCanvas`, declared in root `.gitmodules` | `third_party/WhatsCanvas/LICENSE` | Windows package export is validated; record the submodule commit in the release manifest. |
 | FreeType | WhatsCanvas vendored/submodule dependency; used by advanced text when configured | `third_party/WhatsCanvas/third_party/freetype` | `LICENSE.TXT` in that directory | Inclusion depends on the WhatsCanvas build configuration. |
 | HarfBuzz | WhatsCanvas vendored/submodule dependency; requested by advanced text by default | `third_party/WhatsCanvas/third_party/harfbuzz` | `COPYING` in that directory | Inclusion depends on the WhatsCanvas build configuration. |

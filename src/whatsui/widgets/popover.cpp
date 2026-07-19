@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "wui/icons.h"
 #include "wui/runtime.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
@@ -298,8 +299,8 @@ void TeachingPopover::paint(PaintContext& context)
     if (!stepText_.empty()) context.drawText(stepText_, panel.x + kPadding, panel.y + kPadding * 0.5f + current.typography.caption1.lineHeight,
         current.typography.caption1.size, current.colors.brandForeground1, current.typography.caption1.weight);
     const auto dismiss = dismissBounds();
-    context.drawText("x", dismiss.x + 7.0f, context.centeredTextBottom("x", dismiss, current.typography.body1.size,
-        current.typography.body1.weight), current.typography.body1.size, current.colors.neutralForeground2, current.typography.body1.weight);
+    drawIcon(context, IconName::Dismiss, dismiss,
+             current.colors.neutralForeground2, IconSize::Size16);
     const auto drawButton = [&](const RectF& rect, const std::string& label, bool primary) {
         if (rect.width <= 0.0f) return;
         context.fillRoundRect(rect, current.radius.medium, primary ? current.colors.brandBackground.rest : current.colors.neutralBackground1.hover);

@@ -52,6 +52,38 @@ bool pixelIs(const std::vector<unsigned char>& rgba, int width, float scale,
         && rgba[offset + 1] == color.g && rgba[offset + 2] == color.b
         && rgba[offset + 3] == color.a;
 }
+
+// The visual matrix deliberately runs with the Software backend at both 100%
+// and 150%.  Looking for dark glyph pixels in a control's content box gives us
+// a renderer-independent check that its actual ink (not merely its nominal
+// baseline) is vertically centred.  This catches the otherwise subtle case
+// where a BOTTOM-anchored renderer receives a line-height-based y coordinate.
+bool darkInkIsVerticallyCentered(const std::vector<unsigned char>& rgba, int width,
+                                 float scale, wui::RectF inkRegion,
+                                 float expectedCenterY, float tolerance,
+                                 int maxChannel = 105)
+{
+    const int height = static_cast<int>(rgba.size() / 4U / static_cast<std::size_t>(width));
+    const int left = std::clamp(static_cast<int>(std::lround(inkRegion.x * scale)), 0, width);
+    const int top = std::clamp(static_cast<int>(std::lround(inkRegion.y * scale)), 0, height);
+    const int right = std::clamp(static_cast<int>(std::lround((inkRegion.x + inkRegion.width) * scale)), 0, width);
+    const int bottom = std::clamp(static_cast<int>(std::lround((inkRegion.y + inkRegion.height) * scale)), 0, height);
+    int inkTop = height;
+    int inkBottom = -1;
+    for (int y = top; y < bottom; ++y) {
+        for (int x = left; x < right; ++x) {
+            const auto offset = static_cast<std::size_t>((y * width + x) * 4);
+            if (rgba[offset] <= maxChannel && rgba[offset + 1] <= maxChannel
+                && rgba[offset + 2] <= maxChannel) {
+                inkTop = std::min(inkTop, y);
+                inkBottom = std::max(inkBottom, y);
+            }
+        }
+    }
+    if (inkBottom < inkTop) return false;
+    const float inkCenter = (static_cast<float>(inkTop) + static_cast<float>(inkBottom)) * 0.5f / scale;
+    return std::abs(inkCenter - expectedCenterY) <= tolerance;
+}
 }
 
 int main(int argc, char** argv)
@@ -223,6 +255,35 @@ int main(int argc, char** argv)
         // opaque focus-inner rectangle.
         if (!pixelIs(pixels, width, scale, 330, 1068,
                      wui::theme().colors.neutralBackground2.rest)) return 4;
+        // State surfaces and focus geometry must remain distinct: pressed is
+        // the documented neutral pressed token, while focus retains both the
+        // outer white and inner black ring outside the control's fill.
+        if (!pixelIs(pixels, width, scale, 300, 94,
+                     wui::theme().colors.neutralBackground1.pressed)
+            || !pixelIs(pixels, width, scale, 416, 83,
+                        wui::theme().colors.strokeFocusOuter)
+            || !pixelIs(pixels, width, scale, 416, 84,
+                        wui::theme().colors.strokeFocusInner)
+            || !pixelIs(pixels, width, scale, 300, 273,
+                        wui::theme().colors.brandForeground1)) return 5;
+        // Test the physical ink rather than nominal text coordinates.  The
+        // regions exclude borders, carets and focus rings, and include Button,
+        // ToggleButton, Input, TextArea, SearchField and CompoundButton.
+        if (!darkInkIsVerticallyCentered(pixels, width, scale,
+                                         {42, 94, 82, 18}, 102.0f, 1.5f)
+            || !darkInkIsVerticallyCentered(pixels, width, scale,
+                                            {40, 978, 126, 20}, 988.0f, 1.5f)
+            || !darkInkIsVerticallyCentered(pixels, width, scale,
+                                            {270, 250, 184, 22}, 260.0f, 1.5f)
+            || !darkInkIsVerticallyCentered(pixels, width, scale,
+                                            {42, 296, 408, 18}, 305.0f, 1.5f)
+            || !darkInkIsVerticallyCentered(pixels, width, scale,
+                                            {480, 764, 236, 24}, 776.0f, 1.5f)
+            || !darkInkIsVerticallyCentered(pixels, width, scale,
+                                            {38, 880, 142, 20}, 890.0f, 1.5f)
+            || !darkInkIsVerticallyCentered(pixels, width, scale,
+                                            {38, 900, 142, 16}, 908.0f, 1.5f,
+                                            155)) return 6;
         savePpm(output, pixels, width, height);
         wui::setTextMeasurer(nullptr);
         return 0;

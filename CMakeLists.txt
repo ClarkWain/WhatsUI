@@ -20,6 +20,35 @@ option(WHATSUI_ENABLE_SANITIZERS "Enable supported runtime memory sanitizers for
 option(WHATSUI_ENABLE_ADVANCED_TEXT
     "Enable the in-tree WhatsCanvas FreeType/HarfBuzz text pipeline by default" ON)
 
+set(WHATSUI_FLUENT_ICONS_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/fluent-system-icons")
+set(WHATSUI_FLUENT_ICONS_REGULAR
+    "${WHATSUI_FLUENT_ICONS_DIR}/FluentSystemIcons-Regular.ttf")
+set(WHATSUI_FLUENT_ICONS_FILLED
+    "${WHATSUI_FLUENT_ICONS_DIR}/FluentSystemIcons-Filled.ttf")
+foreach(whatsui_icon_font IN ITEMS
+        "${WHATSUI_FLUENT_ICONS_REGULAR}"
+        "${WHATSUI_FLUENT_ICONS_FILLED}")
+    if(NOT EXISTS "${whatsui_icon_font}")
+        message(FATAL_ERROR
+            "WhatsUI's bundled Fluent icon font is missing: ${whatsui_icon_font}")
+    endif()
+endforeach()
+file(SHA256 "${WHATSUI_FLUENT_ICONS_REGULAR}"
+    WHATSUI_FLUENT_ICONS_REGULAR_SHA256)
+file(SHA256 "${WHATSUI_FLUENT_ICONS_FILLED}"
+    WHATSUI_FLUENT_ICONS_FILLED_SHA256)
+if(NOT WHATSUI_FLUENT_ICONS_REGULAR_SHA256 STREQUAL
+       "8ebc946d0de5ff7cd8fa653020f7c4046c71e27574ac6a9013aa727021290c32")
+    message(FATAL_ERROR
+        "FluentSystemIcons-Regular.ttf does not match the reviewed v1.1.328 asset.")
+endif()
+if(NOT WHATSUI_FLUENT_ICONS_FILLED_SHA256 STREQUAL
+       "348ac72ae7a3ec4755f3aaba870bba15e64ed7a3adb522e4166f2a744451ac99")
+    message(FATAL_ERROR
+        "FluentSystemIcons-Filled.ttf does not match the reviewed v1.1.328 asset.")
+endif()
+
 set(WHATSUI_PACKAGE_REQUIRES_WHATSCANVAS OFF)
 set(WHATSUI_PACKAGE_REQUIRES_GLFW OFF)
 
@@ -45,6 +74,7 @@ add_library(WhatsUI
     src/whatsui/widgets/drawer.cpp
     src/whatsui/widgets/feedback.cpp
     src/whatsui/widgets/form_feedback.cpp
+    src/whatsui/widgets/icons.cpp
     src/whatsui/widgets/image.cpp
     src/whatsui/widgets/layout.cpp
     src/whatsui/widgets/label.cpp
@@ -67,6 +97,9 @@ add_library(WhatsUI
 add_library(WhatsUI::WhatsUI ALIAS WhatsUI)
 
 target_compile_features(WhatsUI PUBLIC cxx_std_17)
+target_compile_definitions(WhatsUI PRIVATE
+    WHATSUI_FLUENT_ICONS_SOURCE_DIR="${WHATSUI_FLUENT_ICONS_DIR}"
+)
 
 if(WHATSUI_ENABLE_SANITIZERS)
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/WhatsUISanitizers.cmake")
@@ -232,8 +265,21 @@ if(WHATSUI_INSTALL)
         "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
         "${CMAKE_CURRENT_SOURCE_DIR}/NOTICE"
         "${CMAKE_CURRENT_SOURCE_DIR}/doc/whatsui/SBOM.md"
+        "${CMAKE_CURRENT_SOURCE_DIR}/doc/whatsui/FLUENT_ICONS.md"
         "${CMAKE_CURRENT_SOURCE_DIR}/doc/whatsui/RELEASE_CHECKLIST.md"
         DESTINATION "${WHATSUI_INSTALL_LICENSEDIR}"
+    )
+    install(DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/fluent-system-icons/"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/WhatsUI/fonts/fluent-system-icons"
+        FILES_MATCHING
+            PATTERN "*.ttf"
+            PATTERN "*.json"
+    )
+    install(FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/fluent-system-icons/LICENSE"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/fluent-system-icons/NOTICE"
+        DESTINATION "${WHATSUI_INSTALL_LICENSEDIR}/third_party/fluent-system-icons"
     )
     if(WHATSUI_WITH_WHATSCANVAS)
         install(FILES "${WHATSUI_WHATSCANVAS_ROOT}/LICENSE"

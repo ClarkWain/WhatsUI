@@ -8,6 +8,7 @@
 #define WUI_TODO_TESTING 1
 #include "../examples/todo_app/main.cpp"
 
+#include <cmath>
 #include <cstdio>
 #ifdef _MSC_VER
 #include <crtdbg.h>
@@ -31,11 +32,14 @@ void expect(bool condition, const char* message)
 
 class FakeSurface final : public wui::RenderSurface {
 public:
+    explicit FakeSurface(wui::SizeF size = {800.0f, 1200.0f}) : size_(size) {}
     [[nodiscard]] wui::CanvasBackend backend() const noexcept override { return wui::CanvasBackend::Software; }
-    [[nodiscard]] wui::SizeF framebufferSize() const noexcept override { return {800.0f, 1200.0f}; }
+    [[nodiscard]] wui::SizeF framebufferSize() const noexcept override { return size_; }
     void beginFrame() override {}
     void endFrame() override {}
-    void resize(wui::SizeF) override {}
+    void resize(wui::SizeF size) override { size_ = size; }
+private:
+    wui::SizeF size_;
 };
 
 class FakeClipboard final : public wui::Clipboard {
@@ -62,10 +66,16 @@ public:
 
 class FakeWindow final : public wui::PlatformWindow {
 public:
+    explicit FakeWindow(wui::SizeF logicalSize = {800.0f, 1200.0f}, float scale = 1.0f)
+        : logicalSize_(logicalSize)
+        , scale_(scale)
+        , surface_({logicalSize.width * scale, logicalSize.height * scale})
+    {
+    }
     [[nodiscard]] wui::WindowId id() const noexcept override { return 42; }
     [[nodiscard]] wui::WindowMetrics metrics() const noexcept override
     {
-        return {{800.0f, 1200.0f}, {800.0f, 1200.0f}, 1.0f};
+        return {logicalSize_, surface_.framebufferSize(), scale_};
     }
     void show() override {}
     void close() override {}
@@ -81,6 +91,8 @@ public:
     int redraws{0};
 
 private:
+    wui::SizeF logicalSize_;
+    float scale_{1.0f};
     FakeSurface surface_;
     FakeClipboard clipboard_;
     FakeCursor cursor_;
@@ -182,6 +194,16 @@ bool containsText(wui::Node* root, const std::string& value)
         if (text->value() == value) return true;
     }
     return false;
+}
+
+wui::Text* textNode(wui::Node* root, const std::string& value)
+{
+    std::vector<wui::Text*> texts;
+    collect(root, texts);
+    for (auto* text : texts) {
+        if (text->value() == value) return text;
+    }
+    return nullptr;
 }
 
 const wui::AccessibilitySnapshotEntry* semanticEntry(const wui::AccessibilitySnapshot& snapshot,
@@ -449,6 +471,10 @@ void testTodoUiTreeInputAndDestructiveConfirmation()
     std::vector<wui::Checkbox*> checkboxes;
     collect(window.root(), checkboxes);
     expect(checkboxes.size() == 1, "Added Todo row should expose a real checkbox");
+    auto* taskTitle = textNode(window.root(), "Review Windows Todo");
+    expect(taskTitle != nullptr
+               && std::abs(center(*checkboxes.front()).y - center(*taskTitle).y) <= 1.0f,
+           "Todo completion indicator must share the primary task-title row center");
 
     // The row checkbox is the Todo-specific primary completion affordance.
     // Validate its hover/pressed transitions and drag-out cancellation before
@@ -615,6 +641,31 @@ void testTodoUiTreeInputAndDestructiveConfirmation()
     window.setRoot({});
 }
 
+void testTodoWrappedTitleKeepsFirstLineRailAlignment()
+{
+    constexpr float kBodyLargeLineHeight = 24.0f;
+    const std::string longTitle =
+        "Review the Windows Todo visual alignment at fractional display scaling";
+    wui::UiWindow window(std::make_unique<FakeWindow>(wui::SizeF{360.0f, 720.0f}));
+    TodoUiHarness harness;
+    expect(harness.apply(harness.interaction.addTask(longTitle)),
+           "Long-title fixture should be added through the Todo interaction");
+    window.setRoot(harness.build(window));
+    commitFrame(window);
+
+    std::vector<wui::Checkbox*> checkboxes;
+    collect(window.root(), checkboxes);
+    auto* title = textNode(window.root(), longTitle);
+    expect(checkboxes.size() == 1 && title != nullptr,
+           "Narrow Todo fixture should expose its completion indicator and title");
+    expect(title->bounds().height > kBodyLargeLineHeight,
+           "Narrow Todo fixture must wrap the task title to exercise first-line alignment");
+    const float titleFirstLineCenter = title->bounds().y + kBodyLargeLineHeight * 0.5f;
+    expect(std::abs(center(*checkboxes.front()).y - titleFirstLineCenter) <= 1.0f,
+           "Wrapped Todo completion indicator must align with the title's first line");
+    window.setRoot({});
+}
+
 void testTodoAccessibilityProjectionUsesRealTaskTree()
 {
     wui::UiWindow window(std::make_unique<FakeWindow>());
@@ -702,6 +753,7 @@ int main()
 #endif
     try {
         testTodoUiTreeInputAndDestructiveConfirmation();
+        testTodoWrappedTitleKeepsFirstLineRailAlignment();
         testTodoAccessibilityProjectionUsesRealTaskTree();
         std::puts("WhatsUI Todo UI interaction smoke tests passed");
         return 0;

@@ -6,6 +6,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "wsc/Canvas.h"
 
@@ -68,6 +70,105 @@ std::string utf8(std::initializer_list<std::uint32_t> codepoints)
         }
     }
     return result;
+}
+
+// A host which predates the family-aware overloads must continue to work, and
+// a native host which implements them must receive the exact Text family for
+// measurement, line breaking and baseline calculations.
+class FamilyTrackingTextProvider final : public wui::TextLayoutProvider {
+public:
+    [[nodiscard]] wui::TextExtents measureText(const std::string& text,
+                                                float fontSize) const override
+    {
+        return {static_cast<float>(text.size()) * fontSize * 0.5f,
+                fontSize, fontSize * 0.8f, fontSize * 0.2f};
+    }
+
+    [[nodiscard]] std::vector<wui::TextLayoutLine> layoutText(
+        const std::string& text, float fontSize, float availableWidth,
+        float /*lineHeight*/, std::size_t /*maxLines*/, bool /*ellipsize*/) const override
+    {
+        return {{text, 0, text.size(), std::min(availableWidth, measureText(text, fontSize).width), false}};
+    }
+
+    [[nodiscard]] wui::TextExtents measureText(const std::string& text, float fontSize,
+                                                int fontWeight,
+                                                std::string_view fontFamily) const override
+    {
+        lastMeasuredFamily = std::string(fontFamily);
+        lastMeasuredWeight = fontWeight;
+        const float familyMultiplier = fontFamily == "Test Face" ? 0.75f : 0.5f;
+        return {static_cast<float>(text.size()) * fontSize * familyMultiplier,
+                fontSize * 1.5f, fontSize * 1.1f, fontSize * 0.4f};
+    }
+
+    [[nodiscard]] std::vector<wui::TextLayoutLine> layoutText(
+        const std::string& text, float fontSize, int fontWeight, float availableWidth,
+        float /*lineHeight*/, std::size_t /*maxLines*/, bool /*ellipsize*/,
+        std::string_view fontFamily) const override
+    {
+        lastLayoutFamily = std::string(fontFamily);
+        lastLayoutWeight = fontWeight;
+        const auto metrics = measureText(text, fontSize, fontWeight, fontFamily);
+        return {{text, 0, text.size(), std::min(availableWidth, metrics.width), false}};
+    }
+
+    mutable std::string lastMeasuredFamily;
+    mutable std::string lastLayoutFamily;
+    mutable int lastMeasuredWeight{0};
+    mutable int lastLayoutWeight{0};
+};
+
+class LegacyTextMeasurer final : public wui::TextMeasurer {
+public:
+    [[nodiscard]] wui::TextExtents measureText(const std::string& text,
+                                                float fontSize) const override
+    {
+        return {static_cast<float>(text.size()) * fontSize * 0.5f,
+                fontSize * 1.25f, fontSize, fontSize * 0.25f};
+    }
+};
+
+void testTextForwardsCustomFamilyToNativeContracts()
+{
+    FamilyTrackingTextProvider provider;
+    wui::setTextMeasurer(&provider);
+    try {
+        wui::Text text("family forwarding");
+        text.setFontFamily("Test Face");
+        text.setFontSize(20.0f);
+        text.setFontWeight(600);
+        text.setWrap(wui::TextWrap::Word);
+        const auto measured = text.measure({0.0f, 400.0f, 0.0f, 200.0f});
+        const float expectedWidth = static_cast<float>(text.value().size()) * 20.0f * 0.75f;
+        expect(std::fabs(measured.width - expectedWidth) < 0.01f,
+               "Text measurement must use its custom font family rather than the theme default");
+        expect(provider.lastMeasuredFamily == "Test Face" && provider.lastMeasuredWeight == 600,
+               "Text width and baseline measurement must forward the custom family and weight");
+        expect(provider.lastLayoutFamily == "Test Face" && provider.lastLayoutWeight == 600,
+               "Text word wrapping must forward the custom family and weight");
+    } catch (...) {
+        wui::setTextMeasurer(nullptr);
+        throw;
+    }
+    wui::setTextMeasurer(nullptr);
+
+    // This deliberately implements only the pre-existing pure virtual
+    // overload. The new family-aware overload must safely forward to it.
+    LegacyTextMeasurer legacy;
+    wui::setTextMeasurer(&legacy);
+    try {
+        wui::Text text("legacy host");
+        text.setFontFamily("A custom family unsupported by this host");
+        text.setFontSize(16.0f);
+        const auto measured = text.measure({});
+        expect(measured.width > 0.0f && std::isfinite(measured.width),
+               "Legacy TextMeasurer implementations must remain usable through family-aware Text");
+    } catch (...) {
+        wui::setTextMeasurer(nullptr);
+        throw;
+    }
+    wui::setTextMeasurer(nullptr);
 }
 
 void testMultilingualLayoutAndCache()
@@ -160,6 +261,53 @@ void testCanvasDprOwnsNativeCoordinateScale()
     expect(entriesAfterRegular == entriesBeforeWeights + 1
                && entriesAfterBold == entriesAfterRegular + 1,
            "text measurement cache must distinguish font weights");
+
+    const wui::Theme originalTheme = wui::theme();
+    wui::Theme alternateTheme = originalTheme;
+    alternateTheme.typography.familyBase = "Consolas";
+    alternateTheme.typography.familyBaseFallback = "Consolas";
+    const auto entriesBeforeFamily = measurer.cacheStats().entries;
+    (void)measurer.measureText("Theme family cache", 14.0f, 400);
+    const auto entriesAfterDefaultFamily = measurer.cacheStats().entries;
+    wui::setTheme(alternateTheme);
+    (void)measurer.measureText("Theme family cache", 14.0f, 400);
+    const auto entriesAfterAlternateFamily = measurer.cacheStats().entries;
+    wui::setTheme(originalTheme);
+    expect(entriesAfterDefaultFamily == entriesBeforeFamily + 1
+               && entriesAfterAlternateFamily == entriesAfterDefaultFamily + 1,
+           "text measurement cache must distinguish dynamically switched font families");
+
+    // Explicit Text families need their own cache entries too: they are passed
+    // to PaintContext during rendering, so measurement and wrapping must use
+    // the same family rather than whichever theme happened to be active.
+    constexpr std::string_view kPortableSans{"WhatsCanvas Sans"};
+    constexpr std::string_view kPortableMono{"WhatsCanvas Mono"};
+    const std::string customSample{"WWWW iiiii"};
+    const auto entriesBeforeExplicitFamilies = measurer.cacheStats().entries;
+    const auto sansMetrics = measurer.measureText(customSample, 16.0f, 400, kPortableSans);
+    const auto entriesAfterSans = measurer.cacheStats().entries;
+    const auto monoMetrics = measurer.measureText(customSample, 16.0f, 400, kPortableMono);
+    const auto entriesAfterMono = measurer.cacheStats().entries;
+    expect(entriesAfterSans == entriesBeforeExplicitFamilies + 1
+               && entriesAfterMono == entriesAfterSans + 1,
+           "text measurement cache must distinguish explicit custom font families");
+    expect(std::fabs(sansMetrics.width - monoMetrics.width) > 0.05f,
+           "portable sans and mono probes must retain distinct shaped metrics");
+
+    wui::setTextMeasurer(&measurer);
+    try {
+        wui::Text monoText(customSample);
+        monoText.setFontFamily(std::string(kPortableMono));
+        monoText.setFontSize(16.0f);
+        monoText.setFontWeight(400);
+        const auto textSize = monoText.measure({});
+        expect(std::fabs(textSize.width - monoMetrics.width) < 0.05f,
+               "Text custom-family measurement must match the family it will paint");
+    } catch (...) {
+        wui::setTextMeasurer(nullptr);
+        throw;
+    }
+    wui::setTextMeasurer(nullptr);
 }
 
 } // namespace
@@ -169,6 +317,7 @@ int main()
     try {
         testMultilingualLayoutAndCache();
         testTextUsesBackendLineBreaking();
+        testTextForwardsCustomFamilyToNativeContracts();
         testCanvasDprOwnsNativeCoordinateScale();
         std::cout << "WhatsUI text shaping tests passed\n";
         return 0;

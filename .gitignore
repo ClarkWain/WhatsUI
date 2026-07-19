@@ -14,6 +14,7 @@ build_glfw/
 build-*/
 package-preview/
 visual-review/
+visual-review-*/
 artifacts/clip-*/
 artifacts/fluent-review/
 artifacts/p0-repro*

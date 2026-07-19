@@ -4,6 +4,7 @@
 #include <cmath>
 #include <utility>
 
+#include "wui/icons.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
 
@@ -82,11 +83,10 @@ void TreeItem::paint(PaintContext& context)
     const RectF glyph = disclosureBounds();
     if (hasChildren()) {
         const Color glyphColor = disabled ? current.colors.neutralForegroundDisabled : current.colors.neutralForeground2;
-        const float cx = glyph.x + glyph.width * .5f, cy = glyph.y + glyph.height * .5f;
-        const std::vector<PointF> chevron = expanded_
-            ? std::vector<PointF>{{cx - 4, cy - 2}, {cx, cy + 2}, {cx + 4, cy - 2}}
-            : std::vector<PointF>{{cx - 2, cy - 4}, {cx + 2, cy}, {cx - 2, cy + 4}};
-        context.strokePolyline(chevron, current.stroke.thick, glyphColor);
+        drawIcon(context,
+                 expanded_ ? IconName::ChevronDown
+                           : IconName::ChevronRight,
+                 glyph, glyphColor, IconSize::Size16);
     }
     const float x = glyph.x + glyph.width + current.spacing.horizontal.s;
     const auto& style = current.typography.body1;

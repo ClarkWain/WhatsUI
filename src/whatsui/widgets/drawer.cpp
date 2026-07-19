@@ -1,6 +1,8 @@
 #include "wui/drawer.h"
 
 #include <algorithm>
+
+#include "wui/icons.h"
 #include <utility>
 
 #include "wui/text_metrics.h"
@@ -135,8 +137,8 @@ void Drawer::paint(PaintContext& context)
     if (!subtitle_.empty()) { y += kHeaderGap; context.drawText(subtitle_, panelBounds_.x + kPadding, y + current.typography.body1.lineHeight, current.typography.body1.size, current.colors.neutralForeground2, current.typography.body1.weight, current.typography.body1.family); }
     const auto close = closeBounds();
     context.fillRoundRect(close, current.radius.medium, current.colors.neutralBackground1.hover);
-    const std::string closeGlyph = "×";
-    context.drawText(closeGlyph, close.x + (close.width - measureTextWidth(closeGlyph, current.typography.body1)) * 0.5f, context.centeredTextBottom(closeGlyph, close, current.typography.body1.size, current.typography.body1.weight, current.typography.body1.family), current.typography.body1.size, current.colors.neutralForeground1, current.typography.body1.weight, current.typography.body1.family);
+    drawIcon(context, IconName::Dismiss, close,
+             current.colors.neutralForeground1, IconSize::Size20);
     if (!children().empty()) { const int save = context.save(); context.clipRect(contentBounds_); context.translate(0.0f, -contentScrollOffset_); children().front()->paint(context); context.restore(); }
     const auto button = [&](const RectF& box, const std::string& label, bool primary) { if (box.width <= 0) return; context.fillRoundRect(box, current.radius.medium, primary ? current.colors.brandBackground.rest : current.colors.neutralBackground1.hover); context.drawText(label, box.x + (box.width - measureTextWidth(label, current.typography.body1Strong)) * .5f, context.centeredTextBottom(label, box, current.typography.body1Strong.size, current.typography.body1Strong.weight, current.typography.body1Strong.family), current.typography.body1Strong.size, primary ? current.colors.onBrand : current.colors.neutralForeground1, current.typography.body1Strong.weight, current.typography.body1Strong.family); };
     button(secondaryBounds(), secondaryLabel_, false); button(primaryBounds(), primaryLabel_, true);

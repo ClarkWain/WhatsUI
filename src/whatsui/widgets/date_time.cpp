@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "wui/runtime.h"
+#include "wui/icons.h"
 #include "wui/selection.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
@@ -66,17 +67,12 @@ void focusRing(PaintContext &c, RectF r) {
                     t.colors.strokeFocusInner);
 }
 void chevron(PaintContext &c, float x, float y, bool right, Color col) {
-  std::vector<PointF> p =
-      right ? std::vector<PointF>{{x - 2, y - 5}, {x + 3, y}, {x - 2, y + 5}}
-            : std::vector<PointF>{{x + 2, y - 5}, {x - 3, y}, {x + 2, y + 5}};
-  c.strokePolyline(p, theme().stroke.thick, col);
+  drawIcon(c, right ? IconName::ChevronRight : IconName::ChevronLeft,
+           {x - 8, y - 8, 16, 16}, col, IconSize::Size16);
 }
 void disclosureChevron(PaintContext &c, float x, float y, bool up, Color col) {
-  const float direction = up ? -1.0f : 1.0f;
-  c.strokePolyline({{x - 4.0f, y - direction * 2.0f},
-                    {x, y + direction * 2.0f},
-                    {x + 4.0f, y - direction * 2.0f}},
-                   theme().stroke.thick, col);
+  drawIcon(c, up ? IconName::ChevronUp : IconName::ChevronDown,
+           {x - 8, y - 8, 16, 16}, col, IconSize::Size16);
 }
 bool inRange(CivilDate x, std::optional<CivilDate> a,
              std::optional<CivilDate> b) {

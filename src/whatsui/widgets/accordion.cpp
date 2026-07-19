@@ -5,6 +5,7 @@
 #include <sstream>
 #include <utility>
 
+#include "wui/icons.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
 
@@ -163,16 +164,15 @@ void AccordionItem::paint(PaintContext& context)
     context.drawText(header_, textX, context.centeredTextBottom(header_, headerRect, titleStyle.size, titleStyle.weight),
                      titleStyle.size, foreground, titleStyle.weight, titleStyle.family);
 
-    const float glyphSize = 10.0f;
+    const float glyphSize = 16.0f;
     const float glyphX = headerRect.x + headerRect.width - current.spacing.horizontal.xxl - glyphSize;
     const float glyphY = headerRect.y + (headerRect.height - glyphSize) * 0.5f;
-    // Fluent uses a compact chevron rather than a detached filled triangle.
-    const std::vector<PointF> chevron = expanded_
-        ? std::vector<PointF>{{glyphX, glyphY + glyphSize * .65f}, {glyphX + glyphSize * .5f, glyphY + glyphSize * .15f}, {glyphX + glyphSize, glyphY + glyphSize * .65f}}
-        : std::vector<PointF>{{glyphX + glyphSize * .2f, glyphY}, {glyphX + glyphSize * .75f, glyphY + glyphSize * .5f}, {glyphX + glyphSize * .2f, glyphY + glyphSize}};
-    context.strokePolyline(chevron, current.stroke.thick,
-                           disabled ? current.colors.neutralForegroundDisabled
-                                    : current.colors.neutralForeground2);
+    drawIcon(context,
+             expanded_ ? IconName::ChevronUp : IconName::ChevronRight,
+             {glyphX, glyphY, glyphSize, glyphSize},
+             disabled ? current.colors.neutralForegroundDisabled
+                      : current.colors.neutralForeground2,
+             IconSize::Size16);
 
     if (expanded_) {
         const float inset = current.spacing.horizontal.xxl;

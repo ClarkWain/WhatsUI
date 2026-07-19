@@ -77,6 +77,29 @@ bool regionContainsColor(const std::vector<unsigned char>& rgba, int width, floa
     return false;
 }
 
+bool regionContainsColorNear(const std::vector<unsigned char>& rgba, int width,
+                             float scale, wui::RectF logicalRegion,
+                             wui::Color color, int tolerance)
+{
+    const int left = static_cast<int>(std::floor(logicalRegion.x * scale));
+    const int top = static_cast<int>(std::floor(logicalRegion.y * scale));
+    const int right = static_cast<int>(
+        std::ceil((logicalRegion.x + logicalRegion.width) * scale));
+    const int bottom = static_cast<int>(
+        std::ceil((logicalRegion.y + logicalRegion.height) * scale));
+    for (int y = top; y < bottom; ++y) {
+        for (int x = left; x < right; ++x) {
+            const auto offset = static_cast<std::size_t>((y * width + x) * 4);
+            if (offset + 3 < rgba.size() &&
+                std::abs(static_cast<int>(rgba[offset]) - color.r) <= tolerance &&
+                std::abs(static_cast<int>(rgba[offset + 1]) - color.g) <= tolerance &&
+                std::abs(static_cast<int>(rgba[offset + 2]) - color.b) <= tolerance)
+                return true;
+        }
+    }
+    return false;
+}
+
 void testOfficialSizesAndOptions()
 {
     wui::Checkbox checkbox("Accept terms");
@@ -247,26 +270,31 @@ void writeVisualMatrix(const std::string& output, float scale)
         expect(regionContainsColor(pixels, width, scale, {507.0f, 197.0f, 4.0f, 7.0f},
                                    wui::theme().colors.neutralStrokeAccessible),
                "Wrapped Checkbox indicator must align with the first label line");
-        // The checked control at index 2 must contain both arms of a visible
-        // chevron, rather than the former short horizontal dash.
-        expect(regionContainsColor(pixels, width, scale, {510.0f, 75.0f, 5.0f, 7.0f},
-                                   wui::theme().colors.onBrand) &&
-                   regionContainsColor(pixels, width, scale, {516.0f, 72.0f, 6.0f, 6.0f},
-                                       wui::theme().colors.onBrand),
+        // The checked control at index 2 must contain visible on-brand pixels
+        // on both sides of the Fluent checkmark. Keep the samples broad enough
+        // for the font's distinct 1x and fractional-DPI hinted outlines.
+        expect(regionContainsColorNear(
+                   pixels, width, scale, {509.0f, 72.0f, 9.0f, 13.0f},
+                   wui::theme().colors.onBrand, 128) &&
+                   regionContainsColorNear(
+                       pixels, width, scale, {516.0f, 70.0f, 9.0f, 15.0f},
+                       wui::theme().colors.onBrand, 128),
                "Checked Checkbox must paint a recognizable two-arm checkmark");
-        // Mixed is transparent with brand stroke/glyph. Index 3 verifies the
-        // SquareFilled center and the transparent gap before its outer stroke.
+        // Mixed uses the same solid brand surface as Checked, with a centred
+        // on-brand horizontal mark. This avoids the broken-looking nested blue
+        // squares that an outline-plus-glyph rendering produced at 150% DPI.
         expect(pixelIs(pixels, width, scale, 40.0f, 142.0f,
-                       wui::theme().colors.brandBackground.rest) &&
-                   pixelIs(pixels, width, scale, 34.0f, 136.0f, background),
-               "Square mixed Checkbox must use brand glyph on a transparent indicator");
-        // Index 9 is circular mixed at {24,254}; the center is the brand
-        // CircleFilled glyph while the bounding-square corner stays clear.
+                       wui::theme().colors.onBrand) &&
+                   pixelIs(pixels, width, scale, 34.0f, 136.0f,
+                           wui::theme().colors.brandBackground.rest),
+               "Square mixed Checkbox must have a solid brand face and centred white mark");
+        // Index 9 is circular mixed at {24,254}; its centre mark is white
+        // while the bounding-square corner remains transparent.
         expect(pixelIs(pixels, width, scale, 40.0f, 270.0f,
-                       wui::theme().colors.brandBackground.rest) &&
-                   pixelIs(pixels, width, scale, 36.0f, 266.0f,
+                       wui::theme().colors.onBrand) &&
+                   pixelIs(pixels, width, scale, 32.0f, 262.0f,
                            background),
-               "Circular mixed Checkbox must use CircleFilled, not SquareFilled");
+               "Circular mixed Checkbox must retain its circular outer silhouette");
         savePpm(output, pixels, width, height);
     } catch (...) {
         wui::setTextMeasurer(nullptr);

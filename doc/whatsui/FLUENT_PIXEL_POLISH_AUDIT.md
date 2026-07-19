@@ -15,6 +15,8 @@ type, state styling and fractional-DPI rendering have all passed.
   from one-pixel rectangles.
 - [x] Center text from measured glyph metrics and the token's baseline. Do not
   approximate text width from character count or hard-coded glyph widths.
+- [x] Centre the ascent/descent box, not `lineHeight / 2`. The latter assumes
+  zero descent and historically pushed 14-DIP control labels down by 3–4 DIP.
 - [x] Pass the typography token's family, size and weight together.
 - [x] Use paired focus strokes outside the component instead of repainting the
   component interior with nested focus-colored fills.
@@ -45,6 +47,10 @@ type, state styling and fractional-DPI rendering have all passed.
 ## Automated visual gates
 
 - `whatsui_fluent_component_visual_matrix_150dpi`
+- `whatsui_fluent_visual_acceptance`
+- `whatsui_fluent_visual_acceptance_125dpi`
+- `whatsui_fluent_visual_acceptance_150dpi`
+- `whatsui_fluent_visual_acceptance_200dpi`
 - `whatsui_fluent_feedback_visual_150dpi`
 - `whatsui_fluent_selection_controls_visual_150dpi`
 - `whatsui_fluent_range_controls_visual_150dpi`
@@ -74,4 +80,11 @@ images are:
 - `fluent_tree_review_150dpi.ppm`
 - `todo_visual_review/{narrow,regular,wide}/`
 
-Generated screenshots are review artifacts and are not source-controlled.
+Most generated screenshots remain local review artifacts. A small, named set
+of incident evidence is source-controlled under `doc/images/` and linked from
+the relevant postmortem.
+
+The strict acceptance suite uses a maximum displacement of one final physical
+pixel. The incident, metric formula, before/after captures, and measured
+100/125/150/200% results are recorded in
+[Fluent control text alignment postmortem](FLUENT_TEXT_BASELINE_POSTMORTEM.md).

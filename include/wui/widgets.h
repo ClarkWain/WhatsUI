@@ -143,7 +143,10 @@ private:
     float fontSize_{16.0f};
     int fontWeight_{400};
     float lineHeight_{0.0f};
-    std::string fontFamily_{"Segoe UI"};
+    // Resolved in Text's constructor from the active Theme. Leaving this
+    // empty here avoids freezing the legacy Segoe UI family before a caller
+    // has selected its Windows typography token set.
+    std::string fontFamily_{};
     TextRole role_{TextRole::Span};
     TextAlign alignment_{TextAlign::Start};
     bool underline_{false};

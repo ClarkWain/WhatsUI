@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "wui/icons.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
 
@@ -351,7 +352,10 @@ SizeF CompoundButton::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const auto textWidth = [](const std::string& text, const TextStyleToken& style) {
-        if (const auto* measurer = textMeasurer()) return measurer->measureText(text, style.size, style.weight).width;
+        if (const auto* measurer = textMeasurer()) {
+            return measurer->measureText(text, style.size, style.weight,
+                                         style.family).width;
+        }
         return static_cast<float>(text.size()) * style.size * 0.56f;
     };
     const float width = std::max(textWidth(label_, current.typography.body1Strong),
@@ -392,10 +396,27 @@ void CompoundButton::paint(PaintContext& context)
     const float descriptionHeight = secondaryContent_.empty() ? 0.0f : current.typography.caption1.lineHeight;
     const float blockHeight = titleHeight + descriptionHeight;
     const float startY = bounds().y + std::max(0.0f, (bounds().height - blockHeight) * 0.5f);
-    const RectF titleBox{bounds().x + padding, startY, std::max(0.0f,bounds().width-padding*2), titleHeight};
-    context.drawText(label_, titleBox.x, context.centeredTextBottom(label_, titleBox, current.typography.body1Strong.size, current.typography.body1Strong.weight), current.typography.body1Strong.size, primary, current.typography.body1Strong.weight);
-    if (!secondaryContent_.empty()) { const RectF box{titleBox.x, startY+titleHeight, titleBox.width, descriptionHeight};
-        context.drawText(secondaryContent_, box.x, context.centeredTextBottom(secondaryContent_, box, current.typography.caption1.size), current.typography.caption1.size, secondary); }
+    const RectF titleBox{bounds().x + padding, startY,
+                         std::max(0.0f, bounds().width - padding * 2.0f),
+                         titleHeight};
+    const auto& titleStyle = current.typography.body1Strong;
+    context.drawText(label_, titleBox.x,
+                     context.centeredTextBottom(label_, titleBox,
+                                                titleStyle.size, titleStyle.weight,
+                                                titleStyle.family),
+                     titleStyle.size, primary, titleStyle.weight, titleStyle.family);
+    if (!secondaryContent_.empty()) {
+        const auto& descriptionStyle = current.typography.caption1;
+        const RectF box{titleBox.x, startY + titleHeight, titleBox.width,
+                        descriptionHeight};
+        context.drawText(secondaryContent_, box.x,
+                         context.centeredTextBottom(secondaryContent_, box,
+                                                    descriptionStyle.size,
+                                                    descriptionStyle.weight,
+                                                    descriptionStyle.family),
+                         descriptionStyle.size, secondary, descriptionStyle.weight,
+                         descriptionStyle.family);
+    }
     clearDirty(DirtyFlag::Paint);
 }
 
@@ -695,7 +716,11 @@ void Checkbox::paint(PaintContext& context)
     const bool mixed = checkState == CheckboxState::Mixed;
     const bool showsMark = checked || mixed;
     const ColorTokens::Interaction& ramp = current.colors.brandBackground;
-    Color box = checked ? ramp.rest : Color{0, 0, 0, 0};
+    // Indeterminate is an active selection state, not a small filled glyph
+    // floating inside an unchecked outline.  Rendering it as a solid brand
+    // surface with a white horizontal mark matches Fluent's checkbox affordance
+    // and remains legible at fractional DPI.
+    Color box = showsMark ? ramp.rest : Color{0, 0, 0, 0};
     Color border = showsMark ? ramp.rest : current.colors.neutralStrokeAccessible;
     Color text = current.colors.neutralForeground1;
     if (!enabled) {
@@ -703,12 +728,10 @@ void Checkbox::paint(PaintContext& context)
         border = current.colors.neutralStrokeDisabled;
         text = current.colors.neutralForegroundDisabled;
     } else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) {
-        if (checked) box = border = ramp.pressed;
-        else if (mixed) border = ramp.pressed;
+        if (showsMark) box = border = ramp.pressed;
         else border = current.colors.neutralStrokeAccessiblePressed;
     } else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) {
-        if (checked) box = border = ramp.hover;
-        else if (mixed) border = ramp.hover;
+        if (showsMark) box = border = ramp.hover;
         else border = current.colors.neutralStrokeAccessibleHover;
     }
     const float hitSize = size_ == CheckboxSize::Large ? 36.0f : 32.0f;
@@ -751,7 +774,7 @@ void Checkbox::paint(PaintContext& context)
                                 radius + 0.5f, current.stroke.thin,
                                 current.colors.strokeFocusInner);
     }
-    if (checked && enabled) {
+    if (showsMark && enabled) {
         context.fillRoundRect(indicator, radius, box);
     } else {
         // A transparent fill cannot erase the already-painted outer rounded
@@ -765,31 +788,17 @@ void Checkbox::paint(PaintContext& context)
                                 current.stroke.thin, border);
     }
     if (showsMark) {
-        // A geometric checkmark keeps this compact control independent of the
-        // text glyph atlas. That matters when a completed ForEach branch is
-        // mounted mid-frame: the Software renderer batches text after widget
-        // paint, whereas the selection indicator must be immediately stable.
-        const Color mark = !enabled
-            ? current.colors.neutralForegroundDisabled
-            : (mixed ? border : current.colors.onBrand);
+        const Color mark = !enabled ? current.colors.neutralForegroundDisabled : current.colors.onBrand;
         if (checkState == CheckboxState::Mixed) {
-            const float inset = indicatorSize * 0.25f;
-            const float markSize = indicatorSize - inset * 2.0f;
-            context.fillRoundRect({indicator.x + inset, indicator.y + inset,
-                                   markSize, markSize},
-                                  shape_ == CheckboxShape::Circular
-                                      ? markSize * 0.5f : current.radius.small,
-                                  mark);
+            const float markWidth = indicatorSize * 0.56f;
+            const float markHeight = std::max(2.0f, indicatorSize * 0.125f);
+            context.fillRoundRect({indicator.x + (indicatorSize - markWidth) * 0.5f,
+                                   indicator.y + (indicatorSize - markHeight) * 0.5f,
+                                   markWidth, markHeight},
+                                  markHeight * 0.5f, mark);
         } else {
-            const float scale = indicatorSize / 16.0f;
-            context.fillPolygon({
-                {indicator.x + 2.5f * scale, indicator.y + 7.5f * scale},
-                {indicator.x + 3.9f * scale, indicator.y + 6.1f * scale},
-                {indicator.x + 6.3f * scale, indicator.y + 8.5f * scale},
-                {indicator.x + 11.8f * scale, indicator.y + 3.0f * scale},
-                {indicator.x + 13.2f * scale, indicator.y + 4.4f * scale},
-                {indicator.x + 6.3f * scale, indicator.y + 11.3f * scale},
-            }, mark);
+            drawIcon(context, IconName::Checkmark, indicator, mark,
+                     IconSize::Size16);
         }
     }
     if (!label_.empty()) {

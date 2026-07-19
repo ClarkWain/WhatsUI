@@ -63,10 +63,21 @@ void testFluentColorAndElevationTokens()
                light.radius.small == 2.0f && light.radius.xxLarge == 12.0f &&
                light.radius.circular == 10000.0f && light.stroke.thickest == 4.0f,
            "Fluent spacing, radii and stroke scales must expose every documented token");
-    expect(light.typography.body1.size == 14.0f && light.typography.body1.lineHeight == 20.0f &&
-               light.typography.title1.size == 32.0f && light.typography.title1.weight == 600 &&
-               light.typography.familyBase == "Segoe UI",
-           "Fluent typography must expose named styles instead of only loose sizes");
+    const auto& windows = light.typography.windows;
+    expect(light.typography.familyBase == "Segoe UI Variable" &&
+               light.typography.familyBaseFallback == "Segoe UI" &&
+               light.typography.body1.family == "Segoe UI Variable" &&
+               light.typography.body1.fallbackFamily == "Segoe UI",
+           "Windows typography must prefer Segoe UI Variable while retaining Segoe UI fallback");
+    expect(windows.caption.size == 12.0f && windows.caption.lineHeight == 16.0f &&
+               windows.body.size == 14.0f && windows.body.lineHeight == 20.0f &&
+               windows.bodyStrong.weight == 600 && windows.bodyLarge.size == 18.0f &&
+               windows.bodyLarge.lineHeight == 24.0f && windows.subtitle.size == 20.0f &&
+               windows.subtitle.lineHeight == 28.0f && windows.title.size == 28.0f &&
+               windows.title.lineHeight == 36.0f && windows.largeTitle.size == 40.0f &&
+               windows.largeTitle.lineHeight == 52.0f && windows.display.size == 68.0f &&
+               windows.display.lineHeight == 92.0f,
+           "Windows typography must expose the exact Fluent 2 Windows type ramp");
 }
 
 void testScopedOverrideIsolation()
@@ -142,9 +153,15 @@ void testStatePropertyResolution()
 void testTextConsumesNamedTypographyStyle()
 {
     const wui::Theme fluent;
+    wui::Text defaultText("Default token text");
+    expect(defaultText.fontFamily() == "Segoe UI Variable",
+           "Text constructed under the Windows default must inherit familyBase");
+    defaultText.setFontFamily({});
+    expect(defaultText.fontFamily() == "Segoe UI Variable",
+           "Resetting a Text family must resolve through the active theme instead of a hard-coded face");
     wui::Text text("Token text");
     text.setTextStyle(fluent.typography.subtitle1);
-    expect(text.fontFamily() == "Segoe UI" && text.fontSize() == 20.0f &&
+    expect(text.fontFamily() == "Segoe UI Variable" && text.fontSize() == 20.0f &&
                text.fontWeight() == 600 && text.lineHeight() == 28.0f,
            "Text must consume a named Fluent style as one family/size/weight/line-height contract");
 }

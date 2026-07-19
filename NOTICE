@@ -1,5 +1,10 @@
 WhatsUI is distributed under the MIT License; see LICENSE.
 
+WhatsUI bundles Microsoft Fluent UI System Icons v1.1.328 Regular and Filled
+font assets under the MIT License. Their license and notice are installed under
+the third_party/fluent-system-icons notice directory and inventoried in
+doc/whatsui/SBOM.md.
+
 The Windows renderer and GLFW package paths include third-party components.
 Their license texts and attribution evidence remain in the pinned WhatsCanvas
 submodule and are inventoried in doc/whatsui/SBOM.md. A release archive must

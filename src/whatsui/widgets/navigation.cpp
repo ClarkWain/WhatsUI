@@ -4,6 +4,7 @@
 #include <cmath>
 #include <utility>
 
+#include "wui/icons.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
 
@@ -180,11 +181,10 @@ void Toolbar::paint(PaintContext& context)
 {
     ContainerNode::paint(context);
     if (!overflowedItems_.empty()) {
-        const auto& current = theme(); const auto& style = current.typography.body1Strong;
+        const auto& current = theme();
         context.fillRoundRect(overflowBounds_, current.radius.medium, current.colors.neutralBackground1.rest);
-        context.drawText("…", overflowBounds_.x + (overflowBounds_.width - textWidth("…", style)) * .5f,
-                         context.centeredTextBottom("…", overflowBounds_, style.size, style.weight), style.size,
-                         current.colors.neutralForeground1, style.weight, style.family);
+        drawIcon(context, IconName::MoreHorizontal, overflowBounds_,
+                 current.colors.neutralForeground1, IconSize::Size20);
     }
     clearDirty(DirtyFlag::Paint);
 }
@@ -424,8 +424,69 @@ bool BreadcrumbItem::onKeyEvent(const KeyEvent&e){if(current_||!isEnabled()||e.a
 BreadcrumbItem& Breadcrumb::addItem(std::string label,bool current){auto item=std::make_unique<BreadcrumbItem>(std::move(label),current);auto*raw=item.get();appendChild(std::move(item));return *raw;}Breadcrumb& Breadcrumb::maxVisible(std::size_t value)noexcept{setMaxVisible(value);return *this;}void Breadcrumb::setMaxVisible(std::size_t value)noexcept{value=std::max<std::size_t>(2,value);if(maxVisible_!=value){maxVisible_=value;markDirty(DirtyFlag::Layout);}}std::size_t Breadcrumb::maxVisible()const noexcept{return maxVisible_;}Breadcrumb& Breadcrumb::accessibleLabel(std::string value){setAccessibleLabel(std::move(value));return *this;}void Breadcrumb::setAccessibleLabel(std::string value){accessibleLabel_=std::move(value);markDirty(DirtyFlag::Style);}const std::string&Breadcrumb::accessibleLabel()const noexcept{return accessibleLabel_;}
 std::vector<std::size_t> Breadcrumb::visibleIndices()const{std::vector<std::size_t> result;const auto count=children().size();if(count<=maxVisible_){for(std::size_t i=0;i<count;++i)result.push_back(i);return result;}result.push_back(0);const std::size_t tail=std::max<std::size_t>(1,maxVisible_-1);for(std::size_t i=count-tail;i<count;++i)result.push_back(i);return result;}
 std::vector<std::string> Breadcrumb::hiddenItems()const{std::vector<std::string> hidden;const auto visible=visibleIndices();for(std::size_t i=0;i<children().size();++i)if(std::find(visible.begin(),visible.end(),i)==visible.end())if(auto*item=dynamic_cast<BreadcrumbItem*>(children()[i].get()))hidden.push_back(item->label());return hidden;}
-SizeF Breadcrumb::measure(const Constraints& constraints)const{const auto visible=visibleIndices();if(visible.empty())return constraints.clamp({0,0});const auto&style=theme().typography.body1;float w=0;for(auto index:visible)w+=children()[index]->measureWithConstraints(constraints).width;const float separator=textWidth("/",style)+theme().spacing.horizontal.s*2;w+=separator*float(visible.size()-1);if(visible.size()<children().size())w+=textWidth("…",style)+separator;return constraints.clamp({w,style.lineHeight});}
-void Breadcrumb::layout(const RectF& rect){Node::layout(rect);const auto visible=visibleIndices();float x=rect.x;const float sep=textWidth("/",theme().typography.body1)+theme().spacing.horizontal.s*2;for(std::size_t i=0;i<children().size();++i)children()[i]->layout({0,0,0,0});for(std::size_t pos=0;pos<visible.size();++pos){if(pos==1&&visible.front()+1!=visible[pos])x+=textWidth("…",theme().typography.body1)+sep;const auto index=visible[pos];const auto size=children()[index]->measureWithConstraints({0,rect.width,0,rect.height});children()[index]->layout({x,rect.y+(rect.height-size.height)*.5f,size.width,size.height});x+=size.width;if(pos+1<visible.size())x+=sep;}clearLayoutDirtyRecursively();}
-void Breadcrumb::paint(PaintContext& context){const auto visible=visibleIndices();const auto&current=theme();const auto&style=current.typography.body1;for(std::size_t pos=0;pos+1<visible.size();++pos){const auto*item=children()[visible[pos]].get();float x=item->bounds().x+item->bounds().width+current.spacing.horizontal.s;context.drawText("/",x,context.centeredTextBottom("/",{x,bounds().y,textWidth("/",style),bounds().height},style.size,style.weight),style.size,current.colors.neutralForeground3,style.weight,style.family);if(pos==0&&visible[pos]+1!=visible[pos+1]){const float ellipsisX=x+textWidth("/",style)+current.spacing.horizontal.s*2;context.drawText("…",ellipsisX,context.centeredTextBottom("…",{ellipsisX,bounds().y,textWidth("…",style),bounds().height},style.size,style.weight),style.size,current.colors.neutralForeground3,style.weight,style.family);}}ContainerNode::paint(context);clearDirty(DirtyFlag::Paint);}
+SizeF Breadcrumb::measure(const Constraints& constraints) const
+{
+    const auto visible = visibleIndices();
+    if (visible.empty()) return constraints.clamp({0, 0});
+    const auto& current = theme();
+    float width = 0;
+    for (const auto index : visible)
+        width += children()[index]->measureWithConstraints(constraints).width;
+    const float separator = 16.0f + current.spacing.horizontal.s * 2.0f;
+    width += separator * static_cast<float>(visible.size() - 1);
+    if (visible.size() < children().size()) width += 16.0f + separator;
+    return constraints.clamp({width, current.typography.body1.lineHeight});
+}
+
+void Breadcrumb::layout(const RectF& rect)
+{
+    Node::layout(rect);
+    const auto visible = visibleIndices();
+    const float separator = 16.0f + theme().spacing.horizontal.s * 2.0f;
+    float x = rect.x;
+    for (const auto& child : children()) child->layout({0, 0, 0, 0});
+    for (std::size_t position = 0; position < visible.size(); ++position) {
+        if (position == 1 && visible.front() + 1 != visible[position])
+            x += 16.0f + separator;
+        const auto index = visible[position];
+        const auto size = children()[index]->measureWithConstraints(
+            {0, rect.width, 0, rect.height});
+        children()[index]->layout(
+            {x, rect.y + (rect.height - size.height) * 0.5f,
+             size.width, size.height});
+        x += size.width;
+        if (position + 1 < visible.size()) x += separator;
+    }
+    clearLayoutDirtyRecursively();
+}
+
+void Breadcrumb::paint(PaintContext& context)
+{
+    const auto visible = visibleIndices();
+    const auto& current = theme();
+    for (std::size_t position = 0; position + 1 < visible.size();
+         ++position) {
+        const auto* item = children()[visible[position]].get();
+        const float x = item->bounds().x + item->bounds().width +
+                        current.spacing.horizontal.s;
+        drawIcon(context, IconName::ChevronRight,
+                 {x, bounds().y + (bounds().height - 16.0f) * 0.5f,
+                  16.0f, 16.0f},
+                 current.colors.neutralForeground3, IconSize::Size16);
+        if (position == 0 &&
+            visible[position] + 1 != visible[position + 1]) {
+            const float moreX =
+                x + 16.0f + current.spacing.horizontal.s * 2.0f;
+            drawIcon(context, IconName::MoreHorizontal,
+                     {moreX,
+                      bounds().y + (bounds().height - 16.0f) * 0.5f,
+                      16.0f, 16.0f},
+                     current.colors.neutralForeground3,
+                     IconSize::Size16);
+        }
+    }
+    ContainerNode::paint(context);
+    clearDirty(DirtyFlag::Paint);
+}
 
 } // namespace wui

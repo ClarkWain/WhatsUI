@@ -727,8 +727,19 @@ void Slider::paint(PaintContext& context)
     context.fillRoundRect(active, current.radius.circular, fill);
     const float thumbSize = (visualStates() & toMask(ControlVisualState::Pressed)) != 0
         ? baseThumbSize + 2.0f : baseThumbSize;
-    const RectF thumbBounds{thumbCenterX - thumbSize * 0.5f, thumbCenterY - thumbSize * 0.5f,
-                            thumbSize, thumbSize};
+    // The pressed thumb expands by 2 DIP.  Its unpressed centre is anchored
+    // at the first/last track point, so blindly expanding it makes a minimum
+    // or maximum thumb overhang its own hit rect by one DIP.  A parent clip
+    // then shaves the circle into a flat edge at 100%/150% DPI. Keep the
+    // enlarged geometry inside the allocated control while preserving the
+    // centre everywhere except those two physical endpoints.
+    const float thumbX = std::clamp(thumbCenterX - thumbSize * 0.5f,
+                                    bounds().x,
+                                    std::max(bounds().x, bounds().x + bounds().width - thumbSize));
+    const float thumbY = std::clamp(thumbCenterY - thumbSize * 0.5f,
+                                    bounds().y,
+                                    std::max(bounds().y, bounds().y + bounds().height - thumbSize));
+    const RectF thumbBounds{thumbX, thumbY, thumbSize, thumbSize};
     drawFocusRing(context, thumbBounds, current,
                   (visualStates() & toMask(ControlVisualState::Focused)) != 0,
                   current.radius.circular);

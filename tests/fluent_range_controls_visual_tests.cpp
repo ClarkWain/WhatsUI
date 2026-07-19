@@ -92,6 +92,13 @@ int main(int argc, char** argv)
         draw(sliderPressed, paint, {28, 206, 270, 32});
         draw(sliderFocused, paint, {330, 206, 270, 32});
         draw(sliderDisabled, paint, {632, 206, 270, 32});
+        // Pressed endpoint thumbs grow by 2 DIP. Keep both circles fully
+        // inside their hit rects so an ancestor clip cannot flatten them.
+        wui::Slider pressedMinimum(0, 100, 0), pressedMaximum(0, 100, 100);
+        pressedMinimum.setVisualState(wui::ControlVisualState::Pressed, true);
+        pressedMaximum.setVisualState(wui::ControlVisualState::Pressed, true);
+        draw(pressedMinimum, paint, {28, 248, 270, 32});
+        draw(pressedMaximum, paint, {330, 248, 270, 32});
         wui::Slider vertical(0, 100, 62); vertical.setOrientation(wui::SliderOrientation::Vertical);
         draw(vertical, paint, {910, 146, 32, 112});
 
@@ -159,6 +166,13 @@ int main(int argc, char** argv)
         // both 100% and 150% DPR; this also catches accidental double scaling.
         if (!pixelIs(pixels, width, scale, 100, 309,
                      wui::theme().colors.brandBackground.rest)) return 4;
+        // Endpoint expansion must not paint into the one-DIP gutter outside
+        // the Slider hit rect at either scale; this is geometric evidence
+        // that the round pressed thumb is not being clipped by a parent.
+        if (!pixelIs(pixels, width, scale, 27, 264,
+                     wui::theme().colors.neutralBackground2.rest) ||
+            !pixelIs(pixels, width, scale, 600, 264,
+                     wui::theme().colors.neutralBackground2.rest)) return 5;
         savePpm(output, pixels, width, height);
         wui::setTextMeasurer(nullptr);
         return 0;

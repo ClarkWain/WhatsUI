@@ -8,6 +8,8 @@
 //     wui::setTextMeasurer(&measurer);
 
 #include "wui/text_metrics.h"
+#include "wui/theme.h"
+#include "wui/icons.h"
 
 #ifdef WHATSUI_HAS_WHATSCANVAS
 
@@ -41,6 +43,8 @@ struct TextCacheStats {
 struct WhatsCanvasTextPolicyStatus {
     bool defaultFallbackChain{false};
     bool emojiFallback{false};
+    bool regularIconFont{false};
+    bool filledIconFont{false};
 };
 
 class WhatsCanvasTextMeasurer : public TextLayoutProvider {
@@ -71,6 +75,9 @@ public:
         WhatsCanvasTextPolicyStatus result;
         if (canvas_ == nullptr) return result;
 
+        const auto icons = registerDefaultIconFonts(*canvas_);
+        result.regularIconFont = icons.regular;
+        result.filledIconFont = icons.filled;
         wsc::FontFallbackChain chain = wsc::FontSystem::defaultFallbackChain();
 #if defined(_WIN32)
         constexpr const char* emojiFamily = "WhatsUI Emoji";
@@ -102,7 +109,15 @@ public:
     [[nodiscard]] TextExtents measureText(const std::string& text, float fontSize,
                                           int fontWeight) const override
     {
-        const MeasureKey key{text, fontSize, fontWeight};
+        return measureText(text, fontSize, fontWeight, {});
+    }
+
+    [[nodiscard]] TextExtents measureText(const std::string& text, float fontSize,
+                                          int fontWeight,
+                                          std::string_view requestedFontFamily) const override
+    {
+        const std::string fontFamily = resolvedFontFamily(requestedFontFamily);
+        const MeasureKey key{text, fontFamily, fontSize, fontWeight};
         if (const auto found = measureCache_.find(key); found != measureCache_.end()) {
             ++cacheHits_;
             return found->second;
@@ -111,9 +126,7 @@ public:
         wsc::Paint paint;
         paint.setTextSize(fontSize * scaleFactor_);
         paint.setFontWeight(fontWeight);
-#if defined(_WIN32)
-        paint.setFontFamily("Segoe UI");
-#endif
+        paint.setFontFamily(fontFamily);
         const wsc::Canvas::TextMetrics metrics = canvas_->measureTextMetrics(text, paint);
         TextExtents extents;
         extents.width = metrics.width / scaleFactor_;
@@ -153,8 +166,24 @@ public:
         std::size_t maxLines,
         bool ellipsize) const override
     {
+        return layoutText(text, fontSize, fontWeight, availableWidth, lineHeight, maxLines,
+                          ellipsize, {});
+    }
+
+    [[nodiscard]] std::vector<TextLayoutLine> layoutText(
+        const std::string& text,
+        float fontSize,
+        int fontWeight,
+        float availableWidth,
+        float lineHeight,
+        std::size_t maxLines,
+        bool ellipsize,
+        std::string_view requestedFontFamily) const override
+    {
         if (canvas_ == nullptr || !std::isfinite(availableWidth) || availableWidth <= 0.0f) return {};
-        const LayoutKey key{text, fontSize, fontWeight, availableWidth, lineHeight, maxLines, ellipsize};
+        const std::string fontFamily = resolvedFontFamily(requestedFontFamily);
+        const LayoutKey key{text, fontFamily, fontSize, fontWeight, availableWidth,
+                            lineHeight, maxLines, ellipsize};
         if (const auto found = layoutCache_.find(key); found != layoutCache_.end()) {
             ++cacheHits_;
             return found->second;
@@ -164,9 +193,7 @@ public:
         wsc::Paint paint;
         paint.setTextSize(fontSize * scaleFactor_);
         paint.setFontWeight(fontWeight);
-#if defined(_WIN32)
-        paint.setFontFamily("Segoe UI");
-#endif
+        paint.setFontFamily(fontFamily);
         const float physicalLineHeight = (lineHeight > 0.0f ? lineHeight : fontSize * 1.25f) * scaleFactor_;
         const float physicalHeight = std::max(physicalLineHeight,
             physicalLineHeight * static_cast<float>(maxLines == 0 ? 65536 : maxLines));
@@ -202,19 +229,41 @@ public:
     }
 
 private:
+    [[nodiscard]] std::string resolvedFontFamily(std::string_view requested = {}) const
+    {
+        const auto& typography = theme().typography;
+        const std::string_view preferred = requested.empty()
+            ? (typography.familyBase.empty() ? typography.familyBaseFallback
+                                             : typography.familyBase)
+            : requested;
+        if (canvas_ != nullptr
+            && canvas_->textBackend() != wsc::Canvas::TextBackend::DirectWrite) {
+            if (preferred == kFluentWindowsFontFamily
+                || preferred == kFluentWindowsFontFallback) {
+                return wsc::FontSystem::kDefaultPrimaryFamily;
+            }
+            if (preferred == typography.familyMonospace) {
+                return wsc::FontSystem::kDefaultMonoFamily;
+            }
+        }
+        return std::string(preferred);
+    }
+
     struct MeasureKey {
         std::string text;
+        std::string fontFamily;
         float fontSize{0.0f};
         int fontWeight{400};
         [[nodiscard]] bool operator<(const MeasureKey& other) const noexcept
         {
-            return std::tie(text, fontSize, fontWeight)
-                < std::tie(other.text, other.fontSize, other.fontWeight);
+            return std::tie(text, fontFamily, fontSize, fontWeight)
+                < std::tie(other.text, other.fontFamily, other.fontSize, other.fontWeight);
         }
     };
 
     struct LayoutKey {
         std::string text;
+        std::string fontFamily;
         float fontSize{0.0f};
         int fontWeight{400};
         float availableWidth{0.0f};
@@ -223,9 +272,11 @@ private:
         bool ellipsize{false};
         [[nodiscard]] bool operator<(const LayoutKey& other) const noexcept
         {
-            return std::tie(text, fontSize, fontWeight, availableWidth, lineHeight, maxLines, ellipsize)
-                < std::tie(other.text, other.fontSize, other.fontWeight, other.availableWidth, other.lineHeight,
-                           other.maxLines, other.ellipsize);
+            return std::tie(text, fontFamily, fontSize, fontWeight, availableWidth,
+                            lineHeight, maxLines, ellipsize)
+                < std::tie(other.text, other.fontFamily, other.fontSize, other.fontWeight,
+                           other.availableWidth, other.lineHeight, other.maxLines,
+                           other.ellipsize);
         }
     };
 

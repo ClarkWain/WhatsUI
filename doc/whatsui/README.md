@@ -18,6 +18,8 @@
 10. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
 11. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
 12. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
+13. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
+14. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
 
 ## 文档职责
 
@@ -33,6 +35,8 @@
 - `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`：Windows 发布候选版本的 100%/150%/200% DPI 与 IME 人工证据记录模板。
 - `TESTING_AND_VALIDATION.md`：细化 golden image、布局快照、行为回归与 Software backend 验证策略。
 - `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`：记录 ClearType 双重 Alpha 衰减、Windows 150% DPR 误判、字重丢失及其端到端修复和视觉证据。
+- `FLUENT_TEXT_BASELINE_POSTMORTEM.md`：记录 `lineHeight / 2` 被误当 baseline 偏移、Todo 局部 4-DIP 下沉、修复公式、截图和四档 DPI 数据。
+- `FLUENT_VISUAL_QUALITY_GATES.md`：定义文字、图标、圆角、描边、状态、裁切和 100/125/150/200% DPI 的一物理像素级视觉验收。
 
 ## 后续扩展建议
 

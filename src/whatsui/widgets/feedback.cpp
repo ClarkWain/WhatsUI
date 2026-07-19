@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "wui/animation.h"
+#include "wui/icons.h"
 #include "wui/runtime.h"
 #include "wui/scheduler.h"
 #include "wui/text_metrics.h"
@@ -39,13 +40,13 @@ Color intentColor(const Theme& current, ToastIntent intent) noexcept
     }
 }
 
-const char* intentGlyph(ToastIntent intent) noexcept
+IconName intentIcon(ToastIntent intent) noexcept
 {
     switch (intent) {
-    case ToastIntent::Success: return "v";
-    case ToastIntent::Warning: return "!";
-    case ToastIntent::Error: return "x";
-    case ToastIntent::Info: default: return "i";
+    case ToastIntent::Success: return IconName::Checkmark;
+    case ToastIntent::Warning: return IconName::Warning;
+    case ToastIntent::Error: return IconName::Dismiss;
+    case ToastIntent::Info: default: return IconName::Info;
     }
 }
 
@@ -194,8 +195,8 @@ void Toast::paint(PaintContext& context)
     const RectF icon{box.x + kToastPadding, box.y + kToastPadding, kToastIcon, kToastIcon};
     const Color color = intentColor(current, intent_);
     context.fillRoundRect(icon, current.radius.circular, color);
-    context.drawText(intentGlyph(intent_), icon.x + (icon.width - measuredWidth(intentGlyph(intent_), 12.0f, 700)) * 0.5f,
-                     context.centeredTextBottom(intentGlyph(intent_), icon, 12.0f, 700), 12.0f, current.colors.onBrand, 700);
+    drawIcon(context, intentIcon(intent_), icon, current.colors.onBrand,
+             IconSize::Size16);
     const float textX = icon.x + icon.width + kToastGap;
     const float textWidth = std::max(0.0f, dismissBounds().x - 8.0f - textX);
     float y = box.y + kToastPadding;
@@ -216,8 +217,8 @@ void Toast::paint(PaintContext& context)
     const auto dismissBox = dismissBounds();
     context.fillRoundRect(dismissBox, current.radius.medium,
                           current.colors.neutralBackground1.rest);
-    context.drawText("x", dismissBox.x + 8.0f, context.centeredTextBottom("x", dismissBox, 12.0f, 600), 12.0f,
-                     current.colors.neutralForeground2, 600);
+    drawIcon(context, IconName::Dismiss, dismissBox,
+             current.colors.neutralForeground2, IconSize::Size16);
     const auto action = actionBounds();
     if (!actionLabel_.empty()) {
         context.fillRoundRect(action, current.radius.medium,

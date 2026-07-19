@@ -49,6 +49,25 @@ namespace {
 
 using Todo = whatsui::todo::TodoRecord;
 
+// Keep the sample on the Fluent 2 Windows type ramp. The font family is not
+// named here: TextStyleToken comes from the active Theme, which supplies the
+// Windows Segoe UI Variable family (or an application's deliberate override).
+// Fluent exposes Body 14/20, Caption 12/16, Subtitle 20/28 and Title 28/36
+// directly; Body large 18/24 is the one application-level rung used by task
+// summaries and row titles.
+[[nodiscard]] wui::TextStyleToken todoBodyLarge(bool strong = false)
+{
+    auto style = wui::theme().typography.windows.bodyLarge;
+    if (strong) style.weight = wui::theme().typography.weightSemibold;
+    return style;
+}
+
+[[nodiscard]] wui::TextStyleToken todoStrong(wui::TextStyleToken style)
+{
+    style.weight = wui::theme().typography.weightSemibold;
+    return style;
+}
+
 std::filesystem::path interactiveTodoStorePath()
 {
     if (const char* localAppData = std::getenv("LOCALAPPDATA"); localAppData != nullptr && *localAppData != '\0') {
@@ -336,6 +355,7 @@ void showConfirmation(wui::UiWindow& window,
                       std::function<void()> confirm)
 {
     using namespace wui::ui;
+    const auto& type = wui::theme().typography;
     // The dialog is deliberately built at the point of invocation so each
     // request owns its action and the window can restore focus to the exact
     // destructive control that opened it if the user presses Escape/Cancel.
@@ -343,8 +363,8 @@ void showConfirmation(wui::UiWindow& window,
         Box().width(360.0f).padding(wui::InsetsF{24.0f, 20.0f, 20.0f, 20.0f}).children(
             Column().gap(16.0f).align(wui::Alignment::Stretch).children(
                 Column().gap(5.0f).children(
-                    Text(std::move(title)).size(20.0f).lineHeight(28.0f).color({36, 36, 36, 255}),
-                    Text(std::move(detail)).wrap().size(16.0f).lineHeight(24.0f).color({97, 97, 97, 255})),
+                    Text(std::move(title)).style(type.windows.subtitle).color({36, 36, 36, 255}),
+                    Text(std::move(detail)).wrap().style(type.windows.body).color({97, 97, 97, 255})),
                 Row().align(wui::Alignment::Center).gap(8.0f).children(
                     Spacer().flex(1.0f),
                     Button("Cancel").accessibilityId("todo.confirm.cancel").variant(wui::ButtonVariant::Ghost)
@@ -371,6 +391,7 @@ void showEditDialog(wui::UiWindow& window,
                     std::function<void()> cancel)
 {
     using namespace wui::ui;
+    const auto& type = wui::theme().typography;
     auto editor = std::make_unique<wui::TextInput>("Task title");
     auto* editorRaw = editor.get();
     editorRaw->setAccessibilityId("todo.edit.title");
@@ -389,8 +410,7 @@ void showEditDialog(wui::UiWindow& window,
 
     auto error = std::make_unique<wui::Text>();
     auto* errorRaw = error.get();
-    errorRaw->setFontSize(14.0f);
-    errorRaw->setLineHeight(20.0f);
+    errorRaw->setTextStyle(type.windows.body);
     errorRaw->setColor({196, 43, 28, 255});
 
     // Dialog dismissal also covers Escape and an enabled backdrop. A shared
@@ -426,12 +446,12 @@ void showEditDialog(wui::UiWindow& window,
         Box().width(320.0f).padding(wui::InsetsF{20.0f, 18.0f, 18.0f, 18.0f}).children(
             Column().gap(14.0f).align(wui::Alignment::Stretch).children(
                 Column().gap(4.0f).children(
-                    Text("Edit task").size(20.0f).lineHeight(28.0f).color({36, 36, 36, 255}),
-                    Text("Update its title, priority, and due date.").wrap().size(16.0f).lineHeight(24.0f).color({97, 97, 97, 255})),
+                    Text("Edit task").style(type.windows.subtitle).color({36, 36, 36, 255}),
+                    Text("Update its title, priority, and due date.").wrap().style(type.windows.body).color({97, 97, 97, 255})),
                 std::move(editor),
                 std::move(important),
                 Column().gap(4.0f).align(wui::Alignment::Stretch).children(
-                    Text("DUE DATE").size(12.0f).lineHeight(18.0f).color({97, 97, 97, 255}),
+                    Text("DUE DATE").style(todoStrong(type.windows.caption)).color({97, 97, 97, 255}),
                     std::move(dueDate)),
                 std::move(error),
                 Row().align(wui::Alignment::Center).gap(8.0f).children(
@@ -489,6 +509,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
     };
 
     const auto& colors = wui::theme().colors;
+    const auto& type = wui::theme().typography;
     const wui::Color canvas = colors.background;
     const wui::Color surface = colors.surface;
     const wui::Color ink = colors.text;
@@ -534,12 +555,12 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
         .children(
             Row().align(wui::Alignment::Center).gap(12.0f).children(
                 Column().gap(3.0f).children(
-                    Text("My day").size(32.0f).weight(600).lineHeight(40.0f).color(ink),
-                    Text("Plan what matters today").size(16.0f).lineHeight(24.0f).color(muted)),
+                    Text("My day").style(type.windows.title).color(ink),
+                    Text("Plan what matters today").style(type.windows.body).color(muted)),
                 Spacer().flex(1.0f),
                 Box().background(blueSoft).radius(14.0f).padding({12.0f, 7.0f, 12.0f, 7.0f})
                     .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
-                    .children(Text().bind(todos, summary).size(14.0f).lineHeight(20.0f).color(blue))),
+                    .children(Text().bind(todos, summary).style(type.windows.body).color(blue))),
             Box().background(surface).radius(12.0f).padding({12.0f, 10.0f, 10.0f, 10.0f})
                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
                     std::move(composerNode),
@@ -552,7 +573,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                 .children(SearchField("Search tasks").accessibilityId("todo.search").onChange(setSearchQuery)),
             Box().background(surface).radius(12.0f).padding({12.0f, 7.0f, 12.0f, 7.0f})
                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
-                    Text("VIEW").size(12.0f).lineHeight(18.0f).color(muted),
+                    Text("VIEW").style(todoStrong(type.windows.caption)).color(muted),
                     Radio("All").bind(filterAll).onChange([setFilter](bool) {
                         setFilter(whatsui::todo::TodoFilter::All);
                     }),
@@ -562,34 +583,34 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                     Radio("Completed").bind(filterCompleted).onChange([setFilter](bool) {
                         setFilter(whatsui::todo::TodoFilter::Completed);
                     }))),
-            If(hasOperationMessage).then([&operationMessage, error = colors.danger] {
+            If(hasOperationMessage).then([&operationMessage, error = colors.danger, body = type.windows.body] {
                 return Box().background({255, 235, 238, 255}).radius(8.0f).padding({12.0f, 8.0f, 12.0f, 8.0f})
-                    .children(Text().bind(operationMessage).size(14.0f).lineHeight(20.0f).color(error));
+                    .children(Text().bind(operationMessage).style(body).color(error));
             }),
             // A short-lived action surface turns destructive operations into a
             // recoverable workflow without moving the list or obscuring rows.
-            If(hasUndo).then([&undoMessage, undo, blue, blueSoft] {
+            If(hasUndo).then([&undoMessage, undo, blue, blueSoft, body = type.windows.body] {
                 return Box().background(blueSoft).radius(10.0f).padding({12.0f, 7.0f, 8.0f, 7.0f})
                     .children(Row().align(wui::Alignment::Center).gap(8.0f).children(
-                        Text().bind(undoMessage).size(14.0f).lineHeight(20.0f).color(blue),
+                        Text().bind(undoMessage).style(body).color(blue),
                         Spacer().flex(1.0f),
                         Button("Undo").accessibilityId("todo.undo").variant(wui::ButtonVariant::Ghost).onClick(undo)));
             }),
             Card().appearance(wui::CardAppearance::FilledAlternative)
                 .children(Row().align(wui::Alignment::Center).gap(12.0f).children(
                     Column().gap(2.0f).children(
-                        Text("TODAY").size(12.0f).lineHeight(18.0f).color(blue),
+                        Text("TODAY").style(todoStrong(type.windows.caption)).color(blue),
                         Text().bind(todos, [summary](const std::vector<Todo>& values) { return summary(values) + " - keep going"; })
-                            .size(18.0f).lineHeight(24.0f).color(ink)),
+                            .style(todoBodyLarge()).color(ink)),
                     Spacer().flex(1.0f),
-                    Text("My day").size(14.0f).lineHeight(20.0f).color(muted))),
+                    Text("My day").style(type.windows.body).color(muted))),
             // Keep the list header in the same content rail as the composer
             // and focus card. The list action belongs beside its heading,
             // rather than stranded at the bottom of a tall window.
             Row().align(wui::Alignment::Center).children(
                 Column().gap(1.0f).children(
-                    Text("Tasks").size(20.0f).weight(600).lineHeight(28.0f).color(ink),
-                    Text("Keep the next important thing in view").size(14.0f).lineHeight(20.0f).color(muted)),
+                    Text("Tasks").style(type.windows.subtitle).color(ink),
+                    Text("Keep the next important thing in view").style(type.windows.body).color(muted)),
                 Spacer().flex(1.0f),
                 If(hasStoredCompleted).then([clearCompleted, requestConfirmation] {
                     return Button("Clear done").accessibilityId("todo.clear-completed").variant(wui::ButtonVariant::Ghost)
@@ -599,47 +620,64 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                                 clearCompleted);
                         });
                 })),
-            If(isEmpty).then([muted] {
+            If(isEmpty).then([muted, body = type.windows.body, bodyLarge = todoBodyLarge(true)] {
                 return Box().background({255, 255, 255, 255}).radius(12.0f)
                     .height(104.0f).padding({20.0f, 24.0f, 20.0f, 24.0f})
                     .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
                     .children(Column().gap(6.0f).align(wui::Alignment::Center).children(
-                        Text("Nothing planned yet").size(18.0f).weight(600).lineHeight(24.0f).color({36, 36, 36, 255}),
-                        Text("Capture the next thing that needs your attention.").size(14.0f).lineHeight(20.0f).color(muted)));
+                        Text("Nothing planned yet").style(bodyLarge).color({36, 36, 36, 255}),
+                        Text("Capture the next thing that needs your attention.").style(body).color(muted)));
             }),
-            If(hasNoMatches).then([muted] {
+            If(hasNoMatches).then([muted, body = type.windows.body, bodyLarge = todoBodyLarge(true)] {
                 return Box().background({255, 255, 255, 255}).radius(12.0f)
                     .height(104.0f).padding({20.0f, 24.0f, 20.0f, 24.0f})
                     .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
                     .children(Column().gap(6.0f).align(wui::Alignment::Center).children(
-                        Text("No matching tasks").size(18.0f).weight(600).lineHeight(24.0f).color({36, 36, 36, 255}),
-                        Text("Try a different search or view.").size(14.0f).lineHeight(20.0f).color(muted)));
+                        Text("No matching tasks").style(bodyLarge).color({36, 36, 36, 255}),
+                        Text("Try a different search or view.").style(body).color(muted)));
             }),
             // A section exists only when it has rows.  In particular, an
             // all-completed list must not imply that completed work is "in
             // progress", and an empty list must remain a calm empty-state
             // card rather than a heading followed by whitespace.
-            If(hasActive).then([&activeTodos, toggle, remove, setImportant, edit, requestConfirmation] {
+            If(hasActive).then([&activeTodos, toggle, remove, setImportant, edit, requestConfirmation,
+                                caption = todoStrong(type.windows.caption), bodyLarge = todoBodyLarge(), metadataStyle = type.windows.caption] {
                 return Column().gap(10.0f).align(wui::Alignment::Stretch).children(
-                    Text("IN PROGRESS").size(12.0f).lineHeight(18.0f).color({97, 97, 97, 255}),
+                    Text("IN PROGRESS").style(caption).color({97, 97, 97, 255}),
                     KeyedForEach<Todo>(activeTodos,
                         [](const Todo& item) { return std::to_string(item.id); },
-                        [toggle, remove, setImportant, edit, requestConfirmation](const Todo& item) {
+                        [toggle, remove, setImportant, edit, requestConfirmation, bodyLarge, metadataStyle](const Todo& item) {
                             const std::string metadata = item.dueDateIso ? "Due " + *item.dueDateIso : std::string{};
                             const std::string automationPrefix = "todo.task." + std::to_string(item.id);
                             return Box().background({255, 255, 255, 255}).radius(10.0f)
                                 .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                                 .children(Row().align(wui::Alignment::Start).gap(10.0f).children(
-                                    Box().height(40.0f)
+                                    // Match the 32-DIP primary row (title +
+                                    // star action). A 40-DIP wrapper placed
+                                    // the completion indicator 4 DIP below the
+                                    // title's visual centre.
+                                    Box().height(32.0f)
                                         .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
                                         .children(Checkbox("", item.completed).accessibilityId(automationPrefix + ".complete").accessibleLabel(item.title)
                                             .onChange([toggle, id = item.id](bool) { toggle(id); })),
                                     Column().gap(4.0f).align(wui::Alignment::Stretch).flex(1.0f).children(
-                                        Row().align(wui::Alignment::Center).gap(8.0f).children(
-                                            Text(item.title).wrap().maxLines(2).ellipsis().size(16.0f).lineHeight(22.0f)
-                                                .color({36, 36, 36, 255}).flex(1.0f),
-                                            IconButton(item.important ? "\xE2\x98\x85" : "\xE2\x98\x86",
+                                        // The 4-DIP vertical inset makes a
+                                        // 24-DIP title line occupy the same
+                                        // 32-DIP primary rail as the
+                                        // completion and important actions.
+                                        // For a two-line title the rail stays
+                                        // top-aligned, so all three controls
+                                        // continue to share the first-line
+                                        // centre instead of drifting toward
+                                        // the full text block's midpoint.
+                                        Row().align(wui::Alignment::Start).gap(8.0f).children(
+                                            Box().padding(wui::InsetsF{0.0f, 4.0f, 0.0f, 4.0f}).flex(1.0f)
+                                                .children(Text(item.title).wrap().maxLines(2).ellipsis().style(bodyLarge)
+                                                    .color({36, 36, 36, 255})),
+                                            IconButton(wui::IconName::Star,
                                                        (item.important ? "Remove important from " : "Mark important: ") + item.title)
+                                                .iconStyle(item.important ? wui::IconStyle::Filled
+                                                                          : wui::IconStyle::Regular)
                                                 .accessibilityId(automationPrefix + ".important")
                                                 .checked(item.important)
                                                 .onClick([setImportant, id = item.id, important = item.important] {
@@ -649,11 +687,11 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                         // rail so a 360px window never squeezes the
                                         // title and completion affordance into slivers.
                                         Row().align(wui::Alignment::Center).gap(6.0f).children(
-                                            Text(metadata).maxLines(1).ellipsis().size(13.0f).lineHeight(18.0f)
+                                            Text(metadata).maxLines(1).ellipsis().style(metadataStyle)
                                                 .color(item.important ? wui::Color{0, 95, 184, 255} : wui::Color{97, 97, 97, 255}).flex(1.0f),
                                             Button("Edit").accessibilityId(automationPrefix + ".edit").variant(wui::ButtonVariant::Ghost)
                                                 .onClick([edit, id = item.id] { edit(id); }),
-                                            IconButton("×", "Delete task").accessibilityId(automationPrefix + ".delete")
+                                            IconButton(wui::IconName::Delete, "Delete task").accessibilityId(automationPrefix + ".delete")
                                                 .onClick([remove, id = item.id, requestConfirmation] {
                                                     requestConfirmation("Remove this task?",
                                                                         "This task will be removed from My day.",
@@ -661,38 +699,42 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                                 })))));
                     }).gap(8.0f).align(wui::Alignment::Stretch));
             }),
-            If(hasCompleted).then([&completedTodos, toggle, remove, setImportant, edit, requestConfirmation] {
+            If(hasCompleted).then([&completedTodos, toggle, remove, setImportant, edit, requestConfirmation,
+                                   caption = todoStrong(type.windows.caption), bodyLarge = todoBodyLarge(), metadataStyle = type.windows.caption] {
                 return Column().gap(10.0f).align(wui::Alignment::Stretch).children(
-                    Text("COMPLETED").size(12.0f).lineHeight(18.0f).color({97, 97, 97, 255}),
+                    Text("COMPLETED").style(caption).color({97, 97, 97, 255}),
                     KeyedForEach<Todo>(completedTodos,
                         [](const Todo& item) { return std::to_string(item.id); },
-                        [toggle, remove, setImportant, edit, requestConfirmation](const Todo& item) {
+                        [toggle, remove, setImportant, edit, requestConfirmation, bodyLarge, metadataStyle](const Todo& item) {
                         const std::string metadata = item.dueDateIso ? "Due " + *item.dueDateIso : std::string{};
                         const std::string automationPrefix = "todo.task." + std::to_string(item.id);
                         return Box().background({255, 255, 255, 255}).radius(10.0f)
                             .padding(wui::InsetsF{14.0f, 11.0f, 10.0f, 11.0f})
                             .children(Row().align(wui::Alignment::Start).gap(10.0f).children(
-                                Box().height(40.0f)
+                                Box().height(32.0f)
                                     .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
                                     .children(Checkbox("", item.completed).accessibilityId(automationPrefix + ".complete").accessibleLabel(item.title)
                                         .onChange([toggle, id = item.id](bool) { toggle(id); })),
                                 Column().gap(4.0f).align(wui::Alignment::Stretch).flex(1.0f).children(
-                                    Row().align(wui::Alignment::Center).gap(8.0f).children(
-                                        Text(item.title).wrap().maxLines(2).ellipsis().size(16.0f).lineHeight(22.0f)
-                                            .color({117, 117, 117, 255}).flex(1.0f),
-                                        IconButton(item.important ? "\xE2\x98\x85" : "\xE2\x98\x86",
+                                    Row().align(wui::Alignment::Start).gap(8.0f).children(
+                                        Box().padding(wui::InsetsF{0.0f, 4.0f, 0.0f, 4.0f}).flex(1.0f)
+                                            .children(Text(item.title).wrap().maxLines(2).ellipsis().style(bodyLarge)
+                                                .color({117, 117, 117, 255})),
+                                        IconButton(wui::IconName::Star,
                                                    (item.important ? "Remove important from " : "Mark important: ") + item.title)
+                                            .iconStyle(item.important ? wui::IconStyle::Filled
+                                                                      : wui::IconStyle::Regular)
                                             .accessibilityId(automationPrefix + ".important")
                                             .checked(item.important)
                                             .onClick([setImportant, id = item.id, important = item.important] {
                                                 setImportant(id, !important);
                                             })),
                                     Row().align(wui::Alignment::Center).gap(6.0f).children(
-                                        Text(metadata).maxLines(1).ellipsis().size(13.0f).lineHeight(18.0f)
+                                        Text(metadata).maxLines(1).ellipsis().style(metadataStyle)
                                             .color({117, 117, 117, 255}).flex(1.0f),
                                         Button("Edit").accessibilityId(automationPrefix + ".edit").variant(wui::ButtonVariant::Ghost)
                                             .onClick([edit, id = item.id] { edit(id); }),
-                                        IconButton("×", "Delete task").accessibilityId(automationPrefix + ".delete")
+                                        IconButton(wui::IconName::Delete, "Delete task").accessibilityId(automationPrefix + ".delete")
                                             .onClick([remove, id = item.id, requestConfirmation] {
                                                 requestConfirmation("Remove this task?",
                                                                     "This task will be removed from My day.",

@@ -242,10 +242,9 @@ void MenuButton::paint(PaintContext& context)
     }
     const float cx = bounds().x + bounds().width - 14.0f;
     const float cy = bounds().y + bounds().height * 0.5f;
-    context.strokePolyline(
-        {{cx - 4.0f, cy - 2.0f}, {cx, cy + 2.0f},
-         {cx + 4.0f, cy - 2.0f}},
-        current.stroke.thick, foreground);
+    drawIcon(context, IconName::ChevronDown,
+             {cx - 8.0f, cy - 8.0f, 16.0f, 16.0f}, foreground,
+             IconSize::Size16);
     clearDirty(DirtyFlag::Paint);
 }
 AccessibilityActionCapabilities MenuButton::accessibilityActions() const noexcept
@@ -326,10 +325,9 @@ void SplitButton::paint(PaintContext& context)
     context.fillRect({dividerX, bounds().y + current.stroke.thin, current.stroke.thin, std::max(0.0f,bounds().height-current.stroke.thin*2.0f)}, foreground);
     context.drawText(label_, bounds().x + current.spacing.horizontal.m, context.centeredTextBottom(label_, bounds(), current.typography.body1Strong.size, current.typography.body1Strong.weight), current.typography.body1Strong.size, foreground, current.typography.body1Strong.weight);
     const float cx = dividerX + arrowWidth * 0.5f; const float cy = bounds().y + bounds().height * 0.5f;
-    context.strokePolyline(
-        {{cx - 4.0f, cy - 2.0f}, {cx, cy + 2.0f},
-         {cx + 4.0f, cy - 2.0f}},
-        current.stroke.thick, foreground);
+    drawIcon(context, IconName::ChevronDown,
+             {cx - 8.0f, cy - 8.0f, 16.0f, 16.0f}, foreground,
+             IconSize::Size16);
     clearDirty(DirtyFlag::Paint);
 }
 bool SplitButton::onPointerEvent(const PointerEvent& event)
@@ -385,14 +383,19 @@ void Tooltip::paint(PaintContext& context) { if (!visible_) { clearDirty(DirtyFl
 Node* Tooltip::hitTest(PointF point) { (void)point; return nullptr; }
 
 IconButton::IconButton(std::string icon, std::string accessibleLabel) : icon_(std::move(icon)), accessibleLabel_(std::move(accessibleLabel)) {}
+IconButton::IconButton(IconName icon, std::string accessibleLabel) : fluentIcon_(icon), accessibleLabel_(std::move(accessibleLabel)) {}
 IconButton& IconButton::icon(std::string value) { setIcon(std::move(value)); return *this; }
 IconButton& IconButton::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
 IconButton& IconButton::checked(bool value) { setChecked(value); return *this; }
 IconButton& IconButton::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
-void IconButton::setIcon(std::string value) { icon_ = std::move(value); markDirty(DirtyFlag::Layout); }
+void IconButton::setIcon(std::string value) { icon_ = std::move(value); fluentIcon_.reset(); markDirty(DirtyFlag::Layout); }
+void IconButton::setIcon(IconName value) noexcept { fluentIcon_ = value; icon_.clear(); markDirty(DirtyFlag::Layout); }
+void IconButton::setIconStyle(IconStyle value) noexcept { if (iconStyle_ != value) { iconStyle_ = value; markDirty(DirtyFlag::Paint); } }
 void IconButton::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); }
 void IconButton::setChecked(std::optional<bool> value) noexcept { if (checked_ != value) { checked_ = value; markDirty(DirtyFlag::Paint); } }
 const std::string& IconButton::icon() const noexcept { return icon_; }
+std::optional<IconName> IconButton::fluentIcon() const noexcept { return fluentIcon_; }
+IconStyle IconButton::iconStyle() const noexcept { return iconStyle_; }
 const std::string& IconButton::accessibleLabel() const noexcept { return accessibleLabel_; }
 std::optional<bool> IconButton::checked() const noexcept { return checked_; }
 SizeF IconButton::measure(const Constraints& constraints) const { const float side = std::max(theme().controls.height, 32.0f); return constraints.clamp({side, side}); }
@@ -403,7 +406,12 @@ void IconButton::paint(PaintContext& context)
     if (!isEnabled()) background = current.colors.neutralBackground3.rest; else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) background = current.colors.neutralBackground1.pressed; else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) background = current.colors.neutralBackground1.hover;
     drawFocusRing(context, bounds(), current, focused);
     if (background.a != 0) context.fillRoundRect(bounds(), current.radius.medium, background);
-    if (!icon_.empty()) {
+    if (fluentIcon_) {
+        drawIcon(context, *fluentIcon_, bounds(),
+                 isEnabled() ? current.colors.neutralForeground1
+                             : current.colors.neutralForegroundDisabled,
+                 IconSize::Size20, iconStyle_);
+    } else if (!icon_.empty()) {
         context.drawText(icon_, bounds().x + (bounds().width - measuredTextWidth(icon_, current.typography.body2.size)) * 0.5f,
                          context.centeredTextBottom(icon_, bounds(), current.typography.body2.size, current.typography.body2.weight, current.typography.body2.family), current.typography.body2.size,
                          isEnabled() ? current.colors.neutralForeground1 : current.colors.neutralForegroundDisabled,

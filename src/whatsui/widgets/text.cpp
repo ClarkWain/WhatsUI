@@ -11,6 +11,9 @@ namespace wui {
 
 Text::Text(std::string value)
     : value_(std::move(value))
+    , fontFamily_(theme().typography.familyBase.empty()
+                      ? std::string(theme().typography.familyBaseFallback)
+                      : std::string(theme().typography.familyBase))
 {
 }
 
@@ -71,7 +74,11 @@ const std::string& Text::fontFamily() const noexcept
 
 void Text::setFontFamily(std::string family)
 {
-    if (family.empty()) family = "Segoe UI";
+    if (family.empty()) {
+        family = theme().typography.familyBase.empty()
+            ? std::string(theme().typography.familyBaseFallback)
+            : std::string(theme().typography.familyBase);
+    }
     if (fontFamily_ == family) return;
     fontFamily_ = std::move(family);
     markDirty(DirtyFlag::Layout);
@@ -79,7 +86,11 @@ void Text::setFontFamily(std::string family)
 
 void Text::setTextStyle(const TextStyleToken& style)
 {
-    const std::string family(style.family.empty() ? "Segoe UI" : style.family);
+    const std::string family(style.family.empty()
+                                 ? (theme().typography.familyBase.empty()
+                                        ? theme().typography.familyBaseFallback
+                                        : theme().typography.familyBase)
+                                 : style.family);
     const float size = std::max(1.0f, style.size);
     const int weight = std::clamp(style.weight, 1, 1000);
     const float lineHeight = std::max(0.0f, style.lineHeight);
@@ -132,7 +143,7 @@ SizeF Text::measure(const Constraints& constraints) const
 float Text::textWidth(const std::string& value) const
 {
     if (const TextMeasurer* measurer = textMeasurer()) {
-        return measurer->measureText(value, fontSize_, fontWeight_).width;
+        return measurer->measureText(value, fontSize_, fontWeight_, fontFamily_).width;
     }
     // Fallback is deliberately codepoint-oriented so non-ASCII text does not
     // become wider merely because UTF-8 uses multiple bytes.
@@ -144,7 +155,9 @@ float Text::textWidth(const std::string& value) const
 float Text::effectiveLineHeight() const noexcept
 {
     if (lineHeight_ > 0.0f) return lineHeight_;
-    if (const TextMeasurer* measurer = textMeasurer()) return measurer->measureText("M", fontSize_).height;
+    if (const TextMeasurer* measurer = textMeasurer()) {
+        return measurer->measureText("M", fontSize_, fontWeight_, fontFamily_).height;
+    }
     return fontSize_ * 1.25f;
 }
 
@@ -156,7 +169,8 @@ std::vector<std::string> Text::layoutLines(float availableWidth) const
         if (const auto* provider = dynamic_cast<const TextLayoutProvider*>(textMeasurer())) {
             const auto resolved = provider->layoutText(value_, fontSize_, fontWeight_, availableWidth,
                                                        effectiveLineHeight(), maxLines_,
-                                                       overflow_ == TextOverflow::Ellipsis);
+                                                       overflow_ == TextOverflow::Ellipsis,
+                                                       fontFamily_);
             std::vector<std::string> lines;
             lines.reserve(resolved.size());
             for (const auto& line : resolved) lines.push_back(line.text);
@@ -225,7 +239,7 @@ float Text::baselineOffset() const noexcept
     extents.ascent = fontSize_ * 0.8f;
     extents.descent = fontSize_ * 0.2f;
     if (const TextMeasurer* measurer = textMeasurer()) {
-        extents = measurer->measureText(value_, fontSize_, fontWeight_);
+        extents = measurer->measureText(value_, fontSize_, fontWeight_, fontFamily_);
     }
     const float height = lineHeight_ > 0.0f ? lineHeight_ : extents.height;
     const float glyphHeight = extents.ascent + extents.descent;

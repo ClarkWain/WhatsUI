@@ -166,15 +166,26 @@ struct StrokeTokens {
     float thickest{4.0f};
 };
 
+// Windows 11 exposes Segoe UI Variable through DirectWrite.  Keep the
+// long-established Segoe UI face alongside it as an explicit fallback token:
+// applications that install a custom renderer can preserve the same contract
+// on Windows versions where the variable family is unavailable.
+inline constexpr std::string_view kFluentWindowsFontFamily{"Segoe UI Variable"};
+inline constexpr std::string_view kFluentWindowsFontFallback{"Segoe UI"};
+
 struct TextStyleToken {
-    std::string_view family{"Segoe UI"};
+    std::string_view family{kFluentWindowsFontFamily};
     float size{14.0f};
     int weight{400};
     float lineHeight{20.0f};
+    // Kept separate from `family`: native backends select exactly one family
+    // name, while font fallback engines need the ordered fallback explicitly.
+    std::string_view fallbackFamily{kFluentWindowsFontFallback};
 };
 
 struct TypographyTokens {
-    std::string_view familyBase{"Segoe UI"};
+    std::string_view familyBase{kFluentWindowsFontFamily};
+    std::string_view familyBaseFallback{kFluentWindowsFontFallback};
     std::string_view familyMonospace{"Consolas"};
     std::string_view familyNumeric{"Bahnschrift"};
     float fontSizeBase100{10.0f};
@@ -201,23 +212,42 @@ struct TypographyTokens {
     int weightMedium{500};
     int weightSemibold{600};
     int weightBold{700};
-    TextStyleToken caption2{{"Segoe UI"}, 10.0f, 400, 14.0f};
-    TextStyleToken caption2Strong{{"Segoe UI"}, 10.0f, 600, 14.0f};
-    TextStyleToken caption1{{"Segoe UI"}, 12.0f, 400, 16.0f};
-    TextStyleToken caption1Strong{{"Segoe UI"}, 12.0f, 600, 16.0f};
-    TextStyleToken caption1Stronger{{"Segoe UI"}, 12.0f, 700, 16.0f};
-    TextStyleToken body1{{"Segoe UI"}, 14.0f, 400, 20.0f};
-    TextStyleToken body1Strong{{"Segoe UI"}, 14.0f, 600, 20.0f};
-    TextStyleToken body1Stronger{{"Segoe UI"}, 14.0f, 700, 20.0f};
-    TextStyleToken body2{{"Segoe UI"}, 16.0f, 400, 22.0f};
-    TextStyleToken subtitle2{{"Segoe UI"}, 16.0f, 600, 22.0f};
-    TextStyleToken subtitle2Stronger{{"Segoe UI"}, 16.0f, 700, 22.0f};
-    TextStyleToken subtitle1{{"Segoe UI"}, 20.0f, 600, 28.0f};
-    TextStyleToken title3{{"Segoe UI"}, 24.0f, 600, 32.0f};
-    TextStyleToken title2{{"Segoe UI"}, 28.0f, 600, 36.0f};
-    TextStyleToken title1{{"Segoe UI"}, 32.0f, 600, 40.0f};
-    TextStyleToken largeTitle{{"Segoe UI"}, 40.0f, 600, 52.0f};
-    TextStyleToken display{{"Segoe UI"}, 68.0f, 600, 92.0f};
+    // Web-compatible named aliases retained for existing applications. They
+    // all inherit the Windows default family above; the canonical Windows
+    // ramp below is the source of truth for new Windows-first components.
+    TextStyleToken caption2{{kFluentWindowsFontFamily}, 10.0f, 400, 14.0f};
+    TextStyleToken caption2Strong{{kFluentWindowsFontFamily}, 10.0f, 600, 14.0f};
+    TextStyleToken caption1{{kFluentWindowsFontFamily}, 12.0f, 400, 16.0f};
+    TextStyleToken caption1Strong{{kFluentWindowsFontFamily}, 12.0f, 600, 16.0f};
+    TextStyleToken caption1Stronger{{kFluentWindowsFontFamily}, 12.0f, 700, 16.0f};
+    TextStyleToken body1{{kFluentWindowsFontFamily}, 14.0f, 400, 20.0f};
+    TextStyleToken body1Strong{{kFluentWindowsFontFamily}, 14.0f, 600, 20.0f};
+    TextStyleToken body1Stronger{{kFluentWindowsFontFamily}, 14.0f, 700, 20.0f};
+    TextStyleToken body2{{kFluentWindowsFontFamily}, 16.0f, 400, 22.0f};
+    TextStyleToken subtitle2{{kFluentWindowsFontFamily}, 16.0f, 600, 22.0f};
+    TextStyleToken subtitle2Stronger{{kFluentWindowsFontFamily}, 16.0f, 700, 22.0f};
+    TextStyleToken subtitle1{{kFluentWindowsFontFamily}, 20.0f, 600, 28.0f};
+    TextStyleToken title3{{kFluentWindowsFontFamily}, 24.0f, 600, 32.0f};
+    TextStyleToken title2{{kFluentWindowsFontFamily}, 28.0f, 600, 36.0f};
+    TextStyleToken title1{{kFluentWindowsFontFamily}, 32.0f, 600, 40.0f};
+    TextStyleToken largeTitle{{kFluentWindowsFontFamily}, 40.0f, 600, 52.0f};
+    TextStyleToken display{{kFluentWindowsFontFamily}, 68.0f, 600, 92.0f};
+
+    // Fluent 2 Windows type ramp. These exact eight roles intentionally do
+    // not mirror the more granular Web ramp above: Windows specifies one
+    // caption, body, body-large, subtitle and title scale. Keep this nested
+    // group additive so the historical API remains source compatible.
+    struct WindowsRamp {
+        TextStyleToken caption{{kFluentWindowsFontFamily}, 12.0f, 400, 16.0f};
+        TextStyleToken body{{kFluentWindowsFontFamily}, 14.0f, 400, 20.0f};
+        TextStyleToken bodyStrong{{kFluentWindowsFontFamily}, 14.0f, 600, 20.0f};
+        TextStyleToken bodyLarge{{kFluentWindowsFontFamily}, 18.0f, 400, 24.0f};
+        TextStyleToken subtitle{{kFluentWindowsFontFamily}, 20.0f, 600, 28.0f};
+        TextStyleToken title{{kFluentWindowsFontFamily}, 28.0f, 600, 36.0f};
+        TextStyleToken largeTitle{{kFluentWindowsFontFamily}, 40.0f, 600, 52.0f};
+        TextStyleToken display{{kFluentWindowsFontFamily}, 68.0f, 600, 92.0f};
+    } windows{};
+
     // Deprecated convenience aliases; new widgets use named styles.
     // Windows desktop defaults use even logical sizes so common fractional
     // scales (notably 150%) land on whole physical-pixel font heights.

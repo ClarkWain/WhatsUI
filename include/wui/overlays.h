@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "wui/text_input.h"
+#include "wui/icons.h"
 #include "wui/widgets.h"
 
 namespace wui {
@@ -188,15 +189,14 @@ private:
     bool visible_{false};
 };
 
-// A compact Fluent command affordance.  icon is intentionally text-based for
-// now so applications can use their own icon font or familiar glyphs without
-// a separate asset pipeline; accessibleLabel remains available to platform
-// accessibility bridges.
+// A compact Fluent command affordance. The semantic overload uses WhatsUI's
+// bundled Fluent icon font; the string overload remains for custom icon fonts.
 class IconButton : public ControlNode {
 public:
     using ClickHandler = std::function<void()>;
 
     explicit IconButton(std::string icon = {}, std::string accessibleLabel = {});
+    explicit IconButton(IconName icon, std::string accessibleLabel = {});
 
     IconButton& icon(std::string value);
     IconButton& accessibleLabel(std::string value);
@@ -205,10 +205,14 @@ public:
     IconButton& checked(bool value);
     IconButton& onClick(ClickHandler handler);
     void setIcon(std::string value);
+    void setIcon(IconName value) noexcept;
+    void setIconStyle(IconStyle value) noexcept;
     void setAccessibleLabel(std::string value);
     void setChecked(std::optional<bool> value) noexcept;
 
     [[nodiscard]] const std::string& icon() const noexcept;
+    [[nodiscard]] std::optional<IconName> fluentIcon() const noexcept;
+    [[nodiscard]] IconStyle iconStyle() const noexcept;
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
     [[nodiscard]] std::optional<bool> checked() const noexcept;
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -221,6 +225,8 @@ public:
 
 private:
     std::string icon_;
+    std::optional<IconName> fluentIcon_;
+    IconStyle iconStyle_{IconStyle::Regular};
     std::string accessibleLabel_;
     std::optional<bool> checked_;
     ClickHandler onClick_;

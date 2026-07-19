@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <utility>
+#include "wui/icons.h"
 #include "wui/text_input.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
@@ -12,6 +13,7 @@ float widthOf(const std::string& s,const TextStyleToken& t) noexcept { if(const 
 Color validation(FieldValidationState s,const Theme& t) noexcept { switch(s){case FieldValidationState::Warning:return t.colors.statusWarning;case FieldValidationState::Error:return t.colors.statusDanger;case FieldValidationState::Success:return t.colors.statusSuccess;default:return t.colors.neutralForeground3;} }
 Color accent(MessageBarIntent i,const Theme& t) noexcept { switch(i){case MessageBarIntent::Success:return t.colors.statusSuccess;case MessageBarIntent::Warning:return t.colors.statusWarning;case MessageBarIntent::Error:return t.colors.statusDanger;default:return t.colors.statusInfo;} }
 Color messageBg(MessageBarIntent i) noexcept { switch(i){case MessageBarIntent::Success:return {237,247,237,255};case MessageBarIntent::Warning:return {255,244,206,255};case MessageBarIntent::Error:return {253,237,238,255};default:return {239,246,252,255};} }
+IconName messageIcon(MessageBarIntent intent) noexcept { switch(intent){case MessageBarIntent::Success:return IconName::CheckmarkCircle;case MessageBarIntent::Warning:return IconName::Warning;case MessageBarIntent::Error:return IconName::ErrorCircle;default:return IconName::Info;} }
 } // namespace
 
 Field::Field(std::string v):label_(std::move(v)){}
@@ -32,6 +34,67 @@ MessageBar::MessageBar(std::string v):body_(std::move(v)){} MessageBar& MessageB
 MessageBar& MessageBar::addAction(MessageBarAction v){actions_.push_back(std::move(v));markDirty(DirtyFlag::Layout);return *this;}MessageBar& MessageBar::clearActions(){actions_.clear();markDirty(DirtyFlag::Layout);return *this;}const std::vector<MessageBarAction>& MessageBar::actions()const noexcept{return actions_;}MessageBar& MessageBar::dismissible(bool v)noexcept{setDismissible(v);return *this;}void MessageBar::setDismissible(bool v)noexcept{if(dismissible_!=v){dismissible_=v;markDirty(DirtyFlag::Layout);}}bool MessageBar::isDismissible()const noexcept{return dismissible_;}MessageBar& MessageBar::onDismiss(DismissHandler h){onDismiss_=std::move(h);return *this;}
 SizeF MessageBar::measure(const Constraints& c)const{const auto&t=theme();const float chrome=kPad*2+kIcon+kMsgGap+(dismissible_?kActionH+kMsgGap:0)+actions_.size()*kActionW;const float available=std::max(1.f,c.maxWidth-chrome);const std::size_t lines=multiline_?std::max<std::size_t>(1,std::size_t(std::ceil(widthOf(body_,t.typography.body1)/available))):1;const float text=(title_.empty()?0:t.typography.body1Strong.lineHeight)+(title_.empty()||body_.empty()?0:2)+lines*t.typography.body1.lineHeight;return c.clamp({chrome+std::max(widthOf(title_,t.typography.body1Strong),widthOf(body_,t.typography.body1)),kPad*2+std::max(kIcon,text)});}void MessageBar::layout(const RectF& b){Node::layout(b);clearLayoutDirtyRecursively();}
 RectF MessageBar::dismissBounds()const noexcept{return {bounds().x+bounds().width-kPad-kActionH,bounds().y+kPad,kActionH,kActionH};}RectF MessageBar::actionBounds(std::size_t i)const noexcept{const float r=bounds().x+bounds().width-kPad-(dismissible_?kActionH+kMsgGap:0);return {r-kActionW*float(actions_.size()-i),bounds().y+bounds().height-kPad-kActionH,kActionW,kActionH};}
-void MessageBar::paint(PaintContext& c){const auto&t=theme();const Color a=accent(intent_,t);c.fillRoundRect(bounds(),t.radius.medium,messageBg(intent_));c.fillRoundRect({bounds().x,bounds().y,4,bounds().height},t.radius.medium,a);RectF icon{bounds().x+kPad,bounds().y+kPad,kIcon,kIcon};c.fillRoundRect(icon,t.radius.circular,a);c.drawText(intent_==MessageBarIntent::Info?"i":"!",icon.x+7,c.centeredTextBottom("i",icon,t.typography.caption1Strong.size,t.typography.caption1Strong.weight),t.typography.caption1Strong.size,t.colors.onBrand,t.typography.caption1Strong.weight,t.typography.caption1Strong.family);const float right=kPad+(dismissible_?kActionH+kMsgGap:0)+actions_.size()*kActionW;RectF content{icon.x+kIcon+kMsgGap,bounds().y+kPad,std::max(0.f,bounds().width-(icon.x+kIcon+kMsgGap-bounds().x)-right),bounds().height-kPad*2};float y=content.y;if(!title_.empty()){RectF b{content.x,y,content.width,t.typography.body1Strong.lineHeight};c.drawText(title_,b.x,c.centeredTextBottom(title_,b,t.typography.body1Strong.size,t.typography.body1Strong.weight),t.typography.body1Strong.size,t.colors.neutralForeground1,t.typography.body1Strong.weight,t.typography.body1Strong.family);y+=b.height+2;}if(!body_.empty()){RectF b{content.x,y,content.width,t.typography.body1.lineHeight};c.drawText(body_,b.x,c.centeredTextBottom(body_,b,t.typography.body1.size,t.typography.body1.weight),t.typography.body1.size,t.colors.neutralForeground1,t.typography.body1.weight,t.typography.body1.family);}for(std::size_t i=0;i<actions_.size();++i){auto b=actionBounds(i);c.fillRoundRect(b,t.radius.small,t.colors.neutralBackground1.rest);c.drawText(actions_[i].label,b.x+(b.width-widthOf(actions_[i].label,t.typography.caption1Strong))/2,c.centeredTextBottom(actions_[i].label,b,t.typography.caption1Strong.size,t.typography.caption1Strong.weight),t.typography.caption1Strong.size,t.colors.brandForeground1,t.typography.caption1Strong.weight,t.typography.caption1Strong.family);}if(dismissible_){auto b=dismissBounds();c.drawText("×",b.x+7,c.centeredTextBottom("×",b,t.typography.body1Strong.size,t.typography.body1Strong.weight),t.typography.body1Strong.size,t.colors.neutralForeground1,t.typography.body1Strong.weight,t.typography.body1Strong.family);}clearDirty(DirtyFlag::Paint);}
+void MessageBar::paint(PaintContext& c)
+{
+    const auto& t = theme();
+    const Color a = accent(intent_, t);
+    c.fillRoundRect(bounds(), t.radius.medium, messageBg(intent_));
+    c.fillRoundRect({bounds().x, bounds().y, 4, bounds().height},
+                    t.radius.medium, a);
+    const RectF icon{bounds().x + kPad, bounds().y + kPad, kIcon, kIcon};
+    drawIcon(c, messageIcon(intent_), icon, a, IconSize::Size20,
+             IconStyle::Filled);
+    const float right = kPad + (dismissible_ ? kActionH + kMsgGap : 0) +
+                        actions_.size() * kActionW;
+    const RectF content{
+        icon.x + kIcon + kMsgGap, bounds().y + kPad,
+        std::max(0.0f, bounds().width -
+                           (icon.x + kIcon + kMsgGap - bounds().x) - right),
+        bounds().height - kPad * 2};
+    float y = content.y;
+    if (!title_.empty()) {
+        const RectF box{content.x, y, content.width,
+                        t.typography.body1Strong.lineHeight};
+        c.drawText(title_, box.x,
+                   c.centeredTextBottom(title_, box,
+                                        t.typography.body1Strong.size,
+                                        t.typography.body1Strong.weight),
+                   t.typography.body1Strong.size,
+                   t.colors.neutralForeground1,
+                   t.typography.body1Strong.weight,
+                   t.typography.body1Strong.family);
+        y += box.height + 2;
+    }
+    if (!body_.empty()) {
+        const RectF box{content.x, y, content.width,
+                        t.typography.body1.lineHeight};
+        c.drawText(body_, box.x,
+                   c.centeredTextBottom(body_, box, t.typography.body1.size,
+                                        t.typography.body1.weight),
+                   t.typography.body1.size, t.colors.neutralForeground1,
+                   t.typography.body1.weight, t.typography.body1.family);
+    }
+    for (std::size_t index = 0; index < actions_.size(); ++index) {
+        const auto box = actionBounds(index);
+        c.fillRoundRect(box, t.radius.small,
+                        t.colors.neutralBackground1.rest);
+        c.drawText(
+            actions_[index].label,
+            box.x + (box.width -
+                     widthOf(actions_[index].label,
+                             t.typography.caption1Strong)) /
+                        2,
+            c.centeredTextBottom(actions_[index].label, box,
+                                 t.typography.caption1Strong.size,
+                                 t.typography.caption1Strong.weight),
+            t.typography.caption1Strong.size, t.colors.brandForeground1,
+            t.typography.caption1Strong.weight,
+            t.typography.caption1Strong.family);
+    }
+    if (dismissible_)
+        drawIcon(c, IconName::Dismiss, dismissBounds(),
+                 t.colors.neutralForeground1, IconSize::Size16);
+    clearDirty(DirtyFlag::Paint);
+}
 bool MessageBar::onPointerEvent(const PointerEvent&e){if(!isEnabled())return false;if(e.action==PointerAction::Down&&e.button==MouseButton::Left){setVisualState(ControlVisualState::Pressed,true);return true;}if(e.action==PointerAction::Up&&e.button==MouseButton::Left){const bool p=(visualStates()&toMask(ControlVisualState::Pressed))!=0;setVisualState(ControlVisualState::Pressed,false);if(!p)return false;if(dismissible_&&dismissBounds().contains(e.position)){dismiss();return true;}for(std::size_t i=0;i<actions_.size();++i)if(actionBounds(i).contains(e.position)){if(actions_[i].onInvoke)actions_[i].onInvoke();return true;}return true;}if(e.action==PointerAction::Enter){setVisualState(ControlVisualState::Hovered,true);return true;}if(e.action==PointerAction::Leave||e.action==PointerAction::Cancel){setVisualState(ControlVisualState::Hovered,false);setVisualState(ControlVisualState::Pressed,false);return true;}return false;}bool MessageBar::onKeyEvent(const KeyEvent&e){if(isEnabled()&&dismissible_&&e.action==KeyAction::Down&&e.keyCode==27){dismiss();return true;}return false;}AccessibilityActionCapabilities MessageBar::accessibilityActions()const noexcept{AccessibilityActionCapabilities a;a.invoke=dismissible_;return a;}AccessibilityActionStatus MessageBar::performAccessibilityAction(AccessibilityActionKind k,std::string_view){if(k!=AccessibilityActionKind::Invoke||!dismissible_)return AccessibilityActionStatus::NotSupported;if(!isEnabled())return AccessibilityActionStatus::ElementNotEnabled;dismiss();return AccessibilityActionStatus::Succeeded;}void MessageBar::dismiss(){if(onDismiss_)onDismiss_();}
 } // namespace wui
