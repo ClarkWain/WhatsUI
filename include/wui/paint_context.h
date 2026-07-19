@@ -1,7 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "wui/frame_stats.h"
 #include "wui/types.h"
@@ -11,6 +14,7 @@
 #include "wsc/CanvasAdapter.h"
 #include "wsc/Color.h"
 #include "wsc/Paint.h"
+#include "wsc/Path.h"
 #include "wsc/base.h"
 #endif
 
@@ -59,14 +63,15 @@ public:
     // labels so Fluent controls cannot drift apart when Windows resolves a
     // different font metric than the nominal point size.
     [[nodiscard]] float centeredTextBottom(const std::string& text, const RectF& lineBox,
-                                           float textSize, int fontWeight = 400) const noexcept
+                                           float textSize, int fontWeight = 400,
+                                           std::string_view fontFamily = "Segoe UI") const noexcept
     {
         float lineHeight = textSize * 1.25f;
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ != nullptr && !text.empty()) {
             wsc::Paint paint;
             paint.setTextSize(textSize * canvasCoordinateScale_);
-            paint.setFontFamily("Segoe UI");
+            paint.setFontFamily(std::string(fontFamily));
             paint.setFontWeight(fontWeight);
             const auto metrics = canvas_->measureTextMetrics(text, paint);
             const float physicalHeight = metrics.lineHeight > 0.0f ? metrics.lineHeight : metrics.height;
@@ -165,8 +170,203 @@ public:
 #endif
     }
 
+    void strokeRoundRect(const RectF& rect, float radius, float width, Color color)
+    {
+        ++paintStats_.commandCount;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ == nullptr || width <= 0.0f) return;
+        wsc::Paint paint;
+        paint.setStyle(wsc::Paint::Style::STROKE);
+        paint.setStrokeWidth(width * canvasCoordinateScale_);
+        paint.setColor(wsc::Color(color.r, color.g, color.b, color.a));
+        paint.setAntiAlias(true);
+        canvas_->drawRoundRect(wsc::RectF(rect.x * canvasCoordinateScale_, rect.y * canvasCoordinateScale_,
+                                          rect.width * canvasCoordinateScale_, rect.height * canvasCoordinateScale_),
+                               radius * canvasCoordinateScale_, paint);
+#else
+        (void)rect;
+        (void)radius;
+        (void)width;
+        (void)color;
+#endif
+    }
+
+    // Paint a rounded surface with an inset stroke.  A surprising number of
+    // controls used to emulate a one-DIP border by drawing a stroke-coloured
+    // rounded rectangle and then a smaller fill on top.  At fractional DPR
+    // values (especially 150%) both silhouettes were independently
+    // antialiased, leaving a soft or stair-stepped seam around the corners.
+    //
+    // Keeping the fill at the requested outer bounds and centring the stroke
+    // half a stroke width inside those bounds gives the renderer one shared
+    // outer silhouette.  The stroke's outer edge lands exactly on the
+    // surface edge while its inner coverage is composited over the fill.
+    void fillStrokeRoundRect(const RectF& rect, float radius, float strokeWidth,
+                             Color fillColor, Color strokeColor)
+    {
+        if (rect.width <= 0.0f || rect.height <= 0.0f) {
+            return;
+        }
+        if (fillColor.a != 0) {
+            fillRoundRect(rect, radius, fillColor);
+        }
+        if (strokeWidth <= 0.0f || strokeColor.a == 0) {
+            return;
+        }
+        const float inset = strokeWidth * 0.5f;
+        strokeRoundRect(
+            {rect.x + inset, rect.y + inset,
+             std::max(0.0f, rect.width - strokeWidth),
+             std::max(0.0f, rect.height - strokeWidth)},
+            std::max(0.0f, radius - inset), strokeWidth, strokeColor);
+    }
+
+    // Backend-neutral open arc used by progress indicators. Rounded caps
+    // avoid the cut-off ends produced by a polygonal approximation at compact
+    // Fluent spinner sizes.
+    void strokeArc(const RectF& bounds, float startRadians, float sweepRadians,
+                   float width, Color color)
+    {
+        ++paintStats_.commandCount;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ == nullptr || width <= 0.0f || color.a == 0 ||
+            bounds.width <= 0.0f || bounds.height <= 0.0f) {
+            return;
+        }
+        wsc::Paint paint;
+        paint.setStyle(wsc::Paint::Style::STROKE);
+        paint.setStrokeWidth(width * canvasCoordinateScale_);
+        paint.setStrokeCap(wsc::Paint::StrokeCap::ROUND);
+        paint.setColor(wsc::Color(color.r, color.g, color.b, color.a));
+        paint.setAntiAlias(true);
+        canvas_->drawArc(
+            wsc::RectF(bounds.x * canvasCoordinateScale_,
+                       bounds.y * canvasCoordinateScale_,
+                       bounds.width * canvasCoordinateScale_,
+                       bounds.height * canvasCoordinateScale_),
+            startRadians, sweepRadians, wsc::Canvas::ArcMode::OPEN, paint);
+#else
+        (void)bounds;
+        (void)startRadians;
+        (void)sweepRadians;
+        (void)width;
+        (void)color;
+#endif
+    }
+
+    // Backend-neutral polygon primitives used by icon-like controls. Keeping
+    // these in PaintContext preserves DPR conversion and lets headless paint
+    // statistics count the operation even when no Canvas is attached.
+    void fillPolygon(const std::vector<PointF>& points, Color color)
+    {
+        ++paintStats_.commandCount;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ == nullptr || points.size() < 3) return;
+        wsc::Path path;
+        path.moveTo(points.front().x * canvasCoordinateScale_, points.front().y * canvasCoordinateScale_);
+        for (std::size_t index = 1; index < points.size(); ++index) {
+            path.lineTo(points[index].x * canvasCoordinateScale_, points[index].y * canvasCoordinateScale_);
+        }
+        path.close();
+        wsc::Paint paint;
+        paint.setStyle(wsc::Paint::Style::FILL);
+        paint.setColor(wsc::Color(color.r, color.g, color.b, color.a));
+        paint.setAntiAlias(true);
+        canvas_->drawPath(path, paint);
+#else
+        (void)points;
+        (void)color;
+#endif
+    }
+
+    void strokePolygon(const std::vector<PointF>& points, float width, Color color)
+    {
+        ++paintStats_.commandCount;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ == nullptr || points.size() < 2 || width <= 0.0f) return;
+        wsc::Path path;
+        path.moveTo(points.front().x * canvasCoordinateScale_, points.front().y * canvasCoordinateScale_);
+        for (std::size_t index = 1; index < points.size(); ++index) {
+            path.lineTo(points[index].x * canvasCoordinateScale_, points[index].y * canvasCoordinateScale_);
+        }
+        path.close();
+        wsc::Paint paint;
+        paint.setStyle(wsc::Paint::Style::STROKE);
+        paint.setStrokeWidth(width * canvasCoordinateScale_);
+        paint.setColor(wsc::Color(color.r, color.g, color.b, color.a));
+        paint.setAntiAlias(true);
+        canvas_->drawPath(path, paint);
+#else
+        (void)points;
+        (void)width;
+        (void)color;
+#endif
+    }
+
+    void strokePolyline(const std::vector<PointF>& points, float width,
+                        Color color)
+    {
+        ++paintStats_.commandCount;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ == nullptr || points.size() < 2 || width <= 0.0f) {
+            return;
+        }
+        wsc::Path path;
+        path.moveTo(points.front().x * canvasCoordinateScale_,
+                    points.front().y * canvasCoordinateScale_);
+        for (std::size_t index = 1; index < points.size(); ++index) {
+            path.lineTo(points[index].x * canvasCoordinateScale_,
+                        points[index].y * canvasCoordinateScale_);
+        }
+        wsc::Paint paint;
+        paint.setStyle(wsc::Paint::Style::STROKE);
+        paint.setStrokeWidth(width * canvasCoordinateScale_);
+        paint.setStrokeCap(wsc::Paint::StrokeCap::ROUND);
+        paint.setStrokeJoin(wsc::Paint::StrokeJoin::ROUND);
+        paint.setColor(wsc::Color(color.r, color.g, color.b, color.a));
+        paint.setAntiAlias(true);
+        canvas_->drawPath(path, paint);
+#else
+        (void)points;
+        (void)width;
+        (void)color;
+#endif
+    }
+
+    // Elevation is recorded independently from fills so performance tools can
+    // identify an accidental proliferation of expensive blurred surfaces.
+    // Callers pass a semantic Theme::elevation token rather than ad-hoc blur
+    // values; the context only performs the logical-to-device conversion.
+    void drawBoxShadow(const RectF& rect, float radius, float blur, float offsetX,
+                       float offsetY, float spread, Color color)
+    {
+        ++paintStats_.commandCount;
+        ++paintStats_.boxShadowCalls;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ == nullptr || color.a == 0 || blur <= 0.0f) {
+            return;
+        }
+        const auto started = std::chrono::steady_clock::now();
+        canvas_->drawBoxShadow(
+            wsc::RectF(rect.x * canvasCoordinateScale_, rect.y * canvasCoordinateScale_,
+                       rect.width * canvasCoordinateScale_, rect.height * canvasCoordinateScale_),
+            radius * canvasCoordinateScale_, spread * canvasCoordinateScale_,
+            blur * canvasCoordinateScale_, offsetX * canvasCoordinateScale_,
+            offsetY * canvasCoordinateScale_, wsc::Color(color.r, color.g, color.b, color.a));
+        paintStats_.boxShadowMilliseconds += elapsedMilliseconds(started);
+#else
+        (void)rect;
+        (void)radius;
+        (void)blur;
+        (void)offsetX;
+        (void)offsetY;
+        (void)spread;
+        (void)color;
+#endif
+    }
+
     void drawText(const std::string& text, float x, float y, float textSize, Color color,
-                  int fontWeight = 400)
+                  int fontWeight = 400, std::string_view fontFamily = "Segoe UI")
     {
         ++paintStats_.commandCount;
         ++paintStats_.textDrawCalls;
@@ -178,11 +378,11 @@ public:
         wsc::CanvasAdapter adapter(*canvas_);
         adapter.setFillColor(wsc::Color(color.r, color.g, color.b, color.a));
         adapter.setTextSize(textSize * canvasCoordinateScale_);
-        // Fluent on Windows is designed around Segoe UI. Selecting it
-        // explicitly also routes through WhatsCanvas' native Windows text
-        // adapter when the portable raster path is unavailable, instead of
-        // falling back to its block-glyph emergency renderer.
-        adapter.fillPaint().setFontFamily("Segoe UI");
+        // Fluent defaults to Segoe UI on Windows. The explicit family is also
+        // routed through WhatsCanvas' native text adapter, so a custom theme
+        // can select another installed family without falling back to block
+        // glyphs on the portable raster path.
+        adapter.fillPaint().setFontFamily(std::string(fontFamily));
         adapter.fillPaint().setFontWeight(fontWeight);
         // WhatsUI's text coordinates are baselines (the layout code computes
         // ascent/descent and vertically centers using that convention).
@@ -198,6 +398,7 @@ public:
         (void)y;
         (void)textSize;
         (void)color;
+        (void)fontFamily;
 #endif
     }
 
@@ -255,6 +456,29 @@ public:
         }
 #else
         (void)rect;
+#endif
+    }
+
+    // Rounded clipping is essential for media previews: painting an opaque
+    // rounded overlay only hides corners on one background and fails for
+    // transparent/video content. Use the backend's actual clip path instead.
+    void clipRoundRect(const RectF& rect, float radius) noexcept
+    {
+        ++paintStats_.commandCount;
+        ++paintStats_.clipRectCalls;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ != nullptr) {
+            const auto started = std::chrono::steady_clock::now();
+            wsc::Path path;
+            path.addRoundRect(wsc::RectF(rect.x * canvasCoordinateScale_, rect.y * canvasCoordinateScale_,
+                                         rect.width * canvasCoordinateScale_, rect.height * canvasCoordinateScale_),
+                              std::max(0.0f, radius) * canvasCoordinateScale_);
+            canvas_->clipPath(path);
+            paintStats_.clipRectMilliseconds += elapsedMilliseconds(started);
+        }
+#else
+        (void)rect;
+        (void)radius;
 #endif
     }
 

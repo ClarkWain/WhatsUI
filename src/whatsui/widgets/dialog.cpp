@@ -6,6 +6,19 @@
 
 namespace wui {
 
+namespace {
+
+void paintElevation(PaintContext& context, const RectF& bounds, float radius,
+                    const ElevationToken& token)
+{
+    for (const ShadowLayerToken* layer : {&token.ambient, &token.key}) {
+        context.drawBoxShadow(bounds, radius, layer->blur, layer->offsetX,
+                              layer->offsetY, layer->spread, layer->color);
+    }
+}
+
+} // namespace
+
 Dialog& Dialog::content(std::unique_ptr<Node> content)
 {
     clearChildren();
@@ -56,9 +69,12 @@ void Dialog::paint(PaintContext& context)
     context.fillRect(bounds(), current.colors.scrim);
     if (!children().empty()) {
         const auto& panel = children().front()->bounds();
-        context.fillRoundRect(panel, current.radius.lg, current.colors.border);
-        context.fillRoundRect({panel.x + 1.0f, panel.y + 1.0f, std::max(0.0f, panel.width - 2.0f), std::max(0.0f, panel.height - 2.0f)},
-                              std::max(0.0f, current.radius.lg - 1.0f), current.colors.surface);
+        paintElevation(context, panel, current.radius.xLarge,
+                       current.elevation.shadow64);
+        context.fillStrokeRoundRect(panel, current.radius.xLarge,
+                                    current.stroke.thin,
+                                    current.colors.surfaceRaised,
+                                    current.colors.neutralStroke1);
     }
     ContainerNode::paint(context);
     clearDirty(DirtyFlag::Paint);

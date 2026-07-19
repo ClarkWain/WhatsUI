@@ -133,14 +133,29 @@ void ListView::paint(PaintContext& context)
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     const float focusInset = current.controls.focusInset;
     if (focused) {
-        context.fillRoundRect({bounds().x - focusInset, bounds().y - focusInset,
-                               bounds().width + focusInset * 2.0f, bounds().height + focusInset * 2.0f},
-                              current.radius.md + focusInset, current.colors.focus);
+        context.strokeRoundRect(
+            {bounds().x - focusInset, bounds().y - focusInset,
+             bounds().width + focusInset * 2.0f,
+             bounds().height + focusInset * 2.0f},
+            current.radius.medium + focusInset,
+            current.stroke.thick, current.colors.strokeFocusOuter);
+        const float innerInset =
+            std::max(0.0f,
+                     focusInset - current.stroke.thin * 0.5f);
+        context.strokeRoundRect(
+            {bounds().x - innerInset, bounds().y - innerInset,
+             bounds().width + innerInset * 2.0f,
+             bounds().height + innerInset * 2.0f},
+            current.radius.medium + innerInset,
+            current.stroke.thin, current.colors.strokeFocusInner);
     }
-    context.fillRoundRect(bounds(), current.radius.md, current.colors.border);
-    const RectF content{bounds().x + 1.0f, bounds().y + 1.0f,
-                        std::max(0.0f, bounds().width - 2.0f), std::max(0.0f, bounds().height - 2.0f)};
-    context.fillRoundRect(content, std::max(0.0f, current.radius.md - 1.0f), current.colors.surface);
+    const float stroke = current.stroke.thin;
+    const RectF content{bounds().x + stroke, bounds().y + stroke,
+                        std::max(0.0f, bounds().width - stroke * 2.0f), std::max(0.0f, bounds().height - stroke * 2.0f)};
+    context.fillStrokeRoundRect(bounds(), current.radius.medium,
+                                stroke,
+                                current.colors.neutralBackground1.rest,
+                                current.colors.neutralStroke1);
 
     const int checkpoint = context.save();
     context.clipRect(content);
@@ -152,15 +167,24 @@ void ListView::paint(PaintContext& context)
         const bool rowSelected = static_cast<int>(index) == selected;
         const bool rowPressed = static_cast<int>(index) == pressedIndex_;
         const bool rowHovered = static_cast<int>(index) == hoveredIndex_;
-        Color fill = current.colors.surface;
+        Color fill = current.colors.neutralBackground1.rest;
         if (rowSelected) fill = Color{230, 244, 253, 255};
         if (itemEnabled && rowHovered) fill = rowSelected ? Color{217, 237, 249, 255} : current.colors.surfaceHover;
         if (itemEnabled && rowPressed) fill = rowSelected ? Color{205, 230, 246, 255} : current.colors.surfacePressed;
         context.fillRect(row, fill);
-        const Color text = itemEnabled ? current.colors.text : current.colors.textDisabled;
-        context.drawText(items_[index].label, row.x + kHorizontalPadding,
-                         row.y + (row.height + current.typography.body) * 0.5f - 2.0f,
-                         current.typography.body, text);
+        const Color text =
+            itemEnabled ? current.colors.neutralForeground1
+                        : current.colors.neutralForegroundDisabled;
+        context.drawText(
+            items_[index].label, row.x + kHorizontalPadding,
+            context.centeredTextBottom(
+                items_[index].label, row,
+                current.typography.body1.size,
+                current.typography.body1.weight,
+                current.typography.body1.family),
+            current.typography.body1.size, text,
+            current.typography.body1.weight,
+            current.typography.body1.family);
     }
     context.restoreTo(checkpoint);
     clearDirty(DirtyFlag::Paint);
@@ -261,7 +285,7 @@ int ListView::nextEnabled(int from, int direction) const noexcept
 
 float ListView::preferredWidth() const noexcept
 {
-    const float characterWidth = theme().typography.body * 0.56f;
+    const float characterWidth = theme().typography.body1.size * 0.56f;
     float width = kDefaultWidth;
     for (const Item& item : items_) {
         width = std::max(width, static_cast<float>(item.label.size()) * characterWidth + kHorizontalPadding * 2.0f);

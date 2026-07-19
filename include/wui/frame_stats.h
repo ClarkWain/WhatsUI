@@ -50,6 +50,7 @@ struct PaintOperationStats {
     std::size_t commandCount{0};
     std::size_t fillRectCalls{0};
     std::size_t fillRoundRectCalls{0};
+    std::size_t boxShadowCalls{0};
     std::size_t textDrawCalls{0};
     std::size_t clipRectCalls{0};
 
@@ -59,6 +60,7 @@ struct PaintOperationStats {
     // traversal or one particular backend operation.
     double fillRectMilliseconds{0.0};
     double fillRoundRectMilliseconds{0.0};
+    double boxShadowMilliseconds{0.0};
     double textDrawMilliseconds{0.0};
     double clipRectMilliseconds{0.0};
 };

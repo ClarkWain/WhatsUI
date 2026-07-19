@@ -93,6 +93,74 @@ private:
     std::vector<T> pendingNotifications_;
 };
 
+// Move-only RAII ownership for one State observer. The observed State must
+// outlive this handle, matching Binding's lifetime contract. Re-subscribing
+// first unregisters the previous observer, which lets widgets safely bind to
+// a different State without retaining teardown work for every old source.
+template <typename T>
+class StateSubscription {
+public:
+    using Callback = typename State<T>::Callback;
+    using SubscriptionId = typename State<T>::SubscriptionId;
+
+    StateSubscription() = default;
+
+    StateSubscription(State<T>& state, Callback callback)
+    {
+        subscribe(state, std::move(callback));
+    }
+
+    ~StateSubscription()
+    {
+        reset();
+    }
+
+    StateSubscription(const StateSubscription&) = delete;
+    StateSubscription& operator=(const StateSubscription&) = delete;
+
+    StateSubscription(StateSubscription&& other) noexcept
+        : state_(std::exchange(other.state_, nullptr))
+        , id_(std::exchange(other.id_, 0))
+    {
+    }
+
+    StateSubscription& operator=(StateSubscription&& other) noexcept
+    {
+        if (this != &other) {
+            reset();
+            state_ = std::exchange(other.state_, nullptr);
+            id_ = std::exchange(other.id_, 0);
+        }
+        return *this;
+    }
+
+    void subscribe(State<T>& state, Callback callback)
+    {
+        reset();
+        const auto id = state.subscribe(std::move(callback));
+        state_ = &state;
+        id_ = id;
+    }
+
+    void reset()
+    {
+        if (state_ != nullptr) {
+            state_->unsubscribe(id_);
+            state_ = nullptr;
+            id_ = 0;
+        }
+    }
+
+    [[nodiscard]] bool active() const noexcept
+    {
+        return state_ != nullptr;
+    }
+
+private:
+    State<T>* state_{nullptr};
+    SubscriptionId id_{0};
+};
+
 template <typename T>
 class Binding {
 public:

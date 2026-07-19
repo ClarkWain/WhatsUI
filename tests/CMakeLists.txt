@@ -131,13 +131,20 @@ target_link_libraries(WhatsUIScrollViewTests
 
 target_compile_features(WhatsUIScrollViewTests PRIVATE cxx_std_17)
 
+add_executable(WhatsUITextAreaCompletionTests
+    text_area_completion_tests.cpp
+)
+target_link_libraries(WhatsUITextAreaCompletionTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUITextAreaCompletionTests PRIVATE cxx_std_17)
+
 if(WHATSUI_ENABLE_SANITIZERS)
     foreach(whatsui_test_target IN ITEMS
             WhatsUISmokeTests
             WhatsUILayoutTests
             WhatsUIStateTests
             WhatsUIWindowTests
-            WhatsUIScrollViewTests)
+            WhatsUIScrollViewTests
+            WhatsUITextAreaCompletionTests)
         whatsui_prepare_sanitized_executable(${whatsui_test_target})
     endforeach()
 endif()
@@ -166,11 +173,353 @@ add_test(
     COMMAND WhatsUIScrollViewTests
 )
 
+add_test(
+    NAME whatsui_text_area_completion_tests
+    COMMAND WhatsUITextAreaCompletionTests
+)
+
+add_executable(WhatsUIFluentFieldMessageBarTests fluent_field_messagebar_tests.cpp)
+target_link_libraries(WhatsUIFluentFieldMessageBarTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentFieldMessageBarTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_field_messagebar COMMAND WhatsUIFluentFieldMessageBarTests)
+set_tests_properties(whatsui_fluent_field_messagebar PROPERTIES LABELS "fluent;field;messagebar;accessibility")
+
+add_executable(WhatsUIRatingImageTests
+    rating_image_tests.cpp
+)
+target_link_libraries(WhatsUIRatingImageTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIRatingImageTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_rating_image_tests COMMAND WhatsUIRatingImageTests)
+set_tests_properties(whatsui_rating_image_tests PROPERTIES LABELS "fluent;rating;image;accessibility")
+
+add_executable(WhatsUIFluentBadgeTests
+    fluent_badge_tests.cpp
+)
+target_link_libraries(WhatsUIFluentBadgeTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentBadgeTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_badge_tests COMMAND WhatsUIFluentBadgeTests)
+set_tests_properties(whatsui_fluent_badge_tests PROPERTIES LABELS "fluent;badge;accessibility")
+
+add_executable(WhatsUIFluentRangeControlsTests
+    fluent_range_controls_tests.cpp
+)
+target_link_libraries(WhatsUIFluentRangeControlsTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentRangeControlsTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_range_controls COMMAND WhatsUIFluentRangeControlsTests)
+set_tests_properties(whatsui_fluent_range_controls PROPERTIES
+    LABELS "fluent;divider;slider;progress;radio;switch;accessibility")
+
+add_executable(WhatsUIFluentFeedbackTests
+    fluent_feedback_tests.cpp
+)
+target_link_libraries(WhatsUIFluentFeedbackTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentFeedbackTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_feedback COMMAND WhatsUIFluentFeedbackTests)
+set_tests_properties(whatsui_fluent_feedback PROPERTIES
+    LABELS "fluent;toast;spinner;overlay;accessibility")
+
+add_executable(WhatsUIFluentPopoverTests fluent_popover_tests.cpp)
+target_link_libraries(WhatsUIFluentPopoverTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentPopoverTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_popover COMMAND WhatsUIFluentPopoverTests)
+
+add_executable(WhatsUIFluentDrawerTests fluent_drawer_tests.cpp)
+target_link_libraries(WhatsUIFluentDrawerTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentDrawerTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_drawer COMMAND WhatsUIFluentDrawerTests)
+set_tests_properties(whatsui_fluent_drawer PROPERTIES LABELS "fluent;drawer;overlay;accessibility")
+
+add_executable(WhatsUIFluentAccordionTests fluent_accordion_tests.cpp)
+target_link_libraries(WhatsUIFluentAccordionTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentAccordionTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_accordion COMMAND WhatsUIFluentAccordionTests)
+set_tests_properties(whatsui_fluent_accordion PROPERTIES LABELS "fluent;accordion;accessibility")
+
+add_executable(WhatsUIFluentPersonaTests fluent_persona_tests.cpp)
+target_link_libraries(WhatsUIFluentPersonaTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentPersonaTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_persona COMMAND WhatsUIFluentPersonaTests)
+set_tests_properties(whatsui_fluent_persona PROPERTIES LABELS "fluent;persona;avatar;presence;accessibility")
+
+add_executable(WhatsUIFluentDateTimeTests fluent_date_time_tests.cpp)
+target_link_libraries(WhatsUIFluentDateTimeTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentDateTimeTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_date_time COMMAND WhatsUIFluentDateTimeTests)
+set_tests_properties(whatsui_fluent_date_time PROPERTIES LABELS "fluent;calendar;datepicker;timepicker;accessibility")
+
+add_executable(WhatsUIFluentTableTests fluent_table_tests.cpp)
+target_link_libraries(WhatsUIFluentTableTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentTableTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_table COMMAND WhatsUIFluentTableTests)
+set_tests_properties(whatsui_fluent_table PROPERTIES LABELS "fluent;table;datagrid;accessibility")
+
+add_executable(WhatsUIFluentTreeTests fluent_tree_tests.cpp)
+target_link_libraries(WhatsUIFluentTreeTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentTreeTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_tree COMMAND WhatsUIFluentTreeTests)
+set_tests_properties(whatsui_fluent_tree PROPERTIES LABELS "fluent;tree;accessibility")
+
+set_tests_properties(whatsui_fluent_popover PROPERTIES
+    LABELS "fluent;popover;teachingpopover;overlay;accessibility")
+
+add_executable(WhatsUIFluentNavigationTests fluent_navigation_tests.cpp)
+target_link_libraries(WhatsUIFluentNavigationTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentNavigationTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_navigation COMMAND WhatsUIFluentNavigationTests)
+set_tests_properties(whatsui_fluent_navigation PROPERTIES
+    LABELS "fluent;toolbar;tabs;link;breadcrumb;accessibility")
+
+add_executable(WhatsUIFluentSelectionControlsTests fluent_selection_controls_tests.cpp)
+target_link_libraries(WhatsUIFluentSelectionControlsTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIFluentSelectionControlsTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_fluent_selection_controls_tests COMMAND WhatsUIFluentSelectionControlsTests)
+set_tests_properties(whatsui_fluent_selection_controls_tests PROPERTIES
+    LABELS "fluent;listbox;combobox;dropdown;accessibility")
+
+add_executable(WhatsUIAvatarGroupTests avatar_group_tests.cpp)
+target_link_libraries(WhatsUIAvatarGroupTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIAvatarGroupTests PRIVATE cxx_std_17)
+add_test(NAME whatsui_avatar_group_tests COMMAND WhatsUIAvatarGroupTests)
+set_tests_properties(whatsui_avatar_group_tests PROPERTIES
+    LABELS "fluent;avatar;group;presence;accessibility")
+
+# WhatsUI is a static library. When the optional WhatsCanvas bridge is enabled,
+# behavior tests that pull widget paint objects must also resolve the bridge's
+# Canvas symbols even when they do not create a real Canvas themselves.
+if(TARGET WhatsCanvasSoftware)
+    target_link_libraries(WhatsUIFluentFieldMessageBarTests PRIVATE WhatsCanvas::Software)
+    add_executable(WhatsUIFluentFieldMessageBarVisualTests fluent_field_messagebar_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentFieldMessageBarVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentFieldMessageBarVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_field_messagebar_visual
+        COMMAND WhatsUIFluentFieldMessageBarVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_field_messagebar.ppm 1.0)
+    add_test(NAME whatsui_fluent_field_messagebar_visual_150dpi
+        COMMAND WhatsUIFluentFieldMessageBarVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_field_messagebar_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_field_messagebar_visual whatsui_fluent_field_messagebar_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;field;messagebar;dpi")
+    target_link_libraries(WhatsUIFluentFeedbackTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentPopoverTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentDrawerTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentAccordionTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentPersonaTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentDateTimeTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentTableTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentTreeTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentNavigationTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentSelectionControlsTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIAvatarGroupTests PRIVATE WhatsCanvas::Software)
+
+    add_executable(WhatsUIFluentDrawerVisualTests fluent_drawer_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentDrawerVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentDrawerVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_drawer_visual
+        COMMAND WhatsUIFluentDrawerVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_drawer_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_drawer_visual_150dpi
+        COMMAND WhatsUIFluentDrawerVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_drawer_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_drawer_visual whatsui_fluent_drawer_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;drawer;dpi")
+
+    add_executable(WhatsUIFluentAccordionVisualTests fluent_accordion_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentAccordionVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentAccordionVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_accordion_visual
+        COMMAND WhatsUIFluentAccordionVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_accordion_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_accordion_visual_150dpi
+        COMMAND WhatsUIFluentAccordionVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_accordion_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_accordion_visual whatsui_fluent_accordion_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;accordion;dpi")
+
+    add_executable(WhatsUIFluentPersonaVisualTests fluent_persona_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentPersonaVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentPersonaVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_persona_visual
+        COMMAND WhatsUIFluentPersonaVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_persona_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_persona_visual_150dpi
+        COMMAND WhatsUIFluentPersonaVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_persona_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_persona_visual whatsui_fluent_persona_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;persona;avatar;presence;dpi")
+
+    add_executable(WhatsUIFluentDateTimeVisualTests fluent_date_time_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentDateTimeVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentDateTimeVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_date_time_visual
+        COMMAND WhatsUIFluentDateTimeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_date_time_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_date_time_visual_150dpi
+        COMMAND WhatsUIFluentDateTimeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_date_time_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_date_time_visual whatsui_fluent_date_time_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;calendar;datepicker;timepicker;dpi")
+
+    add_executable(WhatsUIFluentTableVisualTests fluent_table_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentTableVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentTableVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_table_visual
+        COMMAND WhatsUIFluentTableVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_table_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_table_visual_150dpi
+        COMMAND WhatsUIFluentTableVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_table_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_table_visual whatsui_fluent_table_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;table;datagrid;dpi")
+
+    add_executable(WhatsUIFluentTreeVisualTests fluent_tree_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentTreeVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentTreeVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_tree_visual
+        COMMAND WhatsUIFluentTreeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_tree_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_tree_visual_150dpi
+        COMMAND WhatsUIFluentTreeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_tree_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_tree_visual whatsui_fluent_tree_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;tree;dpi")
+
+    add_executable(WhatsUIFluentFeedbackVisualTests
+        fluent_feedback_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentFeedbackVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentFeedbackVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_feedback_visual
+        COMMAND WhatsUIFluentFeedbackVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_feedback_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_feedback_visual_150dpi
+        COMMAND WhatsUIFluentFeedbackVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_feedback_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_feedback_visual whatsui_fluent_feedback_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;toast;spinner;dpi")
+
+    add_executable(WhatsUIFluentPopoverVisualTests fluent_popover_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentPopoverVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentPopoverVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_popover_visual
+        COMMAND WhatsUIFluentPopoverVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_popover_review)
+    set_tests_properties(whatsui_fluent_popover_visual
+        PROPERTIES LABELS "visual;software;fluent;popover;teachingpopover;dpi")
+
+    add_executable(WhatsUIFluentNavigationVisualTests fluent_navigation_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentNavigationVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentNavigationVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_navigation_visual
+        COMMAND WhatsUIFluentNavigationVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_navigation_review)
+    add_test(NAME whatsui_fluent_navigation_visual_150dpi
+        COMMAND WhatsUIFluentNavigationVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_navigation_review_150dpi 1.5)
+    set_tests_properties(whatsui_fluent_navigation_visual whatsui_fluent_navigation_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;toolbar;tabs;link;breadcrumb;dpi")
+
+    add_executable(WhatsUIFluentSelectionControlsVisualTests fluent_selection_controls_visual_tests.cpp)
+    target_link_libraries(WhatsUIFluentSelectionControlsVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentSelectionControlsVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_selection_controls_visual
+        COMMAND WhatsUIFluentSelectionControlsVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_selection_controls.ppm 1.0)
+    add_test(NAME whatsui_fluent_selection_controls_visual_150dpi
+        COMMAND WhatsUIFluentSelectionControlsVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_selection_controls_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_selection_controls_visual whatsui_fluent_selection_controls_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;listbox;combobox;dropdown;dpi")
+
+    add_executable(WhatsUIAvatarGroupVisualTests avatar_group_visual_tests.cpp)
+    target_link_libraries(WhatsUIAvatarGroupVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIAvatarGroupVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_avatar_group_visual
+        COMMAND WhatsUIAvatarGroupVisualTests ${CMAKE_CURRENT_BINARY_DIR}/avatar_group_review.ppm 1.0)
+    add_test(NAME whatsui_avatar_group_visual_150dpi
+        COMMAND WhatsUIAvatarGroupVisualTests ${CMAKE_CURRENT_BINARY_DIR}/avatar_group_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_avatar_group_visual whatsui_avatar_group_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;avatar;group;presence;dpi")
+
+    target_link_libraries(WhatsUIRatingImageTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentBadgeTests PRIVATE WhatsCanvas::Software)
+    target_link_libraries(WhatsUIFluentRangeControlsTests PRIVATE WhatsCanvas::Software)
+endif()
+
 # Exercise the public WhatsCanvas bridge rather than WhatsCanvas internals.
 # This is deliberately Windows-font-aware: it proves the default fallback
 # chain and Segoe UI Emoji policy when that system font is installed, while
 # still allowing a reduced CI image to validate UTF-8/bidi/line layout.
 if(TARGET WhatsCanvasSoftware)
+    add_executable(WhatsUIFluentCheckboxCompletionTests
+        fluent_checkbox_completion_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentCheckboxCompletionTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentCheckboxCompletionTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_checkbox_completion
+        COMMAND WhatsUIFluentCheckboxCompletionTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_checkbox_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_checkbox_completion_150dpi
+        COMMAND WhatsUIFluentCheckboxCompletionTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_checkbox_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_checkbox_completion whatsui_fluent_checkbox_completion_150dpi
+        PROPERTIES LABELS "visual;software;fluent;checkbox;accessibility")
+
+    add_executable(WhatsUIFluentRangeControlsVisualTests
+        fluent_range_controls_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentRangeControlsVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentRangeControlsVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_range_controls_visual
+        COMMAND WhatsUIFluentRangeControlsVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_range_controls_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_range_controls_visual_150dpi
+        COMMAND WhatsUIFluentRangeControlsVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_range_controls_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_range_controls_visual whatsui_fluent_range_controls_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;divider;slider;progress;radio;switch;dpi")
+
+    add_executable(WhatsUIFluentRatingImageVisualTests
+        fluent_rating_image_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentRatingImageVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentRatingImageVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_rating_image_visual
+        COMMAND WhatsUIFluentRatingImageVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_rating_image_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_rating_image_visual_150dpi
+        COMMAND WhatsUIFluentRatingImageVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_rating_image_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_rating_image_visual whatsui_fluent_rating_image_visual_150dpi PROPERTIES
+        LABELS "visual;software;fluent;rating;image")
+
+    add_executable(WhatsUIFluentBadgeVisualTests
+        fluent_badge_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentBadgeVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentBadgeVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_badge_visual
+        COMMAND WhatsUIFluentBadgeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_badge_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_badge_visual_150dpi
+        COMMAND WhatsUIFluentBadgeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_badge_review_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_badge_visual whatsui_fluent_badge_visual_150dpi
+        PROPERTIES LABELS "visual;software;fluent;badge;dpi")
+
+    add_executable(WhatsUIFluentMenuButtonVisualTests
+        fluent_menu_button_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentMenuButtonVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentMenuButtonVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_menu_button_visual
+        COMMAND WhatsUIFluentMenuButtonVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_menu_button_review.ppm)
+    set_tests_properties(whatsui_fluent_menu_button_visual PROPERTIES
+        LABELS "visual;software;fluent;menu")
+
+    add_executable(WhatsUIFluentCardTests
+        fluent_card_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentCardTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentCardTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_card_tests
+        COMMAND WhatsUIFluentCardTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_card_review.ppm)
+    set_tests_properties(whatsui_fluent_card_tests PROPERTIES LABELS "card;visual;software;fluent")
+
+    add_executable(WhatsUIFluentComponentVisualMatrixTests
+        fluent_component_visual_matrix_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentComponentVisualMatrixTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentComponentVisualMatrixTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_component_visual_matrix
+        COMMAND WhatsUIFluentComponentVisualMatrixTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_component_visual_matrix.ppm 1.0)
+    add_test(NAME whatsui_fluent_component_visual_matrix_150dpi
+        COMMAND WhatsUIFluentComponentVisualMatrixTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_component_visual_matrix_150dpi.ppm 1.5)
+    set_tests_properties(whatsui_fluent_component_visual_matrix PROPERTIES LABELS "visual;software;fluent")
+    set_tests_properties(whatsui_fluent_component_visual_matrix_150dpi PROPERTIES LABELS "visual;software;fluent;dpi")
+
     add_executable(WhatsUITextShapingTests
         text_shaping_tests.cpp
     )
@@ -200,6 +549,24 @@ if(TARGET WhatsCanvasSoftware)
         COMMAND WhatsUITextInputCompositionVisualTests
     )
     set_tests_properties(whatsui_text_input_composition_visual_tests PROPERTIES LABELS "text;ime;visual;software")
+
+    add_executable(WhatsUITextAreaVisualTests
+        text_area_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUITextAreaVisualTests
+        PRIVATE
+            WhatsUI::WhatsUI
+            WhatsCanvas::Software
+    )
+    target_compile_features(WhatsUITextAreaVisualTests PRIVATE cxx_std_17)
+    add_test(
+        NAME whatsui_text_area_visual_tests
+        COMMAND WhatsUITextAreaVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/textarea_fluent_states.ppm
+    )
+    set_tests_properties(whatsui_text_area_visual_tests PROPERTIES
+        LABELS "text;ime;visual;software;fluent"
+    )
 endif()
 
 add_executable(WhatsUILifecycleTests
@@ -284,6 +651,22 @@ target_compile_features(WhatsUIOverlayTests PRIVATE cxx_std_17)
 add_test(
     NAME whatsui_overlay_tests
     COMMAND WhatsUIOverlayTests
+)
+
+add_executable(WhatsUIMenuButtonCompletionTests
+    menu_button_completion_tests.cpp
+)
+
+target_link_libraries(WhatsUIMenuButtonCompletionTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIMenuButtonCompletionTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_menu_button_completion_tests
+    COMMAND WhatsUIMenuButtonCompletionTests
 )
 
 add_executable(WhatsUIAccessibilityTests
@@ -473,11 +856,15 @@ if(TARGET WhatsCanvas::Software)
             WhatsUIStateTests
             WhatsUIWindowTests
             WhatsUIScrollViewTests
+            WhatsUITextAreaCompletionTests
+            WhatsUIRatingImageTests
             WhatsUILifecycleTests
             WhatsUIThemeTests
             WhatsUIFrameStatsTests
+            WhatsUIFluentCardTests
             WhatsUIBasicControlsTests
             WhatsUIOverlayTests
+            WhatsUIMenuButtonCompletionTests
             WhatsUIAccessibilityTests
             WhatsUIListViewTests
             WhatsUITodoStorageTests
@@ -517,8 +904,8 @@ if(TARGET WhatsUITodoApp)
     )
     set_tests_properties(whatsui_todo_visual_review PROPERTIES
         LABELS "visual;software;review"
-        # Software readback creates twelve independent 2x canvases.  The
-        # review job is intentionally comprehensive and can exceed CTest's
+        # Software readback creates three complete multi-scene 2x walkthroughs.
+        # The review job is intentionally comprehensive and can exceed CTest's
         # default timeout on hosted Windows runners.
         TIMEOUT 180
     )

@@ -139,6 +139,18 @@ std::wstring currentFrameworkId(IUIAutomationElement& element)
     return result;
 }
 
+std::wstring currentItemStatus(IUIAutomationElement& element)
+{
+    BSTR value = nullptr;
+    expectSucceeded(element.get_CurrentItemStatus(&value),
+                    "UIA element item-status query failed");
+    const std::wstring result = value != nullptr
+        ? std::wstring(value, SysStringLen(value))
+        : std::wstring{};
+    SysFreeString(value);
+    return result;
+}
+
 ComPtr<IUIAutomationElement> findNamedControl(IUIAutomation& automation,
                                               IUIAutomationElement& root,
                                               CONTROLTYPEID type,
@@ -265,6 +277,92 @@ void expectWhatsUiChildProvider(IUIAutomation& automation, IUIAutomationElement&
            "The UIA child bounds must use the actual native-client/logical DPI ratio");
 }
 
+void expectNativeFormAndBusyProperties(IUIAutomation& automation,
+                                       IUIAutomationElement& root)
+{
+    const struct RequiredControl {
+        CONTROLTYPEID type;
+        const wchar_t* name;
+    } requiredControls[]{
+        {UIA_CheckBoxControlTypeId, L"Native toggle"},
+        {UIA_GroupControlTypeId, L"Native choices"},
+        {UIA_CheckBoxControlTypeId, L"Native required switch"},
+    };
+    for (const auto& expected : requiredControls) {
+        auto element = findNamedControl(
+            automation, root, expected.type, expected.name);
+        expect(static_cast<bool>(element),
+               "Required WhatsUI control must be present in the native UIA tree");
+        BOOL required = FALSE;
+        expectSucceeded(element->get_CurrentIsRequiredForForm(&required),
+                        "UIA IsRequiredForForm property query failed");
+        expect(required != FALSE,
+               "Required Checkbox/RadioGroup/Switch must expose UIA_IsRequiredForForm=true");
+    }
+
+    auto progress = findNamedControl(
+        automation, root, UIA_ProgressBarControlTypeId, L"Native busy progress");
+    expect(static_cast<bool>(progress),
+           "Indeterminate ProgressBar must be present in the native UIA tree");
+    expect(currentItemStatus(*progress.get()) == L"Busy",
+           "Indeterminate ProgressBar must expose UIA_ItemStatus='Busy'");
+    ComPtr<IUIAutomationRangeValuePattern> range;
+    (void)progress->GetCurrentPatternAs(
+        UIA_RangeValuePatternId, __uuidof(IUIAutomationRangeValuePattern),
+        reinterpret_cast<void**>(range.put()));
+    // UI Automation clients may report either an unavailable-pattern HRESULT
+    // or S_OK with a null pattern pointer for an absent optional pattern.
+    // The returned COM provider is the observable capability.
+    expect(!range,
+           "Indeterminate ProgressBar must not expose the UIA RangeValue pattern");
+}
+
+void expectRangeValueProperties(IUIAutomation& automation,
+                                IUIAutomationElement& root)
+{
+    auto slider = findNamedControl(
+        automation, root, UIA_SliderControlTypeId, L"Native range slider");
+    auto progress = findNamedControl(
+        automation, root, UIA_ProgressBarControlTypeId, L"Native determinate progress");
+    expect(static_cast<bool>(slider) && static_cast<bool>(progress),
+           "The native UIA fixture must project the Slider and determinate ProgressBar");
+
+    const auto verify = [](IUIAutomationElement& element, double expectedMinimum,
+                           double expectedMaximum, double expectedValue,
+                           double expectedSmallChange, bool readOnly,
+                           const char* description) {
+        ComPtr<IUIAutomationRangeValuePattern> range;
+        expectSucceeded(element.GetCurrentPatternAs(
+                            UIA_RangeValuePatternId,
+                            __uuidof(IUIAutomationRangeValuePattern),
+                            reinterpret_cast<void**>(range.put())),
+                        description);
+        expect(static_cast<bool>(range), "UIA RangeValue returned no pattern provider");
+        double value = 0.0;
+        double minimum = 0.0;
+        double maximum = 0.0;
+        double smallChange = 0.0;
+        BOOL actualReadOnly = FALSE;
+        expectSucceeded(range->get_CurrentValue(&value), "Unable to read UIA RangeValue.Value");
+        expectSucceeded(range->get_CurrentMinimum(&minimum), "Unable to read UIA RangeValue.Minimum");
+        expectSucceeded(range->get_CurrentMaximum(&maximum), "Unable to read UIA RangeValue.Maximum");
+        expectSucceeded(range->get_CurrentSmallChange(&smallChange), "Unable to read UIA RangeValue.SmallChange");
+        expectSucceeded(range->get_CurrentIsReadOnly(&actualReadOnly), "Unable to read UIA RangeValue.IsReadOnly");
+        expect(std::fabs(value - expectedValue) < 0.001
+                   && std::fabs(minimum - expectedMinimum) < 0.001
+                   && std::fabs(maximum - expectedMaximum) < 0.001
+                   && std::fabs(smallChange - expectedSmallChange) < 0.001,
+               "Native RangeValue properties must preserve the WhatsUI numeric range");
+        expect((actualReadOnly != FALSE) == readOnly,
+               "Native RangeValue IsReadOnly must preserve control semantics");
+    };
+
+    verify(*slider.get(), 10.0, 90.0, 40.0, 5.0, false,
+           "Native Slider must expose UIA RangeValue");
+    verify(*progress.get(), 0.0, 100.0, 60.0, 0.0, true,
+           "Native determinate ProgressBar must expose UIA RangeValue");
+}
+
 void queryNativeUia(HWND hwnd, bool validateFocus, RECT expectedButtonBounds)
 {
     ScopedCom com;
@@ -310,6 +408,8 @@ void queryNativeUia(HWND hwnd, bool validateFocus, RECT expectedButtonBounds)
 
     expectWhatsUiChildProvider(
         *automation.get(), *root.get(), hwnd, expectedButtonBounds);
+    expectNativeFormAndBusyProperties(*automation.get(), *root.get());
+    expectRangeValueProperties(*automation.get(), *root.get());
 }
 
 struct NativeActionState {
@@ -584,6 +684,7 @@ void invokeNativeUiaActions(HWND hwnd)
            "Native value returned no UIA Value pattern provider");
     expectSucceeded(valuePattern->SetValue(L"Updated through UIA"),
                     "UIA SetValue failed for Native value");
+
     // Keep this last: UI Automation may focus an edit before setting Value.
     expectSucceeded(checkbox->SetFocus(),
                     "UIA SetFocus failed for Native toggle");
@@ -854,9 +955,8 @@ void exerciseNativeUiaActions(wui::UiWindow& window, HWND hwnd,
         }
     }
     expect(window.root() != nullptr && window.root()->children().size() > 2
-               && focusedIndex == 2,
+                && focusedIndex == 2,
            "UIA SetFocus must update the WhatsUI focus manager");
-
     // A fresh client must observe the same state as the retained providers.
     runUiaWorkOffUiThread(window, [hwnd] { expectNativeUiaActionState(hwnd); },
                           "UIA post-action state query timed out");
@@ -886,7 +986,7 @@ void exerciseNativeUiaEvents(wui::UiWindow& window, HWND hwnd)
     }
     subscription.get();
 
-    expect(window.root() != nullptr && window.root()->children().size() == 4,
+    expect(window.root() != nullptr && window.root()->children().size() == 9,
            "The native UIA event fixture must retain its controls");
     auto* checkbox = dynamic_cast<wui::Checkbox*>(window.root()->children()[2].get());
     expect(checkbox != nullptr, "The UIA property event fixture must be a Checkbox");
@@ -1042,7 +1142,7 @@ void testNativeUiaRoot()
 {
     auto host = wui::createGlfwPlatformHost();
     wui::UiApp app(std::move(host));
-    auto& window = app.openWindow("WhatsUI native UIA smoke", {560.0f, 320.0f});
+    auto& window = app.openWindow("WhatsUI native UIA smoke", {560.0f, 600.0f});
     NativeActionState actionState;
     window.setRoot(wui::ui::Column()
                        .padding(24)
@@ -1052,7 +1152,7 @@ void testNativeUiaRoot()
                                      ++actionState.invokeCount;
                                      actionState.invokeThread = std::this_thread::get_id();
                                  }),
-                                 wui::ui::Checkbox("Native toggle").accessibilityId("native.toggle").onChange(
+                                 wui::ui::Checkbox("Native toggle").required().accessibilityId("native.toggle").onChange(
                                      [&actionState](bool checked) {
                                          actionState.checked = checked;
                                          actionState.toggleThread = std::this_thread::get_id();
@@ -1061,11 +1161,24 @@ void testNativeUiaRoot()
                                      [&actionState](const std::string& value) {
                                          actionState.value = value;
                                          actionState.valueThread = std::this_thread::get_id();
-                                     }))
+                                     }),
+                                 wui::ui::RadioGroup()
+                                     .accessibleLabel("Native choices")
+                                     .required()
+                                     .option("first", "First choice")
+                                     .option("second", "Second choice"),
+                                 wui::ui::Switch("Native required switch").required(),
+                                 wui::ui::ProgressBar()
+                                     .accessibleLabel("Native busy progress"),
+                                 wui::ui::Slider(10.0f, 90.0f, 40.0f)
+                                     .step(5.0f)
+                                     .accessibleLabel("Native range slider"),
+                                 wui::ui::ProgressBar(0.0f, 100.0f, 60.0f)
+                                     .accessibleLabel("Native determinate progress"))
                        .intoNode());
     window.update();
     window.layout();
-    expect(window.root() != nullptr && window.root()->children().size() == 4,
+    expect(window.root() != nullptr && window.root()->children().size() == 9,
            "The native UIA fixture must retain its action controls");
     window.focusManager().setFocused(window.root()->children()[1].get());
     // Focus is semantic state, not a layout invalidation. Republish the

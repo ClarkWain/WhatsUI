@@ -14,6 +14,7 @@ namespace wui {
 
 class TextInput;
 class Dialog;
+class Drawer;
 
 class UiWindow {
 public:
@@ -98,6 +99,7 @@ private:
     void flushDeferredDialogDismissals() noexcept;
     [[nodiscard]] Node* hitTest(PointF point) const;
     [[nodiscard]] Dialog* activeDialog() const noexcept;
+    [[nodiscard]] Drawer* activeModalDrawer() const noexcept;
 
     std::unique_ptr<PlatformWindow> platformWindow_;
     UiRoot uiRoot_;

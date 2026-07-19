@@ -6,10 +6,14 @@
 #include <string_view>
 #include <vector>
 
+#include "wui/animation.h"
 #include "wui/node.h"
 #include "wui/platform.h"
 
 namespace wui {
+
+enum class InputSize { Small, Medium, Large };
+enum class InputAppearance { Outline, Underline, FilledDarker, FilledLighter };
 
 struct TextRange {
     std::size_t start{0};
@@ -106,6 +110,7 @@ public:
     using CancelHandler = std::function<void()>;
     TextInput() = default;
     explicit TextInput(std::string placeholder);
+    ~TextInput() override;
 
     [[nodiscard]] TextEditingController& controller() noexcept;
     [[nodiscard]] const TextEditingController& controller() const noexcept;
@@ -117,6 +122,25 @@ public:
     void setPlaceholder(std::string placeholder);
 
     TextInput& text(std::string text);
+    TextInput& accessibleLabel(std::string label);
+    [[nodiscard]] const std::string& accessibleLabel() const noexcept;
+    void setAccessibleLabel(std::string label);
+    void setSize(InputSize size) noexcept;
+    [[nodiscard]] InputSize size() const noexcept;
+    void setAppearance(InputAppearance appearance) noexcept;
+    [[nodiscard]] InputAppearance appearance() const noexcept;
+    void setInvalid(bool invalid) noexcept;
+    [[nodiscard]] bool isInvalid() const noexcept;
+
+    // TextArea reuses the same UTF-8 editing and IME controller as TextInput,
+    // but opts into wrapped multi-line layout.  Keep this on the base class so
+    // host integrations only need one native text-input session contract.
+    void setMultiline(bool value) noexcept;
+    [[nodiscard]] bool isMultiline() const noexcept;
+    void setMinimumLines(std::size_t value) noexcept;
+    [[nodiscard]] std::size_t minimumLines() const noexcept;
+    [[nodiscard]] float verticalScrollOffset() const noexcept;
+    [[nodiscard]] float maximumVerticalScrollOffset() const noexcept;
 
     // Applications can react to editing without polling the controller. This
     // keeps filtering and Enter/Escape form semantics widget-local.
@@ -144,13 +168,40 @@ public:
 private:
     [[nodiscard]] std::size_t caretAt(PointF point) const noexcept;
     void notifyChanged();
+    void ensureCaretBlinkAnimation();
+    void stopCaretBlinkAnimation() noexcept;
+    void resetCaretBlink();
 
     TextEditingController controller_;
     std::string placeholder_;
+    std::string accessibleLabel_;
     ChangeHandler onChange_;
     SubmitHandler onSubmit_;
     CancelHandler onCancel_;
     bool selectingWithPointer_{false};
+    InputSize size_{InputSize::Medium};
+    InputAppearance appearance_{InputAppearance::Outline};
+    bool invalid_{false};
+    bool multiline_{false};
+    std::size_t minimumLines_{1};
+    float verticalScrollOffset_{0.0f};
+    bool revealCaretPending_{true};
+    bool hasPaintedCaret_{false};
+    std::size_t lastPaintedCaret_{0};
+    AnimationId caretBlinkAnimation_{0};
+    bool caretVisible_{true};
+};
+
+// A genuine editable multi-line field. It intentionally inherits the same
+// controller, clipboard and IME protocol as TextInput rather than faking a
+// text area with a static Text node.
+class TextArea final : public TextInput {
+public:
+    explicit TextArea(std::string placeholder = {});
+
+    TextArea& rows(std::size_t value) noexcept;
+    void setRows(std::size_t value) noexcept;
+    [[nodiscard]] std::size_t rows() const noexcept;
 };
 
 } // namespace wui

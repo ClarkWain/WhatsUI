@@ -113,7 +113,7 @@ void testTextUsesBackendLineBreaking()
     auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software, 640, 360);
     expect(canvas && canvas->initializeContext(), "Software canvas must initialize");
     wui::WhatsCanvasTextMeasurer textMeasurer(*canvas);
-    textMeasurer.installWindowsFallbackPolicy();
+    (void)textMeasurer.installWindowsFallbackPolicy();
     wui::setTextMeasurer(&textMeasurer);
 
     wui::Text label(utf8({0x4E2D, 0x6587, 0x6CA1, 0x6709, 0x7A7A, 0x683C, 0x4E5F,

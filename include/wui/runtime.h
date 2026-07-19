@@ -10,6 +10,8 @@
 
 namespace wui {
 
+class FocusManager;
+
 enum class PageRetention {
     KeepAlive,
     DisposeOnHide,
@@ -88,6 +90,10 @@ using OverlayId = std::size_t;
 struct OverlayEntry {
     OverlayId id{0};
     std::unique_ptr<Node> content;
+    // A modal overlay captures the existing keyboard owner. OverlayHost
+    // restores this only after detaching the overlay, so a focused pointer can
+    // never retain a child in a removed transient tree.
+    Node* restoreFocus{nullptr};
 };
 
 class OverlayHost {
@@ -96,6 +102,11 @@ public:
 
     ~OverlayHost();
 
+    // UiWindow binds its focus manager once. Standalone/headless hosts may
+    // omit this and retain their previous ownership-only behavior.
+    void bindFocusManager(FocusManager& focusManager) noexcept;
+    void focus(Node* node) noexcept;
+    [[nodiscard]] Node* focused() const noexcept;
     void setOnChange(ChangeHandler handler);
     [[nodiscard]] OverlayId show(std::unique_ptr<Node> overlay);
     [[nodiscard]] std::unique_ptr<Node> dismiss(OverlayId id);
@@ -115,6 +126,7 @@ private:
     OverlayId nextId_{1};
     std::vector<OverlayEntry> overlays_;
     ChangeHandler onChange_;
+    FocusManager* focusManager_{nullptr};
 };
 
 } // namespace wui

@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -28,6 +29,7 @@ enum class AccessibilityRole {
     Button,
     CheckBox,
     RadioButton,
+    RadioGroup,
     Switch,
     Slider,
     TextField,
@@ -37,13 +39,34 @@ enum class AccessibilityRole {
     MenuItem,
     Dialog,
     ProgressBar,
+    Alert,
     Image,
     Separator,
+    Toolbar,
+    TabList,
+    Tab,
+    TabPanel,
+    Link,
+    ComboBox,
+    ListBox,
+    Option,
+    Calendar,
+    Table,
+    DataGrid,
+    ColumnHeader,
+    TableRow,
+    TableCell,
+    DataGridRow,
+    DataGridCell,
+    Tree,
+    TreeItem,
 };
 
 enum class AccessibilityActionKind {
     Invoke,
     Toggle,
+    Expand,
+    Collapse,
     SetValue,
     SetFocus,
 };
@@ -51,6 +74,7 @@ enum class AccessibilityActionKind {
 struct AccessibilityActionCapabilities {
     bool invoke{false};
     bool toggle{false};
+    bool expandCollapse{false};
     bool setValue{false};
     bool focus{false};
     bool valueReadOnly{false};
@@ -88,7 +112,33 @@ struct AccessibilityProperties {
     // system (for example, screen pixels for Windows UI Automation).
     std::optional<RectF> bounds;
     std::optional<bool> checked;
+    // Tri-state checkboxes remain part of the Toggle pattern while exposing
+    // the platform's indeterminate/partially-checked state. `checked` remains
+    // present (and false) so existing two-state consumers stay compatible.
+    bool mixed{false};
+    // Native form semantics shared by labelled selection/range controls.
+    bool required{false};
+    // An indeterminate operation is busy but intentionally has no numeric
+    // value. Platform adapters can surface this as their item/status property.
+    bool busy{false};
+    // A transient status message should be announced by screen readers without
+    // taking focus. Native adapters project this as a polite live region.
+    bool live{false};
+    // Present only for controls exposing an expand/collapse relationship,
+    // such as a MenuButton or the disclosure half of a SplitButton.
+    std::optional<bool> expanded;
+    // Hierarchical collections expose one-based item depth (for example a
+    // TreeItem's UIA Level property). The absence of a value means the role
+    // does not participate in a hierarchy.
+    std::optional<int> level;
     std::optional<std::string> value;
+    // Native range controls retain numeric data separately from their
+    // localized/spoken value string so adapters never reparse display text.
+    std::optional<double> numericValue;
+    std::optional<double> minimumValue;
+    std::optional<double> maximumValue;
+    std::optional<double> smallChange;
+    std::optional<double> largeChange;
     AccessibilityActionCapabilities actions{};
 
     [[nodiscard]] bool hasAccessibleName() const noexcept
@@ -251,6 +301,13 @@ using AccessibilitySnapshot = std::vector<AccessibilitySnapshotEntry>;
                                                                const Node* focused = nullptr);
 
 namespace detail {
+
+// Snapshot paths normally mirror child indices in the rendered Node tree.
+// Virtualized controls reserve this impossible child index to expose logical
+// children (for example, visible ListBox rows) without retaining a Node per
+// option.
+inline constexpr std::size_t kVirtualAccessibilityChild =
+    std::numeric_limits<std::size_t>::max();
 
 inline void appendAccessibilitySnapshot(const AccessibilityNode& node,
                                         std::vector<std::size_t>& path,

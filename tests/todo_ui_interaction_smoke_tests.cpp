@@ -553,8 +553,9 @@ void testTodoUiTreeInputAndDestructiveConfirmation()
     expect(containsText(window.root(), "1 of 1 done"),
            "Todo summary should reflect the recreated completed task before clearing");
 
-    // Add a separate active row so Enter is exercised through the same real
-    // checkbox route without reusing a control that has moved sections.
+    // Add a separate active row to verify the Fluent checkbox keyboard
+    // contract without reusing a control that has moved sections: Enter is
+    // ignored and Space toggles the focused checkbox.
     input = composer(window.root());
     expect(input != nullptr, "Todo composer should remain available after Space completion");
     click(window, *input);
@@ -573,16 +574,24 @@ void testTodoUiTreeInputAndDestructiveConfirmation()
             break;
         }
     }
-    expect(enterCheckbox != nullptr, "Second Todo should remain an active checkbox before Enter activation");
+    expect(enterCheckbox != nullptr, "Second Todo should remain an active checkbox before keyboard activation");
     window.focusManager().setFocused(enterCheckbox);
-    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 13, 0, false}),
-           "Focused Todo checkbox should complete from Enter through UiWindow routing");
+    expect(!window.dispatchKey({window.id(), wui::KeyAction::Down, 13, 0, false}),
+           "Focused Todo checkbox must ignore Enter through UiWindow routing");
+    commitFrame(window);
+    expect(harness.controller.records().size() == 2
+               && harness.controller.records()[0].completed && !harness.controller.records()[1].completed,
+           "Checkbox Enter must leave Todo completion unchanged through the rendered tree");
+    expect(containsText(window.root(), "1 of 2 done"),
+           "Todo summary should remain unchanged after ignored checkbox Enter");
+    expect(window.dispatchKey({window.id(), wui::KeyAction::Down, 32, 0, false}),
+           "Focused Todo checkbox should complete from Space through UiWindow routing");
     commitFrame(window);
     expect(harness.controller.records().size() == 2
                && harness.controller.records()[0].completed && harness.controller.records()[1].completed,
-           "Checkbox Enter should update Todo completion through the rendered tree");
+           "Checkbox Space should update Todo completion through the rendered tree");
     expect(containsText(window.root(), "2 of 2 done"),
-           "Todo summary should reflect the checkbox Enter completion");
+           "Todo summary should reflect the checkbox Space completion");
 
     clearDone = button(window.root(), "Clear done");
     expect(clearDone != nullptr, "Completed Todo work should expose Clear done before approval");
@@ -618,7 +627,7 @@ void testTodoAccessibilityProjectionUsesRealTaskTree()
     auto snapshot = window.accessibilitySnapshot();
     expect(snapshot.size() > 1 && snapshot.front().properties.role == wui::AccessibilityRole::Application,
            "Todo window snapshot should begin with the application semantic root");
-    const auto* composerEntry = semanticEntry(snapshot, wui::AccessibilityRole::TextField, "Add a task for today");
+    const auto* composerEntry = semanticEntry(snapshot, wui::AccessibilityRole::TextField, "Add a task");
     expect(composerEntry != nullptr && composerEntry->properties.value && composerEntry->properties.value->empty(),
            "Todo composer should expose its placeholder name and current editable value");
     const auto* taskEntry = semanticEntry(snapshot, wui::AccessibilityRole::CheckBox, "Accessible Todo task");
@@ -665,7 +674,7 @@ void testTodoAccessibilityProjectionUsesRealTaskTree()
     expect(semanticEntry(snapshot, wui::AccessibilityRole::Button, "Remove") != nullptr
                && semanticEntry(snapshot, wui::AccessibilityRole::Button, "Cancel") != nullptr,
            "Active Todo confirmation should expose only its actionable dialog commands");
-    expect(semanticEntry(snapshot, wui::AccessibilityRole::TextField, "Add a task for today") == nullptr
+    expect(semanticEntry(snapshot, wui::AccessibilityRole::TextField, "Add a task") == nullptr
                && semanticEntry(snapshot, wui::AccessibilityRole::CheckBox, "Accessible Todo task") == nullptr,
            "An active Todo modal must isolate background controls from the accessibility projection");
 

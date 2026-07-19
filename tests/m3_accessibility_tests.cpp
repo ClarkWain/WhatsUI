@@ -145,6 +145,39 @@ void testControlAccessibilityActions()
            "TextInput accessibility SetValue must use the editing change path");
 }
 
+void testTextHeadingAndExplicitInputLabel()
+{
+    auto root = std::make_unique<wui::Column>();
+    auto heading = std::make_unique<wui::Text>("My day");
+    heading->setRole(wui::TextRole::Heading);
+    auto input = std::make_unique<wui::TextInput>("Placeholder");
+    input->setAccessibleLabel("Task title");
+    root->child(std::move(heading));
+    root->child(std::move(input));
+    root->layout({0.0f, 0.0f, 320.0f, 80.0f});
+
+    const auto snapshot = wui::snapshotAccessibilityTree(*root);
+    expect(snapshot.size() == 2 && snapshot[0].properties.role == wui::AccessibilityRole::Heading &&
+               snapshot[0].properties.label == "My day",
+           "Text heading role must be exposed independently from its typography");
+    expect(snapshot[1].properties.role == wui::AccessibilityRole::TextField &&
+               snapshot[1].properties.label == "Task title",
+           "An explicit input label must take precedence over placeholder text");
+}
+
+void testToggleButtonKeepsButtonRoleAndTogglePattern()
+{
+    wui::Container root;
+    auto toggle = std::make_unique<wui::ToggleButton>("Bold", true);
+    toggle->layout({0.0f, 0.0f, 80.0f, 32.0f});
+    root.child(std::move(toggle));
+    const auto snapshot = wui::snapshotAccessibilityTree(root);
+    expect(snapshot.size() == 1 && snapshot[0].properties.role == wui::AccessibilityRole::Button &&
+               snapshot[0].properties.checked && *snapshot[0].properties.checked &&
+               snapshot[0].properties.actions.toggle,
+           "ToggleButton must retain Button semantics while exposing a checked toggle pattern");
+}
+
 } // namespace
 
 int main()
@@ -153,5 +186,7 @@ int main()
     testSnapshotTraversal();
     testVisualControlSnapshot();
     testControlAccessibilityActions();
+    testTextHeadingAndExplicitInputLabel();
+    testToggleButtonKeepsButtonRoleAndTogglePattern();
     return 0;
 }

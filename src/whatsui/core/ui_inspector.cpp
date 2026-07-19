@@ -49,77 +49,92 @@ namespace {
 
     if (const auto* button = dynamic_cast<const Button*>(&node)) {
         auto style = makeStyle("Button", enabled);
-        Color background = current.colors.accent;
-        Color foreground = current.colors.onAccent;
-        const bool ghost = button->variant() == ButtonVariant::Ghost;
-        if (button->variant() == ButtonVariant::Danger) background = current.colors.danger;
-        if (ghost) { background = current.colors.surface; foreground = current.colors.text; style.border = current.colors.border; }
-        if (!enabled) { background = current.colors.disabled; foreground = current.colors.textDisabled; style.border.reset(); }
-        else if (pressed) background = ghost ? current.colors.surfacePressed
-            : button->variant() == ButtonVariant::Danger ? scaleColor(current.colors.danger, 0.84f) : current.colors.accentPressed;
-        else if (hovered) background = ghost ? current.colors.surfaceHover
-            : button->variant() == ButtonVariant::Danger ? scaleColor(current.colors.danger, 0.92f) : current.colors.accentHover;
+        ColorTokens::Interaction ramp = current.colors.neutralBackground1;
+        Color background = ramp.rest;
+        Color foreground = current.colors.neutralForeground1;
+        bool hasBorder = true;
+        switch (button->appearance()) {
+        case ButtonAppearance::Primary:
+            ramp = current.colors.brandBackground; background = ramp.rest; foreground = current.colors.onBrand; hasBorder = false; break;
+        case ButtonAppearance::Danger:
+            ramp = current.colors.dangerBackground; background = ramp.rest; foreground = current.colors.onBrand; hasBorder = false; break;
+        case ButtonAppearance::Subtle:
+            background = {0, 0, 0, 0}; hasBorder = false; break;
+        case ButtonAppearance::Transparent:
+            background = {0, 0, 0, 0}; hasBorder = false; break;
+        case ButtonAppearance::Outline:
+        case ButtonAppearance::Secondary:
+        default:
+            break;
+        }
+        if (hasBorder) style.border = current.colors.neutralStroke1;
+        if (!enabled) { background = current.colors.neutralBackground1.rest; foreground = current.colors.neutralForegroundDisabled; style.border.reset(); }
+        else if (pressed) background = ramp.pressed;
+        else if (hovered) background = ramp.hover;
         style.foreground = foreground;
         style.background = background;
-        style.cornerRadius = current.radius.md;
+        style.cornerRadius = current.radius.medium;
         style.controlExtent = current.controls.height;
         return style;
     }
     if (const auto* checkbox = dynamic_cast<const Checkbox*>(&node)) {
         auto style = makeStyle("Checkbox", enabled);
-        Color box = checkbox->isChecked() ? current.colors.accent : current.colors.surface;
-        Color border = checkbox->isChecked() ? current.colors.accent : current.colors.borderStrong;
-        Color foreground = current.colors.text;
-        if (!enabled) { box = current.colors.disabled; border = current.colors.border; foreground = current.colors.textMuted; }
-        else if (pressed) box = checkbox->isChecked() ? current.colors.accentPressed : current.colors.surfacePressed;
-        else if (hovered) box = checkbox->isChecked() ? current.colors.accentHover : current.colors.surfaceHover;
+        const ColorTokens::Interaction& ramp = checkbox->isChecked() ? current.colors.brandBackground : current.colors.neutralBackground1;
+        Color box = ramp.rest;
+        Color border = checkbox->isChecked() ? current.colors.brandBackground.rest : current.colors.neutralStrokeAccessible;
+        Color foreground = current.colors.neutralForeground1;
+        if (!enabled) { box = current.colors.neutralBackground1.rest; border = current.colors.neutralStroke1; foreground = current.colors.neutralForegroundDisabled; }
+        else if (pressed) box = ramp.pressed;
+        else if (hovered) box = ramp.hover;
         style.background = box; style.border = border; style.foreground = foreground;
-        style.cornerRadius = current.radius.sm; style.controlExtent = current.controls.checkboxSize;
+        style.cornerRadius = current.radius.medium; style.controlExtent = current.controls.checkboxSize;
         return style;
     }
     if (const auto* radio = dynamic_cast<const Radio*>(&node)) {
         auto style = makeStyle("Radio", enabled);
-        Color fill = radio->isSelected() ? current.colors.accent : current.colors.surface;
-        Color border = radio->isSelected() ? current.colors.accent : current.colors.borderStrong;
-        if (!enabled) { fill = current.colors.disabled; border = current.colors.border; }
-        else if (pressed) fill = radio->isSelected() ? current.colors.accentPressed : current.colors.surfacePressed;
-        else if (hovered) fill = radio->isSelected() ? current.colors.accentHover : current.colors.surfaceHover;
-        style.background = fill; style.border = border; style.foreground = enabled ? current.colors.text : current.colors.textDisabled;
-        style.cornerRadius = current.radius.pill; style.controlExtent = current.controls.checkboxSize;
+        const ColorTokens::Interaction& ramp = radio->isSelected() ? current.colors.brandBackground : current.colors.neutralBackground1;
+        Color fill = ramp.rest;
+        Color border = radio->isSelected() ? current.colors.brandBackground.rest : current.colors.neutralStrokeAccessible;
+        if (!enabled) { fill = current.colors.neutralBackground1.rest; border = current.colors.neutralStroke1; }
+        else if (pressed) fill = ramp.pressed;
+        else if (hovered) fill = ramp.hover;
+        style.background = fill; style.border = border; style.foreground = enabled ? current.colors.neutralForeground1 : current.colors.neutralForegroundDisabled;
+        style.cornerRadius = current.radius.circular; style.controlExtent = current.controls.checkboxSize;
         return style;
     }
     if (const auto* toggle = dynamic_cast<const Switch*>(&node)) {
         auto style = makeStyle("Switch", enabled);
-        Color fill = toggle->isOn() ? current.colors.accent : current.colors.surface;
-        Color border = toggle->isOn() ? current.colors.accent : current.colors.borderStrong;
-        if (!enabled) { fill = current.colors.disabled; border = current.colors.border; }
-        else if (pressed) fill = toggle->isOn() ? current.colors.accentPressed : current.colors.surfacePressed;
-        else if (hovered) fill = toggle->isOn() ? current.colors.accentHover : current.colors.surfaceHover;
+        const ColorTokens::Interaction& ramp = toggle->isOn() ? current.colors.brandBackground : current.colors.neutralBackground1;
+        Color fill = ramp.rest;
+        Color border = toggle->isOn() ? current.colors.brandBackground.rest : current.colors.neutralStrokeAccessible;
+        if (!enabled) { fill = current.colors.neutralBackground1.rest; border = current.colors.neutralStroke1; }
+        else if (pressed) fill = ramp.pressed;
+        else if (hovered) fill = ramp.hover;
         style.background = fill;
         style.border = border;
         // Switch paint uses this foreground for both its compact thumb and
         // label. Disabled switches override both with textDisabled.
-        style.foreground = !enabled ? current.colors.textDisabled
-            : toggle->isOn() ? current.colors.onAccent : current.colors.textMuted;
-        style.cornerRadius = current.radius.pill; style.controlExtent = current.controls.compactHeight;
+        style.foreground = !enabled ? current.colors.neutralForegroundDisabled
+            : toggle->isOn() ? current.colors.onBrand : current.colors.neutralForeground3;
+        style.cornerRadius = current.radius.circular; style.controlExtent = current.controls.compactHeight;
         return style;
     }
     if (dynamic_cast<const Slider*>(&node) != nullptr) {
         auto style = makeStyle("Slider", enabled);
-        style.background = !enabled ? current.colors.textDisabled
-            : pressed ? current.colors.accentPressed : hovered ? current.colors.accentHover : current.colors.accent;
-        style.border = current.colors.border; style.cornerRadius = current.radius.pill; style.controlExtent = current.controls.height;
+        style.background = !enabled ? current.colors.neutralForegroundDisabled
+            : pressed ? current.colors.brandBackground.pressed : hovered ? current.colors.brandBackground.hover : current.colors.brandBackground.rest;
+        style.border = current.colors.neutralStroke1; style.cornerRadius = current.radius.circular; style.controlExtent = current.controls.height;
         return style;
     }
     if (dynamic_cast<const ProgressBar*>(&node) != nullptr) {
         auto style = makeStyle("ProgressBar", true);
-        style.background = current.colors.accent; style.border = current.colors.border; style.cornerRadius = current.radius.pill;
+        style.background = current.colors.brandBackground.rest; style.border = current.colors.neutralStroke1; style.cornerRadius = current.radius.circular;
         style.controlExtent = 4.0f;
         return style;
     }
     if (const auto* divider = dynamic_cast<const Divider*>(&node)) {
         auto style = makeStyle("Divider", true);
-        style.background = current.colors.border; style.controlExtent = divider->thickness();
+        style.background = current.colors.neutralStroke1; style.controlExtent = divider->thickness();
         return style;
     }
     return std::nullopt;

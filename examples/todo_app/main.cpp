@@ -501,6 +501,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
     // gives the Add button access to the live IME-backed model.
     auto composer = std::make_unique<wui::TextInput>("Add a task for today");
     auto* composerRaw = composer.get();
+    composerRaw->setAccessibleLabel("Add a task");
     composerRaw->setAccessibilityId("todo.composer");
     composerRaw->setFlex(1.0f);
     auto submit = [addTodo, composerRaw] {
@@ -574,7 +575,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                         Spacer().flex(1.0f),
                         Button("Undo").accessibilityId("todo.undo").variant(wui::ButtonVariant::Ghost).onClick(undo)));
             }),
-            Box().background(blueSoft).radius(12.0f).padding({18.0f, 14.0f, 18.0f, 14.0f})
+            Card().appearance(wui::CardAppearance::FilledAlternative)
                 .children(Row().align(wui::Alignment::Center).gap(12.0f).children(
                     Column().gap(2.0f).children(
                         Text("TODAY").size(12.0f).lineHeight(18.0f).color(blue),
@@ -976,26 +977,41 @@ int main(int argc, char** argv)
         synchronize();
     };
 
-    auto root = buildTodoUi(todos, isEmpty, hasNoMatches, activeTodos, completedTodos, hasActive, hasCompleted, hasStoredCompleted,
-                            filterAll, filterActive, filterCompleted,
-                            hasOperationMessage, operationMessage, hasUndo, undoMessage,
-                            addTodo, toggle, remove, clearCompleted, [] {}, setFilter, setSearchQuery, [](int) {},
-                            [](std::string, std::string, std::function<void()> confirm) { confirm(); },
-                            [](int, bool) {});
+    auto makeRoot = [&] {
+        return buildTodoUi(todos, isEmpty, hasNoMatches, activeTodos, completedTodos,
+                           hasActive, hasCompleted, hasStoredCompleted,
+                           filterAll, filterActive, filterCompleted,
+                           hasOperationMessage, operationMessage, hasUndo, undoMessage,
+                           addTodo, toggle, remove, clearCompleted, [] {}, setFilter,
+                           setSearchQuery, [](int) {},
+                           [](std::string, std::string, std::function<void()> confirm) { confirm(); },
+                           [](int, bool) {});
+    };
+    auto root = makeRoot();
+
+    // A visual walkthrough is a sequence of frames on one render target, just
+    // like the real window. Recreating the Software canvas per scene discards
+    // the background that WhatsCanvas' native ClearType compositor samples
+    // while its glyph commands are flushed, which can turn later text bounds
+    // into opaque black rectangles. Keep one canvas/context for the complete
+    // walkthrough and explicitly repaint the surface for every capture.
+    auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software,
+                                      static_cast<int>(width * scaleFactor),
+                                      static_cast<int>(height * scaleFactor));
+    if (!canvas || !canvas->initializeContext()) {
+        throw std::runtime_error("failed to create software canvas");
+    }
+    wui::WhatsCanvasTextMeasurer measurer(*canvas, scaleFactor);
+    wui::setTextMeasurer(&measurer);
 
     int frame = 0;
     auto renderFrame = [&](const char* namedCapture = nullptr, bool scrollToEnd = false) {
-        // Isolate every visual-regression scene. Reusing one Software canvas
-        // across pixel readbacks can retain backend target state between scenes.
-        auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software,
-                                          static_cast<int>(width * scaleFactor),
-                                          static_cast<int>(height * scaleFactor));
-        if (!canvas || !canvas->initializeContext()) {
-            throw std::runtime_error("failed to create software canvas");
-        }
-        wui::WhatsCanvasTextMeasurer measurer(*canvas, scaleFactor);
-        wui::setTextMeasurer(&measurer);
-
+        wui::flushStructuralUpdates();
+        // Each golden is a complete product state, not an incremental dirty
+        // region. Rebuild the retained widget tree from the current States so
+        // removed ForEach/If branches cannot leave renderer-owned text/clip
+        // resources in the following capture.
+        root = makeRoot();
         wui::flushStructuralUpdates();
         root->layout({0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
         if (scrollToEnd) {
@@ -1019,7 +1035,6 @@ int main(int argc, char** argv)
         if (!canvas->savePixelsPPM(path.string())) {
             throw std::runtime_error("failed to save " + path.string());
         }
-        wui::setTextMeasurer(nullptr);
         if (scrollToEnd) {
             // The next scripted product state starts at the same top-of-page
             // position a user sees after an add/toggle rebuild.
@@ -1060,6 +1075,8 @@ int main(int argc, char** argv)
     renderFrame();                 // all complete: COMPLETED and Clear done only
     clearCompleted();
     renderFrame();                 // empty again after clear
+
+    wui::setTextMeasurer(nullptr);
 
     return 0;
 #endif

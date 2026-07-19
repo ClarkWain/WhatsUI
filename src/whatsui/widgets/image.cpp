@@ -2,10 +2,13 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cmath>
 #include <mutex>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
+
+#include "wui/theme.h"
 
 #ifdef WHATSUI_HAS_WHATSCANVAS
 #include "wsc/Canvas.h"
@@ -18,13 +21,17 @@ namespace wui {
 namespace detail {
 class ImageResource {
 public:
+    std::vector<unsigned char> pixels;
+    int pixelWidth{0};
+    int pixelHeight{0};
+};
+
+class ImageTexture {
+public:
 #ifdef WHATSUI_HAS_WHATSCANVAS
     wsc::Image image;
     wsc::Canvas* canvas{nullptr};
 #endif
-    std::vector<unsigned char> pixels;
-    int pixelWidth{0};
-    int pixelHeight{0};
 };
 } // namespace detail
 
@@ -131,6 +138,7 @@ void Image::setSource(std::vector<unsigned char> rgbaPixels, int pixelWidth, int
 void Image::setSource(ImageSource source)
 {
     source_ = std::move(source);
+    texture_.reset();
     markDirty(DirtyFlag::Layout);
     markDirty(DirtyFlag::Paint);
 }
@@ -138,6 +146,34 @@ void Image::setSource(ImageSource source)
 void Image::clearSource() noexcept
 {
     source_ = ImageSource{};
+    texture_.reset();
+    markDirty(DirtyFlag::Layout);
+    markDirty(DirtyFlag::Paint);
+}
+
+Image& Image::fallback(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
+{
+    return fallback(ImageSource(std::move(rgbaPixels), pixelWidth, pixelHeight));
+}
+
+Image& Image::fallback(ImageSource source)
+{
+    setFallback(std::move(source));
+    return *this;
+}
+
+void Image::setFallback(ImageSource source)
+{
+    fallback_ = std::move(source);
+    texture_.reset();
+    markDirty(DirtyFlag::Layout);
+    markDirty(DirtyFlag::Paint);
+}
+
+void Image::clearFallback() noexcept
+{
+    fallback_ = ImageSource{};
+    texture_.reset();
     markDirty(DirtyFlag::Layout);
     markDirty(DirtyFlag::Paint);
 }
@@ -178,19 +214,61 @@ PointF Image::alignment() const noexcept
     return alignment_;
 }
 
+Image& Image::shape(ImageShape shape) noexcept { setShape(shape); return *this; }
+void Image::setShape(ImageShape shape) noexcept { shape_ = shape; markDirty(DirtyFlag::Paint); }
+ImageShape Image::shape() const noexcept { return shape_; }
+Image& Image::bordered(bool bordered) noexcept { setBordered(bordered); return *this; }
+void Image::setBordered(bool bordered) noexcept { bordered_ = bordered; markDirty(DirtyFlag::Paint); }
+bool Image::isBordered() const noexcept { return bordered_; }
+Image& Image::shadow(bool shadow) noexcept { setShadow(shadow); return *this; }
+void Image::setShadow(bool shadow) noexcept { shadow_ = shadow; markDirty(DirtyFlag::Paint); }
+bool Image::hasShadow() const noexcept { return shadow_; }
+Image& Image::block(bool block) noexcept { setBlock(block); return *this; }
+void Image::setBlock(bool block) noexcept { block_ = block; markDirty(DirtyFlag::Layout); }
+bool Image::isBlock() const noexcept { return block_; }
+Image& Image::alt(std::string description) { setAlt(std::move(description)); return *this; }
+void Image::setAlt(std::string description)
+{
+    if (alt_ != description) { alt_ = std::move(description); markDirty(DirtyFlag::Style); }
+}
+const std::string& Image::alt() const noexcept { return alt_; }
+Image& Image::decorative(bool decorative) noexcept { setDecorative(decorative); return *this; }
+void Image::setDecorative(bool decorative) noexcept
+{
+    if (decorative_ != decorative) { decorative_ = decorative; markDirty(DirtyFlag::Style); }
+}
+bool Image::isDecorative() const noexcept { return decorative_; }
+
 SizeF Image::intrinsicSize() const noexcept
 {
-    return {static_cast<float>(source_.pixelWidth()), static_cast<float>(source_.pixelHeight())};
+    const auto& source = effectiveSource();
+    return {static_cast<float>(source.pixelWidth()), static_cast<float>(source.pixelHeight())};
 }
 
 bool Image::hasSource() const noexcept
 {
-    return !source_.empty();
+    return !effectiveSource().empty();
+}
+
+const ImageSource& Image::effectiveSource() const noexcept
+{
+    return source_.empty() ? fallback_ : source_;
 }
 
 SizeF Image::measure(const Constraints& constraints) const
 {
-    return constraints.clamp(intrinsicSize());
+    SizeF desired = intrinsicSize();
+    if (block_ && desired.width > 0.0f && desired.height > 0.0f &&
+        std::isfinite(constraints.maxWidth)) {
+        const float ratio = desired.height / desired.width;
+        desired.width = constraints.maxWidth;
+        desired.height = desired.width * ratio;
+        if (std::isfinite(constraints.maxHeight) && desired.height > constraints.maxHeight) {
+            desired.height = constraints.maxHeight;
+            desired.width = desired.height / ratio;
+        }
+    }
+    return constraints.clamp(desired);
 }
 
 void Image::prepare(PaintContext& context)
@@ -198,11 +276,12 @@ void Image::prepare(PaintContext& context)
 #ifdef WHATSUI_HAS_WHATSCANVAS
     auto* canvas = context.canvas();
     if (canvas != nullptr && hasSource()) {
-        auto& resource = source_.resource_;
-        if (resource->canvas != canvas || !resource->image.isTextureValid()) {
-            resource->image = wsc::Image{};
-            if (resource->image.loadFromRGBA(*canvas, resource->pixels, resource->pixelWidth, resource->pixelHeight)) {
-                resource->canvas = canvas;
+        const auto& resource = effectiveSource().resource_;
+        if (!texture_) texture_ = std::make_unique<detail::ImageTexture>();
+        if (texture_->canvas != canvas || !texture_->image.isTextureValid()) {
+            texture_->image = wsc::Image{};
+            if (texture_->image.loadFromRGBA(*canvas, resource->pixels, resource->pixelWidth, resource->pixelHeight)) {
+                texture_->canvas = canvas;
             }
         }
     }
@@ -213,11 +292,30 @@ void Image::prepare(PaintContext& context)
 
 void Image::paint(PaintContext& context)
 {
+    const auto& current = theme();
+    float radius = current.radius.none;
+    if (shape_ == ImageShape::Rounded) radius = current.radius.medium;
+    else if (shape_ == ImageShape::Circular) radius = current.radius.circular;
+    if (shadow_) {
+        const auto& elevation = current.elevation.shadow4;
+        context.drawBoxShadow(bounds(), radius, elevation.ambient.blur, elevation.ambient.offsetX,
+                              elevation.ambient.offsetY, elevation.ambient.spread, elevation.ambient.color);
+        context.drawBoxShadow(bounds(), radius, elevation.key.blur, elevation.key.offsetX,
+                              elevation.key.offsetY, elevation.key.spread, elevation.key.color);
+    }
+    const float border = bordered_ ? current.stroke.thin : 0.0f;
+    const RectF destinationBounds{bounds().x + border, bounds().y + border,
+                                  std::max(0.0f, bounds().width - border * 2.0f),
+                                  std::max(0.0f, bounds().height - border * 2.0f)};
+    const float innerRadius = std::max(0.0f, radius - border);
+    const int checkpoint = context.save();
+    if (shape_ == ImageShape::Square) context.clipRect(destinationBounds);
+    else context.clipRoundRect(destinationBounds, innerRadius);
 #ifdef WHATSUI_HAS_WHATSCANVAS
     auto* canvas = context.canvas();
-    const auto& resource = source_.resource_;
-    if (canvas != nullptr && resource && resource->canvas == canvas
-        && resource->image.isTextureValid()) {
+    const auto& resource = effectiveSource().resource_;
+    if (canvas != nullptr && resource && texture_ && texture_->canvas == canvas
+        && texture_->image.isTextureValid()) {
             wsc::Paint paint;
             // Images are untinted by default. WhatsCanvas modulates texture
             // samples by the paint color, whose default is not guaranteed to
@@ -225,20 +323,51 @@ void Image::paint(PaintContext& context)
             paint.setColor(wsc::Color(255, 255, 255, 255));
             paint.setImageSampling(wsc::Paint::ImageSampling::LINEAR);
             const float scale = context.canvasCoordinateScale();
-            const wsc::RectF destination(bounds().x * scale, bounds().y * scale,
-                                          bounds().width * scale, bounds().height * scale);
+            const wsc::RectF destination(destinationBounds.x * scale, destinationBounds.y * scale,
+                                          destinationBounds.width * scale, destinationBounds.height * scale);
             wsc::Canvas::ImageFit canvasFit = wsc::Canvas::ImageFit::CONTAIN;
+            bool drawWithFit = true;
             switch (fit_) {
+            case ImageFit::Default:
             case ImageFit::Fill: canvasFit = wsc::Canvas::ImageFit::FILL; break;
             case ImageFit::Cover: canvasFit = wsc::Canvas::ImageFit::COVER; break;
             case ImageFit::Contain: break;
+            case ImageFit::None:
+            case ImageFit::Center: {
+                const float width = static_cast<float>(resource->pixelWidth);
+                const float height = static_cast<float>(resource->pixelHeight);
+                const float x = fit_ == ImageFit::Center
+                    ? destinationBounds.x + (destinationBounds.width - width) * 0.5f
+                    : destinationBounds.x;
+                const float y = fit_ == ImageFit::Center
+                    ? destinationBounds.y + (destinationBounds.height - height) * 0.5f
+                    : destinationBounds.y;
+                canvas->drawImage(texture_->image,
+                    wsc::RectF(x * scale, y * scale, width * scale, height * scale), paint);
+                drawWithFit = false;
+                break;
             }
-            canvas->drawImageFit(resource->image, destination, canvasFit,
-                                 alignment_.x, alignment_.y, paint);
+            }
+            if (drawWithFit) {
+                canvas->drawImageFit(texture_->image, destination, canvasFit,
+                                     alignment_.x, alignment_.y, paint);
+            }
     }
 #else
     (void)context;
 #endif
+    context.restoreTo(checkpoint);
+    if (bordered_) {
+        const float half = border * 0.5f;
+        const RectF outline{bounds().x + half, bounds().y + half,
+                            std::max(0.0f, bounds().width - border),
+                            std::max(0.0f, bounds().height - border)};
+        const float outlineRadius = shape_ == ImageShape::Circular
+            ? std::min(outline.width, outline.height) * 0.5f
+            : std::max(0.0f, radius - half);
+        context.strokeRoundRect(outline, outlineRadius, border,
+                                current.colors.neutralStroke1);
+    }
     clearDirty(DirtyFlag::Paint);
 }
 

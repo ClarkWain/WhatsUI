@@ -30,7 +30,7 @@ void IfNode::reconcile()
         }
     } else {
         while (!children().empty()) {
-            removeChild(children().size() - 1);
+            (void)removeChild(children().size() - 1);
         }
     }
 }

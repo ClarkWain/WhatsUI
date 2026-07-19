@@ -16,6 +16,8 @@
 
 namespace wui {
 
+class OverlayHost;
+
 enum class PopupPlacement {
     BelowStart,
     BelowEnd,
@@ -99,6 +101,65 @@ private:
     std::vector<MenuItem> items_;
     int selectedIndex_{-1};
     DismissHandler onDismiss_;
+};
+
+// A Fluent command button that owns menu item definitions while OverlayHost
+// owns the transient popup lifetime. Bind it to the window's OverlayHost once
+// when assembling the page.
+class MenuButton : public Button {
+public:
+    explicit MenuButton(std::string label = {});
+
+    MenuButton& addItem(MenuItem item);
+    MenuButton& clearItems();
+    MenuButton& bindOverlayHost(OverlayHost& host) noexcept;
+    [[nodiscard]] const std::vector<MenuItem>& items() const noexcept;
+    [[nodiscard]] bool isOpen() const noexcept;
+    [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
+    void paint(PaintContext& context) override;
+    [[nodiscard]] AccessibilityActionCapabilities accessibilityActions() const noexcept override;
+    AccessibilityActionStatus performAccessibilityAction(
+        AccessibilityActionKind kind, std::string_view value) override;
+
+private:
+    void openMenu();
+    void closeMenu();
+    std::vector<MenuItem> items_;
+    OverlayHost* overlayHost_{nullptr};
+    std::size_t overlayId_{0};
+    bool open_{false};
+};
+
+// A primary command plus an independently-operated menu disclosure. Unlike a
+// MenuButton, the left region never opens the menu.
+class SplitButton : public ControlNode {
+public:
+    using ClickHandler = std::function<void()>;
+    explicit SplitButton(std::string label = {});
+    SplitButton& label(std::string value);
+    void setLabel(std::string value);
+    [[nodiscard]] const std::string& label() const noexcept;
+    SplitButton& onClick(ClickHandler handler);
+    SplitButton& addItem(MenuItem item);
+    SplitButton& bindOverlayHost(OverlayHost& host) noexcept;
+    [[nodiscard]] bool isOpen() const noexcept;
+
+    [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
+    void paint(PaintContext& context) override;
+    bool onPointerEvent(const PointerEvent& event) override;
+    bool onKeyEvent(const KeyEvent& event) override;
+    [[nodiscard]] AccessibilityActionCapabilities accessibilityActions() const noexcept override;
+    AccessibilityActionStatus performAccessibilityAction(AccessibilityActionKind kind, std::string_view value) override;
+
+private:
+    void openMenu();
+    void closeMenu();
+    std::string label_;
+    ClickHandler onClick_;
+    std::vector<MenuItem> items_;
+    OverlayHost* overlayHost_{nullptr};
+    std::size_t overlayId_{0};
+    bool open_{false};
 };
 
 // Tooltip owns a small anchored surface.  Pointer/focus code calls showAfter

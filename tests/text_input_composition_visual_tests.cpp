@@ -11,6 +11,7 @@
 #include "wsc/Canvas.h"
 
 #include "wui/paint_context.h"
+#include "wui/animation.h"
 #include "wui/text_input.h"
 #include "wui/theme.h"
 
@@ -104,12 +105,12 @@ void testCompositionUsesUnderlineAndClearsOnEnd()
     // The marker follows the measured Segoe UI line box, rather than a
     // hard-coded nominal-font baseline. The pre-edit span starts after one
     // Fluent body glyph and ends after two more.
-    expect(hasHorizontalColorRun(active, 20, 28, 44, 34, colors.focus, 4),
+    expect(hasHorizontalColorRun(active, 20, 28, 44, 34, colors.brandForeground1, 4),
            "Active composition must paint a focused underline under its pre-edit span");
     // The upper text band is intentionally outside the underline. A normal
     // selection fill would paint the whole control height here; pre-edit must
     // not masquerade as selection highlight.
-    expect(!hasColorInRect(active, 22, 8, 39, 20, colors.focus),
+    expect(!hasColorInRect(active, 22, 8, 39, 20, colors.brandForeground1),
            "Composition must not use a selection-style focus highlight");
 
     expect(input.onCompositionInput({0, "", wui::CompositionInputEvent::Phase::End}),
@@ -121,9 +122,12 @@ void testCompositionUsesUnderlineAndClearsOnEnd()
     const auto ended = render(input);
     // Exclude the collapsed caret at the pre-edit end; only the former span
     // itself is relevant to verifying underline cleanup.
-    expect(!hasHorizontalColorRun(ended, 20, 28, 44, 34, colors.focus, 4),
+    // The Fluent 2 DIP focus indicator intentionally occupies the bottom
+    // edge (y=33 onward). Restrict this assertion to the text baseline band
+    // so it tests only removal of the composition underline.
+    expect(!hasHorizontalColorRun(ended, 20, 28, 44, 33, colors.brandForeground1, 4),
            "Composition underline must clear after the pre-edit session ends");
-    expect(!hasColorInRect(ended, 22, 8, 39, 20, colors.focus),
+    expect(!hasColorInRect(ended, 22, 8, 39, 20, colors.brandForeground1),
            "Ended composition must not leave a selection-style pre-edit highlight behind");
 }
 
@@ -141,12 +145,41 @@ void testLongTextClipsAndKeepsCaretVisible()
     expect(isTransparentInRect(pixels, 76, 4, kWidth, 36),
            "Long TextInput content must not paint beyond its outer bounds");
     const auto& colors = wui::theme().colors;
-    expect(hasColorInRect(pixels, 56, 6, 65, 34, colors.focus),
+    expect(hasColorInRect(pixels, 56, 6, 65, 34, colors.brandForeground1),
            "Long TextInput must horizontally reveal the active caret near the viewport edge");
 
     const auto caret = input.caretRect();
     expect(caret.x >= 16.0f && caret.x <= 64.0f,
            "IME caret rectangle must use the same clipped horizontal viewport as painting");
+}
+
+void testCaretBlinksAndEditingRestartsVisiblePhase()
+{
+    wui::Ticker::instance().cancelAll();
+    wui::TextInput input;
+    input.text("Task");
+    input.layout({4.0f, 4.0f, 144.0f, 32.0f});
+    input.setVisualState(wui::ControlVisualState::Focused, true);
+    input.controller().moveToEnd();
+
+    const auto caret = input.caretRect();
+    const int left = static_cast<int>(caret.x);
+    const auto& color = wui::theme().colors.brandForeground1;
+    const auto visible = render(input);
+    expect(hasColorInRect(visible, left, 5, left + 3, 33, color),
+           "Focused TextInput caret must start in its visible blink phase");
+
+    wui::Ticker::instance().tick(0.55f);
+    const auto hidden = render(input);
+    expect(!hasColorInRect(hidden, left, 5, left + 3, 33, color),
+           "Focused TextInput caret must hide during the second blink phase");
+
+    expect(input.onTextInput({0, "!"}), "Committed text must be accepted during blink testing");
+    const auto movedCaret = input.caretRect();
+    const auto restarted = render(input);
+    expect(hasColorInRect(restarted, static_cast<int>(movedCaret.x), 5,
+                          static_cast<int>(movedCaret.x) + 3, 33, color),
+           "Editing must restart the caret in a visible blink phase");
 }
 
 } // namespace
@@ -156,6 +189,7 @@ int main()
     try {
         testCompositionUsesUnderlineAndClearsOnEnd();
         testLongTextClipsAndKeepsCaretVisible();
+        testCaretBlinksAndEditingRestartsVisiblePhase();
         std::cout << "WhatsUI TextInput composition visual tests passed\n";
         return 0;
     } catch (const std::exception& error) {

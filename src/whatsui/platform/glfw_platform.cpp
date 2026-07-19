@@ -711,7 +711,7 @@ public:
         glfwGetFramebufferSize(window_, &fbw, &fbh);
         surface_ = std::make_unique<GlfwRenderSurface>(window_, fbw, fbh);
         textMeasurer_ = std::make_unique<WhatsCanvasTextMeasurer>(surface_->canvas());
-        textMeasurer_->installWindowsFallbackPolicy();
+        (void)textMeasurer_->installWindowsFallbackPolicy();
     }
 
     [[nodiscard]] GlfwRenderSurface& glfwSurface() noexcept { return *surface_; }

@@ -1,5 +1,8 @@
 #include "wui/app.h"
+#include "wui/drawer.h"
 #include "wui/scheduler.h"
+#include "wui/selection.h"
+#include "wui/table.h"
 #include "wui/text_input.h"
 #include "wui/widgets.h"
 
@@ -96,6 +99,7 @@ UiWindow::UiWindow(std::unique_ptr<PlatformWindow> platformWindow)
         focusManager_.clear();
         inputRouter_.clearHover();
     });
+    overlayHost_.bindFocusManager(focusManager_);
     overlayHost_.setOnChange([this] { onOverlayChanged(); });
     uiRoot_.setOnInvalidate([this] { platformWindow_->requestRedraw(); });
     platformWindow_->setAccessibilityActionHandler(
@@ -341,9 +345,8 @@ AccessibilitySnapshot UiWindow::accessibilitySnapshot() const
     // A modal is the active accessibility subtree. Exposing the dimmed page
     // alongside it would let automation clients navigate controls that the
     // input router deliberately blocks.
-    const Node* activeRoot = activeDialog() != nullptr
-        ? static_cast<const Node*>(activeDialog())
-        : uiRoot_.content();
+    const Node* activeRoot = activeDialog() != nullptr ? static_cast<const Node*>(activeDialog())
+        : activeModalDrawer() != nullptr ? static_cast<const Node*>(activeModalDrawer()) : uiRoot_.content();
     if (activeRoot == nullptr) {
         return snapshot;
     }
@@ -357,6 +360,23 @@ AccessibilitySnapshot UiWindow::accessibilitySnapshot() const
         entry.path.insert(entry.path.begin(), 0);
         ++entry.depth;
         snapshot.push_back(std::move(entry));
+    }
+    // Non-modal overlays remain part of the active accessibility surface.
+    // In particular, a focused Menu must not disappear from UIA while its
+    // owner correctly reports Expanded. Dialogs continue to replace the page
+    // tree entirely through the activeRoot branch above.
+    if (activeDialog() == nullptr && activeModalDrawer() == nullptr) {
+        std::size_t overlayPath = 1;
+        for (const auto& overlay : overlayHost_.overlays()) {
+            if (!overlay.content) continue;
+            auto overlaySnapshot = snapshotAccessibilityTree(*overlay.content, nativeFocusedNode);
+            for (auto& entry : overlaySnapshot) {
+                entry.path.insert(entry.path.begin(), overlayPath);
+                ++entry.depth;
+                snapshot.push_back(std::move(entry));
+            }
+            ++overlayPath;
+        }
     }
     return snapshot;
 }
@@ -383,9 +403,93 @@ AccessibilityActionStatus UiWindow::performAccessibilityAction(
     if (request.path.empty() || request.path.front() != 0) {
         return AccessibilityActionStatus::ElementNotAvailable;
     }
-    Node* target = activeDialog() != nullptr
-        ? static_cast<Node*>(activeDialog()) : uiRoot_.content();
+    Node* target = activeDialog() != nullptr ? static_cast<Node*>(activeDialog())
+        : activeModalDrawer() != nullptr ? static_cast<Node*>(activeModalDrawer()) : uiRoot_.content();
     if (target == nullptr) return AccessibilityActionStatus::ElementNotAvailable;
+    // Table and DataGrid headers/rows/cells are virtual snapshot children.
+    // Resolve the physical Table prefix first, then validate the current
+    // materialized semantic before dispatching its supported grid operation.
+    const auto virtualMarker = std::find(request.path.begin() + 1, request.path.end(),
+                                         detail::kVirtualAccessibilityChild);
+    if (virtualMarker != request.path.end()) {
+        for (auto it = request.path.begin() + 1; it != virtualMarker; ++it) {
+            if (*it >= target->children().size() || !target->children()[*it]) {
+                return AccessibilityActionStatus::ElementNotAvailable;
+            }
+            target = target->children()[*it].get();
+        }
+        if (auto* table = dynamic_cast<Table*>(target)) {
+            const std::size_t marker = static_cast<std::size_t>(virtualMarker - request.path.begin());
+            if (marker + 1 >= request.path.size()) return AccessibilityActionStatus::ElementNotAvailable;
+            const auto kind = static_cast<TableAccessibilityKind>(request.path[marker + 1]);
+            std::optional<std::size_t> row;
+            std::optional<std::size_t> column;
+            if (kind == TableAccessibilityKind::ColumnHeader) {
+                if (marker + 3 != request.path.size()) return AccessibilityActionStatus::ElementNotAvailable;
+                column = request.path[marker + 2];
+            } else if (kind == TableAccessibilityKind::Row) {
+                if (marker + 3 != request.path.size()) return AccessibilityActionStatus::ElementNotAvailable;
+                row = request.path[marker + 2];
+            } else if (kind == TableAccessibilityKind::Cell) {
+                if (marker + 4 != request.path.size()) return AccessibilityActionStatus::ElementNotAvailable;
+                row = request.path[marker + 2];
+                column = request.path[marker + 3];
+            } else {
+                return AccessibilityActionStatus::ElementNotAvailable;
+            }
+            const auto entries = table->accessibilityEntries();
+            const auto entry = std::find_if(entries.begin(), entries.end(), [&](const TableAccessibilityEntry& value) {
+                return value.kind == kind && value.row == row && value.column == column &&
+                       value.properties.automationId == request.automationId &&
+                       value.properties.label == request.expectedLabel;
+            });
+            if (entry == entries.end()) return AccessibilityActionStatus::ElementNotAvailable;
+            if (!entry->properties.enabled) return AccessibilityActionStatus::ElementNotEnabled;
+            auto* grid = dynamic_cast<DataGrid*>(table);
+            if (grid == nullptr || request.kind != AccessibilityActionKind::Invoke) {
+                return AccessibilityActionStatus::NotSupported;
+            }
+            if (kind == TableAccessibilityKind::ColumnHeader && column.has_value()) {
+                grid->sortBy(*column);
+            } else if (row.has_value()) {
+                const auto status = grid->performAccessibilityAction(
+                    AccessibilityActionKind::SetValue, std::to_string(*row));
+                if (status != AccessibilityActionStatus::Succeeded) return status;
+            } else {
+                return AccessibilityActionStatus::NotSupported;
+            }
+            platformWindow_->requestRedraw();
+            return AccessibilityActionStatus::Succeeded;
+        }
+    }
+    // ListBox options are virtual snapshot children. They do not own Nodes;
+    // invoke the stable parent ListBox value API after validating that the
+    // current materialized option still matches the retained UIA provider.
+    if (request.path.size() >= 3 &&
+        request.path[request.path.size() - 2] == detail::kVirtualAccessibilityChild) {
+        const std::size_t optionIndex = request.path.back();
+        for (std::size_t offset = 1; offset + 2 < request.path.size(); ++offset) {
+            const auto index = request.path[offset];
+            if (index >= target->children().size() || !target->children()[index]) {
+                return AccessibilityActionStatus::ElementNotAvailable;
+            }
+            target = target->children()[index].get();
+        }
+        auto* listBox = dynamic_cast<ListBox*>(target);
+        if (listBox == nullptr || optionIndex >= listBox->options().size() ||
+            request.kind != AccessibilityActionKind::Invoke) {
+            return AccessibilityActionStatus::ElementNotAvailable;
+        }
+        const auto& option = listBox->options()[optionIndex];
+        if (!option.enabled) return AccessibilityActionStatus::ElementNotEnabled;
+        EventDispatchScope dispatchScope(*this);
+        const auto status = listBox->performAccessibilityAction(
+            AccessibilityActionKind::SetValue, option.value);
+        if (status == AccessibilityActionStatus::Succeeded) {
+            platformWindow_->requestRedraw();
+        }
+        return status;
+    }
     for (std::size_t offset = 1; offset < request.path.size(); ++offset) {
         const auto index = request.path[offset];
         if (index >= target->children().size() || !target->children()[index]) {
@@ -536,6 +640,9 @@ bool UiWindow::dispatchKey(const KeyEvent& event)
             if (auto* dialog = activeDialog()) {
                 dialog->dismiss();
                 handled = true;
+            } else if (auto* drawer = activeModalDrawer(); drawer != nullptr && drawer->closesOnEscape()) {
+                drawer->dismiss();
+                handled = true;
             }
         }
 
@@ -631,6 +738,12 @@ void UiWindow::onOverlayChanged() noexcept
             overlay.content->setInvalidationHandler([this] { platformWindow_->requestRedraw(); });
         }
     }
+    // Modal drawers are direct OverlayHost entries rather than Dialogs, but
+    // they have the same keyboard isolation contract. Route Tab traversal and
+    // key actions through their subtree while they are active; non-modal
+    // popovers keep the page as the input root.
+    inputRouter_.setRoot(activeDialog() != nullptr ? static_cast<Node*>(activeDialog())
+        : activeModalDrawer() != nullptr ? static_cast<Node*>(activeModalDrawer()) : uiRoot_.content());
     platformWindow_->requestRedraw();
 }
 
@@ -643,6 +756,18 @@ Dialog* UiWindow::activeDialog() const noexcept
     for (const auto& overlay : overlayHost_.overlays()) {
         if (overlay.id == id) {
             return dynamic_cast<Dialog*>(overlay.content.get());
+        }
+    }
+    return nullptr;
+}
+
+Drawer* UiWindow::activeModalDrawer() const noexcept
+{
+    // Any modal Drawer blocks the page even if a non-modal supplemental
+    // overlay (for example a tooltip) was opened after it.
+    for (auto it = overlayHost_.overlays().rbegin(); it != overlayHost_.overlays().rend(); ++it) {
+        if (auto* drawer = dynamic_cast<Drawer*>(it->content.get()); drawer != nullptr && drawer->trapsFocus()) {
+            return drawer;
         }
     }
     return nullptr;

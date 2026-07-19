@@ -73,6 +73,7 @@ int controlType(AccessibilityRole role) noexcept
     case AccessibilityRole::Button: return UIA_ButtonControlTypeId;
     case AccessibilityRole::CheckBox: return UIA_CheckBoxControlTypeId;
     case AccessibilityRole::RadioButton: return UIA_RadioButtonControlTypeId;
+    case AccessibilityRole::RadioGroup: return UIA_GroupControlTypeId;
     case AccessibilityRole::Switch: return UIA_CheckBoxControlTypeId;
     case AccessibilityRole::Slider: return UIA_SliderControlTypeId;
     case AccessibilityRole::TextField: return UIA_EditControlTypeId;
@@ -82,8 +83,27 @@ int controlType(AccessibilityRole role) noexcept
     case AccessibilityRole::MenuItem: return UIA_MenuItemControlTypeId;
     case AccessibilityRole::Dialog: return UIA_WindowControlTypeId;
     case AccessibilityRole::ProgressBar: return UIA_ProgressBarControlTypeId;
+    case AccessibilityRole::Alert: return UIA_TextControlTypeId;
     case AccessibilityRole::Image: return UIA_ImageControlTypeId;
     case AccessibilityRole::Separator: return UIA_SeparatorControlTypeId;
+    case AccessibilityRole::Toolbar: return UIA_ToolBarControlTypeId;
+    case AccessibilityRole::TabList: return UIA_TabControlTypeId;
+    case AccessibilityRole::Tab: return UIA_TabItemControlTypeId;
+    case AccessibilityRole::TabPanel: return UIA_PaneControlTypeId;
+    case AccessibilityRole::Link: return UIA_HyperlinkControlTypeId;
+    case AccessibilityRole::ComboBox: return UIA_ComboBoxControlTypeId;
+    case AccessibilityRole::ListBox: return UIA_ListControlTypeId;
+    case AccessibilityRole::Option: return UIA_ListItemControlTypeId;
+    case AccessibilityRole::Calendar: return UIA_CalendarControlTypeId;
+    case AccessibilityRole::Table: return UIA_TableControlTypeId;
+    case AccessibilityRole::DataGrid: return UIA_DataGridControlTypeId;
+    case AccessibilityRole::ColumnHeader: return UIA_HeaderItemControlTypeId;
+    case AccessibilityRole::TableRow: return UIA_DataItemControlTypeId;
+    case AccessibilityRole::TableCell: return UIA_TextControlTypeId;
+    case AccessibilityRole::DataGridRow: return UIA_DataItemControlTypeId;
+    case AccessibilityRole::DataGridCell: return UIA_TextControlTypeId;
+    case AccessibilityRole::Tree: return UIA_TreeControlTypeId;
+    case AccessibilityRole::TreeItem: return UIA_TreeItemControlTypeId;
     case AccessibilityRole::Unknown: return UIA_CustomControlTypeId;
     }
     return UIA_CustomControlTypeId;
@@ -283,6 +303,8 @@ class SnapshotProvider final : public IRawElementProviderSimple,
                                public IRawElementProviderFragmentRoot,
                                public IInvokeProvider,
                                public IToggleProvider,
+                               public IExpandCollapseProvider,
+                               public IRangeValueProvider,
                                public IValueProvider {
 public:
     SnapshotProvider(std::shared_ptr<ProviderState> state, ElementKey key)
@@ -304,6 +326,10 @@ public:
             *object = static_cast<IInvokeProvider*>(this);
         } else if (iid == __uuidof(IToggleProvider) && supportsToggle()) {
             *object = static_cast<IToggleProvider*>(this);
+        } else if (iid == __uuidof(IExpandCollapseProvider) && supportsExpandCollapse()) {
+            *object = static_cast<IExpandCollapseProvider*>(this);
+        } else if (iid == __uuidof(IRangeValueProvider) && supportsRangeValue()) {
+            *object = static_cast<IRangeValueProvider*>(this);
         } else if (iid == __uuidof(IValueProvider) && supportsValue()) {
             *object = static_cast<IValueProvider*>(this);
         } else {
@@ -338,6 +364,12 @@ public:
         }
         if (pattern == UIA_TogglePatternId && supportsToggle()) {
             return QueryInterface(__uuidof(IToggleProvider), reinterpret_cast<void**>(provider));
+        }
+        if (pattern == UIA_ExpandCollapsePatternId && supportsExpandCollapse()) {
+            return QueryInterface(__uuidof(IExpandCollapseProvider), reinterpret_cast<void**>(provider));
+        }
+        if (pattern == UIA_RangeValuePatternId && supportsRangeValue()) {
+            return QueryInterface(__uuidof(IRangeValueProvider), reinterpret_cast<void**>(provider));
         }
         if (pattern == UIA_ValuePatternId && supportsValue()) {
             return QueryInterface(__uuidof(IValueProvider), reinterpret_cast<void**>(provider));
@@ -376,8 +408,47 @@ public:
         const auto resolved = resolve();
         if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
         if (!supportsToggle(*resolved)) return UIA_E_NOTSUPPORTED;
-        *state = *resolved->first->entries[resolved->second].properties.checked
-            ? ToggleState_On : ToggleState_Off;
+        const auto& properties = resolved->first->entries[resolved->second].properties;
+        *state = properties.mixed
+            ? ToggleState_Indeterminate
+            : (*properties.checked ? ToggleState_On : ToggleState_Off);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Expand() override
+    {
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsExpandCollapse(*resolved)) return UIA_E_NOTSUPPORTED;
+        if (!resolved->first->entries[resolved->second].properties.enabled) {
+            return UIA_E_ELEMENTNOTENABLED;
+        }
+        AccessibilityActionRequest request;
+        request.kind = AccessibilityActionKind::Expand;
+        return enqueue(*resolved, std::move(request));
+    }
+
+    HRESULT STDMETHODCALLTYPE Collapse() override
+    {
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsExpandCollapse(*resolved)) return UIA_E_NOTSUPPORTED;
+        if (!resolved->first->entries[resolved->second].properties.enabled) {
+            return UIA_E_ELEMENTNOTENABLED;
+        }
+        AccessibilityActionRequest request;
+        request.kind = AccessibilityActionKind::Collapse;
+        return enqueue(*resolved, std::move(request));
+    }
+
+    HRESULT STDMETHODCALLTYPE get_ExpandCollapseState(ExpandCollapseState* state) override
+    {
+        if (!state) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsExpandCollapse(*resolved)) return UIA_E_NOTSUPPORTED;
+        *state = resolved->first->entries[resolved->second].properties.expanded.value_or(false)
+            ? ExpandCollapseState_Expanded : ExpandCollapseState_Collapsed;
         return S_OK;
     }
 
@@ -414,12 +485,83 @@ public:
         return *value || wide.empty() ? S_OK : E_OUTOFMEMORY;
     }
 
+    HRESULT STDMETHODCALLTYPE SetValue(double value) override
+    {
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsRangeValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        const auto& properties = resolved->first->entries[resolved->second].properties;
+        if (properties.actions.valueReadOnly) return UIA_E_INVALIDOPERATION;
+        if (!properties.enabled) return UIA_E_ELEMENTNOTENABLED;
+        if (!std::isfinite(value) || value < *properties.minimumValue ||
+            value > *properties.maximumValue) return E_INVALIDARG;
+        AccessibilityActionRequest request;
+        request.kind = AccessibilityActionKind::SetValue;
+        request.value = std::to_string(value);
+        return enqueue(*resolved, std::move(request));
+    }
+
+    HRESULT STDMETHODCALLTYPE get_Value(double* value) override
+    {
+        if (!value) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsRangeValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        *value = *resolved->first->entries[resolved->second].properties.numericValue;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_Maximum(double* value) override
+    {
+        if (!value) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsRangeValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        *value = *resolved->first->entries[resolved->second].properties.maximumValue;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_Minimum(double* value) override
+    {
+        if (!value) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsRangeValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        *value = *resolved->first->entries[resolved->second].properties.minimumValue;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_LargeChange(double* value) override
+    {
+        if (!value) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsRangeValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        *value = resolved->first->entries[resolved->second].properties.largeChange.value_or(0.0);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_SmallChange(double* value) override
+    {
+        if (!value) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsRangeValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        *value = resolved->first->entries[resolved->second].properties.smallChange.value_or(0.0);
+        return S_OK;
+    }
+
     HRESULT STDMETHODCALLTYPE get_IsReadOnly(BOOL* readOnly) override
     {
         if (!readOnly) return E_POINTER;
         const auto resolved = resolve();
         if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
-        if (!supportsValue(*resolved)) return UIA_E_NOTSUPPORTED;
+        // IValueProvider and IRangeValueProvider share this member.  This
+        // implementation services both interfaces, so accept either pattern
+        // rather than accidentally rejecting a numeric-only range control.
+        if (!supportsValue(*resolved) && !supportsRangeValue(*resolved)) {
+            return UIA_E_NOTSUPPORTED;
+        }
         *readOnly = resolved->first->entries[resolved->second].properties.actions.valueReadOnly
             ? TRUE : FALSE;
         return S_OK;
@@ -454,6 +596,24 @@ public:
         case UIA_ValueValuePropertyId:
             if (properties && properties->value) return setBstrVariant(*properties->value, value);
             return S_OK;
+        case UIA_RangeValueValuePropertyId:
+        case UIA_RangeValueMinimumPropertyId:
+        case UIA_RangeValueMaximumPropertyId:
+        case UIA_RangeValueSmallChangePropertyId:
+        case UIA_RangeValueLargeChangePropertyId: {
+            if (!properties) return S_OK;
+            const std::optional<double>* numeric = nullptr;
+            if (id == UIA_RangeValueValuePropertyId) numeric = &properties->numericValue;
+            else if (id == UIA_RangeValueMinimumPropertyId) numeric = &properties->minimumValue;
+            else if (id == UIA_RangeValueMaximumPropertyId) numeric = &properties->maximumValue;
+            else if (id == UIA_RangeValueSmallChangePropertyId) numeric = &properties->smallChange;
+            else numeric = &properties->largeChange;
+            if (numeric->has_value()) {
+                value->vt = VT_R8;
+                value->dblVal = **numeric;
+            }
+            return S_OK;
+        }
         case UIA_IsEnabledPropertyId:
             value->vt = VT_BOOL;
             value->boolVal = (!properties || properties->enabled) ? VARIANT_TRUE : VARIANT_FALSE;
@@ -467,6 +627,17 @@ public:
             value->boolVal = properties && properties->enabled && properties->actions.focus
                 ? VARIANT_TRUE : VARIANT_FALSE;
             return S_OK;
+        case UIA_IsRequiredForFormPropertyId:
+            value->vt = VT_BOOL;
+            value->boolVal = properties && properties->required ? VARIANT_TRUE : VARIANT_FALSE;
+            return S_OK;
+        case UIA_ItemStatusPropertyId:
+            return setBstrVariant(properties && properties->busy ? "Busy" : std::string{}, value);
+        case UIA_LiveSettingPropertyId:
+            value->vt = VT_I4;
+            value->lVal = properties && properties->live
+                ? Polite : Off;
+            return S_OK;
         case UIA_IsControlElementPropertyId:
         case UIA_IsContentElementPropertyId:
             value->vt = VT_BOOL;
@@ -475,13 +646,28 @@ public:
         case UIA_ToggleToggleStatePropertyId:
             if (properties && properties->checked) {
                 value->vt = VT_I4;
-                value->lVal = *properties->checked ? ToggleState_On : ToggleState_Off;
+                value->lVal = properties->mixed
+                    ? ToggleState_Indeterminate
+                    : (*properties->checked ? ToggleState_On : ToggleState_Off);
+            }
+            return S_OK;
+        case UIA_ExpandCollapseExpandCollapseStatePropertyId:
+            if (properties && properties->expanded) {
+                value->vt = VT_I4;
+                value->lVal = *properties->expanded
+                    ? ExpandCollapseState_Expanded : ExpandCollapseState_Collapsed;
             }
             return S_OK;
         case UIA_SelectionItemIsSelectedPropertyId:
             if (properties && properties->checked) {
                 value->vt = VT_BOOL;
                 value->boolVal = *properties->checked ? VARIANT_TRUE : VARIANT_FALSE;
+            }
+            return S_OK;
+        case UIA_LevelPropertyId:
+            if (properties && properties->level) {
+                value->vt = VT_I4;
+                value->lVal = *properties->level;
             }
             return S_OK;
         case UIA_FrameworkIdPropertyId:
@@ -672,10 +858,38 @@ private:
                (properties.actions.setValue || properties.actions.valueReadOnly);
     }
 
+    [[nodiscard]] static bool supportsRangeValue(const Resolution& resolved) noexcept
+    {
+        if (resolved.second == kSyntheticRoot) return false;
+        const auto& properties = resolved.first->entries[resolved.second].properties;
+        return properties.numericValue.has_value() && properties.minimumValue.has_value() &&
+               properties.maximumValue.has_value() &&
+               (properties.actions.setValue || properties.actions.valueReadOnly);
+    }
+
+    [[nodiscard]] static bool supportsExpandCollapse(const Resolution& resolved) noexcept
+    {
+        if (resolved.second == kSyntheticRoot) return false;
+        const auto& properties = resolved.first->entries[resolved.second].properties;
+        return properties.expanded.has_value() && properties.actions.expandCollapse;
+    }
+
+    [[nodiscard]] bool supportsExpandCollapse() const noexcept
+    {
+        const auto resolved = resolve();
+        return resolved && supportsExpandCollapse(*resolved);
+    }
+
     [[nodiscard]] bool supportsValue() const noexcept
     {
         const auto resolved = resolve();
         return resolved && supportsValue(*resolved);
+    }
+
+    [[nodiscard]] bool supportsRangeValue() const noexcept
+    {
+        const auto resolved = resolve();
+        return resolved && supportsRangeValue(*resolved);
     }
 
     HRESULT enqueue(const Resolution& resolved, AccessibilityActionRequest request) noexcept
@@ -873,6 +1087,11 @@ bool supportsValuePattern(const AccessibilityProperties& properties) noexcept
            (properties.actions.setValue || properties.actions.valueReadOnly);
 }
 
+bool supportsExpandCollapsePattern(const AccessibilityProperties& properties) noexcept
+{
+    return properties.expanded.has_value() && properties.actions.expandCollapse;
+}
+
 bool sameChildren(const SnapshotModel& previous, std::size_t previousParent,
                   const SnapshotModel& current, std::size_t currentParent) noexcept
 {
@@ -997,17 +1216,23 @@ void raiseSnapshotEvents(const std::shared_ptr<ProviderState>& state,
         const auto& newProperties = current.entries[*currentIndex].properties;
         const bool nameChanged = oldProperties.label != newProperties.label;
         const bool enabledChanged = oldProperties.enabled != newProperties.enabled;
+        const bool requiredChanged = oldProperties.required != newProperties.required;
+        const bool busyChanged = oldProperties.busy != newProperties.busy;
         const bool toggleChanged = supportsTogglePattern(oldProperties) &&
             supportsTogglePattern(newProperties) &&
-            oldProperties.checked != newProperties.checked;
+            (oldProperties.checked != newProperties.checked ||
+             oldProperties.mixed != newProperties.mixed);
         const bool valueChanged = supportsValuePattern(oldProperties) &&
             supportsValuePattern(newProperties) &&
             oldProperties.value != newProperties.value;
+        const bool expandedChanged = supportsExpandCollapsePattern(oldProperties) &&
+            supportsExpandCollapsePattern(newProperties) &&
+            oldProperties.expanded != newProperties.expanded;
         const UiaRect oldBounds = previous.screenBounds(oldIndex);
         const UiaRect newBounds = current.screenBounds(*currentIndex);
         const bool boundsChanged = meaningfullyDifferent(oldBounds, newBounds);
-        if (!nameChanged && !enabledChanged && !toggleChanged &&
-            !valueChanged && !boundsChanged) continue;
+        if (!nameChanged && !enabledChanged && !requiredChanged && !busyChanged && !toggleChanged &&
+            !valueChanged && !expandedChanged && !boundsChanged) continue;
 
         auto* provider = eventProvider(state, current, *currentIndex);
         if (!provider) continue;
@@ -1017,16 +1242,34 @@ void raiseSnapshotEvents(const std::shared_ptr<ProviderState>& state,
         }
         if (enabledChanged) {
             raiseBoolProperty(provider, UIA_IsEnabledPropertyId,
-                              oldProperties.enabled, newProperties.enabled);
+                oldProperties.enabled, newProperties.enabled);
+        }
+        if (requiredChanged) {
+            raiseBoolProperty(provider, UIA_IsRequiredForFormPropertyId,
+                oldProperties.required, newProperties.required);
+        }
+        if (busyChanged) {
+            raiseStringProperty(provider, UIA_ItemStatusPropertyId,
+                oldProperties.busy ? "Busy" : std::string{},
+                newProperties.busy ? "Busy" : std::string{});
         }
         if (toggleChanged) {
             raiseIntProperty(provider, UIA_ToggleToggleStatePropertyId,
-                oldProperties.checked.value_or(false) ? ToggleState_On : ToggleState_Off,
-                newProperties.checked.value_or(false) ? ToggleState_On : ToggleState_Off);
+                oldProperties.mixed ? ToggleState_Indeterminate
+                    : (oldProperties.checked.value_or(false) ? ToggleState_On : ToggleState_Off),
+                newProperties.mixed ? ToggleState_Indeterminate
+                    : (newProperties.checked.value_or(false) ? ToggleState_On : ToggleState_Off));
         }
         if (valueChanged) {
             raiseStringProperty(provider, UIA_ValueValuePropertyId,
                 *oldProperties.value, *newProperties.value);
+        }
+        if (expandedChanged) {
+            raiseIntProperty(provider, UIA_ExpandCollapseExpandCollapseStatePropertyId,
+                oldProperties.expanded.value_or(false)
+                    ? ExpandCollapseState_Expanded : ExpandCollapseState_Collapsed,
+                newProperties.expanded.value_or(false)
+                    ? ExpandCollapseState_Expanded : ExpandCollapseState_Collapsed);
         }
         if (boundsChanged) {
             raiseRectProperty(provider, oldBounds, newBounds);

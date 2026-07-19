@@ -1,9 +1,21 @@
 #include "wui/runtime.h"
 
+#include "wui/drawer.h"
+
 #include <stdexcept>
 #include <utility>
 
 namespace wui {
+
+namespace {
+bool ownsFocus(const Node* root, const Node* focused) noexcept
+{
+    for (auto* current = focused; current != nullptr; current = current->parent()) {
+        if (current == root) return true;
+    }
+    return false;
+}
+} // namespace
 
 UiRoot::~UiRoot()
 {
@@ -268,11 +280,24 @@ OverlayId OverlayHost::show(std::unique_ptr<Node> overlay)
     }
 
     const auto id = nextId_++;
-    overlays_.push_back(OverlayEntry{id, std::move(overlay)});
+    Drawer* drawer = dynamic_cast<Drawer*>(overlay.get());
+    const bool modalDrawer = drawer != nullptr && drawer->trapsFocus();
+    Node* const restoreFocus = modalDrawer && focusManager_ != nullptr ? focusManager_->focused() : nullptr;
+    overlays_.push_back(OverlayEntry{id, std::move(overlay), restoreFocus});
     overlays_.back().content->attachRecursively();
+    if (modalDrawer) {
+        // This callback is separate from the author hook. Escape, close and
+        // backdrop dismissal all use Drawer::dismiss(), which now reliably
+        // returns ownership to OverlayHost without caller boilerplate.
+        drawer->setOverlayDismissHandler([this, id] { (void)dismiss(id); });
+    }
     if (onChange_) {
         onChange_();
     }
+    // The window's overlay-change hook clears stale focus/capture pointers.
+    // Focus only after it has completed, otherwise a just-opened Drawer
+    // would immediately lose its modal keyboard owner.
+    if (modalDrawer) focus(drawer);
     return id;
 }
 
@@ -282,6 +307,23 @@ OverlayHost::~OverlayHost()
     // concrete overlay trees are still alive, then release ownership.
     onChange_ = {};
     clear();
+}
+
+void OverlayHost::bindFocusManager(FocusManager& focusManager) noexcept
+{
+    focusManager_ = &focusManager;
+}
+
+void OverlayHost::focus(Node* node) noexcept
+{
+    if (focusManager_ != nullptr) {
+        focusManager_->setFocused(node);
+    }
+}
+
+Node* OverlayHost::focused() const noexcept
+{
+    return focusManager_ != nullptr ? focusManager_->focused() : nullptr;
 }
 
 void OverlayHost::setOnChange(ChangeHandler handler)
@@ -294,12 +336,15 @@ std::unique_ptr<Node> OverlayHost::dismiss(OverlayId id)
     for (auto it = overlays_.begin(); it != overlays_.end(); ++it) {
         if (it->id == id) {
             auto overlay = std::move(it->content);
+            Node* const restoreFocus = it->restoreFocus;
+            const bool restore = focusManager_ != nullptr && ownsFocus(overlay.get(), focusManager_->focused());
             overlay->detachRecursively();
             overlay->setInvalidationHandler({});
             overlays_.erase(it);
             if (onChange_) {
                 onChange_();
             }
+            if (restore) focus(restoreFocus);
             return overlay;
         }
     }
@@ -313,12 +358,15 @@ std::unique_ptr<Node> OverlayHost::dismissTop()
     }
 
     auto overlay = std::move(overlays_.back().content);
+    Node* const restoreFocus = overlays_.back().restoreFocus;
+    const bool restore = focusManager_ != nullptr && ownsFocus(overlay.get(), focusManager_->focused());
     overlay->detachRecursively();
     overlay->setInvalidationHandler({});
     overlays_.pop_back();
     if (onChange_) {
         onChange_();
     }
+    if (restore) focus(restoreFocus);
     return overlay;
 }
 
@@ -326,6 +374,17 @@ void OverlayHost::clear() noexcept
 {
     if (overlays_.empty()) {
         return;
+    }
+    Node* restoreFocus = nullptr;
+    bool focusedOverlay = false;
+    if (focusManager_ != nullptr) {
+        for (auto it = overlays_.rbegin(); it != overlays_.rend(); ++it) {
+            if (it->content && ownsFocus(it->content.get(), focusManager_->focused())) {
+                restoreFocus = it->restoreFocus;
+                focusedOverlay = true;
+                break;
+            }
+        }
     }
     for (const auto& overlay : overlays_) {
         if (overlay.content) {
@@ -337,6 +396,7 @@ void OverlayHost::clear() noexcept
     if (onChange_) {
         onChange_();
     }
+    if (focusedOverlay) focus(restoreFocus);
 }
 
 void Navigator::hideCurrent()

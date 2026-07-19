@@ -64,6 +64,42 @@ void Text::setLineHeight(float height) noexcept
     markDirty(DirtyFlag::Layout);
 }
 
+const std::string& Text::fontFamily() const noexcept
+{
+    return fontFamily_;
+}
+
+void Text::setFontFamily(std::string family)
+{
+    if (family.empty()) family = "Segoe UI";
+    if (fontFamily_ == family) return;
+    fontFamily_ = std::move(family);
+    markDirty(DirtyFlag::Layout);
+}
+
+void Text::setTextStyle(const TextStyleToken& style)
+{
+    const std::string family(style.family.empty() ? "Segoe UI" : style.family);
+    const float size = std::max(1.0f, style.size);
+    const int weight = std::clamp(style.weight, 1, 1000);
+    const float lineHeight = std::max(0.0f, style.lineHeight);
+    if (fontFamily_ == family && fontSize_ == size && fontWeight_ == weight && lineHeight_ == lineHeight) return;
+    fontFamily_ = family;
+    fontSize_ = size;
+    fontWeight_ = weight;
+    lineHeight_ = lineHeight;
+    markDirty(DirtyFlag::Layout);
+}
+
+void Text::setRole(TextRole role) noexcept { if (role_ != role) { role_ = role; markDirty(DirtyFlag::Paint); } }
+TextRole Text::role() const noexcept { return role_; }
+void Text::setAlignment(TextAlign alignment) noexcept { if (alignment_ != alignment) { alignment_ = alignment; markDirty(DirtyFlag::Paint); } }
+TextAlign Text::alignment() const noexcept { return alignment_; }
+void Text::setUnderline(bool value) noexcept { if (underline_ != value) { underline_ = value; markDirty(DirtyFlag::Paint); } }
+bool Text::isUnderlined() const noexcept { return underline_; }
+void Text::setStrikethrough(bool value) noexcept { if (strikethrough_ != value) { strikethrough_ = value; markDirty(DirtyFlag::Paint); } }
+bool Text::isStrikethrough() const noexcept { return strikethrough_; }
+
 TextWrap Text::wrap() const noexcept { return wrap_; }
 void Text::setWrap(TextWrap wrap) noexcept { wrap_ = wrap; markDirty(DirtyFlag::Layout); }
 std::size_t Text::maxLines() const noexcept { return maxLines_; }
@@ -233,9 +269,20 @@ void Text::paint(PaintContext& context)
         for (std::size_t index = 0; index < lines.size(); ++index) {
             const RectF lineBox{bounds().x, bounds().y + lineHeight * static_cast<float>(index),
                                 bounds().width, lineHeight};
-            context.drawText(lines[index], bounds().x,
-                             context.centeredTextBottom(lines[index], lineBox, fontSize_, fontWeight_), fontSize_, color,
-                             fontWeight_);
+            const float width = textWidth(lines[index]);
+            float x = bounds().x;
+            if (alignment_ == TextAlign::Center) x += std::max(0.0f, (bounds().width - width) * 0.5f);
+            if (alignment_ == TextAlign::End) x += std::max(0.0f, bounds().width - width);
+            const float baseline = context.centeredTextBottom(lines[index], lineBox, fontSize_, fontWeight_, fontFamily_);
+            context.drawText(lines[index], x,
+                             baseline, fontSize_, color,
+                             fontWeight_, fontFamily_);
+            if (underline_ && width > 0.0f) {
+                context.fillRect({x, baseline + theme().stroke.thin, width, theme().stroke.thin}, color);
+            }
+            if (strikethrough_ && width > 0.0f) {
+                context.fillRect({x, lineBox.y + lineBox.height * 0.5f, width, theme().stroke.thin}, color);
+            }
         }
         if (needsClip) {
             context.restore();

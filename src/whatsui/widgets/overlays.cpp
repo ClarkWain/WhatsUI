@@ -1,10 +1,12 @@
 #include "wui/overlays.h"
+#include "wui/runtime.h"
 
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <utility>
 
 namespace wui {
@@ -22,9 +24,20 @@ void drawFocusRing(PaintContext& context, const RectF& bounds, const Theme& curr
 {
     if (!focused) return;
     const float inset = current.controls.focusInset;
-    context.fillRoundRect({bounds.x - inset, bounds.y - inset,
-                           bounds.width + inset * 2.0f, bounds.height + inset * 2.0f},
-                          current.radius.md + inset, current.colors.focus);
+    context.strokeRoundRect(
+        {bounds.x - inset, bounds.y - inset,
+         bounds.width + inset * 2.0f,
+         bounds.height + inset * 2.0f},
+        current.radius.medium + inset, current.stroke.thick,
+        current.colors.strokeFocusOuter);
+    const float innerInset =
+        std::max(0.0f, inset - current.stroke.thin * 0.5f);
+    context.strokeRoundRect(
+        {bounds.x - innerInset, bounds.y - innerInset,
+         bounds.width + innerInset * 2.0f,
+         bounds.height + innerInset * 2.0f},
+        current.radius.medium + innerInset, current.stroke.thin,
+        current.colors.strokeFocusInner);
 }
 } // namespace
 
@@ -79,9 +92,15 @@ void Popup::layout(const RectF& bounds)
 void Popup::paintSurface(PaintContext& context, const RectF& panel) const
 {
     const auto& current = theme();
-    context.fillRoundRect({panel.x - 2.0f, panel.y + 2.0f, panel.width + 4.0f, panel.height + 4.0f}, current.radius.lg + 1.0f, Color{0, 0, 0, 28});
-    context.fillRoundRect(panel, current.radius.lg, current.colors.border);
-    context.fillRoundRect({panel.x + 1.0f, panel.y + 1.0f, std::max(0.0f, panel.width - 2.0f), std::max(0.0f, panel.height - 2.0f)}, std::max(0.0f, current.radius.lg - 1.0f), current.colors.surface);
+    const ElevationToken& elevation = current.elevation.shadow16;
+    for (const ShadowLayerToken* layer : {&elevation.ambient, &elevation.key}) {
+        context.drawBoxShadow(panel, current.radius.xLarge, layer->blur, layer->offsetX,
+                              layer->offsetY, layer->spread, layer->color);
+    }
+    context.fillStrokeRoundRect(panel, current.radius.xLarge,
+                                current.stroke.thin,
+                                current.colors.surfaceRaised,
+                                current.colors.neutralStroke1);
 }
 
 void Popup::paint(PaintContext& context) { paintSurface(context, panelBounds_); ContainerNode::paint(context); clearDirty(DirtyFlag::Paint); }
@@ -110,19 +129,67 @@ float Menu::rowHeight() const noexcept { return std::max(28.0f, theme().controls
 SizeF Menu::measure(const Constraints& constraints) const
 {
     float width = 160.0f;
-    for (const auto& item : items_) width = std::max(width, 48.0f + static_cast<float>(item.label.size() + item.shortcut.size()) * theme().typography.body * 0.56f);
-    return constraints.clamp({width, theme().spacing.xs * 2.0f + rowHeight() * static_cast<float>(items_.size())});
+    for (const auto& item : items_) {
+        width = std::max(
+            width,
+            48.0f +
+                static_cast<float>(item.label.size()) *
+                    theme().typography.body1.size * 0.56f +
+                static_cast<float>(item.shortcut.size()) *
+                    theme().typography.caption1.size * 0.56f);
+    }
+    return constraints.clamp(
+        {width, theme().spacing.vertical.xs * 2.0f +
+                    rowHeight() * static_cast<float>(items_.size())});
 }
 void Menu::layout(const RectF& bounds) { Popup::layout(bounds); }
 void Menu::paint(PaintContext& context)
 {
     const auto panel = panelBounds(); const auto& current = theme(); paintSurface(context, panel);
     for (std::size_t i = 0; i < items_.size(); ++i) {
-        const auto& item = items_[i]; const RectF row{panel.x + current.spacing.xs, panel.y + current.spacing.xs + rowHeight() * static_cast<float>(i), std::max(0.0f, panel.width - current.spacing.xs * 2.0f), rowHeight()};
-        if (static_cast<int>(i) == selectedIndex_) context.fillRoundRect(row, current.radius.sm, current.colors.surfaceHover);
-        const Color fg = item.enabled ? current.colors.text : current.colors.textDisabled;
-        context.drawText(item.label, row.x + current.spacing.sm, row.y + (row.height + current.typography.body) * 0.5f - 2.0f, current.typography.body, fg);
-        if (!item.shortcut.empty()) { const float sw = static_cast<float>(item.shortcut.size()) * current.typography.caption * 0.56f; context.drawText(item.shortcut, row.x + row.width - current.spacing.sm - sw, row.y + (row.height + current.typography.caption) * 0.5f - 2.0f, current.typography.caption, current.colors.textMuted); }
+        const auto& item = items_[i];
+        const RectF row{
+            panel.x + current.spacing.horizontal.xs,
+            panel.y + current.spacing.vertical.xs +
+                rowHeight() * static_cast<float>(i),
+            std::max(0.0f,
+                     panel.width -
+                         current.spacing.horizontal.xs * 2.0f),
+            rowHeight()};
+        if (static_cast<int>(i) == selectedIndex_) {
+            context.fillRoundRect(
+                row, current.radius.medium,
+                current.colors.neutralBackground1.hover);
+        }
+        const Color fg =
+            item.enabled ? current.colors.neutralForeground1
+                         : current.colors.neutralForegroundDisabled;
+        context.drawText(
+            item.label, row.x + current.spacing.horizontal.s,
+            context.centeredTextBottom(
+                item.label, row, current.typography.body1.size,
+                current.typography.body1.weight,
+                current.typography.body1.family),
+            current.typography.body1.size, fg,
+            current.typography.body1.weight,
+            current.typography.body1.family);
+        if (!item.shortcut.empty()) {
+            const float sw = measuredTextWidth(
+                item.shortcut, current.typography.caption1.size);
+            context.drawText(
+                item.shortcut,
+                row.x + row.width - current.spacing.horizontal.s -
+                    sw,
+                context.centeredTextBottom(
+                    item.shortcut, row,
+                    current.typography.caption1.size,
+                    current.typography.caption1.weight,
+                    current.typography.caption1.family),
+                current.typography.caption1.size,
+                current.colors.neutralForeground3,
+                current.typography.caption1.weight,
+                current.typography.caption1.family);
+        }
     }
     clearDirty(DirtyFlag::Paint);
 }
@@ -147,6 +214,164 @@ bool Menu::onKeyEvent(const KeyEvent& event)
 }
 void Menu::dismiss() { if (onDismiss_) onDismiss_(); }
 
+MenuButton::MenuButton(std::string label)
+    : Button(std::move(label))
+{
+    Button::onClick([this] { openMenu(); });
+}
+MenuButton& MenuButton::addItem(MenuItem item) { items_.push_back(std::move(item)); return *this; }
+MenuButton& MenuButton::clearItems() { items_.clear(); return *this; }
+MenuButton& MenuButton::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
+const std::vector<MenuItem>& MenuButton::items() const noexcept { return items_; }
+bool MenuButton::isOpen() const noexcept { return open_; }
+SizeF MenuButton::measure(const Constraints& constraints) const
+{
+    const SizeF base = Button::measure({constraints.minWidth,
+                                        std::max(0.0f, constraints.maxWidth - 20.0f),
+                                        constraints.minHeight, constraints.maxHeight});
+    return constraints.clamp({base.width + 20.0f, base.height});
+}
+void MenuButton::paint(PaintContext& context)
+{
+    Button::paint(context);
+    const auto& current = theme();
+    Color foreground = current.colors.neutralForeground1;
+    if (!isEnabled()) foreground = current.colors.neutralForegroundDisabled;
+    else if (appearance() == ButtonAppearance::Primary || appearance() == ButtonAppearance::Danger) {
+        foreground = current.colors.onBrand;
+    }
+    const float cx = bounds().x + bounds().width - 14.0f;
+    const float cy = bounds().y + bounds().height * 0.5f;
+    context.strokePolyline(
+        {{cx - 4.0f, cy - 2.0f}, {cx, cy + 2.0f},
+         {cx + 4.0f, cy - 2.0f}},
+        current.stroke.thick, foreground);
+    clearDirty(DirtyFlag::Paint);
+}
+AccessibilityActionCapabilities MenuButton::accessibilityActions() const noexcept
+{
+    AccessibilityActionCapabilities actions;
+    actions.expandCollapse = overlayHost_ != nullptr && !items_.empty();
+    return actions;
+}
+AccessibilityActionStatus MenuButton::performAccessibilityAction(
+    AccessibilityActionKind kind, std::string_view value)
+{
+    (void)value;
+    if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
+    if (overlayHost_ == nullptr || items_.empty()) return AccessibilityActionStatus::NotSupported;
+    if (kind == AccessibilityActionKind::Expand) {
+        openMenu();
+        return open_ ? AccessibilityActionStatus::Succeeded : AccessibilityActionStatus::Failed;
+    }
+    if (kind == AccessibilityActionKind::Collapse) {
+        if (open_) closeMenu();
+        return AccessibilityActionStatus::Succeeded;
+    }
+    return AccessibilityActionStatus::NotSupported;
+}
+void MenuButton::openMenu()
+{
+    if (open_ || overlayHost_ == nullptr || items_.empty()) return;
+    auto menu = std::make_unique<Menu>();
+    Menu* const menuRaw = menu.get();
+    menu->anchor(bounds()).placement(PopupPlacement::BelowStart);
+    for (const auto& item : items_) menu->addItem(item);
+    menu->onDismiss([this] { closeMenu(); });
+    open_ = true;
+    setVisualState(ControlVisualState::Pressed, true);
+    overlayId_ = overlayHost_->show(std::move(menu));
+    // OverlayHost's window change hook has finished by this point, so this
+    // focus cannot be cleared by the show notification. Arrow/Enter/Escape
+    // now route to the menu until it dismisses.
+    overlayHost_->focus(menuRaw);
+    markDirty(DirtyFlag::Paint);
+}
+void MenuButton::closeMenu()
+{
+    if (!open_) return;
+    OverlayHost* const host = overlayHost_;
+    const auto id = overlayId_;
+    open_ = false;
+    overlayId_ = 0;
+    setVisualState(ControlVisualState::Pressed, false);
+    if (host != nullptr && id != 0) {
+        [[maybe_unused]] auto dismissed = host->dismiss(id);
+        host->focus(this);
+    }
+    markDirty(DirtyFlag::Paint);
+}
+
+SplitButton::SplitButton(std::string label) : label_(std::move(label)) {}
+SplitButton& SplitButton::label(std::string value) { setLabel(std::move(value)); return *this; }
+void SplitButton::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
+const std::string& SplitButton::label() const noexcept { return label_; }
+SplitButton& SplitButton::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
+SplitButton& SplitButton::addItem(MenuItem item) { items_.push_back(std::move(item)); return *this; }
+SplitButton& SplitButton::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
+bool SplitButton::isOpen() const noexcept { return open_; }
+SizeF SplitButton::measure(const Constraints& constraints) const
+{ const auto& current = theme(); return constraints.clamp({measuredTextWidth(label_, current.typography.body1Strong.size) + current.spacing.horizontal.m * 2.0f + 32.0f, 32.0f}); }
+void SplitButton::paint(PaintContext& context)
+{
+    const auto& current = theme(); const bool focused = isEnabled() && (visualStates() & toMask(ControlVisualState::Focused));
+    Color bg = current.colors.brandBackground.rest;
+    if (!isEnabled()) bg = current.colors.neutralBackground3.rest;
+    else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) bg = current.colors.brandBackground.pressed;
+    else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) bg = current.colors.brandBackground.hover;
+    drawFocusRing(context, bounds(), current, focused);
+    context.fillRoundRect(bounds(), current.radius.medium, bg);
+    const float arrowWidth = 32.0f; const float dividerX = bounds().x + bounds().width - arrowWidth;
+    const Color foreground = isEnabled() ? current.colors.onBrand : current.colors.neutralForegroundDisabled;
+    context.fillRect({dividerX, bounds().y + current.stroke.thin, current.stroke.thin, std::max(0.0f,bounds().height-current.stroke.thin*2.0f)}, foreground);
+    context.drawText(label_, bounds().x + current.spacing.horizontal.m, context.centeredTextBottom(label_, bounds(), current.typography.body1Strong.size, current.typography.body1Strong.weight), current.typography.body1Strong.size, foreground, current.typography.body1Strong.weight);
+    const float cx = dividerX + arrowWidth * 0.5f; const float cy = bounds().y + bounds().height * 0.5f;
+    context.strokePolyline(
+        {{cx - 4.0f, cy - 2.0f}, {cx, cy + 2.0f},
+         {cx + 4.0f, cy - 2.0f}},
+        current.stroke.thick, foreground);
+    clearDirty(DirtyFlag::Paint);
+}
+bool SplitButton::onPointerEvent(const PointerEvent& event)
+{
+    if (!isEnabled()) return false;
+    switch (event.action) {
+    case PointerAction::Down: if (event.button == MouseButton::Left) { setVisualState(ControlVisualState::Pressed,true); setVisualState(ControlVisualState::Focused,true); return true; } return false;
+    case PointerAction::Up: if (event.button == MouseButton::Left) { const bool active = (visualStates() & toMask(ControlVisualState::Pressed)) && bounds().contains(event.position); setVisualState(ControlVisualState::Pressed,false); if (active) { if (event.position.x >= bounds().x + bounds().width - 32.0f) openMenu(); else if (onClick_) onClick_(); } return true; } return false;
+    case PointerAction::Enter: setVisualState(ControlVisualState::Hovered,true); return true;
+    case PointerAction::Move: setVisualState(ControlVisualState::Hovered,bounds().contains(event.position)); return true;
+    case PointerAction::Leave: setVisualState(ControlVisualState::Hovered,false); return true;
+    case PointerAction::Cancel: setVisualState(ControlVisualState::Pressed,false); return true;
+    default: return false;
+    }
+}
+bool SplitButton::onKeyEvent(const KeyEvent& event)
+{ if (!isEnabled() || event.action != KeyAction::Down) return false; if (event.keyCode == 40 || event.keyCode == 264 || event.keyCode == 293) { openMenu(); return true; } if (event.keyCode == 13 || event.keyCode == 32 || event.keyCode == 257) { if (onClick_) onClick_(); return true; } return false; }
+AccessibilityActionCapabilities SplitButton::accessibilityActions() const noexcept { AccessibilityActionCapabilities a; a.invoke = static_cast<bool>(onClick_); a.expandCollapse = overlayHost_ != nullptr && !items_.empty(); return a; }
+AccessibilityActionStatus SplitButton::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
+{ (void)value; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; if (kind == AccessibilityActionKind::Invoke) { if (!onClick_) return AccessibilityActionStatus::NotSupported; onClick_(); return AccessibilityActionStatus::Succeeded; } if (kind == AccessibilityActionKind::Expand) { if (overlayHost_ == nullptr || items_.empty()) return AccessibilityActionStatus::NotSupported; openMenu(); return open_ ? AccessibilityActionStatus::Succeeded : AccessibilityActionStatus::Failed; } if (kind == AccessibilityActionKind::Collapse) { if (overlayHost_ == nullptr || items_.empty()) return AccessibilityActionStatus::NotSupported; if (open_) closeMenu(); return AccessibilityActionStatus::Succeeded; } return AccessibilityActionStatus::NotSupported; }
+void SplitButton::openMenu()
+{
+    if (open_ || overlayHost_ == nullptr || items_.empty()) return;
+    auto menu = std::make_unique<Menu>(); Menu* const menuRaw = menu.get(); menu->anchor(bounds()).placement(PopupPlacement::BelowStart);
+    for (const auto& item : items_) menu->addItem(item);
+    menu->onDismiss([this] { closeMenu(); });
+    open_ = true; setVisualState(ControlVisualState::Pressed, true);
+    overlayId_ = overlayHost_->show(std::move(menu)); overlayHost_->focus(menuRaw); markDirty(DirtyFlag::Paint);
+}
+void SplitButton::closeMenu()
+{
+    if (!open_) return;
+    OverlayHost* const host = overlayHost_;
+    const auto id = overlayId_;
+    open_ = false; overlayId_ = 0; setVisualState(ControlVisualState::Pressed, false);
+    if (host != nullptr && id != 0) {
+        [[maybe_unused]] auto dismissed = host->dismiss(id);
+        host->focus(this);
+    }
+    markDirty(DirtyFlag::Paint);
+}
+
 Tooltip& Tooltip::text(std::string value) { text_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
 Tooltip& Tooltip::delay(std::chrono::milliseconds value) noexcept { delay_ = std::max(std::chrono::milliseconds{0}, value); return *this; }
 Tooltip& Tooltip::showAfter(std::chrono::milliseconds elapsed) noexcept { elapsed_ = std::max(std::chrono::milliseconds{0}, elapsed); const bool next = elapsed_ >= delay_ && !text_.empty(); if (visible_ != next) { visible_ = next; markDirty(DirtyFlag::Paint); } return *this; }
@@ -154,9 +379,9 @@ Tooltip& Tooltip::hide() noexcept { elapsed_ = std::chrono::milliseconds{0}; if 
 const std::string& Tooltip::text() const noexcept { return text_; }
 bool Tooltip::isVisible() const noexcept { return visible_; }
 std::chrono::milliseconds Tooltip::delay() const noexcept { return delay_; }
-SizeF Tooltip::measure(const Constraints& constraints) const { const auto& current = theme(); return constraints.clamp({std::max(48.0f, static_cast<float>(text_.size()) * current.typography.caption * 0.56f + current.spacing.md * 2.0f), current.typography.caption + current.spacing.sm * 2.0f}); }
+SizeF Tooltip::measure(const Constraints& constraints) const { const auto& current = theme(); return constraints.clamp({std::max(48.0f, measuredTextWidth(text_, current.typography.caption1.size) + current.spacing.horizontal.m * 2.0f), current.typography.caption1.lineHeight + current.spacing.vertical.s * 2.0f}); }
 void Tooltip::layout(const RectF& bounds) { Popup::layout(bounds); }
-void Tooltip::paint(PaintContext& context) { if (!visible_) { clearDirty(DirtyFlag::Paint); return; } const auto panel = panelBounds(); const auto& current = theme(); context.fillRoundRect(panel, current.radius.sm, Color{50, 49, 48, 245}); context.drawText(text_, panel.x + current.spacing.md, panel.y + (panel.height + current.typography.caption) * 0.5f - 2.0f, current.typography.caption, Color{255, 255, 255, 255}); clearDirty(DirtyFlag::Paint); }
+void Tooltip::paint(PaintContext& context) { if (!visible_) { clearDirty(DirtyFlag::Paint); return; } const auto panel = panelBounds(); const auto& current = theme(); context.fillRoundRect(panel, current.radius.medium, Color{50, 49, 48, 245}); context.drawText(text_, panel.x + current.spacing.horizontal.m, context.centeredTextBottom(text_, panel, current.typography.caption1.size, current.typography.caption1.weight, current.typography.caption1.family), current.typography.caption1.size, Color{255, 255, 255, 255}, current.typography.caption1.weight, current.typography.caption1.family); clearDirty(DirtyFlag::Paint); }
 Node* Tooltip::hitTest(PointF point) { (void)point; return nullptr; }
 
 IconButton::IconButton(std::string icon, std::string accessibleLabel) : icon_(std::move(icon)), accessibleLabel_(std::move(accessibleLabel)) {}
@@ -175,13 +400,14 @@ void IconButton::paint(PaintContext& context)
 {
     const auto& current = theme(); Color background{0, 0, 0, 0};
     const bool focused = isEnabled() && (visualStates() & toMask(ControlVisualState::Focused)) != 0;
-    if (!isEnabled()) background = current.colors.disabled; else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) background = current.colors.surfacePressed; else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) background = current.colors.surfaceHover;
+    if (!isEnabled()) background = current.colors.neutralBackground3.rest; else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) background = current.colors.neutralBackground1.pressed; else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) background = current.colors.neutralBackground1.hover;
     drawFocusRing(context, bounds(), current, focused);
-    if (background.a != 0) context.fillRoundRect(bounds(), current.radius.md, background);
+    if (background.a != 0) context.fillRoundRect(bounds(), current.radius.medium, background);
     if (!icon_.empty()) {
-        context.drawText(icon_, bounds().x + (bounds().width - measuredTextWidth(icon_, current.typography.body)) * 0.5f,
-                         context.centeredTextBottom(icon_, bounds(), current.typography.body), current.typography.body,
-                         isEnabled() ? current.colors.text : current.colors.textDisabled);
+        context.drawText(icon_, bounds().x + (bounds().width - measuredTextWidth(icon_, current.typography.body2.size)) * 0.5f,
+                         context.centeredTextBottom(icon_, bounds(), current.typography.body2.size, current.typography.body2.weight, current.typography.body2.family), current.typography.body2.size,
+                         isEnabled() ? current.colors.neutralForeground1 : current.colors.neutralForegroundDisabled,
+                         current.typography.body2.weight, current.typography.body2.family);
     }
     clearDirty(DirtyFlag::Paint);
 }

@@ -1,5 +1,6 @@
 #include "wui/events.h"
 
+#include "wui/basic_controls.h"
 #include "wui/node.h"
 #include "wui/text_input.h"
 
@@ -426,24 +427,39 @@ bool InputRouter::dispatchKey(const KeyEvent& event)
         return false;
     }
 
-    if (event.action == KeyAction::Down && (event.keyCode == 32 || event.keyCode == 13 || event.keyCode == 257)) {
-        // Controls already express their activation behavior through pointer
-        // events. Synthesizing a complete click preserves that single path
-        // for Button and forthcoming controls without widget-specific casts.
-        // TextInput is focusable but Enter/Space remain text-editing keys;
-        // it must not receive a synthetic pointer click.
-        if (dynamic_cast<ControlNode*>(focused) != nullptr && dynamic_cast<TextInput*>(focused) == nullptr) {
-            PointerEvent down;
-            down.action = PointerAction::Down;
-            down.button = MouseButton::Left;
-            down.position = {focused->bounds().x, focused->bounds().y};
-            PointerEvent up = down;
-            up.action = PointerAction::Up;
-            return focused->onPointerEvent(down) | focused->onPointerEvent(up);
+    // Give each widget first refusal: selection and range controls own their
+    // precise keyboard contract, and text controls must keep editing keys.
+    if (focused->onKeyEvent(event)) {
+        // Radio groups use arrow keys to change the active option. Fluent
+        // requires the roving tab stop to follow that selection, rather than
+        // leaving the FocusManager on the old Radio while a different option
+        // is visually checked. Keep this at the router boundary because only
+        // it owns the real window focus state.
+        const bool isArrow = event.action == KeyAction::Down &&
+            (event.keyCode == 37 || event.keyCode == 38 || event.keyCode == 39 || event.keyCode == 40);
+        if (isArrow) {
+            if (auto* radio = dynamic_cast<Radio*>(focused)) {
+                if (auto* group = dynamic_cast<RadioGroup*>(radio->parent())) {
+                    if (Radio* selected = group->selectedRadio(); selected != nullptr) {
+                        focusManager_->setFocused(selected);
+                    }
+                }
+            }
         }
+        return true;
     }
 
-    return focused->onKeyEvent(event);
+    // Plain Buttons deliberately share their programmatic Invoke path instead
+    // of receiving a fake pointer gesture at the control's top-left corner.
+    // This avoids accidental Slider jumps and Enter toggles on controls whose
+    // keyboard contract only accepts Space.
+    const bool isActivation = event.action == KeyAction::Down &&
+        (event.keyCode == 32 || event.keyCode == 13 || event.keyCode == 257);
+    if (isActivation && focused->accessibilityActions().invoke) {
+        return focused->performAccessibilityAction(AccessibilityActionKind::Invoke, {}) ==
+               AccessibilityActionStatus::Succeeded;
+    }
+    return false;
 }
 
 bool InputRouter::dispatchTextInput(const TextInputEvent& event)

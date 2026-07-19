@@ -174,14 +174,29 @@ void VirtualList::paint(PaintContext& context)
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     const float focusInset = current.controls.focusInset;
     if (focused) {
-        context.fillRoundRect({bounds().x - focusInset, bounds().y - focusInset,
-                               bounds().width + focusInset * 2.0f, bounds().height + focusInset * 2.0f},
-                              current.radius.md + focusInset, current.colors.focus);
+        context.strokeRoundRect(
+            {bounds().x - focusInset, bounds().y - focusInset,
+             bounds().width + focusInset * 2.0f,
+             bounds().height + focusInset * 2.0f},
+            current.radius.medium + focusInset,
+            current.stroke.thick, current.colors.strokeFocusOuter);
+        const float innerInset =
+            std::max(0.0f,
+                     focusInset - current.stroke.thin * 0.5f);
+        context.strokeRoundRect(
+            {bounds().x - innerInset, bounds().y - innerInset,
+             bounds().width + innerInset * 2.0f,
+             bounds().height + innerInset * 2.0f},
+            current.radius.medium + innerInset,
+            current.stroke.thin, current.colors.strokeFocusInner);
     }
-    context.fillRoundRect(bounds(), current.radius.md, current.colors.border);
-    const RectF viewport{bounds().x + 1.0f, bounds().y + 1.0f,
-                         std::max(0.0f, bounds().width - 2.0f), std::max(0.0f, bounds().height - 2.0f)};
-    context.fillRoundRect(viewport, std::max(0.0f, current.radius.md - 1.0f), current.colors.surface);
+    const float stroke = current.stroke.thin;
+    const RectF viewport{bounds().x + stroke, bounds().y + stroke,
+                         std::max(0.0f, bounds().width - stroke * 2.0f), std::max(0.0f, bounds().height - stroke * 2.0f)};
+    context.fillStrokeRoundRect(bounds(), current.radius.medium,
+                                stroke,
+                                current.colors.neutralBackground1.rest,
+                                current.colors.neutralStroke1);
     const int checkpoint = context.save();
     context.clipRect(viewport);
     ContainerNode::paint(context);

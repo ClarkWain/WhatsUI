@@ -5,6 +5,13 @@ project(WhatsUI VERSION 0.1.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+# WhatsUI and its vendored headers are UTF-8.  Pin MSVC's source and execution
+# charset for every in-tree target: suppressing C4819 leaves the active ANSI
+# code page in control and can corrupt preprocessing on non-English Windows.
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 option(WHATSUI_WITH_WHATSCANVAS "Link WhatsCanvas into the WhatsUI target" OFF)
 option(WHATSUI_BUILD_TESTS "Build WhatsUI tests" ON)
 option(WHATSUI_BUILD_EXAMPLES "Build WhatsUI examples (requires WHATSUI_WITH_WHATSCANVAS)" OFF)
@@ -28,16 +35,32 @@ add_library(WhatsUI
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
     src/whatsui/widgets/button.cpp
+    src/whatsui/widgets/avatar.cpp
+    src/whatsui/widgets/accordion.cpp
     src/whatsui/widgets/basic_controls.cpp
+    src/whatsui/widgets/badge.cpp
+    src/whatsui/widgets/card.cpp
+    src/whatsui/widgets/date_time.cpp
     src/whatsui/widgets/dialog.cpp
+    src/whatsui/widgets/drawer.cpp
+    src/whatsui/widgets/feedback.cpp
+    src/whatsui/widgets/form_feedback.cpp
     src/whatsui/widgets/image.cpp
     src/whatsui/widgets/layout.cpp
+    src/whatsui/widgets/label.cpp
     src/whatsui/widgets/list_view.cpp
+    src/whatsui/widgets/navigation.cpp
     src/whatsui/widgets/overlays.cpp
+    src/whatsui/widgets/popover.cpp
+    src/whatsui/widgets/persona.cpp
+    src/whatsui/widgets/rating.cpp
     src/whatsui/widgets/scroll_view.cpp
+    src/whatsui/widgets/selection.cpp
     src/whatsui/widgets/structural.cpp
     src/whatsui/widgets/text.cpp
+    src/whatsui/widgets/table.cpp
     src/whatsui/widgets/text_input.cpp
+    src/whatsui/widgets/tree.cpp
     src/whatsui/widgets/virtual_list.cpp
 )
 

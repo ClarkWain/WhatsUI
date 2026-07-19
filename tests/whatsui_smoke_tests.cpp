@@ -505,16 +505,36 @@ void testCheckboxPointerKeyboardBindingAndDisabledState()
     expect(value.get() && checkbox->isChecked() && changes == 1, "Checkbox pointer activation should update its bound State");
     expect(router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false}), "Focused Checkbox should consume Space");
     expect(!value.get() && changes == 2, "Space should toggle the bound Checkbox value");
-    expect(router.dispatchKey({0, wui::KeyAction::Down, 13, 0, false}), "Focused Checkbox should consume Enter");
-    expect(value.get() && changes == 3, "Enter should toggle the bound Checkbox value");
+    expect(!router.dispatchKey({0, wui::KeyAction::Down, 13, 0, false}),
+           "Focused Checkbox must not consume Enter");
+    expect(!value.get() && changes == 2, "Enter must not toggle the bound Checkbox value");
     checkbox->setEnabled(false);
     expect(!router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false}), "Disabled Checkbox should not consume keyboard activation");
-    expect(value.get() && changes == 3, "Disabled Checkbox should not change its bound State");
+    expect(!value.get() && changes == 2, "Disabled Checkbox should not change its bound State");
 
     std::unique_ptr<wui::Node> declarative = wui::ui::Checkbox("Builder bound").bind(value).enabled(true);
     auto* builderCheckbox = dynamic_cast<wui::Checkbox*>(declarative.get());
-    expect(builderCheckbox != nullptr && builderCheckbox->isChecked(),
+    expect(builderCheckbox != nullptr && !builderCheckbox->isChecked(),
            "Checkbox builder should retain the strong State<bool> binding");
+
+    wui::Slider slider(0.0f, 10.0f, 6.0f);
+    slider.layout({0.0f, 0.0f, 160.0f, 32.0f});
+    router.setRoot(&slider);
+    focus.setFocused(&slider);
+    expect(!router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false}) && slider.value() == 6.0f,
+           "Slider Space must not synthesize a pointer click or change its value");
+    expect(!router.dispatchKey({0, wui::KeyAction::Down, 13, 0, false}) && slider.value() == 6.0f,
+           "Slider Enter must not synthesize a pointer click or change its value");
+
+    int buttonInvocations = 0;
+    wui::Button button("Apply");
+    button.onClick([&buttonInvocations] { ++buttonInvocations; });
+    router.setRoot(&button);
+    focus.setFocused(&button);
+    expect(router.dispatchKey({0, wui::KeyAction::Down, 13, 0, false}) && buttonInvocations == 1,
+           "Button Enter must invoke through its accessibility action");
+    expect(router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false}) && buttonInvocations == 2,
+           "Button Space must invoke through its accessibility action");
 }
 
 void testOverlayHitTestingAndRouting()
@@ -524,7 +544,7 @@ void testOverlayHitTestingAndRouting()
     auto* rawButton = overlayButton.get();
     bool clicked = false;
     overlayButton->onClick([&clicked] { clicked = true; });
-    overlays.show(std::move(overlayButton));
+    (void)overlays.show(std::move(overlayButton));
     overlays.layout({0.0f, 0.0f, 160.0f, 40.0f});
 
     wui::FocusManager focus;
@@ -609,7 +629,7 @@ void testComputed()
     expect(sum.get() == 5, "Computed should hold the initial derived value");
 
     int observed = 0;
-    sum.subscribe([&observed](const int& value) { observed = value; });
+    (void)sum.subscribe([&observed](const int& value) { observed = value; });
     a.set(10);
     expect(sum.get() == 13, "Computed should recompute when a source State changes");
     expect(observed == 13, "Computed should notify its own observers on change");
@@ -624,8 +644,11 @@ void testTheme()
 
     wui::setTheme(wui::Theme{});
     expect(wui::theme().colors.accent.r == 15, "default Fluent accent should be restored");
-    expect(wui::theme().controls.height == 36.0f && wui::theme().typography.body == 16.0f,
-           "default Fluent control and typography tokens should remain stable");
+    expect(wui::theme().controls.height == 32.0f
+               && wui::theme().controls.compactHeight == 24.0f
+               && wui::theme().typography.body == wui::theme().typography.body2.size
+               && wui::theme().typography.bodyLineHeight >= wui::theme().typography.body,
+           "default Fluent aliases should remain aligned with semantic control and typography tokens");
 }
 
 void testStructuralIf()
@@ -810,32 +833,32 @@ void testTextInputRouting()
 
 void testFocusedControlsPaintAFluentFocusRing()
 {
-    auto focusedRoundRectCount = [](wui::Node& node) {
+    auto paintCommandCount = [](wui::Node& node) {
         wui::PaintContext context;
         node.paint(context);
-        return context.paintStats().fillRoundRectCalls;
+        return context.paintStats().commandCount;
     };
 
     wui::Button button("Save");
     button.layout({10.0f, 10.0f, 80.0f, 32.0f});
-    const auto buttonRest = focusedRoundRectCount(button);
+    const auto buttonRest = paintCommandCount(button);
     button.setVisualState(wui::ControlVisualState::Focused, true);
-    expect(focusedRoundRectCount(button) == buttonRest + 1,
-           "Focused Button must paint one additional Fluent focus ring");
+    expect(paintCommandCount(button) == buttonRest + 2,
+           "Focused Button must paint the Fluent outer and inner focus strokes");
 
     wui::Checkbox checkbox("Complete");
     checkbox.layout({10.0f, 10.0f, 120.0f, 24.0f});
-    const auto checkboxRest = focusedRoundRectCount(checkbox);
+    const auto checkboxRest = paintCommandCount(checkbox);
     checkbox.setVisualState(wui::ControlVisualState::Focused, true);
-    expect(focusedRoundRectCount(checkbox) == checkboxRest + 1,
-           "Focused Checkbox must paint one additional Fluent focus ring");
+    expect(paintCommandCount(checkbox) == checkboxRest + 2,
+           "Focused Checkbox must paint the Fluent outer and inner focus strokes");
 
     wui::IconButton icon(".", "More actions");
     icon.layout({10.0f, 10.0f, 32.0f, 32.0f});
-    const auto iconRest = focusedRoundRectCount(icon);
+    const auto iconRest = paintCommandCount(icon);
     icon.setVisualState(wui::ControlVisualState::Focused, true);
-    expect(focusedRoundRectCount(icon) == iconRest + 1,
-           "Focused IconButton must paint one additional Fluent focus ring");
+    expect(paintCommandCount(icon) == iconRest + 2,
+           "Focused IconButton must paint the Fluent outer and inner focus strokes");
 }
 
 void testKeyboardFocusTraversalAndControlActivation()
