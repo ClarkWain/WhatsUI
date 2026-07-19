@@ -234,6 +234,61 @@ public:
 #endif
     }
 
+    void fillCircle(const PointF& center, float radius, Color color)
+    {
+        ++paintStats_.commandCount;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ == nullptr || radius <= 0.0f || color.a == 0) return;
+        wsc::Paint paint;
+        paint.setStyle(wsc::Paint::Style::FILL);
+        paint.setColor(wsc::Color(color.r, color.g, color.b, color.a));
+        paint.setAntiAlias(true);
+        canvas_->drawCircle(wsc::PointF(center.x * canvasCoordinateScale_,
+                                        center.y * canvasCoordinateScale_),
+                            radius * canvasCoordinateScale_, paint);
+#else
+        (void)center;
+        (void)radius;
+        (void)color;
+#endif
+    }
+
+    void strokeCircle(const PointF& center, float radius, float width, Color color)
+    {
+        ++paintStats_.commandCount;
+#ifdef WHATSUI_HAS_WHATSCANVAS
+        if (canvas_ == nullptr || radius <= 0.0f || width <= 0.0f || color.a == 0) return;
+        wsc::Paint paint;
+        paint.setStyle(wsc::Paint::Style::STROKE);
+        paint.setStrokeWidth(width * canvasCoordinateScale_);
+        paint.setStrokeJoin(wsc::Paint::StrokeJoin::ROUND);
+        paint.setColor(wsc::Color(color.r, color.g, color.b, color.a));
+        paint.setAntiAlias(true);
+        canvas_->drawCircle(wsc::PointF(center.x * canvasCoordinateScale_,
+                                        center.y * canvasCoordinateScale_),
+                            radius * canvasCoordinateScale_, paint);
+#else
+        (void)center;
+        (void)radius;
+        (void)width;
+        (void)color;
+#endif
+    }
+
+    // A circular control outline shares one outer silhouette just like
+    // fillStrokeRoundRect().  Keeping the stroke centre half a width inside
+    // the requested radius prevents Radio/Slider rings from growing beyond
+    // their layout box or being clipped at fractional DPR.
+    void fillStrokeCircle(const PointF& center, float radius, float strokeWidth,
+                          Color fillColor, Color strokeColor)
+    {
+        if (radius <= 0.0f) return;
+        if (fillColor.a != 0) fillCircle(center, radius, fillColor);
+        if (strokeWidth <= 0.0f || strokeColor.a == 0) return;
+        strokeCircle(center, std::max(0.0f, radius - strokeWidth * 0.5f),
+                     strokeWidth, strokeColor);
+    }
+
     // Paint a rounded surface with an inset stroke.  A surprising number of
     // controls used to emulate a one-DIP border by drawing a stroke-coloured
     // rounded rectangle and then a smaller fill on top.  At fractional DPR

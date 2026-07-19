@@ -573,6 +573,28 @@ if(TARGET WhatsCanvasSoftware)
         whatsui_fluent_visual_acceptance_200dpi
         PROPERTIES LABELS "visual;software;fluent;geometry;acceptance;dpi")
 
+    add_executable(WhatsUIFluentIndicatorGeometryTests
+        fluent_indicator_geometry_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentIndicatorGeometryTests
+        PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentIndicatorGeometryTests PRIVATE cxx_std_17)
+    foreach(_whatsui_indicator_dpi IN ITEMS 1.0 1.5 2.0)
+        if(_whatsui_indicator_dpi EQUAL 1.0)
+            set(_whatsui_indicator_dpi_tag 100)
+        elseif(_whatsui_indicator_dpi EQUAL 1.5)
+            set(_whatsui_indicator_dpi_tag 150)
+        else()
+            set(_whatsui_indicator_dpi_tag 200)
+        endif()
+        add_test(NAME whatsui_fluent_indicator_geometry_${_whatsui_indicator_dpi_tag}dpi
+            COMMAND WhatsUIFluentIndicatorGeometryTests
+                ${CMAKE_CURRENT_BINARY_DIR}/fluent_indicator_geometry_${_whatsui_indicator_dpi_tag}dpi.ppm
+                ${_whatsui_indicator_dpi})
+        set_tests_properties(whatsui_fluent_indicator_geometry_${_whatsui_indicator_dpi_tag}dpi
+            PROPERTIES LABELS "visual;software;fluent;indicator;geometry;dpi")
+    endforeach()
+
     add_executable(WhatsUITextShapingTests
         text_shaping_tests.cpp
     )

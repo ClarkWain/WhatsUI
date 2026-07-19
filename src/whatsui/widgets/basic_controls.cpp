@@ -182,9 +182,17 @@ void Radio::paint(PaintContext& context)
     const bool enabled = isEnabled();
     const bool selected = isSelected();
     const RectF indicator{bounds().x, bounds().y + (bounds().height - kIndicatorSize) * 0.5f, kIndicatorSize, kIndicatorSize};
-    drawFocusRing(context, indicator, current,
-                  (visualStates() & toMask(ControlVisualState::Focused)) != 0,
-                  current.radius.circular);
+    const PointF indicatorCenter{indicator.x + indicator.width * 0.5f,
+                                 indicator.y + indicator.height * 0.5f};
+    const float indicatorRadius = indicator.width * 0.5f;
+    if ((visualStates() & toMask(ControlVisualState::Focused)) != 0) {
+        const float inset = current.controls.focusInset;
+        context.strokeCircle(indicatorCenter, indicatorRadius + inset,
+                             current.stroke.thick, current.colors.strokeFocusOuter);
+        const float innerInset = std::max(0.0f, inset - current.stroke.thin * 0.5f);
+        context.strokeCircle(indicatorCenter, indicatorRadius + innerInset,
+                             current.stroke.thin, current.colors.strokeFocusInner);
+    }
     StateProperty<Color> selectedFill{current.colors.brandBackground.rest};
     selectedFill.set(ControlVisualState::Hovered, current.colors.brandBackground.hover)
         .set(ControlVisualState::Pressed, current.colors.brandBackground.pressed);
@@ -202,16 +210,14 @@ void Radio::paint(PaintContext& context)
         fill = selected ? border : current.colors.neutralBackground1.rest;
         text = current.colors.neutralForegroundDisabled;
     }
-    context.fillStrokeRoundRect(indicator, current.radius.circular,
-                                current.stroke.thin, fill, border);
+    context.fillStrokeCircle(indicatorCenter, indicatorRadius,
+                             current.stroke.thin, fill, border);
     if (selected) {
         // Selected Fluent radios are a brand disc with a white centre dot.
         // Keeping the brand in the centre (the old implementation) made the
         // selected state read as an unchecked ring at compact sizes.
         const float dot = 6.0f;
-        context.fillRoundRect({indicator.x + (indicator.width - dot) * 0.5f,
-                               indicator.y + (indicator.height - dot) * 0.5f, dot, dot},
-                              current.radius.circular, current.colors.onBrand);
+        context.fillCircle(indicatorCenter, dot * 0.5f, current.colors.onBrand);
     }
     if (!label_.empty()) {
         if (stackedLabel_) {

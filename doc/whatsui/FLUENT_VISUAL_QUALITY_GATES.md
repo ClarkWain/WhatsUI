@@ -7,6 +7,10 @@ logical geometry, and semantic colors. It complements the larger component
 matrix rather than replacing it: the matrix remains the broad review artifact;
 this test makes the most failure-prone visual rules executable.
 
+The Radio/Checkbox failure that led to the device-space curve tolerance and
+radial symmetry gate is documented in
+[Fluent indicator geometry at fractional DPI](FLUENT_INDICATOR_GEOMETRY.md).
+
 ## Release quality bar
 
 The following rules are normative for every new or changed component. “One
@@ -89,6 +93,16 @@ The four tests write `fluent_visual_acceptance*.ppm` beside the CTest binary.
 They are review artifacts and are not source-controlled. The image is always
 written before assertions run so a CI failure remains inspectable.
 
+For compact selection indicators, also run the real Canvas-DPR ownership path:
+
+```powershell
+ctest --test-dir build -C Release --output-on-failure `
+  -R '^whatsui_fluent_indicator_geometry_(100|150|200)dpi$'
+```
+
+These tests write `fluent_indicator_geometry_*.ppm` and validate Radio radial
+symmetry plus Checkbox edge/corner symmetry and clip containment.
+
 ## Executable rules
 
 | Rule | Assertion | Threshold / reason |
@@ -98,6 +112,7 @@ written before assertions run so a CI failure remains inspectable.
 | Input left padding | Placeholder first ink pixel starts after the 14-DIP token plus the default face's measured 1-DIP `P` side-bearing | `<= 1 physical pixel`; the public caret geometry is checked separately so a font bearing cannot hide an inset regression. |
 | Input right padding | Public `TextInput::caretRect()` for a long line ends inside the right content inset | Exact logical value: `right - horizontalPadding - 1 DIP`; this catches clipped long input and asymmetric padding without relying on glyph shape. |
 | Circular geometry | Circular Button corners remain page-colored while its centre is filled; unselected Radio has page-colored corner, stroke axis and white centre | Exact semantic token samples at logical geometry points. This detects square fills, clipping and lost ring strokes. |
+| Compact indicator geometry | Unselected Radio has ink on 24 radial directions with bounded spread and mirror symmetry; Checkbox keeps equal bounds, comparable four-side ink and a clean exterior gutter | Runs through `Canvas::setDevicePixelRatio()` at 100/150/200%; catches curve tessellation that ignores the native DPR root transform. |
 | Stateful surfaces | Compound Button rest/hover/pressed, Radio rest/hover/pressed/selected, and determinate Progress track/fill sample their dedicated Fluent tokens | Exact token comparisons in blank interior/axis regions; no antialiased text pixels are sampled. |
 | Fractional DPI | The identical rules run at `1.0`, `1.25`, `1.5`, and `2.0` scale | Coordinates are converted with the renderer's `lround(logical * scale)` convention, exposing double-scale, half-pixel drift, and scale-specific clipping. |
 
