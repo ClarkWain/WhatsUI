@@ -22,7 +22,9 @@ The long Radio chords, discontinuous curvature, unequal edge mass, and
 clipping are geometry signals and remain visible independently of the camera
 moire.
 
-## Root cause
+## Root causes
+
+### Curve subdivision ignored the final device scale
 
 WhatsCanvas generated Circle, Oval, and rounded-rectangle paths in local
 coordinates, then applied the Canvas root transform. The old curve subdivision
@@ -53,6 +55,38 @@ The 150% Checkbox also uses a legitimate 1 DIP Fluent stroke, which maps to
 by silently turning every border into a one-physical-pixel hairline. The
 requirement is symmetric coverage and continuous corners, not an integer
 number of fully opaque pixels.
+
+### The analytic-AA fringe overlapped fully covered geometry
+
+The first fix removed Radio facets, but `build.bat` could still show a heavy,
+dirty Checkbox edge. The executable was current:
+
+```text
+build.bat
+  -> build-todo
+  -> examples/Release/WhatsUITodoGlfw.exe
+  -> WhatsCanvas OpenGL backend
+```
+
+The misleading result came from backend coverage, not from a stale binary.
+The first indicator regression used only the deterministic Software backend,
+while the native Todo uses OpenGL.
+
+WhatsCanvas expands a filled or stroked triangle mesh with a one-physical-pixel
+coverage fringe. The fringe correctly spans half a pixel inside and half a
+pixel outside the mathematical silhouette. The old implementation nevertheless
+kept the fully covered interior triangles all the way to that silhouette. The
+inner half of the fringe therefore occupied the same pixels as the 100%
+interior. Normal `SrcOver` blending composited both fragments:
+
+```text
+source alpha 0.5 drawn twice:
+result = 0.5 + 0.5 * (1 - 0.5) = 0.75
+```
+
+At 150% this made a valid 1 DIP / 1.5-physical-pixel Checkbox border look
+roughly like a much heavier stroke. It also made an exact-token pixel test pass
+for the wrong reason.
 
 ## Solution
 
@@ -95,6 +129,26 @@ Checkbox remains a rounded rectangle, as required by Fluent, but benefits from
 the device-aware rounded-corner tessellation. Its 16 DIP layout box, hit box,
 and 1 DIP stroke token are unchanged.
 
+### Non-overlapping analytic-AA geometry
+
+The fully covered triangles now stop at the fringe's inner boundary. Boundary
+vertices use the same quantized indices and mitred inset as the fringe, so the
+interior stays watertight while every output pixel is covered by only one
+portion of the shape.
+
+The regression renders a translucent rounded rectangle through a hidden real
+OpenGL 3.3 context. Before the fix, source alpha 128 reached alpha 192 on 120
+pixels. After the fix:
+
+```text
+maximum alpha:       128
+over-covered pixels: 0
+```
+
+The Software golden for the antialiased clipped circle was intentionally
+updated as well: the old abrupt/dark edge is replaced by a single smooth
+coverage ramp.
+
 ## Result
 
 The fixed 150% native-DPR probe is shown at normal size and with nearest-neighbor
@@ -110,11 +164,24 @@ that is unavoidable for a 24-pixel circle. The acceptance criteria are smooth
 radial progression, symmetry, bounded chord error, and no long geometric
 facets—not a mathematically continuous edge on a discrete pixel grid.
 
+The final native Todo frame below comes from
+`build-todo/examples/Release/WhatsUITodoGlfw.exe`. It is read directly from the
+OpenGL framebuffer before presentation, not substituted with a Software render
+or desktop screenshot:
+
+![Native OpenGL Todo after the AA overlap fix](../images/fluent_todo_opengl_after_150dpi.png)
+
+The Checkbox enlarged with nearest-neighbor sampling shows one dark physical
+stroke row/column plus the intended lighter coverage pixels at the corners,
+rather than the previous multiply blended edge:
+
+![Native OpenGL Checkbox after the AA overlap fix, enlarged without smoothing](../images/fluent_todo_checkbox_opengl_after_pixelzoom.png)
+
 ## Automated acceptance
 
 `WhatsUIFluentIndicatorGeometryTests` renders the real Canvas-DPR ownership
-path at 100%, 150%, and 200%. It writes the PPM artifact before assertions and
-checks:
+path through the Software backend at 100%, 150%, and 200%. It writes the PPM
+artifact before assertions and checks:
 
 - Radio ink exists on 24 radial directions;
 - the Radio ink bounds remain centred and circular;
@@ -124,6 +191,12 @@ checks:
 - all four Checkbox edges carry comparable ink;
 - horizontal and vertical mirror mismatch stay below the documented bound;
 - the immediate exterior remains the page token, proving no overflow or clip.
+
+`WhatsCanvasOpenGLAAGeometryTests` complements that widget-level test with a
+real OpenGL framebuffer. It asserts that analytic AA never increases a
+translucent shape beyond its source alpha. Both tests are required: the first
+validates Fluent component geometry and DPR ownership; the second validates
+the backend that `build.bat` actually runs.
 
 Run the focused gate with:
 
@@ -146,6 +219,9 @@ ctest --test-dir build-native-text-compare -C Release --output-on-failure `
 
 - WhatsCanvas owns device-aware Circle/Oval/rounded-rectangle subdivision in
   `src/canvas/Canvas.cpp`.
+- WhatsCanvas also owns non-overlapping analytic-AA mesh expansion in
+  `src/canvas/Canvas.cpp` and its OpenGL regression in
+  `tests/OpenGLAAGeometryTests.cpp`.
 - WhatsUI owns backend-neutral circle drawing in
   `include/wui/paint_context.h`.
 - Radio composition remains in

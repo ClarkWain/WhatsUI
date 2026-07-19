@@ -49,6 +49,21 @@ bool hasColor(const std::vector<unsigned char>& pixels, int left, int top,
     return false;
 }
 
+bool hasBrandInk(const std::vector<unsigned char>& pixels, int left, int top,
+                 int right, int bottom)
+{
+    for (int y = top; y < bottom; ++y) {
+        for (int x = left; x < right; ++x) {
+            const auto offset = static_cast<std::size_t>((y * kWidth + x) * 4);
+            if (pixels[offset + 2] >= pixels[offset] + 16
+                && pixels[offset + 2] >= pixels[offset + 1] + 6) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 int blueSelectionBands(const std::vector<unsigned char>& pixels, int left, int top,
                        int right, int bottom)
 {
@@ -157,8 +172,8 @@ int main(int argc, char** argv)
         expect(blueSelectionBands(pixels, 38, static_cast<int>(kSelectionY + 4.0f),
                                   480, static_cast<int>(kSelectionY + 62.0f)) >= 2,
                "Selection fill must be visible on multiple wrapped visual lines");
-        expect(hasColor(pixels, 38, static_cast<int>(kCompositionY + 4.0f),
-                        480, static_cast<int>(kCompositionY + 58.0f), colors.brandForeground1),
+        expect(hasBrandInk(pixels, 38, static_cast<int>(kCompositionY + 4.0f),
+                           480, static_cast<int>(kCompositionY + 58.0f)),
                "IME composition must paint its Fluent underline");
         expect(hasColor(pixels, 34, static_cast<int>(kFocusedY + 58.0f),
                         486, static_cast<int>(kFocusedY + 64.0f), colors.brandBackground.rest),

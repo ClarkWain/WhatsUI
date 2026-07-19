@@ -62,6 +62,22 @@ bool hasColorInRect(const std::vector<unsigned char>& pixels, int left, int top,
     return false;
 }
 
+bool hasBrandInkInRect(const std::vector<unsigned char>& pixels,
+                       int left, int top, int right, int bottom)
+{
+    for (int y = top; y < bottom; ++y) {
+        for (int x = left; x < right; ++x) {
+            const auto offset = static_cast<std::size_t>((y * kWidth + x) * 4);
+            if (offset + 3 < pixels.size()
+                && pixels[offset + 2] >= pixels[offset] + 16
+                && pixels[offset + 2] >= pixels[offset + 1] + 6) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool hasHorizontalColorRun(const std::vector<unsigned char>& pixels, int left, int top, int right, int bottom,
                            wui::Color color, int minimumLength)
 {
@@ -164,21 +180,20 @@ void testCaretBlinksAndEditingRestartsVisiblePhase()
 
     const auto caret = input.caretRect();
     const int left = static_cast<int>(caret.x);
-    const auto& color = wui::theme().colors.brandForeground1;
     const auto visible = render(input);
-    expect(hasColorInRect(visible, left, 5, left + 3, 33, color),
+    expect(hasBrandInkInRect(visible, left, 5, left + 3, 33),
            "Focused TextInput caret must start in its visible blink phase");
 
     wui::Ticker::instance().tick(0.55f);
     const auto hidden = render(input);
-    expect(!hasColorInRect(hidden, left, 5, left + 3, 33, color),
+    expect(!hasBrandInkInRect(hidden, left, 5, left + 3, 33),
            "Focused TextInput caret must hide during the second blink phase");
 
     expect(input.onTextInput({0, "!"}), "Committed text must be accepted during blink testing");
     const auto movedCaret = input.caretRect();
     const auto restarted = render(input);
-    expect(hasColorInRect(restarted, static_cast<int>(movedCaret.x), 5,
-                          static_cast<int>(movedCaret.x) + 3, 33, color),
+    expect(hasBrandInkInRect(restarted, static_cast<int>(movedCaret.x), 5,
+                             static_cast<int>(movedCaret.x) + 3, 33),
            "Editing must restart the caret in a visible blink phase");
 }
 
