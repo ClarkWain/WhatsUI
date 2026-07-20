@@ -200,6 +200,7 @@ int main(int argc, char** argv)
         wui::Checkbox checkboxPressed("Pressed", false), checkboxFocused("Focused", true);
         checkboxPressed.setVisualState(wui::ControlVisualState::Pressed, true);
         checkboxFocused.setVisualState(wui::ControlVisualState::Focused, true);
+        checkboxFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
         draw(checkboxPressed, paint, {28, 1052, 146, 32});
         draw(checkboxFocused, paint, {190, 1052, 146, 32});
 
@@ -209,6 +210,7 @@ int main(int argc, char** argv)
         radioHover.setVisualState(wui::ControlVisualState::Hovered, true);
         radioPressed.setVisualState(wui::ControlVisualState::Pressed, true);
         radioFocused.setVisualState(wui::ControlVisualState::Focused, true);
+        radioFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
         radioDisabled.setEnabled(false);
         draw(radioRest, paint, {352, 1052, 102, 32});
         draw(radioHover, paint, {464, 1052, 102, 32});
@@ -250,9 +252,9 @@ int main(int argc, char** argv)
         canvas->endFrame();
         const auto pixels = canvas->readPixelsRGBA();
         if (pixels.size() != static_cast<std::size_t>(width * height * 4)) return 3;
-        // A Checkbox focus ring is scoped to its indicator; the transparent
-        // label tail must retain the page surface instead of becoming an
-        // opaque focus-inner rectangle.
+        // Checkbox keyboard focus is a two-stroke root outline. Its
+        // transparent label tail must retain the page surface instead of
+        // becoming an opaque focus-inner rectangle.
         if (!pixelIs(pixels, width, scale, 330, 1068,
                      wui::theme().colors.neutralBackground2.rest)) return 4;
         // State surfaces and focus geometry must remain distinct: pressed is

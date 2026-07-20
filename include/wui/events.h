@@ -168,8 +168,13 @@ struct CompositionInputEvent {
 
 class FocusManager {
 public:
-    void setFocused(Node* node) noexcept;
+    // Programmatic focus is visible by default. Pointer routing passes false;
+    // keyboard traversal passes true, matching the platform focus-visible
+    // convention while retaining one logical focus owner.
+    void setFocused(Node* node, bool focusVisible = true) noexcept;
+    void setFocusVisible(bool visible) noexcept;
     [[nodiscard]] Node* focused() const noexcept;
+    [[nodiscard]] bool isFocusVisible() const noexcept;
     void clear() noexcept;
 
     // Advances through enabled ControlNode instances in tree (pre-order)
@@ -185,6 +190,7 @@ private:
     // call into a destroyed FocusManager.
     struct FocusState {
         Node* focused{nullptr};
+        bool focusVisible{false};
     };
 
     static void clearFocusIfCurrent(const std::weak_ptr<FocusState>& state, Node* node,

@@ -29,14 +29,100 @@ bool isWordCharacter(char character) noexcept
 
 constexpr std::size_t kMaximumUndoEntries = 100;
 
-[[nodiscard]] RectF textViewport(const RectF& bounds, const Theme& current, bool focused) noexcept
+[[nodiscard]] float horizontalTextPadding(const Theme& current, InputSize size,
+                                          bool multiline) noexcept
+{
+    if (multiline) {
+        switch (size) {
+        case InputSize::Small: return current.spacing.horizontal.s;
+        case InputSize::Large: return current.spacing.horizontal.m +
+                                      current.spacing.horizontal.xxs;
+        case InputSize::Medium:
+        default: return current.spacing.horizontal.m;
+        }
+    }
+    switch (size) {
+    case InputSize::Small: return current.spacing.horizontal.s;
+    case InputSize::Large: return current.spacing.horizontal.m +
+                                  current.spacing.horizontal.sNudge;
+    case InputSize::Medium:
+    default: return current.controls.horizontalPadding;
+    }
+}
+
+[[nodiscard]] float verticalTextPadding(const Theme& current, InputSize size,
+                                        bool multiline) noexcept
+{
+    if (!multiline) return current.stroke.thin;
+    switch (size) {
+    case InputSize::Small: return current.spacing.vertical.xs;
+    case InputSize::Large: return current.spacing.vertical.s;
+    case InputSize::Medium:
+    default: return current.spacing.vertical.sNudge;
+    }
+}
+
+[[nodiscard]] RectF textViewport(const RectF& bounds, const Theme& current,
+                                 bool focused, InputSize size,
+                                 bool multiline) noexcept
 {
     (void)focused;
-    const float borderInset = current.stroke.thin;
-    const float horizontalPadding = current.controls.horizontalPadding;
-    return {bounds.x + horizontalPadding, bounds.y + borderInset,
+    const float horizontalPadding =
+        horizontalTextPadding(current, size, multiline);
+    const float verticalPadding =
+        verticalTextPadding(current, size, multiline);
+    return {bounds.x + horizontalPadding, bounds.y + verticalPadding,
             std::max(0.0f, bounds.width - horizontalPadding * 2.0f),
-            std::max(0.0f, bounds.height - borderInset * 2.0f)};
+            std::max(0.0f, bounds.height - verticalPadding * 2.0f)};
+}
+
+[[nodiscard]] float snapToPhysicalPixel(float logical, float scale) noexcept
+{
+    scale = std::max(1.0f, scale);
+    return std::round(logical * scale) / scale;
+}
+
+[[nodiscard]] float snapThicknessToPhysicalPixels(float logical,
+                                                  float scale) noexcept
+{
+    scale = std::max(1.0f, scale);
+    return static_cast<float>(
+               std::max(1L, std::lround(logical * scale))) /
+           scale;
+}
+
+void drawBottomStroke(PaintContext& context, const RectF& bounds, float radius,
+                      float thickness, Color color, float progress = 1.0f)
+{
+    progress = std::clamp(progress, 0.0f, 1.0f);
+    if (bounds.width <= 0.0f || bounds.height <= 0.0f ||
+        thickness <= 0.0f || color.a == 0 || progress <= 0.0f) {
+        return;
+    }
+    const float scale = std::max(1.0f, context.scaleFactor());
+    const float snappedThickness =
+        snapThicknessToPhysicalPixels(thickness, scale);
+    const float intendedWidth = bounds.width * progress;
+    const float intendedLeft =
+        bounds.x + (bounds.width - intendedWidth) * 0.5f;
+    const float left = snapToPhysicalPixel(intendedLeft, scale);
+    const float right =
+        snapToPhysicalPixel(intendedLeft + intendedWidth, scale);
+    const float bottom =
+        snapToPhysicalPixel(bounds.y + bounds.height, scale);
+    const RectF segment{
+        left,
+        bottom - snappedThickness,
+        std::max(1.0f / scale, right - left),
+        snappedThickness,
+    };
+    // Match Fluent's clipped ::after construction. At full width the input's
+    // bottom corners define the silhouette; during scaleX animation the
+    // segment retains clean rounded leading edges instead of square horns.
+    const int checkpoint = context.save();
+    context.clipRoundRect(bounds, radius);
+    context.fillRoundRect(segment, std::min(radius, thickness * 0.5f), color);
+    context.restoreTo(checkpoint);
 }
 
 [[nodiscard]] float measuredTextWidth(const std::string& text, std::size_t end,
@@ -468,6 +554,7 @@ TextInput::TextInput(std::string placeholder)
 TextInput::~TextInput()
 {
     stopCaretBlinkAnimation();
+    stopFocusIndicatorAnimation();
 }
 
 void TextInput::ensureCaretBlinkAnimation()
@@ -497,6 +584,56 @@ void TextInput::resetCaretBlink()
 {
     stopCaretBlinkAnimation();
     caretVisible_ = true;
+}
+
+void TextInput::syncFocusIndicatorAnimation(bool active)
+{
+    if (focusIndicatorTargetActive_ == active) return;
+    focusIndicatorTargetActive_ = active;
+    stopFocusIndicatorAnimation();
+
+    const float target = active ? 1.0f : 0.0f;
+    if (!motionEnabled_) {
+        focusIndicatorProgress_ = target;
+        markDirty(DirtyFlag::Paint);
+        return;
+    }
+
+    const float start = focusIndicatorProgress_;
+    const float distance = std::abs(target - start);
+    if (distance <= 0.0001f) {
+        focusIndicatorProgress_ = target;
+        return;
+    }
+    const auto& current = theme();
+    const float fullDuration = active ? current.motion.durationNormal
+                                      : current.motion.durationUltraFast;
+    Animation animation(
+        std::max(0.001f, fullDuration * distance),
+        [this, start, target](float progress) {
+            focusIndicatorProgress_ = start + (target - start) * progress;
+            markDirty(DirtyFlag::Paint);
+        },
+        active ? easing::easeOutCubic : easing::easeInCubic);
+    animation.onComplete([this, target] {
+        focusIndicatorProgress_ = target;
+        focusIndicatorAnimation_ = 0;
+        markDirty(DirtyFlag::Paint);
+    });
+    focusIndicatorAnimation_ = Ticker::instance().add(std::move(animation));
+}
+
+void TextInput::stopFocusIndicatorAnimation() noexcept
+{
+    if (focusIndicatorAnimation_ == 0) return;
+    Ticker::instance().cancel(focusIndicatorAnimation_);
+    focusIndicatorAnimation_ = 0;
+}
+
+void TextInput::onDetach() noexcept
+{
+    stopCaretBlinkAnimation();
+    stopFocusIndicatorAnimation();
 }
 
 TextEditingController& TextInput::controller() noexcept
@@ -560,6 +697,15 @@ void TextInput::setAppearance(InputAppearance appearance) noexcept { if (appeara
 InputAppearance TextInput::appearance() const noexcept { return appearance_; }
 void TextInput::setInvalid(bool invalid) noexcept { if (invalid_ != invalid) { invalid_ = invalid; markDirty(DirtyFlag::Paint); } }
 bool TextInput::isInvalid() const noexcept { return invalid_; }
+void TextInput::setMotionEnabled(bool enabled) noexcept
+{
+    if (motionEnabled_ == enabled) return;
+    motionEnabled_ = enabled;
+    stopFocusIndicatorAnimation();
+    focusIndicatorProgress_ = focusIndicatorTargetActive_ ? 1.0f : 0.0f;
+    markDirty(DirtyFlag::Paint);
+}
+bool TextInput::isMotionEnabled() const noexcept { return motionEnabled_; }
 void TextInput::setMultiline(bool value) noexcept
 {
     if (multiline_ == value) return;
@@ -584,7 +730,8 @@ float TextInput::maximumVerticalScrollOffset() const noexcept
 {
     if (!multiline_) return 0.0f;
     const auto& current = theme();
-    const RectF viewport = textViewport(bounds(), current, true);
+    const RectF viewport =
+        textViewport(bounds(), current, true, size_, multiline_);
     const float lineHeight = editableLineHeight(current);
     const auto lines = editableLines(controller_.text(), current.typography.body1.size,
                                      viewport.width, lineHeight, true);
@@ -627,7 +774,8 @@ RectF TextInput::caretRect() const noexcept
 {
     const auto& current = theme();
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
-    const RectF viewport = textViewport(bounds(), current, focused);
+    const RectF viewport =
+        textViewport(bounds(), current, focused, size_, multiline_);
     const auto lines = editableLines(controller_.text(), current.typography.body1.size, viewport.width,
                                      editableLineHeight(current), multiline_);
     const auto lineIndex = lineIndexForOffset(lines, controller_.selection().end);
@@ -646,16 +794,22 @@ RectF TextInput::caretRect() const noexcept
                                              viewport.height, maximum);
         }
     }
-    return {viewport.x + caretX - horizontalOffset,
-            multiline_ ? viewport.y + lineHeight * static_cast<float>(lineIndex) - verticalOffset : viewport.y,
-            current.stroke.thin, multiline_ ? std::max(1.0f, lineHeight) : std::max(1.0f, viewport.height)};
+    const float caretTop = multiline_
+        ? viewport.y + lineHeight * static_cast<float>(lineIndex) - verticalOffset
+        : viewport.y + std::max(0.0f, (viewport.height - lineHeight) * 0.5f);
+    return {viewport.x + caretX - horizontalOffset, caretTop,
+            current.stroke.thin, std::max(1.0f, lineHeight)};
 }
 
 SizeF TextInput::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
+    const float horizontalPadding =
+        horizontalTextPadding(current, size_, multiline_);
+    const float verticalPadding =
+        verticalTextPadding(current, size_, multiline_);
     const float available = std::isfinite(constraints.maxWidth)
-        ? std::max(1.0f, constraints.maxWidth - current.controls.horizontalPadding * 2.0f)
+        ? std::max(1.0f, constraints.maxWidth - horizontalPadding * 2.0f)
         : 4096.0f;
     const auto lines = editableLines(controller_.text(), current.typography.body1.size, available,
                                      editableLineHeight(current), multiline_);
@@ -666,9 +820,9 @@ SizeF TextInput::measure(const Constraints& constraints) const
         ? lineHeight * static_cast<float>(std::max(minimumLines_, lines.size()))
         : inputHeight(size_);
     const float height = multiline_
-        ? std::max(inputHeight(size_), textHeight + current.spacing.vertical.xs * 2.0f)
+        ? std::max(inputHeight(size_), textHeight + verticalPadding * 2.0f)
         : inputHeight(size_);
-    return constraints.clamp({widest + current.controls.horizontalPadding * 2.0f, height});
+    return constraints.clamp({widest + horizontalPadding * 2.0f, height});
 }
 
 void TextInput::paint(PaintContext& context)
@@ -679,37 +833,75 @@ void TextInput::paint(PaintContext& context)
     const auto& current = theme();
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     const bool enabled = isEnabled();
+    const bool hovered =
+        (visualStates() & toMask(ControlVisualState::Hovered)) != 0;
+    const bool pressed =
+        (visualStates() & toMask(ControlVisualState::Pressed)) != 0;
+    const float scale = std::max(1.0f, context.scaleFactor());
+    const float outlineStrokeWidth =
+        snapThicknessToPhysicalPixels(current.stroke.thin, scale);
+    syncFocusIndicatorAnimation(focused && enabled);
     if (focused && enabled) {
         ensureCaretBlinkAnimation();
     } else {
         stopCaretBlinkAnimation();
         caretVisible_ = true;
     }
-    const Color outerStroke = !enabled ? current.colors.neutralStrokeDisabled
-                            : invalid_ ? current.colors.statusDanger : current.colors.neutralStroke1;
-    const Color surface = !enabled ? current.colors.neutralBackground3.rest
+    const bool filled = appearance_ == InputAppearance::FilledDarker ||
+                        appearance_ == InputAppearance::FilledLighter;
+    Color outerStroke = current.colors.neutralStroke1;
+    Color bottomStroke = current.colors.neutralStrokeAccessible;
+    if (!enabled) {
+        outerStroke = current.colors.neutralStrokeDisabled;
+        bottomStroke = current.colors.neutralStrokeDisabled;
+    } else if (invalid_ && !focused) {
+        outerStroke = current.colors.statusDanger;
+        bottomStroke = current.colors.statusDanger;
+    } else if (focused || pressed) {
+        outerStroke = current.colors.neutralStroke1Pressed;
+        bottomStroke = current.colors.neutralStrokeAccessiblePressed;
+    } else if (hovered) {
+        outerStroke = current.colors.neutralStroke1Hover;
+        bottomStroke = current.colors.neutralStrokeAccessibleHover;
+    }
+    const Color surface = !enabled ? Color{0, 0, 0, 0}
                         : appearance_ == InputAppearance::FilledDarker ? current.colors.neutralBackground3.rest
-                        : appearance_ == InputAppearance::FilledLighter ? current.colors.neutralBackground2.rest
+                        : appearance_ == InputAppearance::FilledLighter ? current.colors.neutralBackground1.rest
+                        : appearance_ == InputAppearance::Underline ? Color{0, 0, 0, 0}
                         : current.colors.neutralBackground1.rest;
-    const float inset = current.stroke.thin;
-    context.fillStrokeRoundRect(bounds(), current.radius.medium,
-                                current.stroke.thin, surface, outerStroke);
-    // Fluent Input keeps the focus cue at the bottom edge. Unlike a full blue
-    // rectangle it remains quiet next to many fields, while the neutral outer
-    // stroke still preserves the control boundary.
-    if (focused && enabled) {
-        const Color indicator = invalid_ ? current.colors.statusDanger : current.colors.brandBackground.rest;
-        context.fillRoundRect({bounds().x + inset, bounds().y + bounds().height - current.stroke.thick - inset,
-                               std::max(0.0f, bounds().width - inset * 2.0f), current.stroke.thick},
-                              current.radius.none, indicator);
-    } else if (appearance_ == InputAppearance::Underline) {
-        context.fillRect({bounds().x + inset, bounds().y + bounds().height - current.stroke.thin - inset,
-                          std::max(0.0f, bounds().width - inset * 2.0f), current.stroke.thin},
-                         current.colors.neutralStrokeAccessible);
+
+    if (appearance_ == InputAppearance::Outline || !enabled ||
+        (invalid_ && !focused)) {
+        context.fillStrokeRoundRect(bounds(), current.radius.medium,
+                                    outlineStrokeWidth, surface, outerStroke);
+    } else if (filled && surface.a != 0) {
+        context.fillRoundRect(bounds(), current.radius.medium, surface);
+    }
+    if (!filled || !enabled || (invalid_ && !focused)) {
+        drawBottomStroke(context, bounds(),
+                         appearance_ == InputAppearance::Underline
+                             ? current.radius.none
+                             : current.radius.medium,
+                         current.stroke.thin, bottomStroke);
+    }
+    // Fluent's focus-within pseudo-element scales from the field centre. The
+    // neutral accessible bottom border remains beneath it while the 2-DIP
+    // compound-brand indicator expands over 200 ms.
+    if (enabled && focusIndicatorProgress_ > 0.0f) {
+        const Color indicator = pressed
+            ? current.colors.compoundBrandStroke.pressed
+            : current.colors.compoundBrandStroke.rest;
+        drawBottomStroke(context, bounds(),
+                         appearance_ == InputAppearance::Underline
+                             ? current.radius.none
+                             : current.radius.medium,
+                         current.stroke.thick, indicator,
+                         focusIndicatorProgress_);
     }
     const auto selection = controller_.selection();
     const auto composition = controller_.composition();
-    const RectF viewport = textViewport(bounds(), current, focused);
+    const RectF viewport =
+        textViewport(bounds(), current, focused, size_, multiline_);
     const float lineHeight = editableLineHeight(current);
     const auto lines = editableLines(controller_.text(), current.typography.body1.size, viewport.width,
                                      lineHeight, multiline_);
@@ -782,13 +974,24 @@ void TextInput::paint(PaintContext& context)
                                                      current.typography.body1.size);
                 const float endX = linePrefixWidth(controller_.text(), line, compositionEnd,
                                                    current.typography.body1.size);
-                context.fillRect({viewport.x + startX,
-                                  context.centeredTextBottom("Ag", lineBox,
-                                                             current.typography.body1.size,
-                                                             current.typography.body1.weight,
-                                                             current.typography.body1.family)
-                                      + current.controls.focusInset,
-                                  std::max(1.0f, endX - startX), current.stroke.thin}, current.colors.brandForeground1);
+                const float physicalPixel = 1.0f / scale;
+                const float underlineLeft =
+                    snapToPhysicalPixel(viewport.x + startX, scale);
+                const float underlineRight =
+                    snapToPhysicalPixel(viewport.x + endX, scale);
+                const float underlineY = snapToPhysicalPixel(
+                    context.centeredTextBottom(
+                        "Ag", lineBox, current.typography.body1.size,
+                        current.typography.body1.weight,
+                        current.typography.body1.family) +
+                        current.controls.focusInset,
+                    scale);
+                context.fillRect(
+                    {underlineLeft, underlineY,
+                     std::max(physicalPixel,
+                              underlineRight - underlineLeft),
+                     physicalPixel},
+                    current.colors.brandForeground1);
             }
         }
     }
@@ -803,9 +1006,17 @@ void TextInput::paint(PaintContext& context)
     }
     if (focused && enabled && selection.empty() && caretVisible_) {
         const float caretX = viewport.x + selectionEndX - horizontalOffset;
-        const float caretY = multiline_ ? viewport.y + lineHeight * static_cast<float>(caretLineIndex) - verticalOffset : viewport.y;
-        context.fillRect({caretX, caretY, current.stroke.thin,
-                          multiline_ ? std::max(1.0f, lineHeight) : std::max(1.0f, viewport.height)}, current.colors.brandForeground1);
+        const float caretY = multiline_
+            ? viewport.y + lineHeight * static_cast<float>(caretLineIndex) - verticalOffset
+            : viewport.y + std::max(0.0f, (viewport.height - lineHeight) * 0.5f);
+        const float physicalPixel = 1.0f / scale;
+        const float snappedX = snapToPhysicalPixel(caretX, scale);
+        const float snappedTop = snapToPhysicalPixel(caretY, scale);
+        const float snappedBottom =
+            snapToPhysicalPixel(caretY + lineHeight, scale);
+        context.fillRect({snappedX, snappedTop, physicalPixel,
+                          std::max(physicalPixel, snappedBottom - snappedTop)},
+                         current.colors.brandForeground1);
     }
     context.restoreTo(checkpoint);
     revealCaretPending_ = false;
@@ -817,7 +1028,8 @@ void TextInput::paint(PaintContext& context)
 std::size_t TextInput::caretAt(PointF point) const noexcept
 {
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
-    const RectF viewport = textViewport(bounds(), theme(), focused);
+    const RectF viewport =
+        textViewport(bounds(), theme(), focused, size_, multiline_);
     const float lineHeight = editableLineHeight(theme());
     const auto lines = editableLines(controller_.text(), theme().typography.body1.size, viewport.width,
                                      lineHeight, multiline_);
@@ -846,11 +1058,15 @@ EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& c
         return EventResult::Ignored;
     }
     switch (event.action) {
+    case PointerAction::Enter:
+        setVisualState(ControlVisualState::Hovered, true);
+        return EventResult::Handled;
     case PointerAction::Down:
         if (event.button != MouseButton::Left) {
             return EventResult::Ignored;
         }
         selectingWithPointer_ = true;
+        setVisualState(ControlVisualState::Pressed, true);
         resetCaretBlink();
         controller_.setCaret(caretAt(event.position), (event.modifiers & KeyModifierShift) != 0);
         revealCaretPending_ = true;
@@ -860,8 +1076,10 @@ EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& c
         context.capturePointer();
         return EventResult::Handled;
     case PointerAction::Move:
+        setVisualState(ControlVisualState::Hovered,
+                       bounds().contains(event.position));
         if (!selectingWithPointer_) {
-            return EventResult::Ignored;
+            return EventResult::Handled;
         }
         controller_.setCaret(caretAt(event.position), true);
         resetCaretBlink();
@@ -872,7 +1090,8 @@ EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& c
         if (!multiline_) return EventResult::Ignored;
         {
             const float lineHeight = editableLineHeight(theme());
-            const RectF viewport = textViewport(bounds(), theme(), true);
+            const RectF viewport =
+                textViewport(bounds(), theme(), true, size_, multiline_);
             const auto lines = editableLines(controller_.text(), theme().typography.body1.size,
                                              viewport.width, lineHeight, true);
             const float maximum = maximumVerticalOffset(lines, lineHeight, viewport.height);
@@ -888,8 +1107,9 @@ EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& c
         }
     case PointerAction::Up:
     case PointerAction::Cancel:
+        setVisualState(ControlVisualState::Pressed, false);
         if (!selectingWithPointer_) {
-            return EventResult::Ignored;
+            return EventResult::Handled;
         }
         if (event.action == PointerAction::Up) {
             controller_.setCaret(caretAt(event.position), true);
@@ -899,6 +1119,12 @@ EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& c
         selectingWithPointer_ = false;
         markDirty(DirtyFlag::Paint);
         context.releasePointer();
+        return EventResult::Handled;
+    case PointerAction::Leave:
+        setVisualState(ControlVisualState::Hovered, false);
+        if (!selectingWithPointer_) {
+            setVisualState(ControlVisualState::Pressed, false);
+        }
         return EventResult::Handled;
     default:
         return EventResult::Ignored;
@@ -924,7 +1150,8 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
             return;
         }
         const auto& current = theme();
-        const RectF viewport = textViewport(bounds(), current, true);
+        const RectF viewport =
+            textViewport(bounds(), current, true, size_, multiline_);
         const auto lines = editableLines(controller_.text(), current.typography.body1.size, viewport.width,
                                          editableLineHeight(current), true);
         if (lines.empty()) return;
@@ -934,7 +1161,8 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
     };
     const auto moveVertically = [this, extendSelection](int direction) {
         const auto& current = theme();
-        const RectF viewport = textViewport(bounds(), current, true);
+        const RectF viewport =
+            textViewport(bounds(), current, true, size_, multiline_);
         const auto lines = editableLines(controller_.text(), current.typography.body1.size, viewport.width,
                                          editableLineHeight(current), true);
         if (lines.empty()) return;

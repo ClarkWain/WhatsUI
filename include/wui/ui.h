@@ -368,6 +368,7 @@ public:
     TextField&& size(wui::InputSize value) && { node_->setSize(value); return std::move(self()); }
     TextField&& appearance(wui::InputAppearance value) && { node_->setAppearance(value); return std::move(self()); }
     TextField&& invalid(bool value = true) && { node_->setInvalid(value); return std::move(self()); }
+    TextField&& motionEnabled(bool value = true) && { node_->setMotionEnabled(value); return std::move(self()); }
 };
 
 class TextArea : public BuilderBase<TextArea, wui::TextArea> {
@@ -384,6 +385,7 @@ public:
     TextArea&& size(wui::InputSize value) && { node_->setSize(value); return std::move(self()); }
     TextArea&& appearance(wui::InputAppearance value) && { node_->setAppearance(value); return std::move(self()); }
     TextArea&& invalid(bool value = true) && { node_->setInvalid(value); return std::move(self()); }
+    TextArea&& motionEnabled(bool value = true) && { node_->setMotionEnabled(value); return std::move(self()); }
     TextArea&& rows(std::size_t value) && { node_->setRows(value); return std::move(self()); }
 };
 

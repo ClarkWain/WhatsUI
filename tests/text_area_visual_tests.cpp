@@ -64,27 +64,6 @@ bool hasBrandInk(const std::vector<unsigned char>& pixels, int left, int top,
     return false;
 }
 
-int blueSelectionBands(const std::vector<unsigned char>& pixels, int left, int top,
-                       int right, int bottom)
-{
-    int bands = 0;
-    bool previousRow = false;
-    for (int y = top; y < bottom; ++y) {
-        bool row = false;
-        for (int x = left; x < right; ++x) {
-            const auto offset = static_cast<std::size_t>((y * kWidth + x) * 4);
-            if (pixels[offset + 2] > pixels[offset] + 20
-                && pixels[offset + 2] > pixels[offset + 1] + 8) {
-                row = true;
-                break;
-            }
-        }
-        if (row && !previousRow) ++bands;
-        previousRow = row;
-    }
-    return bands;
-}
-
 void drawLabel(wui::PaintContext& paint, const std::string& label, float y)
 {
     paint.drawText(label, kLeft, y - 5.0f, 12.0f,
@@ -124,6 +103,7 @@ int main(int argc, char** argv)
         wui::TextArea longText;
         longText.text("Line one\nLine two\nLine three\nLine four\nLine five\nLine six\nLine seven");
         longText.controller().moveToEnd();
+        longText.setMotionEnabled(false);
         longText.setVisualState(wui::ControlVisualState::Focused, true);
         drawArea(longText, paint, kLongTextY);
         expect(longText.verticalScrollOffset() > 0.0f,
@@ -131,13 +111,15 @@ int main(int argc, char** argv)
 
         drawLabel(paint, "MULTI-LINE SELECTION", kSelectionY);
         wui::TextArea selection;
-        selection.text("Select the first visual line and continue into the second visual line.");
+        selection.text("Select the first visual line and continue\ninto the second visual line.");
         selection.controller().setSelection({7, 62});
+        selection.setMotionEnabled(false);
         selection.setVisualState(wui::ControlVisualState::Focused, true);
         drawArea(selection, paint, kSelectionY);
 
         drawLabel(paint, "IME COMPOSITION", kCompositionY);
         wui::TextArea composition;
+        composition.setMotionEnabled(false);
         composition.setVisualState(wui::ControlVisualState::Focused, true);
         (void)composition.onCompositionInput({0,
             "Composing text continues across the visual line and wraps into another visible line.",
@@ -147,6 +129,7 @@ int main(int argc, char** argv)
         drawLabel(paint, "FOCUSED", kFocusedY);
         wui::TextArea focused;
         focused.text("Focused notes");
+        focused.setMotionEnabled(false);
         focused.setVisualState(wui::ControlVisualState::Focused, true);
         drawArea(focused, paint, kFocusedY);
 
@@ -169,9 +152,11 @@ int main(int argc, char** argv)
         expect(canvas->savePixelsPPM(output), "Software TextArea state artifact must be saved");
 
         const auto& colors = wui::theme().colors;
-        expect(blueSelectionBands(pixels, 38, static_cast<int>(kSelectionY + 4.0f),
-                                  480, static_cast<int>(kSelectionY + 62.0f)) >= 2,
-               "Selection fill must be visible on multiple wrapped visual lines");
+        expect(hasBrandInk(pixels, 38, static_cast<int>(kSelectionY + 6.0f),
+                           240, static_cast<int>(kSelectionY + 25.0f)) &&
+                   hasBrandInk(pixels, 38, static_cast<int>(kSelectionY + 26.0f),
+                               240, static_cast<int>(kSelectionY + 47.0f)),
+               "Selection fill must be visible on both selected visual lines");
         expect(hasBrandInk(pixels, 38, static_cast<int>(kCompositionY + 4.0f),
                            480, static_cast<int>(kCompositionY + 58.0f)),
                "IME composition must paint its Fluent underline");

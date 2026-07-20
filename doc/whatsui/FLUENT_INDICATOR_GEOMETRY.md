@@ -117,13 +117,50 @@ This matters specifically for the native path: tests must call
 `PaintContext` now exposes `fillCircle`, `strokeCircle`, and
 `fillStrokeCircle`. Radio uses these primitives for:
 
-- the outer selected/unselected surface;
-- the inset outline;
-- the white selected dot;
-- both focus-ring strokes.
+- the selected/unselected outer stroke;
+- the compound-brand selected dot.
 
-All four layers share one centre and radius model. Radio no longer relies on a
+Both layers share one centre and radius model. Radio no longer relies on a
 square rounded rectangle with an oversized "circular" corner token.
+
+### Fluent checked-state composition
+
+The circle primitive fix alone does not make a Fluent Radio. The earlier
+checked state used the inverse composition—a solid blue disc with a small
+white dot—which was geometrically round but did not match Fluent 2.
+
+The corrected medium Radio follows the official component source:
+
+- 16 DIP indicator box;
+- 1 DIP circular outer stroke;
+- transparent unchecked centre;
+- 10 DIP checked centre dot (`16 * 0.625`);
+- transparent 2 DIP annular gap between the dot and outer stroke;
+- root-level focus-visible outline for keyboard navigation, rather than extra
+  concentric indicator rings or a persistent rectangle after pointer clicks.
+
+The state ramps are intentionally separate. Unchecked borders use
+`neutralStrokeAccessible`, `neutralStrokeAccessibleHover`, and
+`neutralStrokeAccessiblePressed`. Checked borders use `compoundBrandStroke`;
+the dot uses `compoundBrandForeground1`. The compound-brand pressed value is
+not interchangeable with the pressed brand surface token.
+
+References:
+
+- [Fluent 2 RadioGroup documentation](https://storybooks.fluentui.dev/react/?path=/docs/components-radiogroup--docs)
+- [Fluent Radio style source](https://github.com/microsoft/fluentui/blob/master/packages/react-components/react-radio/library/src/components/Radio/useRadioStyles.styles.ts)
+
+The resulting Todo filter row has the same visible hierarchy as the reference:
+the selected control has a blue outer stroke, a white annular gap, and a blue
+centre dot; unchecked controls remain transparent.
+
+![Todo Radio aligned to the Fluent 2 checked-state composition](../images/fluent_radio_fluent2_after_crop.png)
+
+This is a crop of the real OpenGL Todo framebuffer captured from
+`build-todo/examples/Release/WhatsUITodoGlfw.exe`; the complete frame is kept
+alongside it for layout-level review:
+
+![Complete Todo frame after Fluent 2 Radio state alignment](../images/fluent_radio_fluent2_after.png)
 
 Checkbox remains a rounded rectangle, as required by Fluent, but benefits from
 the device-aware rounded-corner tessellation. Its 16 DIP layout box, hit box,
@@ -212,7 +249,7 @@ The broader regression set remains:
 
 ```powershell
 ctest --test-dir build-native-text-compare -C Release --output-on-failure `
-  -R '^whatsui_fluent_(component_visual_matrix|component_visual_matrix_150dpi|range_controls_visual|range_controls_visual_150dpi|visual_acceptance|visual_acceptance_125dpi|visual_acceptance_150dpi|visual_acceptance_200dpi)$'
+  -R '^whatsui_fluent_(component_visual_matrix|component_visual_matrix_150dpi|range_controls_visual|range_controls_visual_150dpi|radio_visual_(100|125|150|200)dpi|visual_acceptance|visual_acceptance_125dpi|visual_acceptance_150dpi|visual_acceptance_200dpi)$'
 ```
 
 ## Files and ownership
@@ -228,6 +265,8 @@ ctest --test-dir build-native-text-compare -C Release --output-on-failure `
   `src/whatsui/widgets/basic_controls.cpp`.
 - The dedicated regression is
   `tests/fluent_indicator_geometry_tests.cpp`.
+- Radio state composition is locked separately by
+  `tests/fluent_radio_visual_tests.cpp` at 100%, 125%, 150%, and 200%.
 
 Do not solve future indicator defects by increasing a global fixed segment
 count, disabling antialiasing, or snapping every logical stroke to one physical

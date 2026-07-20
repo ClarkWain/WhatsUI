@@ -79,26 +79,63 @@ namespace {
     }
     if (const auto* checkbox = dynamic_cast<const Checkbox*>(&node)) {
         auto style = makeStyle("Checkbox", enabled);
-        const ColorTokens::Interaction& ramp = checkbox->isChecked() ? current.colors.brandBackground : current.colors.neutralBackground1;
-        Color box = ramp.rest;
-        Color border = checkbox->isChecked() ? current.colors.brandBackground.rest : current.colors.neutralStrokeAccessible;
-        Color foreground = current.colors.neutralForeground1;
-        if (!enabled) { box = current.colors.neutralBackground1.rest; border = current.colors.neutralStroke1; foreground = current.colors.neutralForegroundDisabled; }
-        else if (pressed) box = ramp.pressed;
-        else if (hovered) box = ramp.hover;
+        const bool checked = checkbox->state() == CheckboxState::Checked;
+        const bool mixed = checkbox->state() == CheckboxState::Mixed;
+        Color box{0, 0, 0, 0};
+        Color border = current.colors.neutralStrokeAccessible;
+        Color foreground = current.colors.neutralForeground3;
+        if (checked) {
+            box = current.colors.compoundBrandBackground.rest;
+            border = box;
+            foreground = current.colors.neutralForeground1;
+        } else if (mixed) {
+            border = current.colors.compoundBrandStroke.rest;
+            foreground = current.colors.neutralForeground1;
+        }
+        if (!enabled) {
+            box = Color{0, 0, 0, 0};
+            border = current.colors.neutralStrokeDisabled;
+            foreground = current.colors.neutralForegroundDisabled;
+        } else if (pressed) {
+            if (checked) box = border = current.colors.compoundBrandBackground.pressed;
+            else if (mixed) border = current.colors.compoundBrandStroke.pressed;
+            else border = current.colors.neutralStrokeAccessiblePressed;
+            if (!checked && !mixed) foreground = current.colors.neutralForeground1;
+        } else if (hovered) {
+            if (checked) box = border = current.colors.compoundBrandBackground.hover;
+            else if (mixed) border = current.colors.compoundBrandStroke.hover;
+            else border = current.colors.neutralStrokeAccessibleHover;
+            if (!checked && !mixed) foreground = current.colors.neutralForeground2;
+        }
         style.background = box; style.border = border; style.foreground = foreground;
-        style.cornerRadius = current.radius.medium; style.controlExtent = current.controls.checkboxSize;
+        style.cornerRadius = current.radius.small; style.controlExtent = current.controls.checkboxSize;
         return style;
     }
     if (const auto* radio = dynamic_cast<const Radio*>(&node)) {
         auto style = makeStyle("Radio", enabled);
-        const ColorTokens::Interaction& ramp = radio->isSelected() ? current.colors.brandBackground : current.colors.neutralBackground1;
-        Color fill = ramp.rest;
-        Color border = radio->isSelected() ? current.colors.brandBackground.rest : current.colors.neutralStrokeAccessible;
-        if (!enabled) { fill = current.colors.neutralBackground1.rest; border = current.colors.neutralStroke1; }
-        else if (pressed) fill = ramp.pressed;
-        else if (hovered) fill = ramp.hover;
-        style.background = fill; style.border = border; style.foreground = enabled ? current.colors.neutralForeground1 : current.colors.neutralForegroundDisabled;
+        const bool selected = radio->isSelected();
+        Color border = selected ? current.colors.compoundBrandStroke.rest
+                                : current.colors.neutralStrokeAccessible;
+        Color foreground = current.colors.neutralForeground3;
+        if (!enabled) {
+            border = current.colors.neutralStrokeDisabled;
+            foreground = current.colors.neutralForegroundDisabled;
+        } else if (pressed) {
+            border = selected ? current.colors.compoundBrandStroke.pressed
+                              : current.colors.neutralStrokeAccessiblePressed;
+            foreground = current.colors.neutralForeground1;
+        } else if (hovered) {
+            border = selected ? current.colors.compoundBrandStroke.hover
+                              : current.colors.neutralStrokeAccessibleHover;
+            foreground = current.colors.neutralForeground2;
+        } else if (selected) {
+            foreground = current.colors.neutralForeground1;
+        }
+        // Radio never owns an opaque surface: both the unchecked centre and
+        // the annular gap around a checked dot expose the parent background.
+        style.background = Color{0, 0, 0, 0};
+        style.border = border;
+        style.foreground = foreground;
         style.cornerRadius = current.radius.circular; style.controlExtent = current.controls.checkboxSize;
         return style;
     }

@@ -22,6 +22,10 @@ enum class ControlVisualState : std::uint32_t {
     Pressed = 1u << 1,
     Focused = 1u << 2,
     Disabled = 1u << 3,
+    // Logical focus and a visible focus indicator are deliberately separate.
+    // Pointer focus remains keyboard-operable without showing the keyboard
+    // navigation outline; Tab/arrow-key focus sets both flags.
+    FocusVisible = 1u << 4,
 };
 
 using ControlVisualStates = std::uint32_t;

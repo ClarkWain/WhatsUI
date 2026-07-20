@@ -23,6 +23,8 @@ enum class IconName {
     StarOff,
     Checkmark,
     CheckmarkCircle,
+    Square,
+    Circle,
     Info,
     Warning,
     ErrorCircle,
@@ -41,7 +43,12 @@ enum class IconName {
 };
 
 enum class IconStyle { Regular, Filled };
-enum class IconSize : std::uint8_t { Size16 = 16, Size20 = 20, Size24 = 24 };
+enum class IconSize : std::uint8_t {
+    Size12 = 12,
+    Size16 = 16,
+    Size20 = 20,
+    Size24 = 24,
+};
 
 [[nodiscard]] const char* iconFontFamily(IconStyle style) noexcept;
 [[nodiscard]] std::uint32_t iconCodepoint(

@@ -47,9 +47,35 @@ must remain equivalent.
 
 - Supports unchecked, checked, and mixed states; square/circular shapes;
   medium/large sizes; labels before/after; required and disabled states.
+- Medium uses a 16 DIP indicator with a 2 DIP corner radius and the dedicated
+  12 DIP filled checkmark glyph. Large uses a 20 DIP indicator and 16 DIP
+  glyph.
+- The icon font's em box is not the checkmark's visible ink box. Checkbox
+  applies a 1 DIP downward optical correction so the mark itself, rather than
+  only its font metrics, is vertically centred; this removes the 1.5 px
+  upward error visible at Windows 150% scaling.
+- Checked surfaces use `compoundBrandBackground` for rest, hover, and pressed;
+  the pressed state must not reuse the darker Button surface token.
+- Mixed keeps a transparent face with `compoundBrandStroke` and a matching
+  compound-brand square/circle mark. It is not the checked blue face with an
+  inverse white dash.
+- Unchecked label and border states progress from neutral foreground/stroke
+  rest to hover and pressed aliases. Disabled indicators remain transparent
+  with disabled border, mark, and label tokens.
+- Pointer focus remains logical and keyboard-operable without painting a black
+  rectangle. The root focus outline is shown only for keyboard focus-visible.
 - A wrapped label aligns the indicator with the first text line. The complete
   label and indicator form one hit target.
 - Mixed state maps to the native indeterminate Toggle state.
+
+The final OpenGL Todo capture shows the corrected medium checked state without
+the pointer-focus border and with the 12 DIP Fluent mark:
+
+![Todo Checkbox aligned to Fluent 2](../images/fluent_checkbox_fluent2_after_crop.png)
+
+The crop comes from this complete native OpenGL framebuffer:
+
+![Complete Todo frame after Checkbox alignment](../images/fluent_checkbox_fluent2_after.png)
 
 ### RadioGroup
 
@@ -57,6 +83,15 @@ must remain equivalent.
   controlled binding, and arrow-key movement.
 - Vertical, horizontal, and horizontal-stacked layouts are supported. Disabled
   options are skipped by keyboard movement.
+- The medium indicator follows Fluent's exact 16 DIP composition: a 1 DIP
+  circular outer stroke, transparent interior, and—when checked—a 10 DIP
+  compound-brand centre dot. The 2 DIP annular gap between dot and stroke
+  remains transparent; the selected state is not a solid brand disc with a
+  white dot.
+- Unchecked border states use `neutralStrokeAccessible`,
+  `neutralStrokeAccessibleHover`, and `neutralStrokeAccessiblePressed`.
+  Checked border/dot states use the separate compound-brand stroke/foreground
+  ramps. Disabled states use the disabled neutral tokens.
 - Use two to five concise choices. If selection is optional, represent it as an
   explicit “None” choice rather than silently clearing a required group.
 

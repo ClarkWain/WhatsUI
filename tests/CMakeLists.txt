@@ -464,14 +464,24 @@ if(TARGET WhatsCanvasSoftware)
     )
     target_link_libraries(WhatsUIFluentCheckboxCompletionTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
     target_compile_features(WhatsUIFluentCheckboxCompletionTests PRIVATE cxx_std_17)
-    add_test(NAME whatsui_fluent_checkbox_completion
+    add_test(NAME whatsui_fluent_checkbox_completion_100dpi
         COMMAND WhatsUIFluentCheckboxCompletionTests
-            ${CMAKE_CURRENT_BINARY_DIR}/fluent_checkbox_review.ppm 1.0)
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_checkbox_review_100dpi.ppm 1.0)
+    add_test(NAME whatsui_fluent_checkbox_completion_125dpi
+        COMMAND WhatsUIFluentCheckboxCompletionTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_checkbox_review_125dpi.ppm 1.25)
     add_test(NAME whatsui_fluent_checkbox_completion_150dpi
         COMMAND WhatsUIFluentCheckboxCompletionTests
             ${CMAKE_CURRENT_BINARY_DIR}/fluent_checkbox_review_150dpi.ppm 1.5)
-    set_tests_properties(whatsui_fluent_checkbox_completion whatsui_fluent_checkbox_completion_150dpi
-        PROPERTIES LABELS "visual;software;fluent;checkbox;accessibility")
+    add_test(NAME whatsui_fluent_checkbox_completion_200dpi
+        COMMAND WhatsUIFluentCheckboxCompletionTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_checkbox_review_200dpi.ppm 2.0)
+    set_tests_properties(
+        whatsui_fluent_checkbox_completion_100dpi
+        whatsui_fluent_checkbox_completion_125dpi
+        whatsui_fluent_checkbox_completion_150dpi
+        whatsui_fluent_checkbox_completion_200dpi
+        PROPERTIES LABELS "visual;software;fluent;checkbox;accessibility;dpi")
 
     add_executable(WhatsUIFluentRangeControlsVisualTests
         fluent_range_controls_visual_tests.cpp
@@ -573,6 +583,31 @@ if(TARGET WhatsCanvasSoftware)
         whatsui_fluent_visual_acceptance_200dpi
         PROPERTIES LABELS "visual;software;fluent;geometry;acceptance;dpi")
 
+    add_executable(WhatsUIFluentRadioVisualTests
+        fluent_radio_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentRadioVisualTests
+        PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIFluentRadioVisualTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_fluent_radio_visual_100dpi
+        COMMAND WhatsUIFluentRadioVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_radio_states_100dpi.ppm 1.0)
+    add_test(NAME whatsui_fluent_radio_visual_125dpi
+        COMMAND WhatsUIFluentRadioVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_radio_states_125dpi.ppm 1.25)
+    add_test(NAME whatsui_fluent_radio_visual_150dpi
+        COMMAND WhatsUIFluentRadioVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_radio_states_150dpi.ppm 1.5)
+    add_test(NAME whatsui_fluent_radio_visual_200dpi
+        COMMAND WhatsUIFluentRadioVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_radio_states_200dpi.ppm 2.0)
+    set_tests_properties(
+        whatsui_fluent_radio_visual_100dpi
+        whatsui_fluent_radio_visual_125dpi
+        whatsui_fluent_radio_visual_150dpi
+        whatsui_fluent_radio_visual_200dpi
+        PROPERTIES LABELS "visual;software;fluent;radio;states;dpi")
+
     add_executable(WhatsUIFluentIndicatorGeometryTests
         fluent_indicator_geometry_tests.cpp
     )
@@ -665,6 +700,29 @@ if(TARGET WhatsCanvasSoftware)
     set_tests_properties(whatsui_text_area_visual_tests PROPERTIES
         LABELS "text;ime;visual;software;fluent"
     )
+
+    add_executable(WhatsUIFluentInputTextareaVisualTests
+        fluent_input_textarea_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentInputTextareaVisualTests
+        PRIVATE
+            WhatsUI::WhatsUI
+            WhatsCanvas::Software
+    )
+    target_compile_features(WhatsUIFluentInputTextareaVisualTests PRIVATE cxx_std_17)
+    foreach(scale IN ITEMS 1.0 1.25 1.5 2.0)
+        string(REPLACE "." "" scale_suffix "${scale}")
+        add_test(
+            NAME whatsui_fluent_input_textarea_${scale_suffix}dpi
+            COMMAND WhatsUIFluentInputTextareaVisualTests
+                ${CMAKE_CURRENT_BINARY_DIR}/fluent_input_textarea_${scale_suffix}dpi.ppm
+                ${scale}
+        )
+        set_tests_properties(
+            whatsui_fluent_input_textarea_${scale_suffix}dpi
+            PROPERTIES LABELS "input;textarea;text;visual;software;fluent;dpi;animation"
+        )
+    endforeach()
 endif()
 
 add_executable(WhatsUILifecycleTests

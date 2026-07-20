@@ -850,8 +850,11 @@ void testFocusedControlsPaintAFluentFocusRing()
     checkbox.layout({10.0f, 10.0f, 120.0f, 24.0f});
     const auto checkboxRest = paintCommandCount(checkbox);
     checkbox.setVisualState(wui::ControlVisualState::Focused, true);
+    expect(paintCommandCount(checkbox) == checkboxRest,
+           "Pointer-style logical Checkbox focus must not paint a keyboard outline");
+    checkbox.setVisualState(wui::ControlVisualState::FocusVisible, true);
     expect(paintCommandCount(checkbox) == checkboxRest + 2,
-           "Focused Checkbox must paint the Fluent outer and inner focus strokes");
+           "Focus-visible Checkbox must paint the Fluent outer and inner focus strokes");
 
     wui::IconButton icon(".", "More actions");
     icon.layout({10.0f, 10.0f, 32.0f, 32.0f});
@@ -859,6 +862,49 @@ void testFocusedControlsPaintAFluentFocusRing()
     icon.setVisualState(wui::ControlVisualState::Focused, true);
     expect(paintCommandCount(icon) == iconRest + 2,
            "Focused IconButton must paint the Fluent outer and inner focus strokes");
+
+    wui::Radio radio("Choice", true);
+    radio.layout({10.0f, 10.0f, 120.0f, 32.0f});
+    const auto radioRest = paintCommandCount(radio);
+    radio.setVisualState(wui::ControlVisualState::Focused, true);
+    expect(paintCommandCount(radio) == radioRest,
+           "Pointer-style logical Radio focus must not paint a keyboard outline");
+    radio.setVisualState(wui::ControlVisualState::FocusVisible, true);
+    expect(paintCommandCount(radio) == radioRest + 2,
+           "Focus-visible Radio must paint the Fluent outer and inner focus strokes");
+}
+
+void testRadioFocusVisibilityTracksInputModality()
+{
+    auto radio = std::make_unique<wui::Radio>("Choice", false);
+    auto* radioRaw = radio.get();
+    radio->layout({0.0f, 0.0f, 120.0f, 32.0f});
+
+    wui::FocusManager focus;
+    wui::InputRouter router(&focus);
+    router.setRoot(radio.get());
+    const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                                 wui::MouseButton::Left, {8.0f, 16.0f}, 0};
+    const wui::PointerEvent up{0, wui::PointerType::Mouse, wui::PointerAction::Up,
+                               wui::MouseButton::Left, {8.0f, 16.0f}, 0};
+    expect(router.dispatchPointer(down) && router.dispatchPointer(up),
+           "Pointer activation must retain Radio logical focus");
+    expect(focus.focused() == radioRaw && !focus.isFocusVisible()
+               && (radioRaw->visualStates() & wui::toMask(wui::ControlVisualState::Focused)) != 0
+               && (radioRaw->visualStates() & wui::toMask(wui::ControlVisualState::FocusVisible)) == 0,
+           "Pointer-focused Radio must remain keyboard-operable without a visible outline");
+
+    const wui::KeyEvent space{0, wui::KeyAction::Down, 32, 0, false};
+    expect(router.dispatchKey(space) && focus.isFocusVisible()
+               && (radioRaw->visualStates() & wui::toMask(wui::ControlVisualState::FocusVisible)) != 0,
+           "Keyboard interaction must reveal the Radio focus indicator");
+
+    expect(router.dispatchPointer(down),
+           "A subsequent pointer gesture must still reach the focused Radio");
+    expect(!focus.isFocusVisible()
+               && (radioRaw->visualStates() & wui::toMask(wui::ControlVisualState::FocusVisible)) == 0,
+           "Returning to pointer input must hide the keyboard-only Radio outline");
+    (void)router.dispatchPointer(up);
 }
 
 void testKeyboardFocusTraversalAndControlActivation()
@@ -944,6 +990,7 @@ int main()
     testLayoutFlexAndAlign();
     testTextInputRouting();
     testFocusedControlsPaintAFluentFocusRing();
+    testRadioFocusVisibilityTracksInputModality();
     testKeyboardFocusTraversalAndControlActivation();
     } catch (const std::exception& error) {
         std::fprintf(stderr, "WhatsUISmokeTests failed: %s\\n", error.what());

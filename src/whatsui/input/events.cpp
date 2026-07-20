@@ -22,27 +22,32 @@ void FocusManager::clearFocusIfCurrent(const std::weak_ptr<FocusState>& weakStat
     // can invalidate its window while paint invalidation propagates, so no
     // re-entrant caller may observe the departing node as focused.
     state->focused = nullptr;
+    state->focusVisible = false;
     if (clearVisualState) {
         if (auto* control = dynamic_cast<ControlNode*>(node)) {
             control->setVisualState(ControlVisualState::Focused, false);
+            control->setVisualState(ControlVisualState::FocusVisible, false);
         }
     }
 }
 
-void FocusManager::setFocused(Node* node) noexcept
+void FocusManager::setFocused(Node* node, bool focusVisible) noexcept
 {
     if (auto* control = dynamic_cast<ControlNode*>(node); control != nullptr && !control->isEnabled()) {
         node = nullptr;
     }
     if (state_->focused == node) {
+        setFocusVisible(node != nullptr && focusVisible);
         return;
     }
 
     if (auto* control = dynamic_cast<ControlNode*>(state_->focused)) {
         control->setVisualState(ControlVisualState::Focused, false);
+        control->setVisualState(ControlVisualState::FocusVisible, false);
     }
 
     state_->focused = node;
+    state_->focusVisible = node != nullptr && focusVisible;
 
     if (node != nullptr) {
         const std::weak_ptr<FocusState> weakState = state_;
@@ -63,6 +68,17 @@ void FocusManager::setFocused(Node* node) noexcept
 
     if (auto* control = dynamic_cast<ControlNode*>(state_->focused)) {
         control->setVisualState(ControlVisualState::Focused, true);
+        control->setVisualState(ControlVisualState::FocusVisible, state_->focusVisible);
+    }
+}
+
+void FocusManager::setFocusVisible(bool visible) noexcept
+{
+    visible = state_->focused != nullptr && visible;
+    if (state_->focusVisible == visible) return;
+    state_->focusVisible = visible;
+    if (auto* control = dynamic_cast<ControlNode*>(state_->focused)) {
+        control->setVisualState(ControlVisualState::FocusVisible, visible);
     }
 }
 
@@ -71,9 +87,14 @@ Node* FocusManager::focused() const noexcept
     return state_->focused;
 }
 
+bool FocusManager::isFocusVisible() const noexcept
+{
+    return state_->focusVisible;
+}
+
 void FocusManager::clear() noexcept
 {
-    setFocused(nullptr);
+    setFocused(nullptr, false);
 }
 
 bool FocusManager::focusNext(Node* root, bool reverse) noexcept
@@ -100,14 +121,14 @@ bool FocusManager::focusNext(Node* root, bool reverse) noexcept
 
     auto current = std::find(candidates.begin(), candidates.end(), state_->focused);
     if (current == candidates.end()) {
-        setFocused(reverse ? candidates.back() : candidates.front());
+        setFocused(reverse ? candidates.back() : candidates.front(), true);
         return true;
     }
 
     if (reverse) {
-        setFocused(current == candidates.begin() ? candidates.back() : *std::prev(current));
+        setFocused(current == candidates.begin() ? candidates.back() : *std::prev(current), true);
     } else {
-        setFocused(std::next(current) == candidates.end() ? candidates.front() : *std::next(current));
+        setFocused(std::next(current) == candidates.end() ? candidates.front() : *std::next(current), true);
     }
     return true;
 }
@@ -299,7 +320,7 @@ bool InputRouter::dispatchPointerTo(Node* target, const PointerEvent& event)
     }
 
     if (event.action == PointerAction::Down && focusManager_ != nullptr) {
-        focusManager_->setFocused(deliveryTarget);
+        focusManager_->setFocused(deliveryTarget, false);
     }
 
     // Each phase sees the same mutable routed event. Scroll handlers can
@@ -347,7 +368,7 @@ bool InputRouter::dispatchPointerTo(Node* target, const PointerEvent& event)
         if (context.isFocusRequested()) {
             handled = true;
             if (focusManager_ != nullptr) {
-                focusManager_->setFocused(context.requestedFocus());
+                focusManager_->setFocused(context.requestedFocus(), false);
             }
         }
         if (context.pointerCaptureRequest() == PointerCaptureRequest::Capture) {
@@ -426,6 +447,12 @@ bool InputRouter::dispatchKey(const KeyEvent& event)
         focusManager_->clear();
         return false;
     }
+    if (event.action == KeyAction::Down) {
+        // A control reached by pointer keeps logical focus without an outline.
+        // Its first keyboard interaction switches modality and reveals the
+        // same focus owner, as :focus-visible does on the Web.
+        focusManager_->setFocusVisible(true);
+    }
 
     // Give each widget first refusal: selection and range controls own their
     // precise keyboard contract, and text controls must keep editing keys.
@@ -441,7 +468,7 @@ bool InputRouter::dispatchKey(const KeyEvent& event)
             if (auto* radio = dynamic_cast<Radio*>(focused)) {
                 if (auto* group = dynamic_cast<RadioGroup*>(radio->parent())) {
                     if (Radio* selected = group->selectedRadio(); selected != nullptr) {
-                        focusManager_->setFocused(selected);
+                        focusManager_->setFocused(selected, true);
                     }
                 }
             }

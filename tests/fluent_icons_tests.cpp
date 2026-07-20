@@ -29,11 +29,15 @@ void testPinnedMappings()
     expect(wui::iconCodepoint(IconName::TaskList, IconSize::Size16,
                               IconStyle::Regular) == 0xEFAD,
            "TaskList must map to the square LTR Fluent glyph at 16 DIP");
+    expect(wui::iconCodepoint(IconName::Checkmark, IconSize::Size12,
+                              IconStyle::Filled) == 0xF293,
+           "Checkbox must use the dedicated Fluent Checkmark 12 glyph");
 
     constexpr std::array names{
         IconName::Add, IconName::Delete, IconName::Dismiss, IconName::Edit,
         IconName::Star, IconName::StarOff, IconName::Checkmark,
-        IconName::CheckmarkCircle, IconName::Info, IconName::Warning,
+        IconName::CheckmarkCircle, IconName::Square, IconName::Circle,
+        IconName::Info, IconName::Warning,
         IconName::ErrorCircle, IconName::ChevronDown, IconName::ChevronUp,
         IconName::ChevronLeft, IconName::ChevronRight, IconName::Search,
         IconName::MoreHorizontal, IconName::MoreVertical, IconName::ArrowUndo,
@@ -43,7 +47,8 @@ void testPinnedMappings()
     for (const auto name : names) {
         for (const auto style : {IconStyle::Regular, IconStyle::Filled}) {
             for (const auto size :
-                 {IconSize::Size16, IconSize::Size20, IconSize::Size24}) {
+                 {IconSize::Size12, IconSize::Size16,
+                  IconSize::Size20, IconSize::Size24}) {
                 expect(wui::iconCodepoint(name, size, style) != 0,
                        "Every public semantic icon must resolve at every size");
                 expect(!wui::iconUtf8(name, size, style).empty(),

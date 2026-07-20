@@ -35,7 +35,8 @@ bool isColor(const std::vector<unsigned char>& pixels, int x, int y, wui::Color 
         && pixels[offset + 3] == color.a;
 }
 
-std::vector<unsigned char> render(wui::TextInput& input)
+std::vector<unsigned char> render(wui::TextInput& input,
+                                  const char* artifact = nullptr)
 {
     auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software, kWidth, kHeight);
     expect(canvas && canvas->initializeContext(), "Software canvas must initialize for IME visual rendering");
@@ -49,6 +50,10 @@ std::vector<unsigned char> render(wui::TextInput& input)
     auto pixels = canvas->readPixelsRGBA();
     expect(pixels.size() == static_cast<std::size_t>(kWidth * kHeight * 4),
            "Software capture must return a complete RGBA frame");
+    if (artifact != nullptr) {
+        expect(canvas->savePixelsPPM(artifact),
+               "TextInput diagnostic artifact must be writable");
+    }
     return pixels;
 }
 
@@ -107,6 +112,7 @@ void testCompositionUsesUnderlineAndClearsOnEnd()
     wui::TextInput input;
     input.text("abcd");
     input.layout({4.0f, 4.0f, 144.0f, 32.0f});
+    input.setMotionEnabled(false);
     input.setVisualState(wui::ControlVisualState::Focused, true);
     input.controller().setCaret(1);
 
@@ -116,12 +122,12 @@ void testCompositionUsesUnderlineAndClearsOnEnd()
     expect(composition.start == 1 && composition.end == 3,
            "Composition update must expose the exact visual underline range");
 
-    const auto active = render(input);
+    const auto active = render(input, "text_input_composition_active.ppm");
     const auto& colors = wui::theme().colors;
     // The marker follows the measured Segoe UI line box, rather than a
     // hard-coded nominal-font baseline. The pre-edit span starts after one
     // Fluent body glyph and ends after two more.
-    expect(hasHorizontalColorRun(active, 20, 28, 44, 34, colors.brandForeground1, 4),
+    expect(hasHorizontalColorRun(active, 20, 23, 44, 33, colors.brandForeground1, 4),
            "Active composition must paint a focused underline under its pre-edit span");
     // The upper text band is intentionally outside the underline. A normal
     // selection fill would paint the whole control height here; pre-edit must
@@ -141,7 +147,7 @@ void testCompositionUsesUnderlineAndClearsOnEnd()
     // The Fluent 2 DIP focus indicator intentionally occupies the bottom
     // edge (y=33 onward). Restrict this assertion to the text baseline band
     // so it tests only removal of the composition underline.
-    expect(!hasHorizontalColorRun(ended, 20, 28, 44, 33, colors.brandForeground1, 4),
+    expect(!hasHorizontalColorRun(ended, 20, 23, 44, 33, colors.brandForeground1, 4),
            "Composition underline must clear after the pre-edit session ends");
     expect(!hasColorInRect(ended, 22, 8, 39, 20, colors.brandForeground1),
            "Ended composition must not leave a selection-style pre-edit highlight behind");
@@ -152,6 +158,7 @@ void testLongTextClipsAndKeepsCaretVisible()
     wui::TextInput input;
     input.text("A long task title that must stay inside this compact field");
     input.layout({4.0f, 4.0f, 72.0f, 32.0f});
+    input.setMotionEnabled(false);
     input.setVisualState(wui::ControlVisualState::Focused, true);
     input.controller().moveToEnd();
 
@@ -175,6 +182,7 @@ void testCaretBlinksAndEditingRestartsVisiblePhase()
     wui::TextInput input;
     input.text("Task");
     input.layout({4.0f, 4.0f, 144.0f, 32.0f});
+    input.setMotionEnabled(false);
     input.setVisualState(wui::ControlVisualState::Focused, true);
     input.controller().moveToEnd();
 

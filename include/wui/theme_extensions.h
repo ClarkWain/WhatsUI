@@ -32,12 +32,20 @@ namespace wui {
     dark.colors.neutralCardBackground = dark.colors.neutralBackground1;
     dark.colors.brandBackground = {{71, 158, 245, 255}, {98, 171, 245, 255},
                                    {40, 134, 222, 255}, {40, 134, 222, 255}};
+    dark.colors.compoundBrandForeground1 = {{71, 158, 245, 255}, {98, 171, 245, 255},
+                                           {40, 134, 222, 255}, {71, 158, 245, 255}};
+    dark.colors.compoundBrandStroke = dark.colors.compoundBrandForeground1;
+    dark.colors.compoundBrandBackground = dark.colors.compoundBrandForeground1;
     dark.colors.neutralForeground1 = {255, 255, 255, 255};
     dark.colors.neutralForeground2 = {214, 214, 214, 255};
     dark.colors.neutralForeground3 = {173, 173, 173, 255};
     dark.colors.neutralForegroundDisabled = {92, 92, 92, 255};
     dark.colors.neutralStroke1 = {102, 102, 102, 255};
+    dark.colors.neutralStroke1Hover = {117, 117, 117, 255};
+    dark.colors.neutralStroke1Pressed = {107, 107, 107, 255};
     dark.colors.neutralStrokeAccessible = {173, 173, 173, 255};
+    dark.colors.neutralStrokeAccessibleHover = {189, 189, 189, 255};
+    dark.colors.neutralStrokeAccessiblePressed = {179, 179, 179, 255};
     dark.colors.strokeFocusOuter = {0, 0, 0, 255};
     dark.colors.strokeFocusInner = {255, 255, 255, 255};
     dark.colors.brandForeground1 = {71, 158, 245, 255};
@@ -85,6 +93,7 @@ struct ThemeOverride {
     std::optional<SpacingTokens> spacing;
     std::optional<RadiusTokens> radius;
     std::optional<StrokeTokens> stroke;
+    std::optional<MotionTokens> motion;
     std::optional<TypographyTokens> typography;
     std::optional<ControlTokens> controls;
 
@@ -96,6 +105,7 @@ struct ThemeOverride {
         if (spacing) resolved.spacing = *spacing;
         if (radius) resolved.radius = *radius;
         if (stroke) resolved.stroke = *stroke;
+        if (motion) resolved.motion = *motion;
         if (typography) resolved.typography = *typography;
         if (controls) resolved.controls = *controls;
         return resolved;

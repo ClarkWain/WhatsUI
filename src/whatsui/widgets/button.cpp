@@ -9,6 +9,7 @@
 #include "wui/icons.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
+#include "wui/theme_extensions.h"
 
 namespace wui {
 namespace {
@@ -710,29 +711,57 @@ void Checkbox::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const bool enabled = isEnabled();
-    const bool focused = enabled && (visualStates() & toMask(ControlVisualState::Focused)) != 0;
+    const bool focusVisible =
+        enabled
+        && (visualStates() & toMask(ControlVisualState::FocusVisible)) != 0;
     const CheckboxState checkState = state();
     const bool checked = checkState == CheckboxState::Checked;
     const bool mixed = checkState == CheckboxState::Mixed;
     const bool showsMark = checked || mixed;
-    const ColorTokens::Interaction& ramp = current.colors.brandBackground;
-    // Indeterminate is an active selection state, not a small filled glyph
-    // floating inside an unchecked outline.  Rendering it as a solid brand
-    // surface with a white horizontal mark matches Fluent's checkbox affordance
-    // and remains legible at fractional DPI.
-    Color box = showsMark ? ramp.rest : Color{0, 0, 0, 0};
-    Color border = showsMark ? ramp.rest : current.colors.neutralStrokeAccessible;
-    Color text = current.colors.neutralForeground1;
+    StateProperty<Color> checkedFace{current.colors.compoundBrandBackground.rest};
+    checkedFace.set(ControlVisualState::Hovered,
+                    current.colors.compoundBrandBackground.hover)
+        .set(ControlVisualState::Pressed,
+             current.colors.compoundBrandBackground.pressed);
+    StateProperty<Color> mixedBorder{current.colors.compoundBrandStroke.rest};
+    mixedBorder.set(ControlVisualState::Hovered,
+                    current.colors.compoundBrandStroke.hover)
+        .set(ControlVisualState::Pressed,
+             current.colors.compoundBrandStroke.pressed);
+    StateProperty<Color> mixedMark{current.colors.compoundBrandForeground1.rest};
+    mixedMark.set(ControlVisualState::Hovered,
+                  current.colors.compoundBrandForeground1.hover)
+        .set(ControlVisualState::Pressed,
+             current.colors.compoundBrandForeground1.pressed);
+    StateProperty<Color> uncheckedBorder{current.colors.neutralStrokeAccessible};
+    uncheckedBorder.set(ControlVisualState::Hovered,
+                        current.colors.neutralStrokeAccessibleHover)
+        .set(ControlVisualState::Pressed,
+             current.colors.neutralStrokeAccessiblePressed);
+    StateProperty<Color> uncheckedText{current.colors.neutralForeground3};
+    uncheckedText.set(ControlVisualState::Hovered,
+                      current.colors.neutralForeground2)
+        .set(ControlVisualState::Pressed,
+             current.colors.neutralForeground1);
+
+    Color box{0, 0, 0, 0};
+    Color border = uncheckedBorder.resolve(visualStates());
+    Color mark = current.colors.onBrand;
+    Color text = uncheckedText.resolve(visualStates());
+    if (checked) {
+        box = checkedFace.resolve(visualStates());
+        border = box;
+        text = current.colors.neutralForeground1;
+    } else if (mixed) {
+        border = mixedBorder.resolve(visualStates());
+        mark = mixedMark.resolve(visualStates());
+        text = current.colors.neutralForeground1;
+    }
     if (!enabled) {
         box = Color{0, 0, 0, 0};
         border = current.colors.neutralStrokeDisabled;
+        mark = current.colors.neutralForegroundDisabled;
         text = current.colors.neutralForegroundDisabled;
-    } else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) {
-        if (showsMark) box = border = ramp.pressed;
-        else border = current.colors.neutralStrokeAccessiblePressed;
-    } else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) {
-        if (showsMark) box = border = ramp.hover;
-        else border = current.colors.neutralStrokeAccessibleHover;
     }
     const float hitSize = size_ == CheckboxSize::Large ? 36.0f : 32.0f;
     const float indicatorSize = size_ == CheckboxSize::Large ? 20.0f : 16.0f;
@@ -761,25 +790,15 @@ void Checkbox::paint(PaintContext& context)
     const float radius = shape_ == CheckboxShape::Circular
         ? indicatorSize * 0.5f
         : current.radius.small;
-    // Checkbox can be transparent, so its focus cue must be two real strokes.
-    // Filled focus layers are safe for opaque buttons that repaint their
-    // interior, but would turn an unchecked Checkbox black.
-    if (focused) {
-        context.strokeRoundRect({indicator.x - 1.5f, indicator.y - 1.5f,
-                                 indicator.width + 3.0f, indicator.height + 3.0f},
-                                radius + 1.5f, current.stroke.thin,
-                                current.colors.strokeFocusOuter);
-        context.strokeRoundRect({indicator.x - 0.5f, indicator.y - 0.5f,
-                                 indicator.width + 1.0f, indicator.height + 1.0f},
-                                radius + 0.5f, current.stroke.thin,
-                                current.colors.strokeFocusInner);
-    }
-    if (showsMark && enabled) {
+    // Fluent exposes a root focus-within outline, but only in keyboard
+    // focus-visible modality. Pointer activation retains logical focus with
+    // no persistent black frame around either the indicator or label.
+    drawFocusRing(context, bounds(), current, focusVisible, current.radius.small);
+    if (checked && enabled) {
         context.fillRoundRect(indicator, radius, box);
     } else {
-        // A transparent fill cannot erase the already-painted outer rounded
-        // rect. Use an actual centered stroke so unchecked and disabled
-        // indicators reveal the parent surface as Fluent requires.
+        // Unchecked, mixed, and disabled indicators all retain a transparent
+        // centre with a real one-DIP stroke.
         const float halfStroke = current.stroke.thin * 0.5f;
         context.strokeRoundRect({indicator.x + halfStroke, indicator.y + halfStroke,
                                  indicator.width - current.stroke.thin,
@@ -788,17 +807,24 @@ void Checkbox::paint(PaintContext& context)
                                 current.stroke.thin, border);
     }
     if (showsMark) {
-        const Color mark = !enabled ? current.colors.neutralForegroundDisabled : current.colors.onBrand;
-        if (checkState == CheckboxState::Mixed) {
-            const float markWidth = indicatorSize * 0.56f;
-            const float markHeight = std::max(2.0f, indicatorSize * 0.125f);
-            context.fillRoundRect({indicator.x + (indicatorSize - markWidth) * 0.5f,
-                                   indicator.y + (indicatorSize - markHeight) * 0.5f,
-                                   markWidth, markHeight},
-                                  markHeight * 0.5f, mark);
+        const IconSize markSize =
+            size_ == CheckboxSize::Large ? IconSize::Size16 : IconSize::Size12;
+        RectF markBounds = indicator;
+        // Fluent System Icons are laid out in a square em box, but the actual
+        // Checkmark12/16 ink sits one DIP above that box's optical centre.
+        // Centre the visible mark, not merely the font metrics: without this
+        // correction the offset becomes especially obvious as a 1.5 px shift
+        // on Windows at 150% scaling.
+        markBounds.y += 1.0f;
+        if (mixed) {
+            drawIcon(context,
+                     shape_ == CheckboxShape::Circular
+                         ? IconName::Circle
+                         : IconName::Square,
+                     markBounds, mark, markSize, IconStyle::Filled);
         } else {
-            drawIcon(context, IconName::Checkmark, indicator, mark,
-                     IconSize::Size16);
+            drawIcon(context, IconName::Checkmark, markBounds, mark,
+                     markSize, IconStyle::Filled);
         }
     }
     if (!label_.empty()) {

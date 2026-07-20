@@ -185,39 +185,42 @@ void Radio::paint(PaintContext& context)
     const PointF indicatorCenter{indicator.x + indicator.width * 0.5f,
                                  indicator.y + indicator.height * 0.5f};
     const float indicatorRadius = indicator.width * 0.5f;
-    if ((visualStates() & toMask(ControlVisualState::Focused)) != 0) {
-        const float inset = current.controls.focusInset;
-        context.strokeCircle(indicatorCenter, indicatorRadius + inset,
-                             current.stroke.thick, current.colors.strokeFocusOuter);
-        const float innerInset = std::max(0.0f, inset - current.stroke.thin * 0.5f);
-        context.strokeCircle(indicatorCenter, indicatorRadius + innerInset,
-                             current.stroke.thin, current.colors.strokeFocusInner);
-    }
-    StateProperty<Color> selectedFill{current.colors.brandBackground.rest};
-    selectedFill.set(ControlVisualState::Hovered, current.colors.brandBackground.hover)
-        .set(ControlVisualState::Pressed, current.colors.brandBackground.pressed);
+    drawFocusRing(context, bounds(), current,
+                  enabled
+                      && (visualStates() & toMask(ControlVisualState::FocusVisible)) != 0,
+                  current.radius.small);
+    StateProperty<Color> selectedBorder{current.colors.compoundBrandStroke.rest};
+    selectedBorder.set(ControlVisualState::Hovered, current.colors.compoundBrandStroke.hover)
+        .set(ControlVisualState::Pressed, current.colors.compoundBrandStroke.pressed);
+    StateProperty<Color> selectedDot{current.colors.compoundBrandForeground1.rest};
+    selectedDot.set(ControlVisualState::Hovered, current.colors.compoundBrandForeground1.hover)
+        .set(ControlVisualState::Pressed, current.colors.compoundBrandForeground1.pressed);
     StateProperty<Color> unselectedBorder{current.colors.neutralStrokeAccessible};
     unselectedBorder.set(ControlVisualState::Hovered, current.colors.neutralStrokeAccessibleHover)
         .set(ControlVisualState::Pressed, current.colors.neutralStrokeAccessiblePressed);
-    StateProperty<Color> unselectedFill{current.colors.neutralBackground1.rest};
-    unselectedFill.set(ControlVisualState::Hovered, current.colors.neutralBackground1.hover)
-        .set(ControlVisualState::Pressed, current.colors.neutralBackground1.pressed);
-    Color border = selected ? selectedFill.resolve(visualStates()) : unselectedBorder.resolve(visualStates());
-    Color fill = selected ? border : unselectedFill.resolve(visualStates());
-    Color text = current.colors.neutralForeground1;
+    StateProperty<Color> unselectedText{current.colors.neutralForeground3};
+    unselectedText.set(ControlVisualState::Hovered, current.colors.neutralForeground2)
+        .set(ControlVisualState::Pressed, current.colors.neutralForeground1);
+    Color border = selected ? selectedBorder.resolve(visualStates())
+                            : unselectedBorder.resolve(visualStates());
+    Color dot = selectedDot.resolve(visualStates());
+    Color text = selected ? current.colors.neutralForeground1
+                          : unselectedText.resolve(visualStates());
     if (!enabled) {
-        border = selected ? current.colors.neutralForegroundDisabled : current.colors.neutralStrokeDisabled;
-        fill = selected ? border : current.colors.neutralBackground1.rest;
+        border = current.colors.neutralStrokeDisabled;
+        dot = current.colors.neutralForegroundDisabled;
         text = current.colors.neutralForegroundDisabled;
     }
-    context.fillStrokeCircle(indicatorCenter, indicatorRadius,
-                             current.stroke.thin, fill, border);
+    // Fluent Radio is transparent inside its 16-DIP border box. Checked state
+    // adds a 10-DIP compound-brand dot (16 * 0.625), leaving a visible annular
+    // gap; it is not a solid brand disc with an inverse white dot.
+    context.strokeCircle(indicatorCenter,
+                         indicatorRadius - current.stroke.thin * 0.5f,
+                         current.stroke.thin, border);
     if (selected) {
-        // Selected Fluent radios are a brand disc with a white centre dot.
-        // Keeping the brand in the centre (the old implementation) made the
-        // selected state read as an unchecked ring at compact sizes.
-        const float dot = 6.0f;
-        context.fillCircle(indicatorCenter, dot * 0.5f, current.colors.onBrand);
+        constexpr float kCheckedDotScale = 0.625f;
+        context.fillCircle(indicatorCenter,
+                           indicator.width * kCheckedDotScale * 0.5f, dot);
     }
     if (!label_.empty()) {
         if (stackedLabel_) {

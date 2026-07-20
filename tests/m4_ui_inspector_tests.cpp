@@ -3,6 +3,7 @@
 #include <string>
 #include <typeinfo>
 
+#include "wui/basic_controls.h"
 #include "wui/theme.h"
 #include "wui/ui_inspector.h"
 #include "wui/widgets.h"
@@ -136,6 +137,61 @@ void testMeasuredConstraintsAndResolvedStyle()
            "Resolved ghost button style must include its Fluent border token");
 }
 
+void testResolvedRadioStyleMatchesFluentComposition()
+{
+    wui::Column root;
+    auto radio = std::make_unique<wui::Radio>("Selected", true);
+    radio->setVisualState(wui::ControlVisualState::Hovered, true);
+    root.appendChild(std::move(radio));
+    root.layout({0.0f, 0.0f, 180.0f, 40.0f});
+
+    const auto snapshot = wui::inspectUiTree(root);
+    expect(snapshot.size() == 2 && snapshot[1].resolvedStyle
+               && snapshot[1].resolvedStyle->role == "Radio",
+           "Inspector must expose a resolved Radio style");
+    const auto& style = *snapshot[1].resolvedStyle;
+    expect(style.background && style.background->a == 0,
+           "Resolved Radio background must remain transparent");
+    expect(style.border
+               && sameColor(*style.border, wui::theme().colors.compoundBrandStroke.hover),
+           "Resolved checked Radio border must use the compound-brand hover token");
+    expect(style.foreground
+               && sameColor(*style.foreground, wui::theme().colors.neutralForeground2),
+           "Resolved hovered Radio label must use the Fluent hover foreground token");
+}
+
+void testResolvedCheckboxStyleMatchesFluentComposition()
+{
+    wui::Column root;
+    auto checked = std::make_unique<wui::Checkbox>("Checked", true);
+    checked->setVisualState(wui::ControlVisualState::Pressed, true);
+    auto mixed = std::make_unique<wui::Checkbox>("Mixed");
+    mixed->setMixed();
+    mixed->setVisualState(wui::ControlVisualState::Hovered, true);
+    root.appendChild(std::move(checked));
+    root.appendChild(std::move(mixed));
+    root.layout({0.0f, 0.0f, 180.0f, 80.0f});
+
+    const auto snapshot = wui::inspectUiTree(root);
+    expect(snapshot.size() == 3 && snapshot[1].resolvedStyle
+               && snapshot[2].resolvedStyle,
+           "Inspector must expose checked and mixed Checkbox styles");
+    const auto& checkedStyle = *snapshot[1].resolvedStyle;
+    expect(checkedStyle.background
+               && sameColor(*checkedStyle.background,
+                            wui::theme().colors.compoundBrandBackground.pressed)
+               && checkedStyle.border
+               && sameColor(*checkedStyle.border,
+                            wui::theme().colors.compoundBrandBackground.pressed),
+           "Resolved checked Checkbox must use compound-brand pressed surface tokens");
+    const auto& mixedStyle = *snapshot[2].resolvedStyle;
+    expect(mixedStyle.background && mixedStyle.background->a == 0
+               && mixedStyle.border
+               && sameColor(*mixedStyle.border,
+                            wui::theme().colors.compoundBrandStroke.hover),
+           "Resolved mixed Checkbox must keep a transparent face and compound-brand border");
+}
+
 void testRepaintOverlayRetainsIndependentParentAndChildDirtyRegions()
 {
     wui::UiInspectorSnapshot snapshot;
@@ -183,6 +239,8 @@ int main()
     testPreorderAndControlMetadata();
     testHitPathAndDirtySummary();
     testMeasuredConstraintsAndResolvedStyle();
+    testResolvedRadioStyleMatchesFluentComposition();
+    testResolvedCheckboxStyleMatchesFluentComposition();
     testRepaintOverlayRetainsIndependentParentAndChildDirtyRegions();
     testRepaintOverlayScalesLinearlyWithLargeFlatSnapshot();
     return 0;

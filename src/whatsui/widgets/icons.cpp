@@ -27,6 +27,10 @@ constexpr std::uint32_t bySize(IconSize size, std::uint32_t size16,
                                std::uint32_t size24) noexcept
 {
     switch (size) {
+    // Most public icon call sites begin at 16 DIP. Size12 currently exists
+    // for Fluent component internals such as Checkbox; icons without a
+    // dedicated 12-DIP asset retain their 16-DIP silhouette at 12-DIP extent.
+    case IconSize::Size12: return size16;
     case IconSize::Size16: return size16;
     case IconSize::Size24: return size24;
     case IconSize::Size20:
@@ -147,10 +151,20 @@ std::uint32_t iconCodepoint(IconName name, IconSize size,
         return filled ? bySize(size, 0xF727, 0xF728, 0xF729)
                       : bySize(size, 0xF719, 0xF71A, 0xF71B);
     case IconName::Checkmark:
+        if (size == IconSize::Size12) return 0xF293;
         return filled ? bySize(size, 0xE319, 0xF294, 0xF295)
                       : bySize(size, 0xE305, 0xF294, 0xF295);
     case IconName::CheckmarkCircle:
         return bySize(size, 0xF297, 0xF298, 0xF299);
+    case IconName::Square:
+        if (size == IconSize::Size12)
+            return filled ? 0xEB7C : 0xEB73;
+        return filled ? bySize(size, 0xEB7D, 0xEB7E, 0xEB7F)
+                      : bySize(size, 0xEB74, 0xEB75, 0xEB76);
+    case IconName::Circle:
+        if (size == IconSize::Size12)
+            return filled ? 0xE346 : 0xE331;
+        return bySize(size, 0xF2BA, 0xF2BB, 0xF2BC);
     case IconName::Info:
         return filled ? bySize(size, 0xF4A9, 0xF4AA, 0xF4AB)
                       : bySize(size, 0xF4A2, 0xF4A3, 0xF4A4);

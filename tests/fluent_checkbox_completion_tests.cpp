@@ -17,8 +17,8 @@
 
 namespace {
 
-constexpr int kWidth = 760;
-constexpr int kHeight = 300;
+constexpr int kWidth = 900;
+constexpr int kHeight = 380;
 
 void expect(bool condition, const char* message)
 {
@@ -100,9 +100,47 @@ bool regionContainsColorNear(const std::vector<unsigned char>& rgba, int width,
     return false;
 }
 
+struct VerticalPixelBounds {
+    int top{0};
+    int bottom{-1};
+    [[nodiscard]] bool valid() const noexcept { return bottom >= top; }
+    [[nodiscard]] float center() const noexcept {
+        return (static_cast<float>(top) + static_cast<float>(bottom)) * 0.5f;
+    }
+};
+
+VerticalPixelBounds verticalBoundsNearColor(
+    const std::vector<unsigned char>& rgba, int width, float scale,
+    wui::RectF logicalRegion, wui::Color color, int tolerance)
+{
+    const int left = static_cast<int>(std::ceil(logicalRegion.x * scale));
+    const int top = static_cast<int>(std::ceil(logicalRegion.y * scale));
+    const int right = static_cast<int>(
+        std::floor((logicalRegion.x + logicalRegion.width) * scale));
+    const int bottom = static_cast<int>(
+        std::floor((logicalRegion.y + logicalRegion.height) * scale));
+    VerticalPixelBounds result;
+    result.top = bottom;
+    for (int y = top; y <= bottom; ++y) {
+        for (int x = left; x <= right; ++x) {
+            const auto offset = static_cast<std::size_t>((y * width + x) * 4);
+            if (offset + 3 >= rgba.size()) continue;
+            if (std::abs(static_cast<int>(rgba[offset]) - color.r) <= tolerance &&
+                std::abs(static_cast<int>(rgba[offset + 1]) - color.g) <= tolerance &&
+                std::abs(static_cast<int>(rgba[offset + 2]) - color.b) <= tolerance) {
+                result.top = std::min(result.top, y);
+                result.bottom = std::max(result.bottom, y);
+            }
+        }
+    }
+    return result;
+}
+
 void testOfficialSizesAndOptions()
 {
     wui::Checkbox checkbox("Accept terms");
+    expect(wui::theme().controls.checkboxSize == 16.0f,
+           "Fluent medium Checkbox indicator token must be 16 DIP");
     expect(checkbox.measure({}).height == 32.0f,
            "Fluent medium Checkbox must reserve a 32 DIP click target");
     checkbox.setSize(wui::CheckboxSize::Large);
@@ -160,8 +198,9 @@ void testPointerDisabledAndAccessibility()
 
     expect(checkbox.onPointerEvent(pointer(wui::PointerAction::Down, {8.0f, 16.0f},
                                                    wui::MouseButton::Left)) &&
-               (checkbox.visualStates() & wui::toMask(wui::ControlVisualState::Focused)) != 0,
-           "Pointer activation must focus the Checkbox and start pressed feedback");
+               (checkbox.visualStates() & wui::toMask(wui::ControlVisualState::Focused)) != 0 &&
+               (checkbox.visualStates() & wui::toMask(wui::ControlVisualState::FocusVisible)) == 0,
+           "Pointer activation must focus Checkbox without a keyboard-only outline");
     checkbox.onPointerEvent(pointer(wui::PointerAction::Cancel, {8.0f, 16.0f}));
     checkbox.setEnabled(false);
     expect(!checkbox.onKeyEvent({0, wui::KeyAction::Down, 32}) &&
@@ -212,18 +251,44 @@ void writeVisualMatrix(const std::string& output, float scale)
 
         std::vector<std::unique_ptr<wui::Checkbox>> controls;
         controls.push_back(std::make_unique<wui::Checkbox>("Unchecked"));
-        controls.push_back(std::make_unique<wui::Checkbox>("Hovered"));
+        controls.push_back(std::make_unique<wui::Checkbox>("Unchecked hover"));
         controls.back()->setVisualState(wui::ControlVisualState::Hovered, true);
-        controls.push_back(std::make_unique<wui::Checkbox>("Checked", true));
-        controls.push_back(std::make_unique<wui::Checkbox>("Mixed"));
-        controls.back()->setMixed();
-        controls.push_back(std::make_unique<wui::Checkbox>("Focused", true));
-        controls.back()->setVisualState(wui::ControlVisualState::Focused, true);
-        controls.push_back(std::make_unique<wui::Checkbox>("Disabled", true));
+        controls.push_back(std::make_unique<wui::Checkbox>("Unchecked pressed"));
+        controls.back()->setVisualState(wui::ControlVisualState::Hovered, true);
+        controls.back()->setVisualState(wui::ControlVisualState::Pressed, true);
+        controls.push_back(std::make_unique<wui::Checkbox>("Unchecked disabled"));
         controls.back()->setEnabled(false);
+
+        controls.push_back(std::make_unique<wui::Checkbox>("Checked", true));
+        controls.push_back(std::make_unique<wui::Checkbox>("Checked hover", true));
+        controls.back()->setVisualState(wui::ControlVisualState::Hovered, true);
+        controls.push_back(std::make_unique<wui::Checkbox>("Checked pressed", true));
+        controls.back()->setVisualState(wui::ControlVisualState::Hovered, true);
+        controls.back()->setVisualState(wui::ControlVisualState::Pressed, true);
+        controls.push_back(std::make_unique<wui::Checkbox>("Checked disabled", true));
+        controls.back()->setEnabled(false);
+
+        for (const char* label : {"Mixed", "Mixed hover", "Mixed pressed",
+                                  "Mixed disabled"}) {
+            controls.push_back(std::make_unique<wui::Checkbox>(label));
+            controls.back()->setMixed();
+        }
+        controls[9]->setVisualState(wui::ControlVisualState::Hovered, true);
+        controls[10]->setVisualState(wui::ControlVisualState::Hovered, true);
+        controls[10]->setVisualState(wui::ControlVisualState::Pressed, true);
+        controls[11]->setEnabled(false);
+
+        controls.push_back(std::make_unique<wui::Checkbox>("Pointer focus", true));
+        controls.back()->setVisualState(wui::ControlVisualState::Focused, true);
+        controls.push_back(std::make_unique<wui::Checkbox>("Keyboard focus", true));
+        controls.back()->setVisualState(wui::ControlVisualState::Focused, true);
+        controls.back()->setVisualState(wui::ControlVisualState::FocusVisible, true);
         controls.push_back(std::make_unique<wui::Checkbox>("Large circular task", true));
         controls.back()->setSize(wui::CheckboxSize::Large);
         controls.back()->setShape(wui::CheckboxShape::Circular);
+        controls.push_back(std::make_unique<wui::Checkbox>("Circular mixed"));
+        controls.back()->setShape(wui::CheckboxShape::Circular);
+        controls.back()->setMixed();
         controls.push_back(std::make_unique<wui::Checkbox>("Required before"));
         controls.back()->setLabelPosition(wui::CheckboxLabelPosition::Before);
         controls.back()->setRequired();
@@ -231,15 +296,12 @@ void writeVisualMatrix(const std::string& output, float scale)
             "A wrapping label keeps its indicator aligned with the first line"));
         expect(controls.back()->measure({0.0f, 210.0f}).height >= 40.0f,
                "A narrow Checkbox label must wrap to multiple visual lines");
-        controls.push_back(std::make_unique<wui::Checkbox>("Circular mixed"));
-        controls.back()->setShape(wui::CheckboxShape::Circular);
-        controls.back()->setMixed();
 
         for (std::size_t index = 0; index < controls.size(); ++index) {
-            const float x = 24.0f + static_cast<float>(index % 3) * 238.0f;
-            const float y = 62.0f + static_cast<float>(index / 3) * 64.0f;
-            const float measuredHeight = controls[index]->measure({0.0f, 210.0f}).height;
-            controls[index]->layout({x, y, 210.0f, measuredHeight});
+            const float x = 24.0f + static_cast<float>(index % 4) * 215.0f;
+            const float y = 62.0f + static_cast<float>(index / 4) * 64.0f;
+            const float measuredHeight = controls[index]->measure({0.0f, 195.0f}).height;
+            controls[index]->layout({x, y, 195.0f, measuredHeight});
             controls[index]->prepare(paint);
             controls[index]->paint(paint);
         }
@@ -248,51 +310,79 @@ void writeVisualMatrix(const std::string& output, float scale)
         expect(pixels.size() == static_cast<std::size_t>(width * height * 4),
                "Checkbox visual capture must return a complete RGBA frame");
         const auto background = wui::theme().colors.neutralBackground2.rest;
-        // Index 6 is the selected circular task checkbox at logical bounds
-        // {24, 190, 210, 36}. Its 20-DIP indicator starts at {32,198}; the
+        // Index 14 is the selected circular task checkbox at logical bounds
+        // {454, 254, 195, 36}. Its 20-DIP indicator starts at {462,262}; the
         // geometric corner must remain background rather than becoming a
         // clipped square at either 1x or fractional DPR.
-        expect(pixelIs(pixels, width, scale, 32.0f, 198.0f, background),
+        expect(pixelIs(pixels, width, scale, 462.0f, 262.0f, background),
                "Circular Checkbox must leave the indicator corner unfilled");
-        // Index 4 is focused at {262,126,210,32}. The label-side area is
-        // intentionally sampled outside the two-layer indicator focus ring;
-        // the historical bug painted this entire transparent region black.
-        expect(pixelIs(pixels, width, scale, 390.0f, 130.0f, background),
-               "Checkbox focus ring must not paint or contaminate label background");
+        // Index 12 has logical pointer focus at {24,254,195,32}. It must not
+        // paint the keyboard-only root focus rectangle.
+        expect(pixelIs(pixels, width, scale, 22.0f, 270.0f, background),
+               "Pointer-focused Checkbox must not paint a persistent black frame");
+        // Index 13 has keyboard focus at {239,254,195,32}; the root outline
+        // remains available for keyboard navigation and accessibility.
+        expect(!pixelIs(pixels, width, scale, 237.0f, 270.0f, background),
+               "Keyboard-focused Checkbox must retain its focus-visible outline");
         expect(regionContainsColor(pixels, width, scale, {31.0f, 75.0f, 3.0f, 7.0f},
                                    wui::theme().colors.neutralStrokeAccessible) &&
-                   regionContainsColor(pixels, width, scale, {269.0f, 75.0f, 3.0f, 7.0f},
+                   regionContainsColor(pixels, width, scale, {246.0f, 75.0f, 3.0f, 7.0f},
                                        wui::theme().colors.neutralStrokeAccessibleHover),
                "Unchecked Checkbox hover must resolve the official accessible-stroke hover token");
-        // Index 8 wraps to multiple lines at {500,190}. The indicator's left
-        // stroke must occur beside the first line (around y=200), rather than
+        expect(pixelIs(pixels, width, scale, 34.0f, 136.0f,
+                       wui::theme().colors.compoundBrandBackground.rest) &&
+                   pixelIs(pixels, width, scale, 249.0f, 136.0f,
+                           wui::theme().colors.compoundBrandBackground.hover) &&
+                   pixelIs(pixels, width, scale, 464.0f, 136.0f,
+                           wui::theme().colors.compoundBrandBackground.pressed),
+               "Checked Checkbox surfaces must use compound-brand interaction tokens");
+        // Index 17 wraps to multiple lines at {239,318}. The indicator's left
+        // stroke must occur beside the first line, rather than
         // drifting to the vertical center of the complete label block.
-        expect(regionContainsColor(pixels, width, scale, {507.0f, 197.0f, 4.0f, 7.0f},
+        expect(regionContainsColor(pixels, width, scale, {246.0f, 320.0f, 4.0f, 9.0f},
                                    wui::theme().colors.neutralStrokeAccessible),
                "Wrapped Checkbox indicator must align with the first label line");
-        // The checked control at index 2 must contain visible on-brand pixels
+        // The checked control at index 4 must contain visible on-brand pixels
         // on both sides of the Fluent checkmark. Keep the samples broad enough
         // for the font's distinct 1x and fractional-DPI hinted outlines.
         expect(regionContainsColorNear(
-                   pixels, width, scale, {509.0f, 72.0f, 9.0f, 13.0f},
+                   pixels, width, scale, {33.0f, 136.0f, 7.0f, 11.0f},
                    wui::theme().colors.onBrand, 128) &&
                    regionContainsColorNear(
-                       pixels, width, scale, {516.0f, 70.0f, 9.0f, 15.0f},
+                       pixels, width, scale, {39.0f, 134.0f, 8.0f, 14.0f},
                        wui::theme().colors.onBrand, 128),
                "Checked Checkbox must paint a recognizable two-arm checkmark");
-        // Mixed uses the same solid brand surface as Checked, with a centred
-        // on-brand horizontal mark. This avoids the broken-looking nested blue
-        // squares that an outline-plus-glyph rendering produced at 150% DPI.
-        expect(pixelIs(pixels, width, scale, 40.0f, 142.0f,
-                       wui::theme().colors.onBrand) &&
-                   pixelIs(pixels, width, scale, 34.0f, 136.0f,
-                           wui::theme().colors.brandBackground.rest),
-               "Square mixed Checkbox must have a solid brand face and centred white mark");
-        // Index 9 is circular mixed at {24,254}; its centre mark is white
+        // Ignore the rounded face corners and compare the visible white ink
+        // against the physical-pixel centre of the complete 16-DIP indicator.
+        // This catches baseline-centred icon fonts whose actual checkmark is
+        // one DIP too high (1.5 px at the common Windows 150% scale).
+        const auto checkmarkInk = verticalBoundsNearColor(
+            pixels, width, scale, {34.5f, 136.5f, 11.0f, 11.0f},
+            wui::theme().colors.onBrand, 72);
+        const int indicatorTop =
+            static_cast<int>(std::floor(134.0f * scale));
+        const int indicatorBottom =
+            static_cast<int>(std::ceil(150.0f * scale)) - 1;
+        const float indicatorCenter =
+            (static_cast<float>(indicatorTop) +
+             static_cast<float>(indicatorBottom)) *
+            0.5f;
+        expect(checkmarkInk.valid() &&
+                   std::abs(checkmarkInk.center() - indicatorCenter) <= 0.75f,
+               "Checked Checkbox mark ink must be vertically centred within the indicator");
+        // Mixed is an outlined compound-brand state with a same-color inner
+        // mark. It must not regress to the checked state's blue face and
+        // inverse white mark.
+        expect(pixelIs(pixels, width, scale, 40.0f, 206.0f,
+                       wui::theme().colors.compoundBrandForeground1.rest) &&
+                   !pixelIs(pixels, width, scale, 34.0f, 200.0f,
+                            wui::theme().colors.compoundBrandBackground.rest),
+               "Square mixed Checkbox must use a transparent face and compound-brand mark");
+        // Index 15 is circular mixed at {669,254}; its centre mark is brand
         // while the bounding-square corner remains transparent.
-        expect(pixelIs(pixels, width, scale, 40.0f, 270.0f,
-                       wui::theme().colors.onBrand) &&
-                   pixelIs(pixels, width, scale, 32.0f, 262.0f,
+        expect(pixelIs(pixels, width, scale, 685.0f, 270.0f,
+                       wui::theme().colors.compoundBrandForeground1.rest) &&
+                   pixelIs(pixels, width, scale, 677.0f, 262.0f,
                            background),
                "Circular mixed Checkbox must retain its circular outer silhouette");
         savePpm(output, pixels, width, height);

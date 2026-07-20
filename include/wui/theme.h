@@ -31,6 +31,16 @@ struct ColorTokens {
                                       {224, 224, 224, 255}, {224, 224, 224, 255}};
     Interaction brandBackground{{15, 108, 189, 255}, {17, 94, 163, 255},
                                 {12, 59, 94, 255}, {15, 84, 140, 255}};
+    // Compound brand aliases are used when a control combines a brand stroke
+    // and foreground mark (Radio, checked selection indicators). Their
+    // pressed value is intentionally brand[60], not the darker
+    // colorBrandBackgroundPressed surface token.
+    Interaction compoundBrandForeground1{{15, 108, 189, 255}, {17, 94, 163, 255},
+                                         {15, 84, 140, 255}, {15, 108, 189, 255}};
+    Interaction compoundBrandStroke{{15, 108, 189, 255}, {17, 94, 163, 255},
+                                    {15, 84, 140, 255}, {15, 108, 189, 255}};
+    Interaction compoundBrandBackground{{15, 108, 189, 255}, {17, 94, 163, 255},
+                                        {15, 84, 140, 255}, {15, 108, 189, 255}};
     Interaction dangerBackground{{196, 49, 75, 255}, {179, 38, 30, 255},
                                  {117, 11, 28, 255}, {163, 38, 56, 255}};
 
@@ -39,6 +49,8 @@ struct ColorTokens {
     Color neutralForeground3{97, 97, 97, 255};
     Color neutralForegroundDisabled{179, 179, 179, 255};
     Color neutralStroke1{209, 209, 209, 255};
+    Color neutralStroke1Hover{199, 199, 199, 255};
+    Color neutralStroke1Pressed{179, 179, 179, 255};
     Color neutralStrokeAccessible{97, 97, 97, 255};
     Color neutralStrokeAccessibleHover{87, 87, 87, 255};
     Color neutralStrokeAccessiblePressed{66, 66, 66, 255};
@@ -166,6 +178,16 @@ struct StrokeTokens {
     float thickest{4.0f};
 };
 
+struct MotionTokens {
+    // Fluent global duration aliases, expressed in seconds for Animation.
+    float durationUltraFast{0.05f};
+    float durationFaster{0.10f};
+    float durationFast{0.15f};
+    float durationNormal{0.20f};
+    float durationGentle{0.25f};
+    float durationSlow{0.30f};
+};
+
 // Windows 11 exposes Segoe UI Variable through DirectWrite.  Keep the
 // long-established Segoe UI face alongside it as an explicit fallback token:
 // applications that install a custom renderer can preserve the same contract
@@ -264,10 +286,10 @@ struct ControlTokens {
     // and large variants expose 24 and 40 without redefining the theme.
     float height{32.0f};
     float compactHeight{24.0f};
-    float horizontalPadding{14.0f};
+    float horizontalPadding{12.0f};
     float focusInset{2.0f};
     float focusWidth{2.0f};
-    float checkboxSize{20.0f};
+    float checkboxSize{16.0f};
 };
 
 struct Theme {
@@ -276,6 +298,7 @@ struct Theme {
     SpacingTokens spacing{};
     RadiusTokens radius{};
     StrokeTokens stroke{};
+    MotionTokens motion{};
     TypographyTokens typography{};
     ControlTokens controls{};
 };

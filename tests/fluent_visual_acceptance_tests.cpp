@@ -198,8 +198,8 @@ void verifyShapeAndStateTokens(const std::vector<std::uint8_t>& pixels, int widt
     // exact full token at the mathematical edge would reward duplicate overdraw.
     expect(pixelIs(pixels, width, scale, 24, 216, background)
                && pixelNear(pixels, width, scale, 24, 226,
-                            colors.neutralStrokeAccessible, 24)
-               && pixelIs(pixels, width, scale, 34, 226, colors.neutralBackground1.rest),
+                            colors.neutralStrokeAccessible, 28)
+               && pixelIs(pixels, width, scale, 34, 226, background),
            "Unselected Radio must render as a hollow circular stroke");
 
     // Blank interior/axis samples make the state checks independent from glyph
@@ -208,13 +208,19 @@ void verifyShapeAndStateTokens(const std::vector<std::uint8_t>& pixels, int widt
                && pixelIs(pixels, width, scale, 196, 174, colors.neutralBackground1.hover)
                && pixelIs(pixels, width, scale, 356, 174, colors.neutralBackground1.pressed),
            "Compound Button rest, hover and pressed surfaces must be distinct");
-    expect(pixelNear(pixels, width, scale, 24, 226, colors.neutralStrokeAccessible, 24)
+    // At fractional DPR the mathematical edge is deliberately a partial-
+    // coverage pixel. Keep the tolerance below the distance to adjacent state
+    // tokens while allowing the expected 125% analytic-AA blend.
+    expect(pixelNear(pixels, width, scale, 24, 226, colors.neutralStrokeAccessible, 28)
                && pixelNear(pixels, width, scale, 150, 226,
-                            colors.neutralStrokeAccessibleHover, 24)
+                            colors.neutralStrokeAccessibleHover, 28)
                && pixelNear(pixels, width, scale, 276, 226,
-                            colors.neutralStrokeAccessiblePressed, 24)
-               && pixelIs(pixels, width, scale, 404, 226, colors.brandBackground.rest)
-               && pixelIs(pixels, width, scale, 410, 226, colors.onBrand),
+                            colors.neutralStrokeAccessiblePressed, 28)
+               && pixelNear(pixels, width, scale, 402, 226,
+                            colors.compoundBrandStroke.rest, 28)
+               && pixelIs(pixels, width, scale, 404, 226, colors.neutralBackground2.rest)
+               && pixelIs(pixels, width, scale, 410, 226,
+                          colors.compoundBrandForeground1.rest),
            "Radio rest, hover, pressed and selected state tokens must be distinct");
     expect(pixelIs(pixels, width, scale, 100, 276, colors.brandBackground.rest)
                && pixelIs(pixels, width, scale, 400, 276, colors.neutralStroke1),

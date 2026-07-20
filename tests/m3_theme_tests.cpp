@@ -28,6 +28,16 @@ void testFluentDarkTokens()
            "Fluent dark raised surfaces must use neutralBackground1");
     expect(equal(dark.colors.accent, {71, 158, 245, 255}),
            "Fluent dark must expose its accessible blue accent");
+    expect(equal(dark.colors.compoundBrandStroke.rest, {71, 158, 245, 255}) &&
+               equal(dark.colors.compoundBrandStroke.hover, {98, 171, 245, 255}) &&
+               equal(dark.colors.compoundBrandStroke.pressed, {40, 134, 222, 255}) &&
+               equal(dark.colors.compoundBrandBackground.pressed, {40, 134, 222, 255}),
+           "Fluent dark compound-brand indicators must use foreground-strength states");
+    expect(equal(dark.colors.neutralStroke1Hover, {117, 117, 117, 255}) &&
+               equal(dark.colors.neutralStroke1Pressed, {107, 107, 107, 255}) &&
+               equal(dark.colors.neutralStrokeAccessibleHover, {189, 189, 189, 255}) &&
+               equal(dark.colors.neutralStrokeAccessiblePressed, {179, 179, 179, 255}),
+           "Fluent dark editable fields must expose complete neutral stroke states");
     expect(equal(dark.colors.onAccent, {0, 0, 0, 255}),
            "Fluent dark accent foreground must remain legible");
     expect(dark.elevation.shadow16.ambient.color.a == 61 &&
@@ -55,6 +65,18 @@ void testFluentColorAndElevationTokens()
                equal(light.colors.brandBackground.pressed, {12, 59, 94, 255}) &&
                equal(light.colors.brandBackground.selected, {15, 84, 140, 255}),
            "Fluent brand background states must use the documented alias tokens");
+    expect(equal(light.colors.compoundBrandForeground1.rest, {15, 108, 189, 255}) &&
+               equal(light.colors.compoundBrandForeground1.hover, {17, 94, 163, 255}) &&
+               equal(light.colors.compoundBrandForeground1.pressed, {15, 84, 140, 255}) &&
+               equal(light.colors.compoundBrandStroke.pressed, {15, 84, 140, 255}) &&
+               equal(light.colors.compoundBrandBackground.pressed, {15, 84, 140, 255}),
+           "Compound-brand foreground and stroke must not use the darker pressed surface token");
+    expect(equal(light.colors.neutralStroke1Hover, {199, 199, 199, 255}) &&
+               equal(light.colors.neutralStroke1Pressed, {179, 179, 179, 255}) &&
+               light.motion.durationUltraFast == 0.05f &&
+               light.motion.durationNormal == 0.20f &&
+               light.controls.horizontalPadding == 12.0f,
+           "Input tokens must expose official stroke, motion, and medium padding aliases");
 
     expect(equal(wui::fluentBrandShadow({255, 255, 255, 255}, true), {0, 0, 0, 32}) &&
                equal(wui::fluentBrandShadow({15, 108, 189, 255}, false), {0, 0, 0, 65}),
@@ -103,6 +125,12 @@ void testScopedOverrideIsolation()
     popupElevation.elevation = elevated;
     const wui::ThemeScope popup(compactDialog, popupElevation);
 
+    wui::ThemeOverride reducedMotion;
+    auto motion = popup.resolvedTheme().motion;
+    motion.durationNormal = 0.0f;
+    reducedMotion.motion = motion;
+    const wui::ThemeScope reducedMotionPopup(popup, reducedMotion);
+
     expect(equal(appTheme.colors.accent, {15, 108, 189, 255}),
            "A local theme scope must not mutate its inherited theme");
     expect(equal(darkPane.resolvedTheme().colors.background, {31, 31, 31, 255}),
@@ -119,6 +147,9 @@ void testScopedOverrideIsolation()
     expect(popup.resolvedTheme().elevation.shadow16.key.blur == 20.0f &&
                compactDialog.resolvedTheme().elevation.shadow16.key.blur == 16.0f,
            "Elevation overrides must remain local to their theme scope");
+    expect(reducedMotionPopup.resolvedTheme().motion.durationNormal == 0.0f &&
+               popup.resolvedTheme().motion.durationNormal == 0.20f,
+           "Motion token overrides must remain lexical and category-scoped");
 }
 
 void testStatePropertyResolution()

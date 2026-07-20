@@ -131,6 +131,8 @@ public:
     [[nodiscard]] InputAppearance appearance() const noexcept;
     void setInvalid(bool invalid) noexcept;
     [[nodiscard]] bool isInvalid() const noexcept;
+    void setMotionEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool isMotionEnabled() const noexcept;
 
     // TextArea reuses the same UTF-8 editing and IME controller as TextInput,
     // but opts into wrapped multi-line layout.  Keep this on the base class so
@@ -171,6 +173,9 @@ private:
     void ensureCaretBlinkAnimation();
     void stopCaretBlinkAnimation() noexcept;
     void resetCaretBlink();
+    void syncFocusIndicatorAnimation(bool active);
+    void stopFocusIndicatorAnimation() noexcept;
+    void onDetach() noexcept override;
 
     TextEditingController controller_;
     std::string placeholder_;
@@ -190,6 +195,10 @@ private:
     std::size_t lastPaintedCaret_{0};
     AnimationId caretBlinkAnimation_{0};
     bool caretVisible_{true};
+    AnimationId focusIndicatorAnimation_{0};
+    float focusIndicatorProgress_{0.0f};
+    bool focusIndicatorTargetActive_{false};
+    bool motionEnabled_{true};
 };
 
 // A genuine editable multi-line field. It intentionally inherits the same
