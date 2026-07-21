@@ -78,6 +78,9 @@ private:
     std::vector<std::string> overflowedItems_;
     OverflowHandler onOverflow_;
     RectF overflowBounds_{};
+    bool overflowHovered_{false};
+    bool overflowPressed_{false};
+    bool overflowFocused_{false};
 };
 
 class TabList;

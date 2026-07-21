@@ -33,8 +33,12 @@ void testFluentDarkTokens()
                equal(dark.colors.compoundBrandStroke.pressed, {40, 134, 222, 255}) &&
                equal(dark.colors.compoundBrandBackground.pressed, {40, 134, 222, 255}),
            "Fluent dark compound-brand indicators must use foreground-strength states");
+    expect(equal(dark.colors.neutralBackgroundDisabled, {20, 20, 20, 255}) &&
+               equal(dark.colors.neutralStrokeDisabled, {66, 66, 66, 255}),
+           "Fluent dark disabled buttons must use the official neutral aliases");
     expect(equal(dark.colors.neutralStroke1Hover, {117, 117, 117, 255}) &&
                equal(dark.colors.neutralStroke1Pressed, {107, 107, 107, 255}) &&
+               equal(dark.colors.neutralStroke1Selected, {112, 112, 112, 255}) &&
                equal(dark.colors.neutralStrokeAccessibleHover, {189, 189, 189, 255}) &&
                equal(dark.colors.neutralStrokeAccessiblePressed, {179, 179, 179, 255}),
            "Fluent dark editable fields must expose complete neutral stroke states");
@@ -54,6 +58,8 @@ void testFluentColorAndElevationTokens()
     expect(equal(light.colors.surfaceRaised, {255, 255, 255, 255}) &&
                equal(light.colors.border, {209, 209, 209, 255}),
            "Fluent aliases must expose a raised neutral surface and Windows stroke");
+    expect(equal(light.colors.neutralBackgroundDisabled, {240, 240, 240, 255}),
+           "Fluent light disabled controls must use neutralBackgroundDisabled");
     expect(light.elevation.useWindowsStroke && light.elevation.shadow16.ambient.blur == 2.0f &&
                light.elevation.shadow16.key.blur == 16.0f &&
                light.elevation.shadow16.key.offsetY == 8.0f &&
@@ -73,6 +79,7 @@ void testFluentColorAndElevationTokens()
            "Compound-brand foreground and stroke must not use the darker pressed surface token");
     expect(equal(light.colors.neutralStroke1Hover, {199, 199, 199, 255}) &&
                equal(light.colors.neutralStroke1Pressed, {179, 179, 179, 255}) &&
+               equal(light.colors.neutralStroke1Selected, {189, 189, 189, 255}) &&
                light.motion.durationUltraFast == 0.05f &&
                light.motion.durationNormal == 0.20f &&
                light.controls.horizontalPadding == 12.0f,
@@ -184,6 +191,11 @@ void testStatePropertyResolution()
 void testTextConsumesNamedTypographyStyle()
 {
     const wui::Theme fluent;
+    expect(fluent.typography.familyControls == "Segoe UI",
+           "Fluent controls must retain the classic Segoe UI family used by the reference components");
+    expect(fluent.typography.body1Strong.weight == 600 &&
+               fluent.typography.subtitle2.weight == 600,
+           "Fluent medium and large Button labels must use the reference Semibold weight");
     wui::Text defaultText("Default token text");
     expect(defaultText.fontFamily() == "Segoe UI Variable",
            "Text constructed under the Windows default must inherit familyBase");

@@ -179,7 +179,7 @@ void verifyStatePixels(const std::vector<std::uint8_t>& pixels,
         colors.neutralStrokeDisabled};
 
     for (std::size_t column = 0; column < kColumns.size(); ++column) {
-        const float centerX = kColumns[column] + 8.0f;
+        const float centerX = kColumns[column] + 16.0f;
         const float uncheckedCenterY = kUncheckedY + 16.0f;
         const float checkedCenterY = kCheckedY + 16.0f;
 

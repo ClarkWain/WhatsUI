@@ -38,4 +38,5 @@ Invoke/ExpandCollapse/Focus actions. Collapsed descendants must not be exposed.
 `fluent_tree_tests.cpp` covers stable identity, disclosure, disabled-item
 navigation, keyboard behavior, scroll-into-view and accessibility actions.
 `fluent_tree_visual_tests.cpp` produces Software renderer review captures at
-100% and 150% scale with nested, collapsed, selected and disabled states.
+100%, 125%, 150%, and 200% scale with nested, collapsed, selected and
+disabled states.

@@ -88,6 +88,106 @@ if(TARGET WhatsUI::Glfw)
         SKIP_RETURN_CODE 77
         TIMEOUT 30
     )
+
+    add_executable(WhatsUIFluentButtonOpenGLVisualTests
+        fluent_button_opengl_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentButtonOpenGLVisualTests
+        PRIVATE
+            WhatsUI::Glfw
+    )
+    target_compile_features(
+        WhatsUIFluentButtonOpenGLVisualTests PRIVATE cxx_std_17)
+
+    foreach(scale IN ITEMS 1.0 1.25 1.5 2.0)
+        if(scale STREQUAL "1.0")
+            set(scale_suffix 100)
+        elseif(scale STREQUAL "1.25")
+            set(scale_suffix 125)
+        elseif(scale STREQUAL "1.5")
+            set(scale_suffix 150)
+        else()
+            set(scale_suffix 200)
+        endif()
+        add_test(
+            NAME whatsui_fluent_button_opengl_${scale_suffix}dpi
+            COMMAND WhatsUIFluentButtonOpenGLVisualTests
+                ${CMAKE_CURRENT_BINARY_DIR}/fluent_button_opengl_${scale_suffix}dpi.ppm
+                ${scale}
+        )
+        set_tests_properties(
+            whatsui_fluent_button_opengl_${scale_suffix}dpi PROPERTIES
+            LABELS "native;glfw;opengl;visual;fluent;button;dpi"
+            SKIP_RETURN_CODE 77
+            TIMEOUT 30
+        )
+    endforeach()
+
+    add_executable(WhatsUIPaintGeometryBackendParityTests
+        paint_geometry_backend_parity_tests.cpp
+    )
+    target_link_libraries(WhatsUIPaintGeometryBackendParityTests
+        PRIVATE
+            WhatsUI::Glfw
+    )
+    target_compile_features(
+        WhatsUIPaintGeometryBackendParityTests PRIVATE cxx_std_17)
+
+    foreach(scale IN ITEMS 1.0 1.25 1.5 2.0)
+        if(scale STREQUAL "1.0")
+            set(scale_suffix 100)
+        elseif(scale STREQUAL "1.25")
+            set(scale_suffix 125)
+        elseif(scale STREQUAL "1.5")
+            set(scale_suffix 150)
+        else()
+            set(scale_suffix 200)
+        endif()
+        add_test(
+            NAME whatsui_paint_geometry_backend_parity_${scale_suffix}dpi
+            COMMAND WhatsUIPaintGeometryBackendParityTests ${scale}
+        )
+        set_tests_properties(
+            whatsui_paint_geometry_backend_parity_${scale_suffix}dpi PROPERTIES
+            LABELS "native;glfw;opengl;software;visual;fluent;geometry;parity;dpi"
+            SKIP_RETURN_CODE 77
+            TIMEOUT 30
+        )
+    endforeach()
+
+    add_executable(WhatsUIFluentControlOpenGLVisualMatrixTests
+        fluent_control_opengl_visual_matrix_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentControlOpenGLVisualMatrixTests
+        PRIVATE
+            WhatsUI::Glfw
+    )
+    target_compile_features(
+        WhatsUIFluentControlOpenGLVisualMatrixTests PRIVATE cxx_std_17)
+
+    foreach(scale IN ITEMS 1.0 1.25 1.5 2.0)
+        if(scale STREQUAL "1.0")
+            set(scale_suffix 100)
+        elseif(scale STREQUAL "1.25")
+            set(scale_suffix 125)
+        elseif(scale STREQUAL "1.5")
+            set(scale_suffix 150)
+        else()
+            set(scale_suffix 200)
+        endif()
+        add_test(
+            NAME whatsui_fluent_control_opengl_matrix_${scale_suffix}dpi
+            COMMAND WhatsUIFluentControlOpenGLVisualMatrixTests
+                ${CMAKE_CURRENT_BINARY_DIR}/fluent_control_opengl_matrix_${scale_suffix}dpi.ppm
+                ${scale}
+        )
+        set_tests_properties(
+            whatsui_fluent_control_opengl_matrix_${scale_suffix}dpi PROPERTIES
+            LABELS "native;glfw;opengl;visual;fluent;matrix;action;input;selection;dpi"
+            SKIP_RETURN_CODE 77
+            TIMEOUT 30
+        )
+    endforeach()
 endif()
 
 # Exercise the real Win32 UI Automation client boundary against a GLFW HWND.
@@ -344,7 +444,12 @@ if(TARGET WhatsCanvasSoftware)
         COMMAND WhatsUIFluentDrawerVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_drawer_review.ppm 1.0)
     add_test(NAME whatsui_fluent_drawer_visual_150dpi
         COMMAND WhatsUIFluentDrawerVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_drawer_review_150dpi.ppm 1.5)
-    set_tests_properties(whatsui_fluent_drawer_visual whatsui_fluent_drawer_visual_150dpi
+    add_test(NAME whatsui_fluent_drawer_visual_125dpi
+        COMMAND WhatsUIFluentDrawerVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_drawer_review_125dpi.ppm 1.25)
+    add_test(NAME whatsui_fluent_drawer_visual_200dpi
+        COMMAND WhatsUIFluentDrawerVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_drawer_review_200dpi.ppm 2.0)
+    set_tests_properties(whatsui_fluent_drawer_visual whatsui_fluent_drawer_visual_125dpi
+        whatsui_fluent_drawer_visual_150dpi whatsui_fluent_drawer_visual_200dpi
         PROPERTIES LABELS "visual;software;fluent;drawer;dpi")
 
     add_executable(WhatsUIFluentAccordionVisualTests fluent_accordion_visual_tests.cpp)
@@ -354,7 +459,12 @@ if(TARGET WhatsCanvasSoftware)
         COMMAND WhatsUIFluentAccordionVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_accordion_review.ppm 1.0)
     add_test(NAME whatsui_fluent_accordion_visual_150dpi
         COMMAND WhatsUIFluentAccordionVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_accordion_review_150dpi.ppm 1.5)
-    set_tests_properties(whatsui_fluent_accordion_visual whatsui_fluent_accordion_visual_150dpi
+    add_test(NAME whatsui_fluent_accordion_visual_125dpi
+        COMMAND WhatsUIFluentAccordionVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_accordion_review_125dpi.ppm 1.25)
+    add_test(NAME whatsui_fluent_accordion_visual_200dpi
+        COMMAND WhatsUIFluentAccordionVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_accordion_review_200dpi.ppm 2.0)
+    set_tests_properties(whatsui_fluent_accordion_visual whatsui_fluent_accordion_visual_125dpi
+        whatsui_fluent_accordion_visual_150dpi whatsui_fluent_accordion_visual_200dpi
         PROPERTIES LABELS "visual;software;fluent;accordion;dpi")
 
     add_executable(WhatsUIFluentPersonaVisualTests fluent_persona_visual_tests.cpp)
@@ -364,7 +474,12 @@ if(TARGET WhatsCanvasSoftware)
         COMMAND WhatsUIFluentPersonaVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_persona_review.ppm 1.0)
     add_test(NAME whatsui_fluent_persona_visual_150dpi
         COMMAND WhatsUIFluentPersonaVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_persona_review_150dpi.ppm 1.5)
-    set_tests_properties(whatsui_fluent_persona_visual whatsui_fluent_persona_visual_150dpi
+    add_test(NAME whatsui_fluent_persona_visual_125dpi
+        COMMAND WhatsUIFluentPersonaVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_persona_review_125dpi.ppm 1.25)
+    add_test(NAME whatsui_fluent_persona_visual_200dpi
+        COMMAND WhatsUIFluentPersonaVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_persona_review_200dpi.ppm 2.0)
+    set_tests_properties(whatsui_fluent_persona_visual whatsui_fluent_persona_visual_125dpi
+        whatsui_fluent_persona_visual_150dpi whatsui_fluent_persona_visual_200dpi
         PROPERTIES LABELS "visual;software;fluent;persona;avatar;presence;dpi")
 
     add_executable(WhatsUIFluentDateTimeVisualTests fluent_date_time_visual_tests.cpp)
@@ -372,9 +487,14 @@ if(TARGET WhatsCanvasSoftware)
     target_compile_features(WhatsUIFluentDateTimeVisualTests PRIVATE cxx_std_17)
     add_test(NAME whatsui_fluent_date_time_visual
         COMMAND WhatsUIFluentDateTimeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_date_time_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_date_time_visual_125dpi
+        COMMAND WhatsUIFluentDateTimeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_date_time_review_125dpi.ppm 1.25)
     add_test(NAME whatsui_fluent_date_time_visual_150dpi
         COMMAND WhatsUIFluentDateTimeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_date_time_review_150dpi.ppm 1.5)
-    set_tests_properties(whatsui_fluent_date_time_visual whatsui_fluent_date_time_visual_150dpi
+    add_test(NAME whatsui_fluent_date_time_visual_200dpi
+        COMMAND WhatsUIFluentDateTimeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_date_time_review_200dpi.ppm 2.0)
+    set_tests_properties(whatsui_fluent_date_time_visual whatsui_fluent_date_time_visual_125dpi
+        whatsui_fluent_date_time_visual_150dpi whatsui_fluent_date_time_visual_200dpi
         PROPERTIES LABELS "visual;software;fluent;calendar;datepicker;timepicker;dpi")
 
     add_executable(WhatsUIFluentTableVisualTests fluent_table_visual_tests.cpp)
@@ -382,9 +502,14 @@ if(TARGET WhatsCanvasSoftware)
     target_compile_features(WhatsUIFluentTableVisualTests PRIVATE cxx_std_17)
     add_test(NAME whatsui_fluent_table_visual
         COMMAND WhatsUIFluentTableVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_table_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_table_visual_125dpi
+        COMMAND WhatsUIFluentTableVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_table_review_125dpi.ppm 1.25)
     add_test(NAME whatsui_fluent_table_visual_150dpi
         COMMAND WhatsUIFluentTableVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_table_review_150dpi.ppm 1.5)
-    set_tests_properties(whatsui_fluent_table_visual whatsui_fluent_table_visual_150dpi
+    add_test(NAME whatsui_fluent_table_visual_200dpi
+        COMMAND WhatsUIFluentTableVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_table_review_200dpi.ppm 2.0)
+    set_tests_properties(whatsui_fluent_table_visual whatsui_fluent_table_visual_125dpi
+        whatsui_fluent_table_visual_150dpi whatsui_fluent_table_visual_200dpi
         PROPERTIES LABELS "visual;software;fluent;table;datagrid;dpi")
 
     add_executable(WhatsUIFluentTreeVisualTests fluent_tree_visual_tests.cpp)
@@ -392,9 +517,14 @@ if(TARGET WhatsCanvasSoftware)
     target_compile_features(WhatsUIFluentTreeVisualTests PRIVATE cxx_std_17)
     add_test(NAME whatsui_fluent_tree_visual
         COMMAND WhatsUIFluentTreeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_tree_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_tree_visual_125dpi
+        COMMAND WhatsUIFluentTreeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_tree_review_125dpi.ppm 1.25)
     add_test(NAME whatsui_fluent_tree_visual_150dpi
         COMMAND WhatsUIFluentTreeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_tree_review_150dpi.ppm 1.5)
-    set_tests_properties(whatsui_fluent_tree_visual whatsui_fluent_tree_visual_150dpi
+    add_test(NAME whatsui_fluent_tree_visual_200dpi
+        COMMAND WhatsUIFluentTreeVisualTests ${CMAKE_CURRENT_BINARY_DIR}/fluent_tree_review_200dpi.ppm 2.0)
+    set_tests_properties(whatsui_fluent_tree_visual whatsui_fluent_tree_visual_125dpi
+        whatsui_fluent_tree_visual_150dpi whatsui_fluent_tree_visual_200dpi
         PROPERTIES LABELS "visual;software;fluent;tree;dpi")
 
     add_executable(WhatsUIFluentFeedbackVisualTests
@@ -491,10 +621,20 @@ if(TARGET WhatsCanvasSoftware)
     add_test(NAME whatsui_fluent_range_controls_visual
         COMMAND WhatsUIFluentRangeControlsVisualTests
             ${CMAKE_CURRENT_BINARY_DIR}/fluent_range_controls_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_range_controls_visual_125dpi
+        COMMAND WhatsUIFluentRangeControlsVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_range_controls_review_125dpi.ppm 1.25)
     add_test(NAME whatsui_fluent_range_controls_visual_150dpi
         COMMAND WhatsUIFluentRangeControlsVisualTests
             ${CMAKE_CURRENT_BINARY_DIR}/fluent_range_controls_review_150dpi.ppm 1.5)
-    set_tests_properties(whatsui_fluent_range_controls_visual whatsui_fluent_range_controls_visual_150dpi
+    add_test(NAME whatsui_fluent_range_controls_visual_200dpi
+        COMMAND WhatsUIFluentRangeControlsVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_range_controls_review_200dpi.ppm 2.0)
+    set_tests_properties(
+        whatsui_fluent_range_controls_visual
+        whatsui_fluent_range_controls_visual_125dpi
+        whatsui_fluent_range_controls_visual_150dpi
+        whatsui_fluent_range_controls_visual_200dpi
         PROPERTIES LABELS "visual;software;fluent;divider;slider;progress;radio;switch;dpi")
 
     add_executable(WhatsUIFluentRatingImageVisualTests
@@ -508,7 +648,16 @@ if(TARGET WhatsCanvasSoftware)
     add_test(NAME whatsui_fluent_rating_image_visual_150dpi
         COMMAND WhatsUIFluentRatingImageVisualTests
             ${CMAKE_CURRENT_BINARY_DIR}/fluent_rating_image_review_150dpi.ppm 1.5)
-    set_tests_properties(whatsui_fluent_rating_image_visual whatsui_fluent_rating_image_visual_150dpi PROPERTIES
+    add_test(NAME whatsui_fluent_rating_image_visual_125dpi
+        COMMAND WhatsUIFluentRatingImageVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_rating_image_review_125dpi.ppm 1.25)
+    add_test(NAME whatsui_fluent_rating_image_visual_200dpi
+        COMMAND WhatsUIFluentRatingImageVisualTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_rating_image_review_200dpi.ppm 2.0)
+    set_tests_properties(whatsui_fluent_rating_image_visual
+        whatsui_fluent_rating_image_visual_125dpi
+        whatsui_fluent_rating_image_visual_150dpi
+        whatsui_fluent_rating_image_visual_200dpi PROPERTIES
         LABELS "visual;software;fluent;rating;image")
 
     add_executable(WhatsUIFluentBadgeVisualTests
@@ -541,8 +690,20 @@ if(TARGET WhatsCanvasSoftware)
     target_compile_features(WhatsUIFluentCardTests PRIVATE cxx_std_17)
     add_test(NAME whatsui_fluent_card_tests
         COMMAND WhatsUIFluentCardTests
-            ${CMAKE_CURRENT_BINARY_DIR}/fluent_card_review.ppm)
-    set_tests_properties(whatsui_fluent_card_tests PROPERTIES LABELS "card;visual;software;fluent")
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_card_review.ppm 1.0)
+    add_test(NAME whatsui_fluent_card_tests_125dpi
+        COMMAND WhatsUIFluentCardTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_card_review_125dpi.ppm 1.25)
+    add_test(NAME whatsui_fluent_card_tests_150dpi
+        COMMAND WhatsUIFluentCardTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_card_review_150dpi.ppm 1.5)
+    add_test(NAME whatsui_fluent_card_tests_200dpi
+        COMMAND WhatsUIFluentCardTests
+            ${CMAKE_CURRENT_BINARY_DIR}/fluent_card_review_200dpi.ppm 2.0)
+    set_tests_properties(whatsui_fluent_card_tests
+        whatsui_fluent_card_tests_125dpi whatsui_fluent_card_tests_150dpi
+        whatsui_fluent_card_tests_200dpi
+        PROPERTIES LABELS "card;visual;software;fluent;dpi")
 
     add_executable(WhatsUIFluentComponentVisualMatrixTests
         fluent_component_visual_matrix_tests.cpp
@@ -721,6 +882,29 @@ if(TARGET WhatsCanvasSoftware)
         set_tests_properties(
             whatsui_fluent_input_textarea_${scale_suffix}dpi
             PROPERTIES LABELS "input;textarea;text;visual;software;fluent;dpi;animation"
+        )
+    endforeach()
+
+    add_executable(WhatsUIFluentButtonVisualTests
+        fluent_button_visual_tests.cpp
+    )
+    target_link_libraries(WhatsUIFluentButtonVisualTests
+        PRIVATE
+            WhatsUI::WhatsUI
+            WhatsCanvas::Software
+    )
+    target_compile_features(WhatsUIFluentButtonVisualTests PRIVATE cxx_std_17)
+    foreach(scale IN ITEMS 1.0 1.25 1.5 2.0)
+        string(REPLACE "." "" scale_suffix "${scale}")
+        add_test(
+            NAME whatsui_fluent_button_${scale_suffix}dpi
+            COMMAND WhatsUIFluentButtonVisualTests
+                ${CMAKE_CURRENT_BINARY_DIR}/fluent_button_${scale_suffix}dpi.ppm
+                ${scale}
+        )
+        set_tests_properties(
+            whatsui_fluent_button_${scale_suffix}dpi
+            PROPERTIES LABELS "button;visual;software;fluent;dpi;states;focus"
         )
     endforeach()
 endif()

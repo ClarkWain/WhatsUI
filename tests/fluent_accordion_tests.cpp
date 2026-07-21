@@ -39,6 +39,8 @@ void testInputAndFocus()
     auto& third = accordion.addItem("Third", "Body");
     disabled.setEnabled(false);
     accordion.layout({0, 0, 360, 220});
+    expect(first.bounds().height == 44.0f,
+           "Medium Accordion headers must use the Fluent 44-DIP container");
     expect(first.onKeyEvent({0, wui::KeyAction::Down, 32}) && first.isExpanded(),
            "Space on a focused AccordionItem must toggle its disclosure");
     expect(first.onKeyEvent({0, wui::KeyAction::Down, 40}) && accordion.focusedIndex() == 2,

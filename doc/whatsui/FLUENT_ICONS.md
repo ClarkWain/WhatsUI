@@ -12,6 +12,20 @@ renderer’s color, clipping, and baseline machinery. The default set replaces
 ASCII stand-ins and one-off geometry such as `x`, `+`, slash separators, and
 hand-built chevrons.
 
+### Visible-ink centring
+
+An icon font's em box is not its visible vector outline. Fluent System Icons
+reserve asymmetric vertical font space, so centring only the font
+ascent/descent box placed a 20-DIP Star or Delete outline 2 DIP above the
+centre of a 32-DIP IconButton. `drawIcon()` applies the font's 10% semantic-size
+optical correction after baseline centring. This shared correction covers
+standalone Icon, IconButton, Button and ToggleButton icon content rather than
+adding per-widget offsets.
+
+The native OpenGL Button visual gate measures the actual rasterized Star and
+Delete ink at 100%, 125%, 150%, and 200%. Both axes must remain within one
+physical pixel of the IconButton centre.
+
 The supported optical sizes are 16, 20, and 24 DIP. Choose the size matching
 the component slot instead of scaling a single glyph:
 

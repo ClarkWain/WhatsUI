@@ -11,8 +11,10 @@
 #include "wui/theme.h"
 #include "wui/theme_extensions.h"
 
+#include "button_visuals.h"
+
 namespace wui {
-namespace {
+namespace button_visuals {
 
 [[nodiscard]] float buttonHeight(const Theme& current, ButtonSize size) noexcept
 {
@@ -32,19 +34,265 @@ namespace {
     }
 }
 
-[[nodiscard]] const TextStyleToken& buttonTextStyle(const Theme& current,
-                                                    ButtonSize size) noexcept
+[[nodiscard]] TextStyleToken controlTextStyle(const Theme& current,
+                                              TextStyleToken style) noexcept
 {
-    // Fluent v9: small = 12 Regular, medium = 14 Semibold,
-    // large = 16 Semibold.
+    if (!current.typography.familyControls.empty()) {
+        style.family = current.typography.familyControls;
+    }
+    return style;
+}
+
+[[nodiscard]] TextStyleToken buttonTextStyle(const Theme& current,
+                                             ButtonSize size) noexcept
+{
+    // Fluent Web Button: small = 12/16 Regular, medium = 14/20 Semibold,
+    // large = 16/22 Semibold. The reference component uses classic Segoe UI.
     switch (size) {
     case ButtonSize::Small:
-        return current.typography.caption1;
+        return controlTextStyle(current, current.typography.caption1);
     case ButtonSize::Large:
-        return current.typography.subtitle2;
+        return controlTextStyle(current, current.typography.subtitle2);
     case ButtonSize::Medium:
     default:
-        return current.typography.body1Strong;
+        return controlTextStyle(current, current.typography.body1Strong);
+    }
+}
+
+[[nodiscard]] constexpr Color transparent() noexcept
+{
+    return {0, 0, 0, 0};
+}
+
+// Figma wraps a Button label in a container with 2 DIP bottom padding.
+// Centering that wrapper shifts the actual line box upward by 1 DIP.
+[[nodiscard]] constexpr float buttonLabelOpticalOffset() noexcept
+{
+    return -1.0f;
+}
+
+[[nodiscard]] float buttonHorizontalPadding(const Theme& current,
+                                            ButtonSize size) noexcept
+{
+    switch (size) {
+    case ButtonSize::Small: return current.spacing.horizontal.s;
+    case ButtonSize::Large: return current.spacing.horizontal.l;
+    case ButtonSize::Medium:
+    default: return current.spacing.horizontal.m;
+    }
+}
+
+[[nodiscard]] float buttonContentGap(const Theme& current,
+                                     ButtonSize size) noexcept
+{
+    return size == ButtonSize::Small ? current.spacing.horizontal.xs
+                                     : current.spacing.horizontal.sNudge;
+}
+
+[[nodiscard]] IconSize buttonIconSize(ButtonSize size) noexcept
+{
+    switch (size) {
+    case ButtonSize::Small: return IconSize::Size16;
+    case ButtonSize::Large: return IconSize::Size24;
+    case ButtonSize::Medium:
+    default: return IconSize::Size20;
+    }
+}
+
+[[nodiscard]] float iconLogicalSize(IconSize size) noexcept
+{
+    return static_cast<float>(static_cast<std::uint8_t>(size));
+}
+
+[[nodiscard]] float measuredButtonTextWidth(const std::string& label,
+                                            const TextStyleToken& style)
+{
+    if (const TextMeasurer* measurer = textMeasurer()) {
+        return measurer->measureText(label, style.size, style.weight,
+                                     style.family).width;
+    }
+    return static_cast<float>(label.size()) * (style.size * 0.56f);
+}
+
+[[nodiscard]] ButtonVisual resolveButtonVisual(
+    const Theme& current, ButtonAppearance appearance, bool disabled,
+    bool selected, ControlVisualStates states) noexcept
+{
+    const bool pressed =
+        (states & toMask(ControlVisualState::Pressed)) != 0;
+    const bool hovered =
+        (states & toMask(ControlVisualState::Hovered)) != 0;
+    ButtonVisual visual{current.colors.neutralBackground1.rest,
+                        current.colors.neutralForeground1,
+                        current.colors.neutralStroke1, true,
+                        current.stroke.thin};
+
+    switch (appearance) {
+    case ButtonAppearance::Primary:
+        visual.background = current.colors.brandBackground.rest;
+        visual.foreground = current.colors.onBrand;
+        visual.hasBorder = false;
+        break;
+    case ButtonAppearance::Danger:
+        visual.background = current.colors.dangerBackground.rest;
+        visual.foreground = current.colors.onBrand;
+        visual.hasBorder = false;
+        break;
+    case ButtonAppearance::Outline:
+        visual.background = transparent();
+        break;
+    case ButtonAppearance::Subtle:
+    case ButtonAppearance::Transparent:
+        visual.background = transparent();
+        visual.foreground = current.colors.neutralForeground2;
+        visual.hasBorder = false;
+        break;
+    case ButtonAppearance::Secondary:
+    default:
+        break;
+    }
+
+    if (disabled) {
+        visual.foreground = current.colors.neutralForegroundDisabled;
+        visual.border = current.colors.neutralStrokeDisabled;
+        if (appearance == ButtonAppearance::Primary ||
+            appearance == ButtonAppearance::Danger ||
+            appearance == ButtonAppearance::Secondary) {
+            visual.background = current.colors.neutralBackgroundDisabled;
+        } else {
+            visual.background = transparent();
+        }
+        return visual;
+    }
+
+    if (pressed) {
+        switch (appearance) {
+        case ButtonAppearance::Primary:
+            visual.background = current.colors.brandBackground.pressed;
+            break;
+        case ButtonAppearance::Danger:
+            visual.background = current.colors.dangerBackground.pressed;
+            break;
+        case ButtonAppearance::Secondary:
+            visual.background = current.colors.neutralBackground1.pressed;
+            visual.border = current.colors.neutralStroke1Pressed;
+            break;
+        case ButtonAppearance::Outline:
+            visual.border = current.colors.neutralStroke1Pressed;
+            break;
+        case ButtonAppearance::Subtle:
+            visual.background = current.colors.neutralBackground1.pressed;
+            visual.foreground = current.colors.neutralForeground1;
+            break;
+        case ButtonAppearance::Transparent:
+            visual.foreground = current.colors.brandBackground.hover;
+            break;
+        }
+        return visual;
+    }
+
+    if (hovered) {
+        switch (appearance) {
+        case ButtonAppearance::Primary:
+            visual.background = current.colors.brandBackground.hover;
+            break;
+        case ButtonAppearance::Danger:
+            visual.background = current.colors.dangerBackground.hover;
+            break;
+        case ButtonAppearance::Secondary:
+            visual.background = current.colors.neutralBackground1.hover;
+            visual.border = current.colors.neutralStroke1Hover;
+            break;
+        case ButtonAppearance::Outline:
+            visual.border = current.colors.neutralStroke1Hover;
+            break;
+        case ButtonAppearance::Subtle:
+            visual.background = current.colors.neutralBackground1.hover;
+            visual.foreground = current.colors.neutralForeground1;
+            break;
+        case ButtonAppearance::Transparent:
+            visual.foreground = current.colors.brandForeground1;
+            break;
+        }
+        return visual;
+    }
+
+    if (selected) {
+        switch (appearance) {
+        case ButtonAppearance::Primary:
+            visual.background = current.colors.brandBackground.selected;
+            break;
+        case ButtonAppearance::Danger:
+            visual.background = current.colors.dangerBackground.selected;
+            break;
+        case ButtonAppearance::Secondary:
+            visual.background = current.colors.neutralBackground1.selected;
+            visual.border = current.colors.neutralStroke1Selected;
+            break;
+        case ButtonAppearance::Outline:
+            visual.border = current.colors.neutralStroke1Selected;
+            visual.borderWidth = current.stroke.thick;
+            break;
+        case ButtonAppearance::Subtle:
+            visual.background = current.colors.neutralBackground1.selected;
+            visual.foreground = current.colors.neutralForeground1;
+            break;
+        case ButtonAppearance::Transparent:
+            visual.foreground = current.colors.brandForeground1;
+            break;
+        }
+    }
+    return visual;
+}
+
+void drawButtonContent(PaintContext& context, const RectF& bounds,
+                       const std::string& label,
+                       const std::optional<IconName>& icon,
+                       IconStyle iconStyle, ButtonIconPosition iconPosition,
+                       bool iconOnly, ButtonSize size, Color foreground,
+                       const Theme& current)
+{
+    const RectF alignedBounds = context.snapRectEdges(bounds);
+    const bool hasIcon = icon.has_value();
+    const bool showText = !label.empty() && (!iconOnly || !hasIcon);
+    const auto textStyle = buttonTextStyle(current, size);
+    const float textWidth =
+        showText ? measuredButtonTextWidth(label, textStyle) : 0.0f;
+    const IconSize semanticIconSize = buttonIconSize(size);
+    const float iconSize =
+        hasIcon ? iconLogicalSize(semanticIconSize) : 0.0f;
+    const float gap =
+        hasIcon && showText ? buttonContentGap(current, size) : 0.0f;
+    const float contentWidth = textWidth + iconSize + gap;
+    float cursor =
+        alignedBounds.x +
+        std::max(0.0f, (alignedBounds.width - contentWidth) * 0.5f);
+
+    const auto paintIcon = [&](float x) {
+        if (!icon) return;
+        const RectF iconBounds{x,
+                               alignedBounds.y +
+                                   (alignedBounds.height - iconSize) * 0.5f,
+                               iconSize, iconSize};
+        drawIcon(context, *icon, iconBounds, foreground, semanticIconSize,
+                 iconStyle);
+    };
+
+    if (hasIcon && iconPosition == ButtonIconPosition::Before) {
+        paintIcon(cursor);
+        cursor += iconSize + gap;
+    }
+    if (showText) {
+        context.drawText(
+            label, cursor,
+            context.centeredTextBottom(label, alignedBounds, textStyle.size,
+                                       textStyle.weight, textStyle.family) +
+                buttonLabelOpticalOffset(),
+            textStyle.size, foreground, textStyle.weight, textStyle.family);
+        cursor += textWidth + gap;
+    }
+    if (hasIcon && iconPosition == ButtonIconPosition::After) {
+        paintIcon(cursor);
     }
 }
 
@@ -52,19 +300,54 @@ void drawFocusRing(PaintContext& context, const RectF& bounds, const Theme& curr
 {
     if (!focused) return;
     const float inset = current.controls.focusInset;
+    const float outerStroke =
+        context.snapStrokeWidth(current.stroke.thick);
+    const float innerStroke =
+        context.snapStrokeWidth(current.stroke.thin);
     context.strokeRoundRect({bounds.x - inset, bounds.y - inset,
                              bounds.width + inset * 2.0f, bounds.height + inset * 2.0f},
-                            radius + inset, current.stroke.thick,
+                            radius + inset, outerStroke,
                             current.colors.strokeFocusOuter);
     const float innerInset =
-        std::max(0.0f, inset - current.stroke.thin * 0.5f);
+        std::max(0.0f, inset - innerStroke * 0.5f);
     context.strokeRoundRect(
         {bounds.x - innerInset, bounds.y - innerInset,
          bounds.width + innerInset * 2.0f,
          bounds.height + innerInset * 2.0f},
-        radius + innerInset, current.stroke.thin,
+        radius + innerInset, innerStroke,
         current.colors.strokeFocusInner);
 }
+
+ButtonVisual paintButtonSurface(
+    PaintContext& context, const RectF& bounds, const Theme& current,
+    ButtonAppearance appearance, bool disabled, bool selected,
+    ControlVisualStates states, ButtonShape shape)
+{
+    const RectF alignedBounds = context.snapRectEdges(bounds);
+    const bool focusVisible =
+        !disabled &&
+        (states & toMask(ControlVisualState::FocusVisible)) != 0;
+    const auto visual = resolveButtonVisual(
+        current, appearance, disabled, selected, states);
+    const float radius =
+        buttonRadius(current, shape, alignedBounds.height);
+    drawFocusRing(context, alignedBounds, current, focusVisible, radius);
+    if (visual.hasBorder) {
+        context.fillStrokeRoundRect(
+            alignedBounds, radius,
+            context.snapStrokeWidth(visual.borderWidth),
+            visual.background, visual.border);
+    } else if (visual.background.a != 0) {
+        context.fillRoundRect(alignedBounds, radius, visual.background);
+    }
+    return visual;
+}
+
+} // namespace button_visuals
+
+namespace {
+
+using namespace button_visuals;
 
 [[nodiscard]] float checkboxLabelWidth(const std::string& label, const TextStyleToken& style)
 {
@@ -88,6 +371,8 @@ void drawFocusRing(PaintContext& context, const RectF& bounds, const Theme& curr
 }
 
 } // namespace
+
+using namespace button_visuals;
 
 Button::Button(std::string label)
     : label_(std::move(label))
@@ -122,6 +407,7 @@ void Button::setVariant(ButtonVariant variant) noexcept
     variant_ = variant;
     switch (variant) {
     case ButtonVariant::Primary: appearance_ = ButtonAppearance::Primary; break;
+    case ButtonVariant::Secondary: appearance_ = ButtonAppearance::Secondary; break;
     // Legacy Ghost rendered as a bordered secondary action, so it maps to
     // Outline rather than the borderless Fluent Subtle appearance.
     case ButtonVariant::Ghost: appearance_ = ButtonAppearance::Outline; break;
@@ -141,6 +427,7 @@ void Button::setAppearance(ButtonAppearance appearance) noexcept
     switch (appearance) {
     case ButtonAppearance::Primary: variant_ = ButtonVariant::Primary; break;
     case ButtonAppearance::Danger: variant_ = ButtonVariant::Danger; break;
+    case ButtonAppearance::Secondary: variant_ = ButtonVariant::Secondary; break;
     default: variant_ = ButtonVariant::Ghost; break;
     }
     markDirty(DirtyFlag::Paint);
@@ -166,104 +453,101 @@ void Button::setShape(ButtonShape shape) noexcept
 
 ButtonShape Button::shape() const noexcept { return shape_; }
 
+Button& Button::icon(IconName value) noexcept
+{
+    setIcon(value);
+    return *this;
+}
+
+Button& Button::iconStyle(IconStyle value) noexcept
+{
+    setIconStyle(value);
+    return *this;
+}
+
+Button& Button::iconPosition(ButtonIconPosition value) noexcept
+{
+    setIconPosition(value);
+    return *this;
+}
+
+Button& Button::iconOnly(bool value) noexcept
+{
+    setIconOnly(value);
+    return *this;
+}
+
+Button& Button::clearIcon() noexcept
+{
+    setIcon(std::nullopt);
+    return *this;
+}
+
+void Button::setIcon(std::optional<IconName> value) noexcept
+{
+    if (icon_ == value) return;
+    icon_ = value;
+    markDirty(DirtyFlag::Layout);
+}
+
+void Button::setIconStyle(IconStyle value) noexcept
+{
+    if (iconStyle_ == value) return;
+    iconStyle_ = value;
+    markDirty(DirtyFlag::Paint);
+}
+
+void Button::setIconPosition(ButtonIconPosition value) noexcept
+{
+    if (iconPosition_ == value) return;
+    iconPosition_ = value;
+    markDirty(DirtyFlag::Layout);
+}
+
+void Button::setIconOnly(bool value) noexcept
+{
+    if (iconOnly_ == value) return;
+    iconOnly_ = value;
+    markDirty(DirtyFlag::Layout);
+}
+
+std::optional<IconName> Button::icon() const noexcept { return icon_; }
+IconStyle Button::iconStyle() const noexcept { return iconStyle_; }
+ButtonIconPosition Button::iconPosition() const noexcept
+{
+    return iconPosition_;
+}
+bool Button::isIconOnly() const noexcept { return iconOnly_; }
+
 SizeF Button::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const auto& textStyle = buttonTextStyle(current, size_);
-    float textWidth = static_cast<float>(label_.size()) * (textStyle.size * 0.56f);
-    if (const TextMeasurer* measurer = textMeasurer()) {
-        textWidth = measurer->measureText(label_, textStyle.size,
-                                          textStyle.weight).width;
-    }
     const float height = buttonHeight(current, size_);
-    const float horizontalPadding = size_ == ButtonSize::Small ? current.spacing.horizontal.s
-                                  : size_ == ButtonSize::Large ? current.spacing.horizontal.l
-                                                               : current.spacing.horizontal.m;
-    return constraints.clamp({textWidth + horizontalPadding * 2.0f, height});
+    if (iconOnly_ && icon_) {
+        return constraints.clamp({height, height});
+    }
+    const float textWidth = measuredButtonTextWidth(label_, textStyle);
+    const float iconWidth =
+        icon_ ? iconLogicalSize(buttonIconSize(size_)) : 0.0f;
+    const float gap =
+        icon_ && !label_.empty() ? buttonContentGap(current, size_) : 0.0f;
+    return constraints.clamp(
+        {textWidth + iconWidth + gap +
+             buttonHorizontalPadding(current, size_) * 2.0f,
+         height});
 }
 
 void Button::paint(PaintContext& context)
 {
     const Theme& current = theme();
-    ColorTokens::Interaction ramp = current.colors.neutralBackground1;
-    Color background = ramp.rest;
-    Color foreground = current.colors.neutralForeground1;
-    bool hasBorder = true;
-    switch (appearance_) {
-    case ButtonAppearance::Primary:
-        ramp = current.colors.brandBackground;
-        background = ramp.rest;
-        foreground = current.colors.onBrand;
-        hasBorder = false;
-        break;
-    case ButtonAppearance::Danger:
-        ramp = current.colors.dangerBackground;
-        background = ramp.rest;
-        foreground = current.colors.onBrand;
-        hasBorder = false;
-        break;
-    case ButtonAppearance::Outline:
-        hasBorder = true;
-        break;
-    case ButtonAppearance::Subtle:
-        hasBorder = false;
-        background = {0, 0, 0, 0};
-        break;
-    case ButtonAppearance::Transparent:
-        hasBorder = false;
-        background = {0, 0, 0, 0};
-        ramp = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}};
-        break;
-    case ButtonAppearance::Secondary:
-    default:
-        ramp = current.colors.neutralBackground1;
-        background = ramp.rest;
-        break;
-    }
     const bool disabled = !isEnabled();
-    const bool focused = !disabled && (visualStates() & toMask(ControlVisualState::Focused)) != 0;
-    if (disabled) {
-        background = current.colors.neutralBackground1.rest;
-        foreground = current.colors.neutralForegroundDisabled;
-    } else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) {
-        background = ramp.pressed;
-    } else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) {
-        background = ramp.hover;
-    }
-    // The paired focus ring is painted underneath the control. Borderless
-    // appearances still need an opaque rest surface while focused, otherwise
-    // the inner focus layer becomes the button's visible fill.
-    if (focused && background.a == 0) {
-        background = current.colors.neutralBackground1.rest;
-    }
-    // A two-pass rounded rectangle provides a crisp one-pixel Fluent-style
-    // stroke without exposing backend-specific stroke APIs.
-    const float radius = buttonRadius(current, shape_, bounds().height);
-    drawFocusRing(context, bounds(), current, focused, radius);
-    if (hasBorder && !disabled) {
-        context.fillStrokeRoundRect(bounds(), radius, current.stroke.thin,
-                                    background, current.colors.neutralStroke1);
-    } else if (background.a != 0) {
-        context.fillRoundRect(bounds(), radius, background);
-    }
-    if (!label_.empty()) {
-        const auto& textStyle = buttonTextStyle(current, size_);
-        float textWidth =
-            static_cast<float>(label_.size()) * (textStyle.size * 0.56f);
-        if (const TextMeasurer* measurer = textMeasurer()) {
-            textWidth =
-                measurer->measureText(label_, textStyle.size,
-                                      textStyle.weight).width;
-        }
-        context.drawText(
-            label_,
-            bounds().x +
-                std::max(0.0f, (bounds().width - textWidth) * 0.5f),
-            context.centeredTextBottom(label_, bounds(), textStyle.size,
-                                       textStyle.weight,
-                                       textStyle.family),
-            textStyle.size, foreground, textStyle.weight, textStyle.family);
-    }
+    const auto visual = paintButtonSurface(
+        context, bounds(), current, appearance_, disabled, false,
+        visualStates(), shape_);
+    drawButtonContent(context, bounds(), label_, icon_, iconStyle_,
+                      iconPosition_, iconOnly_, size_, visual.foreground,
+                      current);
     ContainerNode::paint(context);
     clearDirty(DirtyFlag::Paint);
 }
@@ -359,9 +643,13 @@ SizeF CompoundButton::measure(const Constraints& constraints) const
         }
         return static_cast<float>(text.size()) * style.size * 0.56f;
     };
-    const float width = std::max(textWidth(label_, current.typography.body1Strong),
-                                 textWidth(secondaryContent_, current.typography.caption1));
-    const float padding = size_ == ButtonSize::Small ? current.spacing.horizontal.s : current.spacing.horizontal.m;
+    const auto titleStyle =
+        controlTextStyle(current, current.typography.body1Strong);
+    const auto descriptionStyle =
+        controlTextStyle(current, current.typography.caption1);
+    const float width = std::max(textWidth(label_, titleStyle),
+                                 textWidth(secondaryContent_, descriptionStyle));
+    const float padding = buttonHorizontalPadding(current, size_);
     return constraints.clamp({width + padding * 2.0f, compoundHeight(size_)});
 }
 
@@ -369,45 +657,35 @@ void CompoundButton::paint(PaintContext& context)
 {
     const auto& current = theme();
     const bool disabled = !isEnabled();
-    const bool focused = !disabled && (visualStates() & toMask(ControlVisualState::Focused)) != 0;
-    Color background = current.colors.neutralBackground1.rest;
-    Color primary = current.colors.neutralForeground1;
-    Color secondary = current.colors.neutralForeground3;
-    bool border = true;
-    const ColorTokens::Interaction* ramp = &current.colors.neutralBackground1;
-    if (appearance_ == ButtonAppearance::Primary || appearance_ == ButtonAppearance::Danger) {
-        ramp = appearance_ == ButtonAppearance::Primary ? &current.colors.brandBackground : &current.colors.dangerBackground;
-        background = ramp->rest; primary = secondary = current.colors.onBrand; border = false;
-    } else if (appearance_ == ButtonAppearance::Subtle || appearance_ == ButtonAppearance::Transparent) {
-        background = {0, 0, 0, 0}; border = false;
-    }
-    if (disabled) { primary = secondary = current.colors.neutralForegroundDisabled; }
-    else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) background = ramp->pressed;
-    else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) background = ramp->hover;
-    const float radius = buttonRadius(current, shape_, bounds().height);
-    drawFocusRing(context, bounds(), current, focused, radius);
-    if (border) {
-        context.fillStrokeRoundRect(bounds(), radius, current.stroke.thin,
-                                    background,
-                                    current.colors.neutralStroke1);
-    }
-    else if (background.a != 0) context.fillRoundRect(bounds(), radius, background);
-    const float padding = size_ == ButtonSize::Small ? current.spacing.horizontal.s : current.spacing.horizontal.m;
-    const float titleHeight = current.typography.body1Strong.lineHeight;
-    const float descriptionHeight = secondaryContent_.empty() ? 0.0f : current.typography.caption1.lineHeight;
+    const auto visual = paintButtonSurface(
+        context, bounds(), current, appearance_, disabled, false,
+        visualStates(), shape_);
+    Color primary = visual.foreground;
+    Color secondary =
+        disabled ? current.colors.neutralForegroundDisabled
+        : appearance_ == ButtonAppearance::Primary ||
+                appearance_ == ButtonAppearance::Danger
+            ? visual.foreground
+            : current.colors.neutralForeground3;
+    const float padding = buttonHorizontalPadding(current, size_);
+    const auto titleStyle =
+        controlTextStyle(current, current.typography.body1Strong);
+    const auto descriptionStyle =
+        controlTextStyle(current, current.typography.caption1);
+    const float titleHeight = titleStyle.lineHeight;
+    const float descriptionHeight =
+        secondaryContent_.empty() ? 0.0f : descriptionStyle.lineHeight;
     const float blockHeight = titleHeight + descriptionHeight;
     const float startY = bounds().y + std::max(0.0f, (bounds().height - blockHeight) * 0.5f);
     const RectF titleBox{bounds().x + padding, startY,
                          std::max(0.0f, bounds().width - padding * 2.0f),
                          titleHeight};
-    const auto& titleStyle = current.typography.body1Strong;
     context.drawText(label_, titleBox.x,
                      context.centeredTextBottom(label_, titleBox,
                                                 titleStyle.size, titleStyle.weight,
                                                 titleStyle.family),
                      titleStyle.size, primary, titleStyle.weight, titleStyle.family);
     if (!secondaryContent_.empty()) {
-        const auto& descriptionStyle = current.typography.caption1;
         const RectF box{titleBox.x, startY + titleHeight, titleBox.width,
                         descriptionHeight};
         context.drawText(secondaryContent_, box.x,
@@ -468,62 +746,104 @@ void ToggleButton::setSize(ButtonSize value) noexcept { if (size_ != value) { si
 ButtonSize ToggleButton::size() const noexcept { return size_; }
 void ToggleButton::setShape(ButtonShape value) noexcept { if (shape_ != value) { shape_ = value; markDirty(DirtyFlag::Paint); } }
 ButtonShape ToggleButton::shape() const noexcept { return shape_; }
+void ToggleButton::setAppearance(ButtonAppearance value) noexcept
+{
+    if (appearance_ == value) return;
+    appearance_ = value;
+    markDirty(DirtyFlag::Paint);
+}
+ButtonAppearance ToggleButton::appearance() const noexcept
+{
+    return appearance_;
+}
+ToggleButton& ToggleButton::icon(IconName value) noexcept
+{
+    setIcon(value);
+    return *this;
+}
+ToggleButton& ToggleButton::iconStyle(IconStyle value) noexcept
+{
+    setIconStyle(value);
+    return *this;
+}
+ToggleButton& ToggleButton::iconPosition(ButtonIconPosition value) noexcept
+{
+    setIconPosition(value);
+    return *this;
+}
+ToggleButton& ToggleButton::iconOnly(bool value) noexcept
+{
+    setIconOnly(value);
+    return *this;
+}
+ToggleButton& ToggleButton::clearIcon() noexcept
+{
+    setIcon(std::nullopt);
+    return *this;
+}
+void ToggleButton::setIcon(std::optional<IconName> value) noexcept
+{
+    if (icon_ == value) return;
+    icon_ = value;
+    markDirty(DirtyFlag::Layout);
+}
+void ToggleButton::setIconStyle(IconStyle value) noexcept
+{
+    if (iconStyle_ == value) return;
+    iconStyle_ = value;
+    markDirty(DirtyFlag::Paint);
+}
+void ToggleButton::setIconPosition(ButtonIconPosition value) noexcept
+{
+    if (iconPosition_ == value) return;
+    iconPosition_ = value;
+    markDirty(DirtyFlag::Layout);
+}
+void ToggleButton::setIconOnly(bool value) noexcept
+{
+    if (iconOnly_ == value) return;
+    iconOnly_ = value;
+    markDirty(DirtyFlag::Layout);
+}
+std::optional<IconName> ToggleButton::icon() const noexcept { return icon_; }
+IconStyle ToggleButton::iconStyle() const noexcept { return iconStyle_; }
+ButtonIconPosition ToggleButton::iconPosition() const noexcept
+{
+    return iconPosition_;
+}
+bool ToggleButton::isIconOnly() const noexcept { return iconOnly_; }
 
 SizeF ToggleButton::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const auto& textStyle = buttonTextStyle(current, size_);
-    float width =
-        static_cast<float>(label_.size()) * textStyle.size * 0.56f;
-    if (const TextMeasurer* measurer = textMeasurer()) {
-        width =
-            measurer->measureText(label_, textStyle.size,
-                                  textStyle.weight).width;
+    const float height = buttonHeight(current, size_);
+    if (iconOnly_ && icon_) {
+        return constraints.clamp({height, height});
     }
-    const float padding = size_ == ButtonSize::Small ? current.spacing.horizontal.s
-                        : size_ == ButtonSize::Large ? current.spacing.horizontal.l : current.spacing.horizontal.m;
-    return constraints.clamp({width + padding * 2.0f, buttonHeight(current, size_)});
+    const float textWidth = measuredButtonTextWidth(label_, textStyle);
+    const float iconWidth =
+        icon_ ? iconLogicalSize(buttonIconSize(size_)) : 0.0f;
+    const float gap =
+        icon_ && !label_.empty() ? buttonContentGap(current, size_) : 0.0f;
+    return constraints.clamp(
+        {textWidth + iconWidth + gap +
+             buttonHorizontalPadding(current, size_) * 2.0f,
+         height});
 }
 
 void ToggleButton::paint(PaintContext& context)
 {
     const auto& current = theme();
     const bool enabled = isEnabled();
-    const bool focused = enabled && (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     const bool selected = isChecked();
-    const auto& ramp = selected ? current.colors.brandBackground : current.colors.neutralBackground1;
-    Color background = selected ? ramp.rest : current.colors.neutralBackground1.rest;
-    Color foreground = selected ? current.colors.onBrand : current.colors.neutralForeground1;
-    if (!enabled) {
-        background = current.colors.neutralBackground1.rest;
-        foreground = current.colors.neutralForegroundDisabled;
-    } else if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) {
-        background = ramp.pressed;
-    } else if ((visualStates() & toMask(ControlVisualState::Hovered)) != 0) {
-        background = ramp.hover;
-    }
-    const float radius = buttonRadius(current, shape_, bounds().height);
-    drawFocusRing(context, bounds(), current, focused, radius);
-    const Color border = selected ? background : current.colors.neutralStroke1;
-    context.fillStrokeRoundRect(bounds(), radius, current.stroke.thin,
-                                background, border);
-    if (!label_.empty()) {
-        const auto& textStyle = buttonTextStyle(current, size_);
-        float width =
-            static_cast<float>(label_.size()) * textStyle.size * 0.56f;
-        if (const TextMeasurer* measurer = textMeasurer()) {
-            width =
-                measurer->measureText(label_, textStyle.size,
-                                      textStyle.weight).width;
-        }
-        context.drawText(
-            label_,
-            bounds().x + std::max(0.0f, (bounds().width - width) * 0.5f),
-            context.centeredTextBottom(label_, bounds(), textStyle.size,
-                                       textStyle.weight,
-                                       textStyle.family),
-            textStyle.size, foreground, textStyle.weight, textStyle.family);
-    }
+    const auto visual = paintButtonSurface(
+        context, bounds(), current, appearance_, !enabled, selected,
+        visualStates(), shape_);
+    drawButtonContent(context, bounds(), label_, icon_,
+                      selected ? IconStyle::Filled : iconStyle_,
+                      iconPosition_, iconOnly_, size_, visual.foreground,
+                      current);
     clearDirty(DirtyFlag::Paint);
 }
 
@@ -787,43 +1107,40 @@ void Checkbox::paint(PaintContext& context)
     const RectF indicator{leadingX + (hitSize - indicatorSize) * 0.5f,
                           indicatorY,
                           indicatorSize, indicatorSize};
+    const RectF renderedIndicator = context.snapRectEdges(indicator);
     const float radius = shape_ == CheckboxShape::Circular
-        ? indicatorSize * 0.5f
+        ? std::min(renderedIndicator.width, renderedIndicator.height) * 0.5f
         : current.radius.small;
     // Fluent exposes a root focus-within outline, but only in keyboard
     // focus-visible modality. Pointer activation retains logical focus with
     // no persistent black frame around either the indicator or label.
     drawFocusRing(context, bounds(), current, focusVisible, current.radius.small);
     if (checked && enabled) {
-        context.fillRoundRect(indicator, radius, box);
+        context.fillRoundRect(renderedIndicator, radius, box);
     } else {
         // Unchecked, mixed, and disabled indicators all retain a transparent
         // centre with a real one-DIP stroke.
-        const float halfStroke = current.stroke.thin * 0.5f;
-        context.strokeRoundRect({indicator.x + halfStroke, indicator.y + halfStroke,
-                                 indicator.width - current.stroke.thin,
-                                 indicator.height - current.stroke.thin},
+        const float indicatorStroke =
+            context.snapStrokeWidth(current.stroke.thin);
+        const float halfStroke = indicatorStroke * 0.5f;
+        context.strokeRoundRect({renderedIndicator.x + halfStroke,
+                                 renderedIndicator.y + halfStroke,
+                                 renderedIndicator.width - indicatorStroke,
+                                 renderedIndicator.height - indicatorStroke},
                                 std::max(0.0f, radius - halfStroke),
-                                current.stroke.thin, border);
+                                indicatorStroke, border);
     }
     if (showsMark) {
         const IconSize markSize =
             size_ == CheckboxSize::Large ? IconSize::Size16 : IconSize::Size12;
-        RectF markBounds = indicator;
-        // Fluent System Icons are laid out in a square em box, but the actual
-        // Checkmark12/16 ink sits one DIP above that box's optical centre.
-        // Centre the visible mark, not merely the font metrics: without this
-        // correction the offset becomes especially obvious as a 1.5 px shift
-        // on Windows at 150% scaling.
-        markBounds.y += 1.0f;
         if (mixed) {
             drawIcon(context,
                      shape_ == CheckboxShape::Circular
                          ? IconName::Circle
                          : IconName::Square,
-                     markBounds, mark, markSize, IconStyle::Filled);
+                     renderedIndicator, mark, markSize, IconStyle::Filled);
         } else {
-            drawIcon(context, IconName::Checkmark, markBounds, mark,
+            drawIcon(context, IconName::Checkmark, renderedIndicator, mark,
                      markSize, IconStyle::Filled);
         }
     }

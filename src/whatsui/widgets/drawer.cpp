@@ -12,7 +12,9 @@ namespace wui {
 namespace {
 constexpr float kPadding = 24.0f;
 constexpr float kHeaderGap = 8.0f;
-constexpr float kFooterGap = 12.0f;
+constexpr float kHeaderBottomPadding = 12.0f;
+constexpr float kFooterTopPadding = 16.0f;
+constexpr float kFooterGap = 8.0f;
 
 float measureTextWidth(const std::string& value, const TextStyleToken& style) noexcept
 {
@@ -64,7 +66,8 @@ float Drawer::desiredExtent(const RectF& host) const noexcept
 {
     if (explicitExtent_ > 0.0f) return explicitExtent_;
     if (size_ == DrawerSize::Full) return position_ == DrawerPosition::Bottom ? host.height : host.width;
-    const float base = size_ == DrawerSize::Small ? 320.0f : size_ == DrawerSize::Large ? 640.0f : 480.0f;
+    const float base = size_ == DrawerSize::Small ? 320.0f
+        : size_ == DrawerSize::Large ? 940.0f : 592.0f;
     return std::min(base, position_ == DrawerPosition::Bottom ? host.height : host.width);
 }
 
@@ -81,9 +84,17 @@ float Drawer::headerHeight() const noexcept
 {
     const auto& typography = theme().typography;
     if (title_.empty() && subtitle_.empty()) return kPadding;
-    return kPadding + typography.subtitle1.lineHeight + (subtitle_.empty() ? 0.0f : kHeaderGap + typography.body1.lineHeight) + kPadding;
+    return kPadding + typography.subtitle1.lineHeight +
+        (subtitle_.empty() ? 0.0f
+                           : kHeaderGap + typography.body1.lineHeight) +
+        kHeaderBottomPadding;
 }
-float Drawer::footerHeight() const noexcept { return primaryLabel_.empty() && secondaryLabel_.empty() ? 0.0f : theme().controls.height + kPadding * 2.0f; }
+float Drawer::footerHeight() const noexcept
+{
+    return primaryLabel_.empty() && secondaryLabel_.empty()
+        ? 0.0f
+        : theme().controls.height + kFooterTopPadding + kPadding;
+}
 
 SizeF Drawer::measure(const Constraints& constraints) const
 {
@@ -109,39 +120,98 @@ void Drawer::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-RectF Drawer::closeBounds() const noexcept { return {panelBounds_.x + panelBounds_.width - kPadding - 32.0f, panelBounds_.y + kPadding - 4.0f, 32.0f, 32.0f}; }
+RectF Drawer::closeBounds() const noexcept
+{
+    return {panelBounds_.x + panelBounds_.width - 16.0f - 32.0f,
+            panelBounds_.y + kPadding, 32.0f, 32.0f};
+}
 RectF Drawer::primaryBounds() const noexcept
 {
     if (primaryLabel_.empty()) return {};
     const float width = std::max(80.0f, measureTextWidth(primaryLabel_, theme().typography.body1Strong) + 32.0f);
-    return {panelBounds_.x + panelBounds_.width - kPadding - width, panelBounds_.y + panelBounds_.height - kPadding - theme().controls.height, width, theme().controls.height};
+    return {panelBounds_.x + kPadding,
+            panelBounds_.y + panelBounds_.height - kPadding -
+                theme().controls.height,
+            width, theme().controls.height};
 }
 RectF Drawer::secondaryBounds() const noexcept
 {
     if (secondaryLabel_.empty()) return {};
-    const auto primary = primaryBounds(); const float width = std::max(80.0f, measureTextWidth(secondaryLabel_, theme().typography.body1Strong) + 32.0f);
-    return {primary.x - kFooterGap - width, panelBounds_.y + panelBounds_.height - kPadding - theme().controls.height, width, theme().controls.height};
+    const auto primary = primaryBounds();
+    const float width = std::max(
+        80.0f, measureTextWidth(secondaryLabel_,
+                                theme().typography.body1Strong) +
+                    32.0f);
+    const float x = primary.width > 0.0f
+        ? primary.x + primary.width + kFooterGap
+        : panelBounds_.x + kPadding;
+    return {x,
+            panelBounds_.y + panelBounds_.height - kPadding -
+                theme().controls.height,
+            width, theme().controls.height};
 }
 
 void Drawer::paint(PaintContext& context)
 {
     const auto& current = theme();
     if (type_ == DrawerType::Overlay && modal_) context.fillRect(bounds(), current.colors.scrim);
-    shadow(context, panelBounds_, position_ == DrawerPosition::Bottom ? current.radius.large : 0.0f, current.elevation.shadow64);
-    context.fillRect(panelBounds_, current.colors.neutralBackground1.rest);
-    if (position_ == DrawerPosition::Start) context.fillRect({panelBounds_.x + panelBounds_.width - current.stroke.thin, panelBounds_.y, current.stroke.thin, panelBounds_.height}, current.colors.neutralStroke1);
-    else if (position_ == DrawerPosition::End) context.fillRect({panelBounds_.x, panelBounds_.y, current.stroke.thin, panelBounds_.height}, current.colors.neutralStroke1);
-    else context.fillRect({panelBounds_.x, panelBounds_.y, panelBounds_.width, current.stroke.thin}, current.colors.neutralStroke1);
+    const RectF panel = context.snapRectEdges(panelBounds_);
+    if (type_ == DrawerType::Overlay) {
+        shadow(context, panel, 0.0f, current.elevation.shadow64);
+    }
+    context.fillRect(panel, current.colors.neutralBackground1.rest);
+    // Inline drawers use the very quiet Background3 separator from Fluent;
+    // overlay drawers are separated by elevation and do not need a second
+    // visible grey contour.
+    if (type_ == DrawerType::Inline) {
+        const float stroke = context.snapStrokeWidth(current.stroke.thin);
+        const Color separator = current.colors.neutralBackground3.rest;
+        if (position_ == DrawerPosition::Start)
+            context.fillRect({panel.x + panel.width - stroke, panel.y,
+                              stroke, panel.height}, separator);
+        else if (position_ == DrawerPosition::End)
+            context.fillRect({panel.x, panel.y, stroke, panel.height},
+                             separator);
+        else
+            context.fillRect({panel.x, panel.y, panel.width, stroke},
+                             separator);
+    }
     float y = panelBounds_.y + kPadding;
     if (!title_.empty()) { context.drawText(title_, panelBounds_.x + kPadding, y + current.typography.subtitle1.lineHeight, current.typography.subtitle1.size, current.colors.neutralForeground1, current.typography.subtitle1.weight, current.typography.subtitle1.family); y += current.typography.subtitle1.lineHeight; }
     if (!subtitle_.empty()) { y += kHeaderGap; context.drawText(subtitle_, panelBounds_.x + kPadding, y + current.typography.body1.lineHeight, current.typography.body1.size, current.colors.neutralForeground2, current.typography.body1.weight, current.typography.body1.family); }
     const auto close = closeBounds();
-    context.fillRoundRect(close, current.radius.medium, current.colors.neutralBackground1.hover);
     drawIcon(context, IconName::Dismiss, close,
              current.colors.neutralForeground1, IconSize::Size20);
     if (!children().empty()) { const int save = context.save(); context.clipRect(contentBounds_); context.translate(0.0f, -contentScrollOffset_); children().front()->paint(context); context.restore(); }
-    const auto button = [&](const RectF& box, const std::string& label, bool primary) { if (box.width <= 0) return; context.fillRoundRect(box, current.radius.medium, primary ? current.colors.brandBackground.rest : current.colors.neutralBackground1.hover); context.drawText(label, box.x + (box.width - measureTextWidth(label, current.typography.body1Strong)) * .5f, context.centeredTextBottom(label, box, current.typography.body1Strong.size, current.typography.body1Strong.weight, current.typography.body1Strong.family), current.typography.body1Strong.size, primary ? current.colors.onBrand : current.colors.neutralForeground1, current.typography.body1Strong.weight, current.typography.body1Strong.family); };
-    button(secondaryBounds(), secondaryLabel_, false); button(primaryBounds(), primaryLabel_, true);
+    const auto button = [&](const RectF& box, const std::string& label,
+                            bool primary) {
+        if (box.width <= 0) return;
+        const RectF aligned = context.snapRectEdges(box);
+        context.fillStrokeRoundRect(
+            aligned, current.radius.medium,
+            context.snapStrokeWidth(current.stroke.thin),
+            primary ? current.colors.brandBackground.rest
+                    : current.colors.neutralBackground1.rest,
+            primary ? current.colors.brandBackground.rest
+                    : current.colors.neutralStroke1);
+        context.drawText(
+            label,
+            aligned.x +
+                (aligned.width -
+                 measureTextWidth(label, current.typography.body1Strong)) *
+                    .5f,
+            context.centeredTextBottom(
+                label, aligned, current.typography.body1Strong.size,
+                current.typography.body1Strong.weight,
+                current.typography.body1Strong.family),
+            current.typography.body1Strong.size,
+            primary ? current.colors.onBrand
+                    : current.colors.neutralForeground1,
+            current.typography.body1Strong.weight,
+            current.typography.body1Strong.family);
+    };
+    button(primaryBounds(), primaryLabel_, true);
+    button(secondaryBounds(), secondaryLabel_, false);
     clearDirty(DirtyFlag::Paint);
 }
 

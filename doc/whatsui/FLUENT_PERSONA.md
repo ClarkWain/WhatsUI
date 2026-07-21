@@ -61,6 +61,6 @@ combined group or interactive button.
 
 - `WhatsUIFluentPersonaTests`: sizing, four lines, presence-only behavior,
   passive/interactive policy, and semantic snapshots.
-- `WhatsUIFluentPersonaVisualTests`: Software captures at 100% and 150% DPI,
-  covering status overlays, before/below positions, text truncation, and
-  presence-only rendering.
+- `WhatsUIFluentPersonaVisualTests`: Software captures at 100%, 125%, 150%,
+  and 200% DPI, covering status overlays, before/below positions, text
+  truncation, optical two-line leading, and presence-only rendering.

@@ -70,6 +70,26 @@ void testRatingValueAndInteraction()
     rating.setMaximum(1);
     expect(rating.maximum() == 2,
            "Rating maximum must enforce Fluent's minimum of two items");
+
+    wui::Rating gapOwnership(0.0f, 5);
+    gapOwnership.setSize(wui::RatingSize::Small);
+    gapOwnership.layout({0.0f, 0.0f, 68.0f, 16.0f});
+    gapOwnership.onPointerEvent(pointer(
+        wui::PointerAction::Down, 13.0f, 8.0f,
+        wui::MouseButton::Left));
+    gapOwnership.onPointerEvent(pointer(
+        wui::PointerAction::Up, 13.0f, 8.0f,
+        wui::MouseButton::Left));
+    expect(near(gapOwnership.value(), 1.0f),
+           "The 2 DIP gap must belong to the preceding Rating item");
+    gapOwnership.onPointerEvent(pointer(
+        wui::PointerAction::Down, 14.0f, 8.0f,
+        wui::MouseButton::Left));
+    gapOwnership.onPointerEvent(pointer(
+        wui::PointerAction::Up, 14.0f, 8.0f,
+        wui::MouseButton::Left));
+    expect(near(gapOwnership.value(), 2.0f),
+           "The next Rating item must begin immediately after its 2 DIP gap");
 }
 
 void testRatingBindingReadonlyDisabledAndAccessibility()
@@ -177,6 +197,24 @@ void testRatingRebindAndSetterInvalidation()
 
 void testRatingDisplayContract()
 {
+    wui::Rating interactive;
+    interactive.setSize(wui::RatingSize::Small);
+    expect(near(interactive.measure({}).width, 68.0f) &&
+               near(interactive.measure({}).height, 16.0f),
+           "Small Rating must use five 12 DIP items, four 2 DIP gaps and a 16 DIP row");
+    interactive.setSize(wui::RatingSize::Medium);
+    expect(near(interactive.measure({}).width, 88.0f) &&
+               near(interactive.measure({}).height, 16.0f),
+           "Medium Rating must use five 16 DIP items separated by 2 DIP");
+    interactive.setSize(wui::RatingSize::Large);
+    expect(near(interactive.measure({}).width, 108.0f) &&
+               near(interactive.measure({}).height, 20.0f),
+           "Large Rating must use five 20 DIP items separated by 2 DIP");
+    interactive.setSize(wui::RatingSize::ExtraLarge);
+    expect(near(interactive.measure({}).width, 148.0f) &&
+               near(interactive.measure({}).height, 28.0f),
+           "Extra-large Rating must use five 28 DIP items separated by 2 DIP");
+
     wui::RatingDisplay display(4.5f, 5);
     display.setCount(12345);
     expect(display.valueText() == "4.5" && display.countText() == "12,345",

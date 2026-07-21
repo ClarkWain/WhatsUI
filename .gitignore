@@ -22,5 +22,9 @@ artifacts/todo-empty-state-review/
 artifacts/todo-interaction-smoke/
 release-check/
 
+# Local clone of the Fluent UI reference repository used for design research.
+# It is neither a WhatsUI dependency nor a source-distributed artifact.
+fluentui/
+
 # Local product-input notes are intentionally not source or release artifacts.
 建议.txt

@@ -232,9 +232,17 @@ void drawIcon(PaintContext& context, IconName name, const RectF& bounds,
 #endif
     const float x =
         bounds.x + std::max(0.0f, (bounds.width - glyphWidth) * 0.5f);
+    // Fluent System Icons reserve vertical space in the font em box that is
+    // not symmetric around the visible vector outline. Centering the font's
+    // ascent/descent box therefore leaves 20-DIP icon ink about 2 DIP above
+    // the control centre. Apply the icon font's 10% optical correction here,
+    // once, so Icon, IconButton and icon-bearing Buttons share the same
+    // visible-ink centre at every semantic size and DPR.
+    const float opticalYOffset = extent * 0.1f;
     context.drawText(
         glyph, x,
-        context.centeredTextBottom(glyph, bounds, extent, 400, family),
+        context.centeredTextBottom(glyph, bounds, extent, 400, family)
+            + opticalYOffset,
         extent, color, 400, family);
 }
 

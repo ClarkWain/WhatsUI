@@ -117,15 +117,17 @@ void teachingPopoverActionsAndSemantics()
         .secondaryAction("Back", [&] { ++secondary; })
         .stepText("Step 1 of 3")
         .onDismiss([&] { ++dismissed; });
+    expect(teaching.hasArrow(),
+           "TeachingPopover must expose the Fluent anchored pointer by default");
     teaching.anchor({12, 12, 32, 28}).placement(wui::PopupPlacement::BelowStart);
     teaching.layout({0, 0, 480, 320});
     const auto panel = teaching.panelBounds();
     expect(teaching.measure({0, 480, 0, 320}).height > 100.0f,
            "TeachingPopover must reserve action footer space");
-    expect(teaching.onPointerEvent(click(panel.x + panel.width - 48.0f, panel.y + panel.height - 28.0f)) && primary == 1 && dismissed == 1,
+    expect(teaching.onPointerEvent(click(panel.x + panel.width - 168.0f, panel.y + panel.height - 28.0f)) && primary == 1 && dismissed == 1,
            "Primary action must invoke once and dismiss TeachingPopover");
     teaching.onDismiss([&] { ++dismissed; });
-    teaching.onPointerEvent(click(panel.x + panel.width - 160.0f, panel.y + panel.height - 28.0f));
+    teaching.onPointerEvent(click(panel.x + panel.width - 48.0f, panel.y + panel.height - 28.0f));
     expect(secondary == 1, "Secondary TeachingPopover action must be independently invokable");
 }
 } // namespace

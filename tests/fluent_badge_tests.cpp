@@ -17,8 +17,9 @@ void testBadgeVariantsAndSizing()
     const auto medium = badge.measure({0, 1000, 0, 1000});
     badge.setSize(wui::BadgeSize::ExtraLarge);
     const auto large = badge.measure({0, 1000, 0, 1000});
-    expect(large.height > medium.height && large.width > medium.width,
-           "Badge sizes must use Fluent's increasing density scale");
+    expect(medium.height == 20.0f && large.height == 32.0f &&
+               large.width > medium.width,
+           "Badge sizes must use Fluent's exact 20/32-DIP density scale");
     badge.setAppearance(wui::BadgeAppearance::Outline);
     badge.setColor(wui::BadgeColor::Success);
     expect(badge.appearance() == wui::BadgeAppearance::Outline &&
@@ -51,15 +52,25 @@ void testPresenceGeometryAndSemantics()
     wui::PresenceBadge presence(wui::PresenceStatus::DoNotDisturb);
     presence.setAvatarSize(64.0f);
     const auto extent = presence.measure({0, 100, 0, 100});
-    expect(extent.width == 16.0f && extent.height == 16.0f,
-           "PresenceBadge must cap overlay size at Fluent's large-avatar status extent");
+    expect(extent.width == 20.0f && extent.height == 20.0f,
+           "A 64-DIP Avatar must use Fluent's 20-DIP large PresenceBadge");
+    presence.setAvatarSize(40.0f);
+    expect(presence.measure({0, 100, 0, 100}).width == 12.0f,
+           "A 40-DIP Avatar must use Fluent's 12-DIP small PresenceBadge");
+    presence.setAvatarSize(56.0f);
+    expect(presence.measure({0, 100, 0, 100}).width == 16.0f,
+           "A 56-DIP Avatar must use Fluent's 16-DIP PresenceBadge");
+    presence.setAvatarSize(28.0f);
+    expect(presence.measure({0, 100, 0, 100}).width == 10.0f,
+           "A 28-DIP Avatar must use Fluent's 10-DIP extra-small PresenceBadge");
+    presence.setAvatarSize(64.0f);
     const wui::RectF avatar{10, 20, 64, 64};
     const auto bottomRight = presence.boundsForAvatar(avatar);
     presence.setPosition(wui::PresenceBadgePosition::TopLeft);
     const auto topLeft = presence.boundsForAvatar(avatar);
-    expect(bottomRight.x > avatar.x && bottomRight.y > avatar.y &&
-               topLeft.x < avatar.x + 1.0f && topLeft.y < avatar.y + 1.0f,
-           "PresenceBadge must expose deterministic Avatar overlay positions");
+    expect(bottomRight.x == 54.0f && bottomRight.y == 64.0f &&
+               topLeft.x == 10.0f && topLeft.y == 20.0f,
+           "PresenceBadge must align its Figma frame exactly to each Avatar edge");
     expect(presence.generatedAccessibleLabel() == "Do not disturb",
            "PresenceBadge must expose status text rather than a color-only meaning");
 }

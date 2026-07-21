@@ -305,7 +305,9 @@ class SnapshotProvider final : public IRawElementProviderSimple,
                                public IToggleProvider,
                                public IExpandCollapseProvider,
                                public IRangeValueProvider,
-                               public IValueProvider {
+                               public IValueProvider,
+                               public ISelectionProvider,
+                               public ISelectionItemProvider {
 public:
     SnapshotProvider(std::shared_ptr<ProviderState> state, ElementKey key)
         : state_(std::move(state)), key_(std::move(key))
@@ -332,6 +334,10 @@ public:
             *object = static_cast<IRangeValueProvider*>(this);
         } else if (iid == __uuidof(IValueProvider) && supportsValue()) {
             *object = static_cast<IValueProvider*>(this);
+        } else if (iid == __uuidof(ISelectionProvider) && supportsSelectionContainer()) {
+            *object = static_cast<ISelectionProvider*>(this);
+        } else if (iid == __uuidof(ISelectionItemProvider) && supportsSelectionItem()) {
+            *object = static_cast<ISelectionItemProvider*>(this);
         } else {
             return E_NOINTERFACE;
         }
@@ -373,6 +379,12 @@ public:
         }
         if (pattern == UIA_ValuePatternId && supportsValue()) {
             return QueryInterface(__uuidof(IValueProvider), reinterpret_cast<void**>(provider));
+        }
+        if (pattern == UIA_SelectionPatternId && supportsSelectionContainer()) {
+            return QueryInterface(__uuidof(ISelectionProvider), reinterpret_cast<void**>(provider));
+        }
+        if (pattern == UIA_SelectionItemPatternId && supportsSelectionItem()) {
+            return QueryInterface(__uuidof(ISelectionItemProvider), reinterpret_cast<void**>(provider));
         }
         return S_OK;
     }
@@ -567,6 +579,99 @@ public:
         return S_OK;
     }
 
+    HRESULT STDMETHODCALLTYPE GetSelection(SAFEARRAY** selected) override
+    {
+        if (!selected) return E_POINTER;
+        *selected = nullptr;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsSelectionContainer(*resolved)) return UIA_E_NOTSUPPORTED;
+        std::vector<std::size_t> items;
+        for (const auto child : resolved->first->childIndices(resolved->second)) {
+            const auto& properties = resolved->first->entries[child].properties;
+            if (properties.checked.value_or(false) && isSelectionItem(*resolved->first, child)) {
+                items.push_back(child);
+            }
+        }
+        SAFEARRAY* result = SafeArrayCreateVector(VT_UNKNOWN, 0, static_cast<ULONG>(items.size()));
+        if (!result) return E_OUTOFMEMORY;
+        for (LONG slot = 0; slot < static_cast<LONG>(items.size()); ++slot) {
+            auto* provider = new (std::nothrow) SnapshotProvider(
+                state_, keyFor(*resolved->first, items[static_cast<std::size_t>(slot)]));
+            if (!provider) { SafeArrayDestroy(result); return E_OUTOFMEMORY; }
+            IUnknown* unknown = static_cast<IRawElementProviderSimple*>(provider);
+            const HRESULT put = SafeArrayPutElement(result, &slot, unknown);
+            provider->Release();
+            if (FAILED(put)) { SafeArrayDestroy(result); return put; }
+        }
+        *selected = result;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_CanSelectMultiple(BOOL* value) override
+    {
+        if (!value) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsSelectionContainer(*resolved)) return UIA_E_NOTSUPPORTED;
+        *value = resolved->first->entries[resolved->second].properties.selectionCanSelectMultiple
+            ? TRUE : FALSE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_IsSelectionRequired(BOOL* value) override
+    {
+        if (!value) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsSelectionContainer(*resolved)) return UIA_E_NOTSUPPORTED;
+        *value = resolved->first->entries[resolved->second].properties.selectionIsSelectionRequired
+            ? TRUE : FALSE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Select() override
+    {
+        return selectionItemAction(AccessibilityActionKind::Select);
+    }
+
+    HRESULT STDMETHODCALLTYPE AddToSelection() override
+    {
+        return selectionItemAction(AccessibilityActionKind::AddToSelection);
+    }
+
+    HRESULT STDMETHODCALLTYPE RemoveFromSelection() override
+    {
+        return selectionItemAction(AccessibilityActionKind::RemoveFromSelection);
+    }
+
+    HRESULT STDMETHODCALLTYPE get_IsSelected(BOOL* value) override
+    {
+        if (!value) return E_POINTER;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsSelectionItem(*resolved)) return UIA_E_NOTSUPPORTED;
+        *value = resolved->first->entries[resolved->second].properties.checked.value_or(false)
+            ? TRUE : FALSE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_SelectionContainer(IRawElementProviderSimple** provider) override
+    {
+        if (!provider) return E_POINTER;
+        *provider = nullptr;
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsSelectionItem(*resolved)) return UIA_E_NOTSUPPORTED;
+        const auto container = selectionContainerIndex(*resolved->first, resolved->second);
+        if (!container) return UIA_E_NOTSUPPORTED;
+        auto* result = new (std::nothrow) SnapshotProvider(
+            state_, keyFor(*resolved->first, *container));
+        if (!result) return E_OUTOFMEMORY;
+        *provider = static_cast<IRawElementProviderSimple*>(result);
+        return S_OK;
+    }
+
     HRESULT STDMETHODCALLTYPE GetPropertyValue(PROPERTYID id, VARIANT* value) override
     {
         if (!value) return E_POINTER;
@@ -659,9 +764,9 @@ public:
             }
             return S_OK;
         case UIA_SelectionItemIsSelectedPropertyId:
-            if (properties && properties->checked) {
+            if (properties && isSelectionItem(model, index)) {
                 value->vt = VT_BOOL;
-                value->boolVal = *properties->checked ? VARIANT_TRUE : VARIANT_FALSE;
+                value->boolVal = properties->checked.value_or(false) ? VARIANT_TRUE : VARIANT_FALSE;
             }
             return S_OK;
         case UIA_LevelPropertyId:
@@ -841,6 +946,14 @@ private:
     {
         if (resolved.second == kSyntheticRoot) return false;
         const auto& properties = resolved.first->entries[resolved.second].properties;
+        // RadioButton and Tab are exclusive selection items. Their framework
+        // actions may internally reuse Toggle, but native UIA must expose the
+        // SelectionItem pattern rather than incorrectly advertising a Toggle
+        // pattern to assistive technology.
+        if (properties.role == AccessibilityRole::RadioButton ||
+            properties.role == AccessibilityRole::Tab) {
+            return false;
+        }
         return properties.checked && properties.actions.toggle;
     }
 
@@ -848,6 +961,107 @@ private:
     {
         const auto resolved = resolve();
         return resolved && supportsToggle(*resolved);
+    }
+
+    [[nodiscard]] static bool isSelectionContainerRole(AccessibilityRole role) noexcept
+    {
+        return role == AccessibilityRole::RadioGroup || role == AccessibilityRole::ListBox ||
+               role == AccessibilityRole::TabList;
+    }
+
+    [[nodiscard]] static std::optional<std::size_t> selectionContainerIndex(
+        const SnapshotModel& model, std::size_t index) noexcept
+    {
+        if (index == kSyntheticRoot || index >= model.entries.size()) return std::nullopt;
+        auto parent = model.parents[index];
+        while (parent) {
+            if (isSelectionContainerRole(model.entries[*parent].properties.role)) return parent;
+            parent = model.parents[*parent];
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] static bool isSelectionItem(const SnapshotModel& model,
+                                              std::size_t index) noexcept
+    {
+        if (index == kSyntheticRoot || index >= model.entries.size()) return false;
+        const auto role = model.entries[index].properties.role;
+        if (role != AccessibilityRole::RadioButton && role != AccessibilityRole::Option &&
+            role != AccessibilityRole::Tab) {
+            return false;
+        }
+        return selectionContainerIndex(model, index).has_value();
+    }
+
+    [[nodiscard]] static bool supportsSelectionContainer(const Resolution& resolved) noexcept
+    {
+        return resolved.second != kSyntheticRoot &&
+               isSelectionContainerRole(
+                   resolved.first->entries[resolved.second].properties.role);
+    }
+
+    [[nodiscard]] bool supportsSelectionContainer() const noexcept
+    {
+        const auto resolved = resolve();
+        return resolved && supportsSelectionContainer(*resolved);
+    }
+
+    [[nodiscard]] static bool supportsSelectionItem(const Resolution& resolved) noexcept
+    {
+        if (resolved.second == kSyntheticRoot ||
+            !isSelectionItem(*resolved.first, resolved.second)) {
+            return false;
+        }
+        const auto& properties = resolved.first->entries[resolved.second].properties;
+        switch (properties.role) {
+        case AccessibilityRole::RadioButton:
+            return properties.checked.has_value() && properties.actions.toggle;
+        case AccessibilityRole::Option:
+        case AccessibilityRole::Tab:
+            return properties.checked.has_value() && properties.actions.invoke;
+        default:
+            return false;
+        }
+    }
+
+    [[nodiscard]] bool supportsSelectionItem() const noexcept
+    {
+        const auto resolved = resolve();
+        return resolved && supportsSelectionItem(*resolved);
+    }
+
+    HRESULT selectionItemAction(AccessibilityActionKind requested) noexcept
+    {
+        const auto resolved = resolve();
+        if (!resolved) return UIA_E_ELEMENTNOTAVAILABLE;
+        if (!supportsSelectionItem(*resolved)) return UIA_E_NOTSUPPORTED;
+        const auto& model = *resolved->first;
+        const auto& properties = model.entries[resolved->second].properties;
+        if (!properties.enabled) return UIA_E_ELEMENTNOTENABLED;
+        const auto container = selectionContainerIndex(model, resolved->second);
+        if (!container) return UIA_E_NOTSUPPORTED;
+        const auto& containerProperties = model.entries[*container].properties;
+        if ((requested == AccessibilityActionKind::AddToSelection ||
+             requested == AccessibilityActionKind::RemoveFromSelection) &&
+            !containerProperties.selectionCanSelectMultiple) {
+            return UIA_E_INVALIDOPERATION;
+        }
+        if (requested == AccessibilityActionKind::RemoveFromSelection &&
+            containerProperties.selectionIsSelectionRequired) {
+            return UIA_E_INVALIDOPERATION;
+        }
+        AccessibilityActionRequest request;
+        // Retained Radio and Tab nodes already expose a control action. ListBox
+        // options are virtual snapshot children, so preserve the explicit
+        // Add/Remove request for UiWindow to route to ListBox.
+        if (properties.role == AccessibilityRole::RadioButton) {
+            request.kind = AccessibilityActionKind::Toggle;
+        } else if (properties.role == AccessibilityRole::Tab) {
+            request.kind = AccessibilityActionKind::Invoke;
+        } else {
+            request.kind = requested;
+        }
+        return enqueue(*resolved, std::move(request));
     }
 
     [[nodiscard]] static bool supportsValue(const Resolution& resolved) noexcept

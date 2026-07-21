@@ -56,6 +56,15 @@ void testOverlayGeometryAndModalDismissal()
            "Modal overlay Drawer must consume and dismiss a backdrop press by default");
     expect(drawer.onKeyEvent({0, wui::KeyAction::Down, 27}) && dismissed == 2,
            "Drawer Escape must dismiss without relying on a platform-specific dialog path");
+
+    wui::Drawer medium("Medium");
+    medium.size(wui::DrawerSize::Medium).layout({0, 0, 1200, 700});
+    expect(medium.panelBounds().width == 592,
+           "Medium Drawer must match the Fluent 592-DIP surface width");
+    wui::Drawer large("Large");
+    large.size(wui::DrawerSize::Large).layout({0, 0, 1200, 700});
+    expect(large.panelBounds().width == 940,
+           "Large Drawer must match the Fluent 940-DIP surface width");
 }
 
 void testInlineAndNonModalPolicies()
@@ -80,8 +89,11 @@ void testBodyScrollAndActions()
     expect(drawer.maxContentScrollOffset() > 1000, "Drawer body must expose a clipped scrollable viewport for long content");
     drawer.setContentScrollOffset(99999);
     expect(drawer.contentScrollOffset() == drawer.maxContentScrollOffset(), "Drawer scroll offset must clamp at content end");
-    const auto secondaryBounds = wui::RectF{drawer.panelBounds().x + drawer.panelBounds().width - 24 - 80 - 12 - 80,
-                                            drawer.panelBounds().y + drawer.panelBounds().height - 24 - wui::theme().controls.height, 80, wui::theme().controls.height};
+    const auto secondaryBounds = wui::RectF{
+        drawer.panelBounds().x + 24 + 80 + 8,
+        drawer.panelBounds().y + drawer.panelBounds().height - 24 -
+            wui::theme().controls.height,
+        80, wui::theme().controls.height};
     // Invoke through the public action area rather than depending on rendering.
     drawer.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Up, wui::MouseButton::Left,
                            {secondaryBounds.x + 8, secondaryBounds.y + 8}});

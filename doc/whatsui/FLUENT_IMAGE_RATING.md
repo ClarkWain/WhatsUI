@@ -23,6 +23,8 @@ This implementation follows the Fluent UI React v9 Storybook contracts for
 - Step is either one or one half. Value, pointer preview, keyboard navigation,
   state binding, and accessibility SetValue all share the same snapping path.
 - Item sizes match Fluent's 12, 16, 20, and 28 logical-pixel scale.
+- Rating items use the Fluent 2-DIP inter-item gap. `Small` keeps a 12-DIP
+  glyph inside a 16-DIP row, with equal 2-DIP top and bottom breathing room.
 - Neutral, brand, and marigold color variants and star, circle, and square
   shapes are supported. Disabled, focused, read-only, and pointer states are
   deterministic.
@@ -50,5 +52,10 @@ Callers with no rating result should omit the component.
   changes, binding, read-only/disabled behavior, SetValue, item labels, image
   fallback, and accessibility snapshots.
 - `WhatsUIFluentRatingImageVisualTests` generates the complete visual matrix at
-  both 100% and 150% scale. It also guards against clip/batch corruption and
-  border color leaking into transparent image letterbox space.
+  100%, 125%, 150%, and 200%. It checks physical-pixel stroke snapping,
+  pointer/pressed/read-only/disabled Rating states, and guards against
+  clip/batch corruption and border color leaking into transparent image
+  letterbox space.
+- A circular Image always clips through a centred square viewport based on
+  `min(width, height)`. Non-square bounds therefore produce a real circle,
+  never an ellipse or capsule.

@@ -17,6 +17,19 @@ constexpr int kHome = 36;
 constexpr int kEnd = 35;
 constexpr int kLeft = 37;
 constexpr int kRight = 39;
+constexpr float kToolbarItemHeight = 32.0f;
+constexpr float kToolbarHeight = 40.0f;
+constexpr float kToolbarHorizontalPadding = 8.0f;
+constexpr float kToolbarVerticalPadding = 4.0f;
+constexpr float kTabHeight = 44.0f;
+constexpr float kTabHorizontalPadding = 10.0f;
+constexpr float kTabIndicatorInset = 12.0f;
+constexpr float kTabIndicatorHeight = 3.0f;
+constexpr float kBreadcrumbHeight = 32.0f;
+constexpr float kBreadcrumbItemPadding = 6.0f;
+constexpr float kBreadcrumbSeparatorGap = 0.0f;
+constexpr float kBreadcrumbIconSize = 16.0f;
+constexpr float kBreadcrumbOverflowSize = 32.0f;
 
 float textWidth(const std::string& value, const TextStyleToken& style) noexcept
 {
@@ -45,9 +58,20 @@ void focusRing(PaintContext& context, const RectF& rect, float radius,
 {
     if (!focused) return;
     const float inset = current.controls.focusInset;
-    context.strokeRoundRect({rect.x - inset, rect.y - inset, rect.width + 2 * inset,
-                             rect.height + 2 * inset}, radius + inset,
-                             current.controls.focusWidth, current.colors.strokeFocusInner);
+    const RectF aligned = context.snapRectEdges(rect);
+    const float outerWidth = context.snapStrokeWidth(current.stroke.thick);
+    const float innerWidth = context.snapStrokeWidth(current.stroke.thin);
+    context.strokeRoundRect(
+        context.snapRectEdges({aligned.x - inset, aligned.y - inset,
+                               aligned.width + 2.0f * inset,
+                               aligned.height + 2.0f * inset}),
+        radius + inset, outerWidth, current.colors.strokeFocusOuter);
+    const float inner = std::max(0.0f, inset - innerWidth * 0.5f);
+    context.strokeRoundRect(
+        context.snapRectEdges({aligned.x - inner, aligned.y - inner,
+                               aligned.width + 2.0f * inner,
+                               aligned.height + 2.0f * inner}),
+        radius + inner, innerWidth, current.colors.strokeFocusInner);
 }
 
 } // namespace
@@ -64,15 +88,17 @@ SizeF ToolbarItem::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     return constraints.clamp({textWidth(label_, current.typography.body1) + current.spacing.horizontal.m * 2,
-                              current.controls.height});
+                              kToolbarItemHeight});
 }
 void ToolbarItem::paint(PaintContext& context)
 {
-    const auto& current = theme(); const RectF rect = bounds();
+    const auto& current = theme(); const RectF rect = context.snapRectEdges(bounds());
     if (rect.width <= 0.0f || rect.height <= 0.0f) { clearDirty(DirtyFlag::Paint); return; }
     const bool primary = appearance_ == ToolbarItemAppearance::Primary;
-    const Color fill = primary ? interactiveFill(current, *this, current.colors.brandBackground)
-                               : interactiveFill(current, *this, current.colors.neutralBackground1);
+    const Color fill = !isEnabled() && primary
+                           ? current.colors.neutralBackgroundDisabled
+                           : primary ? interactiveFill(current, *this, current.colors.brandBackground)
+                                     : interactiveFill(current, *this, current.colors.neutralBackground1);
     if (primary || hasState(*this, ControlVisualState::Hovered) || hasState(*this, ControlVisualState::Pressed))
         context.fillRoundRect(rect, current.radius.medium, fill);
     focusRing(context, rect, current.radius.medium, current, hasState(*this, ControlVisualState::Focused));
@@ -133,6 +159,14 @@ SizeF Toolbar::measure(const Constraints& constraints) const
         if (orientation_ == ToolbarOrientation::Horizontal) width += gap * float(children().size() - 1);
         else height += gap * float(children().size() - 1);
     }
+    if (orientation_ == ToolbarOrientation::Horizontal) {
+        width += kToolbarHorizontalPadding * 2.0f;
+        height = std::max(kToolbarHeight,
+                          height + kToolbarVerticalPadding * 2.0f);
+    } else {
+        width += kToolbarHorizontalPadding * 2.0f;
+        height += kToolbarVerticalPadding * 2.0f;
+    }
     return constraints.clamp({width, height});
 }
 void Toolbar::layout(const RectF& rect)
@@ -140,8 +174,14 @@ void Toolbar::layout(const RectF& rect)
     Node::layout(rect);
     const float gap = theme().spacing.horizontal.xs;
     const bool horizontal = orientation_ == ToolbarOrientation::Horizontal;
-    const float limit = horizontal ? rect.width : rect.height;
-    const float overflowExtent = theme().controls.height;
+    const float contentX = rect.x + kToolbarHorizontalPadding;
+    const float contentY = rect.y + kToolbarVerticalPadding;
+    const float contentWidth =
+        std::max(0.0f, rect.width - kToolbarHorizontalPadding * 2.0f);
+    const float contentHeight =
+        std::max(0.0f, rect.height - kToolbarVerticalPadding * 2.0f);
+    const float limit = horizontal ? contentWidth : contentHeight;
+    const float overflowExtent = kToolbarItemHeight;
     std::vector<SizeF> sizes; sizes.reserve(children().size());
     float natural = 0.0f;
     for (const auto& child : children()) {
@@ -152,7 +192,7 @@ void Toolbar::layout(const RectF& rect)
     const bool needsOverflow = natural > limit + 0.01f;
     const float itemLimit = needsOverflow ? std::max(0.0f, limit - overflowExtent - (children().empty() ? 0.0f : gap)) : limit;
     overflowedItems_.clear(); overflowBounds_ = {};
-    float cursor = horizontal ? rect.x : rect.y;
+    float cursor = horizontal ? contentX : contentY;
     float used = 0.0f;
     bool hidden = false;
     for (std::size_t i = 0; i < children().size(); ++i) {
@@ -165,33 +205,69 @@ void Toolbar::layout(const RectF& rect)
             continue;
         }
         if (i != 0) cursor += gap;
-        if (horizontal) children()[i]->layout({cursor, rect.y + (rect.height - sizes[i].height) * .5f, sizes[i].width, sizes[i].height});
-        else children()[i]->layout({rect.x + (rect.width - sizes[i].width) * .5f, cursor, sizes[i].width, sizes[i].height});
+        if (horizontal) children()[i]->layout({cursor, contentY + (contentHeight - sizes[i].height) * .5f, sizes[i].width, sizes[i].height});
+        else children()[i]->layout({contentX + (contentWidth - sizes[i].width) * .5f, cursor, sizes[i].width, sizes[i].height});
         cursor += extent; used = next;
     }
     if (!overflowedItems_.empty()) {
-        const float edge = horizontal ? rect.x + rect.width - overflowExtent : rect.y + rect.height - overflowExtent;
-        overflowBounds_ = horizontal ? RectF{edge, rect.y + (rect.height - overflowExtent) * .5f, overflowExtent, overflowExtent}
-                                     : RectF{rect.x + (rect.width - overflowExtent) * .5f, edge, overflowExtent, overflowExtent};
+        const float edge = horizontal ? contentX + contentWidth - overflowExtent : contentY + contentHeight - overflowExtent;
+        overflowBounds_ = horizontal ? RectF{edge, contentY + (contentHeight - overflowExtent) * .5f, overflowExtent, overflowExtent}
+                                     : RectF{contentX + (contentWidth - overflowExtent) * .5f, edge, overflowExtent, overflowExtent};
     }
     clearLayoutDirtyRecursively();
 }
 RectF Toolbar::overflowBounds() const noexcept { return overflowBounds_; }
 void Toolbar::paint(PaintContext& context)
 {
+    const auto& current = theme();
+    context.fillRoundRect(context.snapRectEdges(bounds()),
+                          current.radius.medium,
+                          current.colors.neutralBackground1.rest);
     ContainerNode::paint(context);
     if (!overflowedItems_.empty()) {
-        const auto& current = theme();
-        context.fillRoundRect(overflowBounds_, current.radius.medium, current.colors.neutralBackground1.rest);
-        drawIcon(context, IconName::MoreHorizontal, overflowBounds_,
+        const RectF overflow = context.snapRectEdges(overflowBounds_);
+        Color fill = current.colors.neutralBackground1.rest;
+        if (overflowPressed_) fill = current.colors.neutralBackground1.pressed;
+        else if (overflowHovered_) fill = current.colors.neutralBackground1.hover;
+        context.fillRoundRect(overflow, current.radius.medium, fill);
+        focusRing(context, overflow, current.radius.medium, current,
+                  overflowFocused_);
+        drawIcon(context, IconName::MoreHorizontal, overflow,
                  current.colors.neutralForeground1, IconSize::Size20);
     }
     clearDirty(DirtyFlag::Paint);
 }
 bool Toolbar::onPointerEvent(const PointerEvent& event)
 {
-    if (!overflowedItems_.empty() && event.action == PointerAction::Up && event.button == MouseButton::Left && overflowBounds_.contains(event.position)) {
-        if (onOverflow_) onOverflow_(overflowedItems_);
+    if (overflowedItems_.empty()) return false;
+    const bool inside = overflowBounds_.contains(event.position);
+    if (event.action == PointerAction::Enter || event.action == PointerAction::Move) {
+        overflowHovered_ = inside;
+        markDirty(DirtyFlag::Paint);
+        return inside;
+    }
+    if (event.action == PointerAction::Leave) {
+        overflowHovered_ = false;
+        overflowPressed_ = false;
+        markDirty(DirtyFlag::Paint);
+        return true;
+    }
+    if (event.action == PointerAction::Down && event.button == MouseButton::Left && inside) {
+        overflowPressed_ = true;
+        overflowFocused_ = true;
+        markDirty(DirtyFlag::Paint);
+        return true;
+    }
+    if (event.action == PointerAction::Up && event.button == MouseButton::Left) {
+        const bool invoke = inside && overflowPressed_;
+        overflowPressed_ = false;
+        markDirty(DirtyFlag::Paint);
+        if (invoke && onOverflow_) onOverflow_(overflowedItems_);
+        return inside || invoke;
+    }
+    if (event.action == PointerAction::Cancel) {
+        overflowPressed_ = false;
+        markDirty(DirtyFlag::Paint);
         return true;
     }
     return false;
@@ -224,17 +300,51 @@ const std::string& Tab::label() const noexcept { return label_; }
 Tab& Tab::label(std::string value) { setLabel(std::move(value)); return *this; }
 void Tab::setLabel(std::string value) { if (label_ != value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); } }
 bool Tab::isSelected() const noexcept { return selected_; }
-SizeF Tab::measure(const Constraints& constraints) const { const auto& current = theme(); return constraints.clamp({textWidth(label_, current.typography.body1Strong) + current.spacing.horizontal.l * 2, current.controls.height + 8}); }
+SizeF Tab::measure(const Constraints& constraints) const
+{
+    const auto& current = theme();
+    return constraints.clamp(
+        {textWidth(label_, current.typography.body1Strong) +
+             kTabHorizontalPadding * 2.0f,
+         kTabHeight});
+}
 void Tab::paint(PaintContext& context)
 {
-    const auto& current = theme(); const RectF rect = bounds(); const bool selected = selected_;
-    if (hasState(*this, ControlVisualState::Hovered) && !selected) context.fillRoundRect({rect.x + 2, rect.y + 2, std::max(0.f, rect.width - 4), std::max(0.f, rect.height - 6)}, current.radius.medium, current.colors.neutralBackground1.hover);
-    if (hasState(*this, ControlVisualState::Pressed) && !selected) context.fillRoundRect({rect.x + 2, rect.y + 2, std::max(0.f, rect.width - 4), std::max(0.f, rect.height - 6)}, current.radius.medium, current.colors.neutralBackground1.pressed);
-    focusRing(context, {rect.x + 2, rect.y + 2, std::max(0.f, rect.width - 4), std::max(0.f, rect.height - 6)}, current.radius.medium, current, hasState(*this, ControlVisualState::Focused));
+    const auto& current = theme();
+    const RectF rect = context.snapRectEdges(bounds());
+    const bool selected = selected_;
+    focusRing(context, rect, current.radius.medium, current,
+              hasState(*this, ControlVisualState::Focused));
     const auto& style = selected ? current.typography.body1Strong : current.typography.body1;
     const Color foreground = !isEnabled() ? current.colors.neutralForegroundDisabled : selected ? current.colors.brandForeground1 : current.colors.neutralForeground1;
-    context.drawText(label_, rect.x + (rect.width - textWidth(label_, style)) * .5f, context.centeredTextBottom(label_, {rect.x,rect.y,rect.width,rect.height-4}, style.size, style.weight), style.size, foreground, style.weight, style.family);
-    if (selected) context.fillRoundRect({rect.x + 4, rect.y + rect.height - 3, std::max(0.f, rect.width - 8), 3}, current.radius.circular, current.colors.brandForeground1);
+    context.drawText(label_, rect.x + (rect.width - textWidth(label_, style)) * .5f,
+                     context.centeredTextBottom(label_, rect, style.size,
+                                                style.weight, style.family),
+                     style.size, foreground, style.weight, style.family);
+    const bool hovered = hasState(*this, ControlVisualState::Hovered);
+    const bool pressed = hasState(*this, ControlVisualState::Pressed);
+    if (selected || hovered || pressed) {
+        const RectF indicator = context.snapRectEdges(
+            {rect.x + kTabIndicatorInset,
+             rect.y + rect.height - kTabIndicatorHeight,
+             std::max(0.0f, rect.width - 2.0f * kTabIndicatorInset),
+             kTabIndicatorHeight});
+        Color indicatorColor =
+            selected ? current.colors.compoundBrandStroke.rest
+                     : current.colors.neutralStroke1;
+        if (pressed)
+            indicatorColor =
+                selected ? current.colors.compoundBrandStroke.pressed
+                         : current.colors.neutralStroke1Pressed;
+        else if (hovered)
+            indicatorColor =
+                selected ? current.colors.compoundBrandStroke.hover
+                         : current.colors.neutralStroke1Hover;
+        if (!isEnabled())
+            indicatorColor = current.colors.neutralForegroundDisabled;
+        context.fillRoundRect(indicator, current.radius.circular,
+                              indicatorColor);
+    }
     clearDirty(DirtyFlag::Paint);
 }
 bool Tab::onPointerEvent(const PointerEvent& event)
@@ -289,9 +399,38 @@ std::size_t TabList::focusedIndex() const noexcept { return focusedIndex_; }
 TabList& TabList::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
 void TabList::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
 const std::string& TabList::accessibleLabel() const noexcept { return accessibleLabel_; }
-SizeF TabList::measure(const Constraints& constraints) const { float width = 0, height = 0; for (const auto& child : children()) { const auto size = child->measureWithConstraints(constraints); width += size.width; height = std::max(height,size.height); } return constraints.clamp({width,height}); }
-void TabList::layout(const RectF& rect) { Node::layout(rect); float cursor = rect.x; for (const auto& child : children()) { const auto size=child->measureWithConstraints({0,rect.width,0,rect.height}); child->layout({cursor,rect.y,size.width,rect.height}); cursor += size.width; } clearLayoutDirtyRecursively(); }
-void TabList::paint(PaintContext& context) { const auto& current = theme(); context.fillRect({bounds().x,bounds().y+bounds().height-1,bounds().width,1},current.colors.neutralStroke1); ContainerNode::paint(context); clearDirty(DirtyFlag::Paint); }
+SizeF TabList::measure(const Constraints& constraints) const
+{
+    float width = 0.0f;
+    for (const auto& child : children())
+        width += child->measureWithConstraints(constraints).width;
+    return constraints.clamp({width, kTabHeight});
+}
+void TabList::layout(const RectF& rect)
+{
+    Node::layout(rect);
+    float cursor = rect.x;
+    const float height = std::min(kTabHeight, rect.height);
+    const float y = rect.y + (rect.height - height) * 0.5f;
+    for (const auto& child : children()) {
+        const auto size =
+            child->measureWithConstraints({0, rect.width, 0, height});
+        child->layout({cursor, y, size.width, height});
+        cursor += size.width;
+    }
+    clearLayoutDirtyRecursively();
+}
+void TabList::paint(PaintContext& context)
+{
+    const auto& current = theme();
+    const float stroke = context.snapStrokeWidth(current.stroke.thin);
+    const float y = context.snapToPhysicalPixel(
+        bounds().y + bounds().height - stroke);
+    context.fillRect({bounds().x, y, bounds().width, stroke},
+                     current.colors.neutralStroke1);
+    ContainerNode::paint(context);
+    clearDirty(DirtyFlag::Paint);
+}
 void TabList::selectTab(Tab& tab, bool notify)
 {
     if (!tab.isEnabled()) return;
@@ -392,14 +531,55 @@ Link& Link::href(std::string value) { setHref(std::move(value)); return *this; }
 void Link::setHref(std::string value) { href_=std::move(value);markDirty(DirtyFlag::Style); }
 Link& Link::onInvoke(InvokeHandler handler) { onInvoke_=std::move(handler);return *this; }
 SizeF Link::measure(const Constraints& constraints) const { const auto& style=theme().typography.body1;return constraints.clamp({textWidth(label_,style),style.lineHeight}); }
-void Link::paint(PaintContext& context) { const auto&current=theme();const auto&style=current.typography.body1;const RectF rect=bounds();const bool disabled=!isEnabled();const bool pressed=hasState(*this,ControlVisualState::Pressed);const Color fg=disabled?current.colors.neutralForegroundDisabled:pressed?current.colors.brandBackground.pressed:current.colors.brandForeground1;focusRing(context,rect,current.radius.small,current,hasState(*this,ControlVisualState::Focused));context.drawText(label_,rect.x,context.centeredTextBottom(label_,rect,style.size,style.weight),style.size,fg,style.weight,style.family);if(!disabled){const float underline=pressed?2:1;context.fillRect({rect.x,rect.y+rect.height-underline,textWidth(label_,style),underline},fg);}clearDirty(DirtyFlag::Paint); }
+void Link::paint(PaintContext& context)
+{
+    const auto& current = theme();
+    const auto& style = current.typography.body1;
+    const RectF rect = context.snapRectEdges(bounds());
+    const bool disabled = !isEnabled();
+    const bool pressed = hasState(*this, ControlVisualState::Pressed);
+    const bool hovered = hasState(*this, ControlVisualState::Hovered);
+    const Color fg =
+        disabled ? current.colors.neutralForegroundDisabled
+        : pressed ? current.colors.brandBackground.pressed
+        : hovered ? current.colors.brandBackground.hover
+                  : current.colors.brandBackground.hover;
+    const bool focused = hasState(*this, ControlVisualState::Focused);
+    context.drawText(label_, rect.x,
+                     context.centeredTextBottom(label_, rect, style.size,
+                                                style.weight, style.family),
+                     style.size, fg, style.weight, style.family);
+    // Fluent's non-inline Link is unadorned at rest. Hover and pressed add a
+    // single underline; keyboard focus uses the paired black/white underline
+    // treatment instead of a rectangular control ring.
+    if (!disabled && (hovered || pressed || focused)) {
+        const float underline = context.snapStrokeWidth(current.stroke.thin);
+        const float y =
+            context.snapToPhysicalPixel(rect.y + rect.height - underline);
+        context.fillRect({rect.x, y, textWidth(label_, style), underline}, fg);
+        if (focused) {
+            const float upperY =
+                context.snapToPhysicalPixel(y - underline * 2.0f);
+            context.fillRect(
+                {rect.x, upperY, textWidth(label_, style), underline},
+                current.colors.strokeFocusInner);
+        }
+    }
+    clearDirty(DirtyFlag::Paint);
+}
 bool Link::onPointerEvent(const PointerEvent&e){if(!isEnabled())return false;if(e.action==PointerAction::Enter){setVisualState(ControlVisualState::Hovered,true);return true;}if(e.action==PointerAction::Leave){setVisualState(ControlVisualState::Hovered,false);setVisualState(ControlVisualState::Pressed,false);return true;}if(e.action==PointerAction::Down&&e.button==MouseButton::Left){setVisualState(ControlVisualState::Pressed,true);setVisualState(ControlVisualState::Focused,true);return true;}if(e.action==PointerAction::Up&&e.button==MouseButton::Left){const bool activate=hasState(*this,ControlVisualState::Pressed)&&bounds().contains(e.position);setVisualState(ControlVisualState::Pressed,false);if(activate)invoke();return true;}if(e.action==PointerAction::Cancel){setVisualState(ControlVisualState::Pressed,false);return true;}return false;}
 bool Link::onKeyEvent(const KeyEvent&e){if(!isEnabled()||e.action!=KeyAction::Down)return false;if(e.keyCode==kEnter||e.keyCode==kSpace){invoke();return true;}return false;}
 AccessibilityActionCapabilities Link::accessibilityActions()const noexcept{AccessibilityActionCapabilities a;a.invoke=true;return a;} AccessibilityActionStatus Link::performAccessibilityAction(AccessibilityActionKind k,std::string_view){if(k!=AccessibilityActionKind::Invoke)return AccessibilityActionStatus::NotSupported;if(!isEnabled())return AccessibilityActionStatus::ElementNotEnabled;invoke();return AccessibilityActionStatus::Succeeded;}void Link::invoke(){if(isEnabled()&&onInvoke_)onInvoke_();}
 
 BreadcrumbItem::BreadcrumbItem(std::string label,bool current):label_(std::move(label)),current_(current){}
 const std::string& BreadcrumbItem::label()const noexcept{return label_;}BreadcrumbItem& BreadcrumbItem::label(std::string value){setLabel(std::move(value));return *this;}void BreadcrumbItem::setLabel(std::string value){if(label_!=value){label_=std::move(value);markDirty(DirtyFlag::Layout);}}bool BreadcrumbItem::isCurrent()const noexcept{return current_;}BreadcrumbItem& BreadcrumbItem::current(bool value)noexcept{setCurrent(value);return *this;}void BreadcrumbItem::setCurrent(bool value)noexcept{if(current_!=value){current_=value;markDirty(DirtyFlag::Paint);}}BreadcrumbItem& BreadcrumbItem::onInvoke(InvokeHandler handler){onInvoke_=std::move(handler);return *this;}
-SizeF BreadcrumbItem::measure(const Constraints& constraints)const{const auto&style=current_?theme().typography.body1Strong:theme().typography.body1;return constraints.clamp({textWidth(label_,style),style.lineHeight});}
+SizeF BreadcrumbItem::measure(const Constraints& constraints) const
+{
+    const auto& style = theme().typography.body1Strong;
+    return constraints.clamp(
+        {textWidth(label_, style) + kBreadcrumbItemPadding * 2.0f,
+         kBreadcrumbHeight});
+}
 void BreadcrumbItem::paint(PaintContext& context)
 {
     // Collapsed middle items retain their Node identity for a future overflow
@@ -408,14 +588,24 @@ void BreadcrumbItem::paint(PaintContext& context)
         clearDirty(DirtyFlag::Paint);
         return;
     }
-    const auto& current = theme(); const auto& style = current_ ? current.typography.body1Strong : current.typography.body1;
-    const RectF rect = bounds();
+    const auto& current = theme();
+    const auto& style = current.typography.body1Strong;
+    const RectF rect = context.snapRectEdges(bounds());
     const Color fg = !isEnabled() ? current.colors.neutralForegroundDisabled
-                   : current_ ? current.colors.neutralForeground1 : current.colors.brandForeground1;
+                   : current_ ? current.colors.neutralForeground1
+                   : hasState(*this, ControlVisualState::Pressed) ? current.colors.neutralForeground1
+                   : current.colors.neutralForeground2;
+    if (!current_ && isEnabled()) {
+        if (hasState(*this, ControlVisualState::Pressed))
+            context.fillRoundRect(rect, current.radius.medium,
+                                  current.colors.neutralBackground1.pressed);
+        else if (hasState(*this, ControlVisualState::Hovered))
+            context.fillRoundRect(rect, current.radius.medium,
+                                  current.colors.neutralBackground1.hover);
+    }
     focusRing(context, rect, current.radius.small, current, hasState(*this, ControlVisualState::Focused));
-    context.drawText(label_, rect.x, context.centeredTextBottom(label_, rect, style.size, style.weight),
+    context.drawText(label_, rect.x + kBreadcrumbItemPadding, context.centeredTextBottom(label_, rect, style.size, style.weight),
                      style.size, fg, style.weight, style.family);
-    if (!current_ && isEnabled()) context.fillRect({rect.x, rect.y + rect.height - 1, textWidth(label_, style), 1}, fg);
     clearDirty(DirtyFlag::Paint);
 }
 bool BreadcrumbItem::onPointerEvent(const PointerEvent&e){if(current_||!isEnabled())return false;if(e.action==PointerAction::Enter){setVisualState(ControlVisualState::Hovered,true);return true;}if(e.action==PointerAction::Leave){setVisualState(ControlVisualState::Hovered,false);setVisualState(ControlVisualState::Pressed,false);return true;}if(e.action==PointerAction::Down&&e.button==MouseButton::Left){setVisualState(ControlVisualState::Pressed,true);setVisualState(ControlVisualState::Focused,true);return true;}if(e.action==PointerAction::Up&&e.button==MouseButton::Left){const bool activate=hasState(*this,ControlVisualState::Pressed)&&bounds().contains(e.position);setVisualState(ControlVisualState::Pressed,false);if(activate)invoke();return true;}if(e.action==PointerAction::Cancel){setVisualState(ControlVisualState::Pressed,false);return true;}return false;}
@@ -432,22 +622,26 @@ SizeF Breadcrumb::measure(const Constraints& constraints) const
     float width = 0;
     for (const auto index : visible)
         width += children()[index]->measureWithConstraints(constraints).width;
-    const float separator = 16.0f + current.spacing.horizontal.s * 2.0f;
+    const float separator =
+        kBreadcrumbIconSize + kBreadcrumbSeparatorGap * 2.0f;
     width += separator * static_cast<float>(visible.size() - 1);
-    if (visible.size() < children().size()) width += 16.0f + separator;
-    return constraints.clamp({width, current.typography.body1.lineHeight});
+    if (visible.size() < children().size())
+        width += kBreadcrumbOverflowSize + separator;
+    return constraints.clamp({width, kBreadcrumbHeight});
 }
 
 void Breadcrumb::layout(const RectF& rect)
 {
     Node::layout(rect);
     const auto visible = visibleIndices();
-    const float separator = 16.0f + theme().spacing.horizontal.s * 2.0f;
+    const float separator =
+        kBreadcrumbIconSize + kBreadcrumbSeparatorGap * 2.0f;
     float x = rect.x;
     for (const auto& child : children()) child->layout({0, 0, 0, 0});
     for (std::size_t position = 0; position < visible.size(); ++position) {
+        if (position > 0) x += separator;
         if (position == 1 && visible.front() + 1 != visible[position])
-            x += 16.0f + separator;
+            x += kBreadcrumbOverflowSize + separator;
         const auto index = visible[position];
         const auto size = children()[index]->measureWithConstraints(
             {0, rect.width, 0, rect.height});
@@ -455,7 +649,6 @@ void Breadcrumb::layout(const RectF& rect)
             {x, rect.y + (rect.height - size.height) * 0.5f,
              size.width, size.height});
         x += size.width;
-        if (position + 1 < visible.size()) x += separator;
     }
     clearLayoutDirtyRecursively();
 }
@@ -468,19 +661,37 @@ void Breadcrumb::paint(PaintContext& context)
          ++position) {
         const auto* item = children()[visible[position]].get();
         const float x = item->bounds().x + item->bounds().width +
-                        current.spacing.horizontal.s;
+                        kBreadcrumbSeparatorGap;
         drawIcon(context, IconName::ChevronRight,
-                 {x, bounds().y + (bounds().height - 16.0f) * 0.5f,
-                  16.0f, 16.0f},
+                 {x, bounds().y +
+                         (bounds().height - kBreadcrumbIconSize) * 0.5f,
+                  kBreadcrumbIconSize, kBreadcrumbIconSize},
                  current.colors.neutralForeground3, IconSize::Size16);
         if (position == 0 &&
             visible[position] + 1 != visible[position + 1]) {
             const float moreX =
-                x + 16.0f + current.spacing.horizontal.s * 2.0f;
+                x + kBreadcrumbIconSize + kBreadcrumbSeparatorGap;
+            const RectF overflow{moreX,
+                                 bounds().y +
+                                     (bounds().height -
+                                      kBreadcrumbOverflowSize) *
+                                         0.5f,
+                                 kBreadcrumbOverflowSize,
+                                 kBreadcrumbOverflowSize};
+            context.fillRoundRect(overflow, current.radius.medium,
+                                  current.colors.neutralBackground1.rest);
             drawIcon(context, IconName::MoreHorizontal,
-                     {moreX,
-                      bounds().y + (bounds().height - 16.0f) * 0.5f,
-                      16.0f, 16.0f},
+                     overflow,
+                     current.colors.neutralForeground3,
+                     IconSize::Size20);
+            const float trailingX =
+                moreX + kBreadcrumbOverflowSize +
+                kBreadcrumbSeparatorGap;
+            drawIcon(context, IconName::ChevronRight,
+                     {trailingX,
+                      bounds().y +
+                          (bounds().height - kBreadcrumbIconSize) * 0.5f,
+                      kBreadcrumbIconSize, kBreadcrumbIconSize},
                      current.colors.neutralForeground3,
                      IconSize::Size16);
         }

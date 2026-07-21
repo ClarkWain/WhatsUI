@@ -293,20 +293,33 @@ void Image::prepare(PaintContext& context)
 void Image::paint(PaintContext& context)
 {
     const auto& current = theme();
+    const RectF renderedBounds = context.snapRectEdges(bounds());
+    RectF shapeBounds = renderedBounds;
+    if (shape_ == ImageShape::Circular) {
+        const float extent =
+            std::min(renderedBounds.width, renderedBounds.height);
+        shapeBounds = context.snapRectEdges(
+            {renderedBounds.x + (renderedBounds.width - extent) * 0.5f,
+             renderedBounds.y + (renderedBounds.height - extent) * 0.5f,
+             extent, extent});
+    }
     float radius = current.radius.none;
     if (shape_ == ImageShape::Rounded) radius = current.radius.medium;
     else if (shape_ == ImageShape::Circular) radius = current.radius.circular;
     if (shadow_) {
         const auto& elevation = current.elevation.shadow4;
-        context.drawBoxShadow(bounds(), radius, elevation.ambient.blur, elevation.ambient.offsetX,
+        context.drawBoxShadow(shapeBounds, radius, elevation.ambient.blur, elevation.ambient.offsetX,
                               elevation.ambient.offsetY, elevation.ambient.spread, elevation.ambient.color);
-        context.drawBoxShadow(bounds(), radius, elevation.key.blur, elevation.key.offsetX,
+        context.drawBoxShadow(shapeBounds, radius, elevation.key.blur, elevation.key.offsetX,
                               elevation.key.offsetY, elevation.key.spread, elevation.key.color);
     }
-    const float border = bordered_ ? current.stroke.thin : 0.0f;
-    const RectF destinationBounds{bounds().x + border, bounds().y + border,
-                                  std::max(0.0f, bounds().width - border * 2.0f),
-                                  std::max(0.0f, bounds().height - border * 2.0f)};
+    const float border = bordered_
+        ? context.snapStrokeWidth(current.stroke.thin)
+        : 0.0f;
+    const RectF destinationBounds = context.snapRectEdges(
+        {shapeBounds.x + border, shapeBounds.y + border,
+         std::max(0.0f, shapeBounds.width - border * 2.0f),
+         std::max(0.0f, shapeBounds.height - border * 2.0f)});
     const float innerRadius = std::max(0.0f, radius - border);
     const int checkpoint = context.save();
     if (shape_ == ImageShape::Square) context.clipRect(destinationBounds);
@@ -359,9 +372,10 @@ void Image::paint(PaintContext& context)
     context.restoreTo(checkpoint);
     if (bordered_) {
         const float half = border * 0.5f;
-        const RectF outline{bounds().x + half, bounds().y + half,
-                            std::max(0.0f, bounds().width - border),
-                            std::max(0.0f, bounds().height - border)};
+        const RectF outline = context.snapRectEdges(
+            {shapeBounds.x + half, shapeBounds.y + half,
+             std::max(0.0f, shapeBounds.width - border),
+             std::max(0.0f, shapeBounds.height - border)});
         const float outlineRadius = shape_ == ImageShape::Circular
             ? std::min(outline.width, outline.height) * 0.5f
             : std::max(0.0f, radius - half);

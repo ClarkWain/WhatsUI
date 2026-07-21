@@ -7,6 +7,13 @@ logical geometry, and semantic colors. It complements the larger component
 matrix rather than replacing it: the matrix remains the broad review artifact;
 this test makes the most failure-prone visual rules executable.
 
+Software output is not the product-renderer sign-off. Native Windows builds
+present through WhatsCanvas OpenGL, whose DPR root transform, analytic-AA
+coverage, texture composition, and framebuffer rasterization can differ from
+the CPU renderer. Product-facing controls therefore also need a hidden
+GLFW/OpenGL readback at the same DPR. A fixed 2x Software Todo capture must
+never be used as evidence for a 1.25x or 1.5x native result.
+
 The Radio/Checkbox failure that led to the device-space curve tolerance and
 radial symmetry gate is documented in
 [Fluent indicator geometry at fractional DPI](FLUENT_INDICATOR_GEOMETRY.md).
@@ -26,6 +33,10 @@ logical DIP.
 - Button labels use the active Fluent button style and semibold weight; body,
   caption, subtitle, and title text come from the theme type ramp rather than
   ad-hoc sizes.
+- A requested 600 weight must resolve to a registered 600 face. On Windows the
+  portable backend must expose `seguisb.ttf`; silently resolving Button labels
+  to the nearer Bold 700 face is a visual failure even when logical typography
+  tokens and geometry are correct.
 - Text must not touch or cross its content box. Truncation must use the
   component's declared wrapping, ellipsis, or scrolling behavior.
 - Editable controls must show a correctly sized, clipped, blinking caret; the
@@ -74,8 +85,16 @@ logical DIP.
   text additionally proves that Canvas/PaintContext DPR ownership is applied
   exactly once. GLFW content-scale discovery, callbacks, and cross-monitor
   movement remain native release checks.
+- Components used by the shipped Todo demo must also render through a hidden
+  OpenGL framebuffer at 100%, 125%, 150%, and 200%. The OpenGL gate samples
+  semantic state colors and writes an inspectable frame; a Software-only pass
+  cannot release a visual change.
 - The generated artifact is saved before assertions, and the component state
   matrix is visually inspected at 150% after a relevant rendering change.
+- Todo's headless capture accepts `--scale <dpr>` so the narrow, regular, and
+  wide integration frames can be reviewed at the requested Windows scale.
+  Its default remains `2.0` for compatibility with existing CI baselines;
+  reviewers must pass `--scale 1.5` when claiming 150% evidence.
 - A whole-image hash is supporting evidence, never the only gate. Every fixed
   visual defect receives a local geometry or semantic-pixel regression test
   with a diagnostic failure message.
@@ -104,6 +123,65 @@ ctest --test-dir build -C Release --output-on-failure `
 These tests write `fluent_indicator_geometry_*.ppm` and validate Radio radial
 symmetry plus Checkbox edge/corner symmetry and clip containment.
 
+For Button and Todo action changes, run both renderer families:
+
+```powershell
+ctest --test-dir build -C Release --output-on-failure `
+  -R '^whatsui_fluent_button_(opengl_(100|125|150|200)|(10|125|15|20))dpi$'
+```
+
+`whatsui_fluent_button_opengl_*` creates a hidden GLFW context, gives
+WhatsCanvas the actual DPR through `Canvas::setDevicePixelRatio()`, reads the
+OpenGL framebuffer, and verifies Primary pressed, Secondary, Subtle, selected
+icon-only, hover, and keyboard-focus states. The generated
+`fluent_button_opengl_*.ppm` files are the product-renderer review artifacts.
+
+For a cross-family native review of Action, Input, and Selection controls:
+
+```powershell
+ctest --test-dir build -C Release --output-on-failure `
+  -R '^whatsui_fluent_control_opengl_matrix_(100|125|150|200)dpi$'
+```
+
+The first six columns are Rest, Hover, Pressed, Focus, Selected, and Disabled.
+The composite Action section additionally labels SplitButton's independent
+primary-hover, primary-down, disclosure-hover, disclosure-down, disabled, and
+retained-open cases. The matrix writes
+`fluent_control_opengl_matrix_*dpi.ppm` before asserting Button state colors,
+CompoundButton surfaces, MenuButton chevron centring, SplitButton region
+isolation/separator thickness, IconButton and Checkbox visible-ink centring,
+Input/Textarea one-/two-DIP bottom strokes, Radio/Switch roundness, and Medium
+Slider 20-DIP-thumb geometry. The 150% image is a required visual-review
+artifact, not merely diagnostic output.
+
+For renderer-independent geometry and stroke parity:
+
+```powershell
+ctest --test-dir build -C Release --output-on-failure `
+  -R '^whatsui_paint_geometry_backend_parity_(100|125|150|200)dpi$'
+```
+
+This test paints a text-free Button, Checkbox, Radio, Switch, and Slider scene
+through both Software and hidden GLFW/OpenGL backends. It compares structural
+ink bounds rather than demanding fragile whole-frame equality: corresponding
+edges, widths, and heights may differ by at most one physical pixel. It also
+checks circular centre symmetry and requires the Slider's 4-DIP rail to occupy
+exactly `round(4 * DPR)` physical pixels.
+
+For disclosure, data, and content surfaces:
+
+```powershell
+ctest --test-dir build -C Release --output-on-failure `
+  -R '^whatsui_fluent_(drawer|accordion|persona|date_time|table|tree|rating_image_visual|card_tests)'
+```
+
+These families run at 100%, 125%, 150%, and 200%. The Popover executable
+produces all four DPI artifacts in one test. Content-surface assertions include
+Card Shadow04/Shadow08 separation, matching CardFooter measure/layout gaps,
+Header ellipsis before trailing actions, Persona optical line leading, a
+12-DIP Small Rating glyph inside a 16-DIP row with 2-DIP item gaps, and a true
+centred circular Image viewport in non-square bounds.
+
 ## Executable rules
 
 | Rule | Assertion | Threshold / reason |
@@ -115,9 +193,14 @@ symmetry plus Checkbox edge/corner symmetry and clip containment.
 | Circular geometry | Circular Button corners remain page-colored while its centre is filled; unselected Radio has page-colored corner, stroke axis and a transparent centre showing its parent background | Exact semantic token samples at logical geometry points. This detects square fills, clipping, accidental Radio fills and lost ring strokes. |
 | Compact indicator geometry | Unselected Radio has ink on 24 radial directions with bounded spread and mirror symmetry; Checkbox keeps equal bounds, comparable four-side ink and a clean exterior gutter | Runs through `Canvas::setDevicePixelRatio()` at 100/150/200%; catches curve tessellation that ignores the native DPR root transform. |
 | Checkbox checkmark optical centre | The visible Checkmark12 ink centre is compared with the complete 16-DIP indicator's physical-pixel centre | `<= 0.75 physical pixel` at 100/125/150/200%; catches baseline/em-box centring that leaves the actual mark one DIP high. |
+| Button geometry and focus modality | Small/medium/large faces hug measured content with 8/12/16-DIP horizontal padding and retain 24/32/40-DIP heights; Medium icon+text uses 20-DIP icon + 6-DIP gap, icon-only is 32×32; pointer focus has no black frame while keyboard focus-visible retains the paired ring | Runs at 100/125/150/200%; samples Primary, Secondary, Outline, Subtle, Transparent and selected ToggleButton aliases, Regular→Filled selected icons, plus the Figma 1-DIP optical label offset. |
+| IconButton visible-ink centre | Selected Star and hovered Delete glyph ink is compared with the complete 32-DIP Button face, not with the icon font em box | `<= 1 physical pixel` on both axes at 100/125/150/200% through the native OpenGL path; catches baseline-only centring that left 20-DIP icons 2 DIP high. |
+| Composite Action controls | CompoundButton uses the shared state surface, MenuButton keeps its chevron in the measured trailing 20-DIP slot, and SplitButton changes only the operated primary/disclosure region | Local semantic-token samples at 100/125/150/200%; the Split separator must equal one snapped DIP, disabled must replace both brand regions, and retained open may press only the disclosure region. |
+| Backend geometry parity | Text-free Button, Checkbox, Radio, Switch, and Slider structural ink bounds are compared between Software and OpenGL | Corresponding edges, widths, heights, and circular centres differ by `<= 1 physical pixel`; this catches backend-only half-pixel drift without relying on font rasterization or whole-image hashes. |
 | Input / Textarea field layers | Rest and hover frames sample their neutral outer and accessible bottom stroke separately; focus-in samples brand at the centre while retaining neutral stroke near the ends | Runs at 100/125/150/200%; proves the 200 ms centre-out focus animation and requires integer physical-pixel stroke thickness, preventing a uniform grey, soft 1.5-pixel edge, or instantly full-width field border. |
 | Editable caret geometry | Input and Textarea caret ink is measured independently from the focus line | Exactly `1 physical pixel` wide and one 20-DIP Body 1 line high; Input is vertically centred and medium Textarea begins after its 6-DIP top padding. |
 | Stateful surfaces | Compound Button, Checkbox, Radio, and determinate Progress states sample their dedicated Fluent tokens | Checkbox verifies unchecked, checked, mixed, pointer-focus, keyboard-focus and disabled states, including compound-brand surfaces/marks, at 100/125/150/200%. Radio verifies its separate outer stroke, 10 DIP dot and transparent annular gap at the same scales. |
+| Switch focus root | Medium Switch keeps its 40×20 track at an 8-DIP horizontal inset inside the exact 56×36 focus/hit root | White 3-DIP and black 2-DIP focus strokes stay inside the 4-DIP-radius root at 100/125/150/200%; the pixel immediately outside remains the parent surface. |
 | Fractional DPI | The identical rules run at `1.0`, `1.25`, `1.5`, and `2.0` scale | Coordinates are converted with the renderer's `lround(logical * scale)` convention, exposing double-scale, half-pixel drift, and scale-specific clipping. |
 
 The centering threshold is expressed in output pixels, not DIPs:
@@ -134,10 +217,11 @@ this suite has a local diagnostic meaning: a baseline moved, a token/state was
 lost, a content inset regressed, or a circular/stroke shape became clipped.
 
 Native DirectWrite quality and one-DPR ownership are separately gated by
-`whatsui_windows_native_text_dpi_tests`; this suite validates the portable
-Software component path used by the deterministic visual matrix. Reviewers
-must still inspect the generated matrix for gestalt issues (visual hierarchy,
-crowding, and composition) that no local pixel assertion can prove.
+`whatsui_windows_native_text_dpi_tests`; the Software suite validates the
+portable deterministic component path, while the hidden OpenGL suite validates
+the product compositor. Reviewers must still inspect the generated native
+frame for gestalt issues (visual hierarchy, crowding, and composition) that no
+local pixel assertion can prove.
 
 `whatsui_fluent_component_visual_matrix*` remains a broad 100/150% review gate
 and uses a deliberately wider 1.5-DIP ink band across varied strings. It is not

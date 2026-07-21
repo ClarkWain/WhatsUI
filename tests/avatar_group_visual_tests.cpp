@@ -57,35 +57,43 @@ void render(const std::string& output, float scale)
         const auto& current = wui::theme();
         paint.fillRect({0, 0, static_cast<float>(kLogicalWidth), static_cast<float>(kLogicalHeight)}, current.colors.neutralBackground2.rest);
         paint.drawText("Fluent Avatar", 28, 35, 22, current.colors.neutralForeground1, 600);
-        paint.drawText("Initials, presence, and group overflow", 28, 59, 13, current.colors.neutralForeground2, 400);
+        paint.drawText("Icon fallback, initials, activity, presence, and group overflow", 28, 59, 13, current.colors.neutralForeground2, 400);
 
-        wui::Avatar ada("Ada Lovelace", wui::AvatarSize::Size64);
-        ada.setColor(wui::AvatarColor::Brand);
-        ada.layout({28, 82, 64, 64});
-        ada.paint(paint);
+        // The first three examples mirror the Figma Avatar component: default
+        // Person icon, a status overlay aligned to the visual edge, then an
+        // Initials avatar with an activity ring that overflows without
+        // changing its 64-DIP layout footprint.
+        wui::Avatar fallback({}, wui::AvatarSize::Size64);
+        fallback.layout({28, 82, 64, 64});
+        fallback.paint(paint);
+        paint.drawText("Icon", 28, 170, 13, current.colors.neutralForeground1, 600);
+
+        wui::Avatar online({}, wui::AvatarSize::Size64);
+        online.layout({130, 82, 64, 64});
+        online.paint(paint);
         wui::PresenceBadge presence(wui::PresenceStatus::Available);
         presence.setAvatarSize(64);
-        presence.layout(presence.boundsForAvatar(ada.bounds()));
+        presence.layout(presence.boundsForAvatar(online.bounds()));
         presence.paint(paint);
-        paint.drawText("Ada Lovelace", 28, 170, 13, current.colors.neutralForeground1, 600);
+        paint.drawText("Online", 130, 170, 13, current.colors.neutralForeground1, 600);
 
-        wui::Avatar square("Grace Hopper", wui::AvatarSize::Size48);
-        square.setShape(wui::AvatarShape::Square);
-        square.setColor(wui::AvatarColor::Cranberry);
-        square.layout({130, 90, 48, 48});
-        square.paint(paint);
-        paint.drawText("Square", 130, 170, 13, current.colors.neutralForeground1, 600);
+        wui::Avatar initials("Morgan Brown", wui::AvatarSize::Size64);
+        initials.setColor(wui::AvatarColor::Neutral);
+        initials.setActive(true);
+        initials.layout({232, 82, 64, 64});
+        initials.paint(paint);
+        paint.drawText("Activity", 232, 170, 13, current.colors.neutralForeground1, 600);
 
         wui::AvatarGroup stack;
-        stack.setSize(wui::AvatarSize::Size48);
+        stack.setSize(wui::AvatarSize::Size40);
         stack.setMaxVisible(3);
         stack.addAvatar("Ada Lovelace").setColor(wui::AvatarColor::Brand);
         stack.addAvatar("Grace Hopper").setColor(wui::AvatarColor::Purple);
         stack.addAvatar("Margaret Hamilton").setColor(wui::AvatarColor::Green);
         stack.addAvatar("Katherine Johnson").setColor(wui::AvatarColor::Marigold);
-        stack.layout({235, 90, 220, 48});
+        stack.layout({336, 94, 150, 40});
         stack.paint(paint);
-        paint.drawText("Project members", 235, 170, 13, current.colors.neutralForeground1, 600);
+        paint.drawText("Stack", 336, 170, 13, current.colors.neutralForeground1, 600);
 
         wui::AvatarGroup spread;
         spread.setGroupLayout(wui::AvatarGroupLayout::Spread);
@@ -94,9 +102,9 @@ void render(const std::string& output, float scale)
         spread.addAvatar("Linus Torvalds").setColor(wui::AvatarColor::Teal);
         spread.addAvatar("Annie Easley").setColor(wui::AvatarColor::Plum);
         spread.addAvatar("Alan Turing").setColor(wui::AvatarColor::DarkGreen);
-        spread.layout({470, 98, 120, 32});
+        spread.layout({500, 98, 100, 32});
         spread.paint(paint);
-        paint.drawText("Spread", 470, 170, 13, current.colors.neutralForeground1, 600);
+        paint.drawText("Spread", 500, 170, 13, current.colors.neutralForeground1, 600);
 
         canvas->endFrame();
         const auto pixels = canvas->readPixelsRGBA();

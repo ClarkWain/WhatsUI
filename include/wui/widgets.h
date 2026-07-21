@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "wui/icons.h"
 #include "wui/node.h"
 #include "wui/state.h"
 
@@ -498,6 +499,9 @@ enum class ButtonVariant {
     Primary,
     Ghost,
     Danger,
+    // Appended to preserve the numeric values of the original variants while
+    // allowing the Fluent default to round-trip through the compatibility API.
+    Secondary,
 };
 
 enum class ButtonAppearance {
@@ -521,6 +525,11 @@ enum class ButtonShape {
     Square,
 };
 
+enum class ButtonIconPosition {
+    Before,
+    After,
+};
+
 class Button : public ControlNode {
 public:
     using ClickHandler = std::function<void()>;
@@ -541,6 +550,19 @@ public:
     [[nodiscard]] ButtonSize size() const noexcept;
     void setShape(ButtonShape shape) noexcept;
     [[nodiscard]] ButtonShape shape() const noexcept;
+    Button& icon(IconName value) noexcept;
+    Button& iconStyle(IconStyle value) noexcept;
+    Button& iconPosition(ButtonIconPosition value) noexcept;
+    Button& iconOnly(bool value = true) noexcept;
+    Button& clearIcon() noexcept;
+    void setIcon(std::optional<IconName> value) noexcept;
+    void setIconStyle(IconStyle value) noexcept;
+    void setIconPosition(ButtonIconPosition value) noexcept;
+    void setIconOnly(bool value) noexcept;
+    [[nodiscard]] std::optional<IconName> icon() const noexcept;
+    [[nodiscard]] IconStyle iconStyle() const noexcept;
+    [[nodiscard]] ButtonIconPosition iconPosition() const noexcept;
+    [[nodiscard]] bool isIconOnly() const noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
@@ -552,10 +574,14 @@ public:
 private:
     std::string label_;
     ClickHandler onClick_;
-    ButtonVariant variant_{ButtonVariant::Primary};
-    ButtonAppearance appearance_{ButtonAppearance::Primary};
+    ButtonVariant variant_{ButtonVariant::Secondary};
+    ButtonAppearance appearance_{ButtonAppearance::Secondary};
     ButtonSize size_{ButtonSize::Medium};
     ButtonShape shape_{ButtonShape::Rounded};
+    std::optional<IconName> icon_;
+    IconStyle iconStyle_{IconStyle::Regular};
+    ButtonIconPosition iconPosition_{ButtonIconPosition::Before};
+    bool iconOnly_{false};
 };
 
 // Fluent's two-line command button. The secondary content is descriptive
@@ -615,6 +641,21 @@ public:
     [[nodiscard]] ButtonSize size() const noexcept;
     void setShape(ButtonShape value) noexcept;
     [[nodiscard]] ButtonShape shape() const noexcept;
+    void setAppearance(ButtonAppearance value) noexcept;
+    [[nodiscard]] ButtonAppearance appearance() const noexcept;
+    ToggleButton& icon(IconName value) noexcept;
+    ToggleButton& iconStyle(IconStyle value) noexcept;
+    ToggleButton& iconPosition(ButtonIconPosition value) noexcept;
+    ToggleButton& iconOnly(bool value = true) noexcept;
+    ToggleButton& clearIcon() noexcept;
+    void setIcon(std::optional<IconName> value) noexcept;
+    void setIconStyle(IconStyle value) noexcept;
+    void setIconPosition(ButtonIconPosition value) noexcept;
+    void setIconOnly(bool value) noexcept;
+    [[nodiscard]] std::optional<IconName> icon() const noexcept;
+    [[nodiscard]] IconStyle iconStyle() const noexcept;
+    [[nodiscard]] ButtonIconPosition iconPosition() const noexcept;
+    [[nodiscard]] bool isIconOnly() const noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
@@ -632,8 +673,13 @@ private:
     std::optional<Binding<bool>> binding_;
     bool hasBinding_{false};
     ChangeHandler onChange_;
+    ButtonAppearance appearance_{ButtonAppearance::Secondary};
     ButtonSize size_{ButtonSize::Medium};
     ButtonShape shape_{ButtonShape::Rounded};
+    std::optional<IconName> icon_;
+    IconStyle iconStyle_{IconStyle::Regular};
+    ButtonIconPosition iconPosition_{ButtonIconPosition::Before};
+    bool iconOnly_{false};
 };
 
 enum class CheckboxState {

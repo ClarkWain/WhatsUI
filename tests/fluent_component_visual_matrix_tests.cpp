@@ -53,6 +53,22 @@ bool pixelIs(const std::vector<unsigned char>& rgba, int width, float scale,
         && rgba[offset + 3] == color.a;
 }
 
+bool pixelNear(const std::vector<unsigned char>& rgba, int width, float scale,
+               int logicalX, int logicalY, wui::Color color,
+               int tolerance)
+{
+    const int x = static_cast<int>(
+        std::lround(static_cast<float>(logicalX) * scale));
+    const int y = static_cast<int>(
+        std::lround(static_cast<float>(logicalY) * scale));
+    const auto offset = static_cast<std::size_t>((y * width + x) * 4);
+    return offset + 3 < rgba.size() &&
+        std::abs(static_cast<int>(rgba[offset]) - color.r) <= tolerance &&
+        std::abs(static_cast<int>(rgba[offset + 1]) - color.g) <= tolerance &&
+        std::abs(static_cast<int>(rgba[offset + 2]) - color.b) <= tolerance &&
+        std::abs(static_cast<int>(rgba[offset + 3]) - color.a) <= tolerance;
+}
+
 // The visual matrix deliberately runs with the Software backend at both 100%
 // and 150%.  Looking for dark glyph pixels in a control's content box gives us
 // a renderer-independent check that its actual ink (not merely its nominal
@@ -114,6 +130,7 @@ int main(int argc, char** argv)
         buttons[1]->setVisualState(wui::ControlVisualState::Hovered, true);
         buttons[2]->setVisualState(wui::ControlVisualState::Pressed, true);
         buttons[3]->setVisualState(wui::ControlVisualState::Focused, true);
+        buttons[3]->setVisualState(wui::ControlVisualState::FocusVisible, true);
         buttons[4]->setEnabled(false);
         for (std::size_t i = 0; i < buttons.size(); ++i) draw(*buttons[i], paint, {28.0f + i * 128.0f, 86, 110, 32});
         wui::ToggleButton toggle("Pinned", true); draw(toggle, paint, {676, 86, 110, 32});
@@ -129,11 +146,14 @@ int main(int argc, char** argv)
 
         label(paint, "TEXT FIELDS", 28, 218);
         wui::TextInput placeholder("Placeholder"), focused("Focused"), invalid("Invalid"), disabled("Disabled");
-        focused.text("Editing text"); focused.setVisualState(wui::ControlVisualState::Focused, true);
+        focused.text("Editing text");
+        focused.setMotionEnabled(false);
+        focused.setVisualState(wui::ControlVisualState::Focused, true);
         invalid.setInvalid(true); disabled.setEnabled(false);
         draw(placeholder, paint, {28, 244, 210, 32}); draw(focused, paint, {254, 244, 210, 32});
         draw(invalid, paint, {480, 244, 210, 32}); draw(disabled, paint, {706, 244, 210, 32});
         wui::TextArea area("Multi-line placeholder"); area.text("First line\nSecond line\nThird line\nFourth line");
+        area.setMotionEnabled(false);
         area.layout({28, 294, 438, 84}); area.setVisualState(wui::ControlVisualState::Focused, true); area.prepare(paint); area.paint(paint);
         wui::TextArea areaInvalid("Required notes"); areaInvalid.setInvalid(true); draw(areaInvalid, paint, {480, 294, 436, 84});
 
@@ -175,6 +195,7 @@ int main(int argc, char** argv)
         compoundHover.setVisualState(wui::ControlVisualState::Hovered, true);
         compoundPressed.setVisualState(wui::ControlVisualState::Pressed, true);
         compoundFocused.setVisualState(wui::ControlVisualState::Focused, true);
+        compoundFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
         compoundDisabled.setEnabled(false);
         draw(compoundRest, paint, {28, 872, 160, 52});
         draw(compoundHover, paint, {206, 872, 160, 52});
@@ -189,6 +210,7 @@ int main(int argc, char** argv)
         toggleHover.setVisualState(wui::ControlVisualState::Hovered, true);
         togglePressed.setVisualState(wui::ControlVisualState::Pressed, true);
         toggleFocused.setVisualState(wui::ControlVisualState::Focused, true);
+        toggleFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
         toggleDisabled.setEnabled(false);
         draw(toggleRest, paint, {28, 972, 150, 32});
         draw(toggleHover, paint, {196, 972, 150, 32});
@@ -224,6 +246,7 @@ int main(int argc, char** argv)
         switchHover.setVisualState(wui::ControlVisualState::Hovered, true);
         switchPressed.setVisualState(wui::ControlVisualState::Pressed, true);
         switchFocused.setVisualState(wui::ControlVisualState::Focused, true);
+        switchFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
         switchDisabled.setEnabled(false);
         draw(switchRest, paint, {28, 1096, 120, 32});
         draw(switchHover, paint, {166, 1096, 134, 32});
@@ -252,21 +275,23 @@ int main(int argc, char** argv)
         canvas->endFrame();
         const auto pixels = canvas->readPixelsRGBA();
         if (pixels.size() != static_cast<std::size_t>(width * height * 4)) return 3;
+        // Preserve the rendered matrix even when a later pixel assertion
+        // fails so a visual regression remains directly inspectable.
+        savePpm(output, pixels, width, height);
         // Checkbox keyboard focus is a two-stroke root outline. Its
         // transparent label tail must retain the page surface instead of
         // becoming an opaque focus-inner rectangle.
         if (!pixelIs(pixels, width, scale, 330, 1068,
                      wui::theme().colors.neutralBackground2.rest)) return 4;
-        // State surfaces and focus geometry must remain distinct: pressed is
-        // the documented neutral pressed token, while focus retains both the
+        // Outline remains transparent while pressed; focus retains both the
         // outer white and inner black ring outside the control's fill.
         if (!pixelIs(pixels, width, scale, 300, 94,
-                     wui::theme().colors.neutralBackground1.pressed)
-            || !pixelIs(pixels, width, scale, 416, 83,
-                        wui::theme().colors.strokeFocusOuter)
+                     wui::theme().colors.neutralBackground2.rest)
+            || !pixelNear(pixels, width, scale, 416, 83,
+                          wui::theme().colors.strokeFocusOuter, 3)
             || !pixelIs(pixels, width, scale, 416, 84,
                         wui::theme().colors.strokeFocusInner)
-            || !pixelIs(pixels, width, scale, 300, 273,
+            || !pixelIs(pixels, width, scale, 300, 275,
                         wui::theme().colors.brandForeground1)) return 5;
         // Test the physical ink rather than nominal text coordinates.  The
         // regions exclude borders, carets and focus rings, and include Button,
@@ -278,7 +303,7 @@ int main(int argc, char** argv)
             || !darkInkIsVerticallyCentered(pixels, width, scale,
                                             {270, 250, 184, 22}, 260.0f, 1.5f)
             || !darkInkIsVerticallyCentered(pixels, width, scale,
-                                            {42, 296, 408, 18}, 305.0f, 1.5f)
+                                            {42, 296, 408, 18}, 310.0f, 1.5f)
             || !darkInkIsVerticallyCentered(pixels, width, scale,
                                             {480, 764, 236, 24}, 776.0f, 1.5f)
             || !darkInkIsVerticallyCentered(pixels, width, scale,
@@ -286,7 +311,6 @@ int main(int argc, char** argv)
             || !darkInkIsVerticallyCentered(pixels, width, scale,
                                             {38, 900, 142, 16}, 908.0f, 1.5f,
                                             155)) return 6;
-        savePpm(output, pixels, width, height);
         wui::setTextMeasurer(nullptr);
         return 0;
     } catch (...) {

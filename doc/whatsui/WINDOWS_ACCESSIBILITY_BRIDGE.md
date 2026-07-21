@@ -7,9 +7,10 @@ Windows UI Automation (UIA) fragment tree for the GLFW host. Native
 clients can discover named controls, roles, bounds, enabled/focused state,
 values, and checked state. Buttons expose Invoke, checkboxes/switches expose
 Toggle, editable text exposes Value, and focus requests are marshalled to the
-UI thread. Name, enabled, toggle, value, focus, bounds, and structure changes
-raise native UIA events. Rich text ranges, Selection patterns, and the Narrator
-validation matrix are not complete, so full
+UI thread. RadioGroup, TabList, and ListBox expose native Selection containers;
+RadioButton, Tab, and virtual ListBox Option children expose SelectionItem.
+Name, enabled, toggle, value, focus, bounds, and structure changes raise native
+UIA events. Rich text ranges and the Narrator validation matrix are not complete, so full
 screen-reader support must not yet be claimed.
 
 The semantic projection is now a real runtime boundary rather than a
@@ -46,9 +47,10 @@ UIA needs a real provider object that implements at least:
 3. `IRawElementProviderFragmentRoot` for `ElementProviderFromPoint` and
    `GetFocus`.
 4. `IInvokeProvider` for buttons, `IToggleProvider` for checkbox/switch/icon
-   toggles, and `IValueProvider` for editable text fields. Radio selection is
-   deliberately reserved for `SelectionItem`, rather than misrepresented as a
-   toggle. A Value pattern is not a substitute for rich text ranges.
+   toggles, `IValueProvider` for editable text fields, and the UIA
+   `ISelectionProvider` / `ISelectionItemProvider` pair for RadioGroup,
+   TabList, ListBox, RadioButton, Tab, and materialized ListBox Options. A
+   Value pattern is not a substitute for rich text ranges.
 
 Fragment parents are calculated using the longest exposed visual-path prefix.
 This is important because non-semantic visual containers are absent from the
@@ -79,6 +81,9 @@ on each axis, then `ClientToScreen`, avoiding a second 150% DPI scale.
 
 - [x] Route Invoke/Toggle/Value/focus actions to the UI thread through explicit
       `UiWindow` accessibility actions. Do not synthesize mouse coordinates.
+- [x] Project UIA Selection/SelectionItem policy and selected state for radio,
+      tab, and virtual ListBox option controls. `Select`, `AddToSelection`,
+      and `RemoveFromSelection` reuse the UI-thread control contract.
 - [x] Keep retained provider identities stable across published snapshots,
       preferring explicit automation IDs for keyed/dynamic controls.
 - [x] Raise focus, Name, IsEnabled, ToggleState, Value, BoundingRectangle, and
@@ -93,11 +98,14 @@ on each axis, then `ClientToScreen`, avoiding a second 150% DPI scale.
       automated smoke requires a named/focused WhatsUI Button, framework id,
       control type, and client-contained screen bounds.
 - [ ] Assert root name and every common Todo control's Name, ControlType,
-      IsEnabled, ToggleState/Value, and bounding rectangle at 100%, 150%, and
-      200% DPI.
+      IsEnabled, ToggleState/Value/Selection state, and bounding rectangle at
+      100%, 150%, and 200% DPI.
 - [x] Invoke a button, toggle a checkbox, edit text, and move focus through UIA;
       assert callbacks run on the GLFW UI thread and retained providers observe
       the newly published state.
+- [x] Assert native RadioGroup `Selection`, RadioButton `SelectionItem`,
+      owning SelectionContainer, and cross-thread `SelectionItem.Select()`
+      against a real GLFW HWND/UIA COM client.
 - [x] Subscribe from an MTA UIA client and assert property, focus, bounds, and
       structure events, stable retained RuntimeIds, and zero duplicate events
       for identical snapshot republishes.

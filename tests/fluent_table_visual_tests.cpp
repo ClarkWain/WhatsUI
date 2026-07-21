@@ -25,6 +25,17 @@ bool hasColor(const std::vector<unsigned char>& pixels, wui::Color color)
     for (std::size_t i = 0; i + 3 < pixels.size(); i += 4) if (pixels[i] == color.r && pixels[i + 1] == color.g && pixels[i + 2] == color.b && pixels[i + 3] == color.a) return true;
     return false;
 }
+bool pixelIs(const std::vector<unsigned char>& pixels, int width, float scale,
+             float x, float y, wui::Color color)
+{
+    const int px = std::clamp(static_cast<int>(std::lround(x * scale)), 0, width - 1);
+    const int py = std::max(0, static_cast<int>(std::lround(y * scale)));
+    const std::size_t offset = (static_cast<std::size_t>(py) * static_cast<std::size_t>(width) +
+                                static_cast<std::size_t>(px)) * 4;
+    return offset + 3 < pixels.size() && pixels[offset] == color.r &&
+           pixels[offset + 1] == color.g && pixels[offset + 2] == color.b &&
+           pixels[offset + 3] == color.a;
+}
 std::vector<wui::TableColumn> columns()
 {
     // Keep all three columns in each side-by-side review surface. This is a
@@ -55,6 +66,9 @@ void render(const std::string& path, float scale)
         canvas->endFrame(); const auto pixels = canvas->readPixelsRGBA();
         expect(!pixels.empty() && hasColor(pixels, wui::theme().colors.neutralStroke1) && hasColor(pixels, wui::theme().colors.neutralBackground1.selected),
                "Table/DataGrid visual matrix must paint separators and a Fluent selected row");
+        expect(pixelIs(pixels, width, scale, 590, 144,
+                       wui::theme().colors.neutralBackground1.selected),
+               "DataGrid selected state must fill the complete 44-DIP row outside the focused cell");
         savePpm(path, pixels, width, height);
     } catch (...) { wui::setTextMeasurer(nullptr); throw; }
     wui::setTextMeasurer(nullptr);

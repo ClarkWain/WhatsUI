@@ -21,6 +21,10 @@ wui::PointerEvent pointer(wui::PointerAction action, float x, float y)
 
 void testRadioGroupOwnsSelectionAndArrowPolicy()
 {
+    wui::Radio iconOnly;
+    expect(iconOnly.measure({}).width == 32.0f &&
+               iconOnly.measure({}).height == 32.0f,
+           "An unlabeled Radio must retain Fluent's square 32-DIP hit slot");
     // Bound State must outlive the group because Node teardown unsubscribes
     // from it during group destruction.
     wui::State<std::string> state{"third"};
@@ -59,15 +63,16 @@ void testRadioGroupOwnsSelectionAndArrowPolicy()
            "RadioGroup accessibility must expose role, name, selected value, and required state");
     group.setGroupLayout(wui::RadioGroupLayout::HorizontalStacked);
     const auto firstStackedMeasure = group.measure({0, 400, 0, 200});
-    expect(firstStackedMeasure.width > firstStackedMeasure.height && firstStackedMeasure.height > 32.0f,
-           "Horizontal-stacked RadioGroup must arrange choices across the main axis");
+    expect(firstStackedMeasure.width > firstStackedMeasure.height &&
+               firstStackedMeasure.height == 56.0f,
+           "Horizontal-stacked RadioGroup must reserve a 32-DIP indicator slot, 4-DIP gap, and 20-DIP label line");
 
     wui::RadioGroup initiallyStacked;
     initiallyStacked.setGroupLayout(wui::RadioGroupLayout::HorizontalStacked);
     initiallyStacked.addOption("a", "Alpha");
     initiallyStacked.addOption("b", "Beta");
-    expect(initiallyStacked.measure({0, 400, 0, 200}).height > 32.0f,
-           "Horizontal-stacked RadioGroup must reserve stacked label height on its first measure before layout");
+    expect(initiallyStacked.measure({0, 400, 0, 200}).height == 56.0f,
+           "Horizontal-stacked RadioGroup must reserve its exact stacked height on the first measure before layout");
 }
 
 void testRadioGroupArrowKeysMoveRovingFocus()
@@ -95,6 +100,14 @@ void testRadioGroupArrowKeysMoveRovingFocus()
 
 void testSwitchOfficialSizesAndLabelPositions()
 {
+    wui::Switch iconOnly;
+    iconOnly.setSize(wui::SwitchSize::Small);
+    expect(iconOnly.measure({}).width == 48.0f,
+           "Small Switch must reserve its 32-DIP track plus two 8-DIP hit margins");
+    iconOnly.setSize(wui::SwitchSize::Medium);
+    expect(iconOnly.measure({}).width == 56.0f,
+           "Medium Switch must reserve its 40-DIP track plus two 8-DIP hit margins");
+
     wui::Switch toggle("Sync", false);
     toggle.setSize(wui::SwitchSize::Small);
     expect(toggle.measure({}).height == 32.0f, "Small Switch must use Fluent's 32 DIP control row");

@@ -139,11 +139,16 @@ void testPointerSelectionAndCompositionAcrossVisualLines()
     wui::InputRouter router(&focus);
     router.setRoot(&root);
 
-    expect(router.dispatchPointer(pointer(wui::PointerAction::Down, 13.0f, 5.0f)),
+    const float contentTop = wui::theme().spacing.vertical.sNudge;
+    const float lineHeight = wui::theme().typography.body1.lineHeight;
+    expect(router.dispatchPointer(pointer(wui::PointerAction::Down, 13.0f,
+                                          contentTop + 2.0f)),
            "TextArea pointer selection must start inside the first line");
-    expect(router.dispatchPointer(pointer(wui::PointerAction::Move, 62.0f, 45.0f)),
+    expect(router.dispatchPointer(pointer(wui::PointerAction::Move, 62.0f,
+                                          contentTop + lineHeight * 2.0f + 4.0f)),
            "Captured pointer movement must extend selection across lines");
-    expect(router.dispatchPointer(pointer(wui::PointerAction::Up, 62.0f, 45.0f)),
+    expect(router.dispatchPointer(pointer(wui::PointerAction::Up, 62.0f,
+                                          contentTop + lineHeight * 2.0f + 4.0f)),
            "TextArea pointer selection must release cleanly");
     const auto selected = rawArea->controller().selection();
     expect(selected.start < 3 && selected.end > 20,

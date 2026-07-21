@@ -45,6 +45,10 @@ void menuNavigationAndInvocation()
         .addItem({"Delete", {}, true, [&] { invoked += 10; }})
         .onDismiss([&] { ++dismissed; });
     menu.layout({0.0f, 0.0f, 320.0f, 240.0f});
+    const auto menuSize = menu.measure({0.0f, 320.0f, 0.0f, 240.0f});
+    expect(menuSize.width >= 138.0f && menuSize.width <= 300.0f &&
+               menuSize.height == 108.0f,
+           "menu geometry should use 4-DIP surface padding, 32-DIP rows and 2-DIP row gaps");
 
     expect(menu.selectedIndex() == 1, "menu should select the first enabled item");
     expect(menu.onKeyEvent({0, wui::KeyAction::Down, 40}), "down should navigate a menu");
@@ -62,6 +66,13 @@ void tooltipDelayAndSearchEscape()
     expect(!tooltip.isVisible(), "tooltip must not show before its delay");
     tooltip.showAfter(std::chrono::milliseconds{500});
     expect(tooltip.isVisible(), "tooltip should show at its configured delay");
+    const auto tooltipSize =
+        tooltip.measure({0.0f, 400.0f, 0.0f, 200.0f});
+    expect(tooltipSize.width <= 240.0f && tooltipSize.height == 28.0f,
+           "tooltip must use the Fluent 240-DIP cap and 6-DIP vertical padding");
+    tooltip.appearance(wui::TooltipAppearance::Brand);
+    expect(tooltip.appearance() == wui::TooltipAppearance::Brand,
+           "tooltip must retain its Fluent appearance variant");
     tooltip.hide();
     expect(!tooltip.isVisible(), "tooltip hide should be immediate");
 

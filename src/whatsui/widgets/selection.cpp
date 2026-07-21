@@ -53,18 +53,25 @@ constexpr float kMinimumListWidth = 180.0f;
 void drawFocusRing(PaintContext& context, const RectF& rect, const Theme& current, bool focused)
 {
     if (!focused) return;
+    const RectF aligned = context.snapRectEdges(rect);
     const float inset = current.controls.focusInset;
+    const float outerWidth = context.snapStrokeWidth(current.stroke.thick);
+    const float innerWidth = context.snapStrokeWidth(current.stroke.thin);
     context.strokeRoundRect(
-        {rect.x - inset, rect.y - inset,
-         rect.width + inset * 2.0f, rect.height + inset * 2.0f},
-        current.radius.medium + inset, current.stroke.thick,
+        context.snapRectEdges(
+            {aligned.x - inset, aligned.y - inset,
+             aligned.width + inset * 2.0f,
+             aligned.height + inset * 2.0f}),
+        current.radius.medium + inset, outerWidth,
         current.colors.strokeFocusOuter);
     const float inner =
-        std::max(0.0f, inset - current.stroke.thin * 0.5f);
+        std::max(0.0f, inset - innerWidth * 0.5f);
     context.strokeRoundRect(
-        {rect.x - inner, rect.y - inner,
-         rect.width + inner * 2.0f, rect.height + inner * 2.0f},
-        current.radius.medium + inner, current.stroke.thin,
+        context.snapRectEdges(
+            {aligned.x - inner, aligned.y - inner,
+             aligned.width + inner * 2.0f,
+             aligned.height + inner * 2.0f}),
+        current.radius.medium + inner, innerWidth,
         current.colors.strokeFocusInner);
 }
 
@@ -203,7 +210,7 @@ float ListBox::rowHeight() const noexcept
     });
     // Fluent's secondary-content option is a two-line row. Use a uniform
     // height for the list so keyboard/pointer hit regions remain stable.
-    return std::max(hasSecondary ? 52.0f : 32.0f, theme().controls.height);
+    return std::max(hasSecondary ? 56.0f : 32.0f, theme().controls.height);
 }
 float ListBox::preferredWidth() const noexcept
 {
@@ -234,18 +241,21 @@ void ListBox::paint(PaintContext& context)
 {
     const auto& current = theme();
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
-    drawFocusRing(context, bounds(), current, focused);
-    const RectF content{bounds().x + current.stroke.thin, bounds().y + current.stroke.thin,
-                        std::max(0.0f, bounds().width - current.stroke.thin * 2.0f),
-                        std::max(0.0f, bounds().height - current.stroke.thin * 2.0f)};
-    context.fillStrokeRoundRect(bounds(), current.radius.medium,
-                                current.stroke.thin,
+    const RectF frame = context.snapRectEdges(bounds());
+    const float stroke = context.snapStrokeWidth(current.stroke.thin);
+    drawFocusRing(context, frame, current, focused);
+    const RectF content{frame.x + stroke, frame.y + stroke,
+                        std::max(0.0f, frame.width - stroke * 2.0f),
+                        std::max(0.0f, frame.height - stroke * 2.0f)};
+    context.fillStrokeRoundRect(frame, current.radius.medium,
+                                stroke,
                                 current.colors.surfaceRaised,
                                 current.colors.neutralStroke1);
     const int checkpoint = context.save(); context.clipRect(content);
     const int first = std::max(0, static_cast<int>(std::floor(scrollOffset_ / rowHeight())));
     for (std::size_t i = static_cast<std::size_t>(first); i < options_.size(); ++i) {
-        const RectF row = optionBounds(static_cast<int>(i));
+        const RectF row =
+            context.snapRectEdges(optionBounds(static_cast<int>(i)));
         if (row.y >= content.y + content.height) break;
         const bool enabled = isEnabled() && options_[i].enabled;
         const bool selected = isSelected(static_cast<int>(i));
@@ -368,8 +378,31 @@ AccessibilityActionCapabilities ListBox::accessibilityActions() const noexcept
 AccessibilityActionStatus ListBox::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
 {
     if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
-    if (kind != AccessibilityActionKind::SetValue) return AccessibilityActionStatus::NotSupported;
-    for (std::size_t i = 0; i < options_.size(); ++i) if (options_[i].value == value) { choose(static_cast<int>(i)); return AccessibilityActionStatus::Succeeded; }
+    if (kind != AccessibilityActionKind::SetValue &&
+        kind != AccessibilityActionKind::Select &&
+        kind != AccessibilityActionKind::AddToSelection &&
+        kind != AccessibilityActionKind::RemoveFromSelection) {
+        return AccessibilityActionStatus::NotSupported;
+    }
+    for (std::size_t i = 0; i < options_.size(); ++i) {
+        if (options_[i].value != value) continue;
+        const int index = static_cast<int>(i);
+        if (!selectable(index)) return AccessibilityActionStatus::ElementNotEnabled;
+        if (kind == AccessibilityActionKind::RemoveFromSelection) {
+            if (selectionMode_ != ListBoxSelectionMode::Multiple) {
+                return AccessibilityActionStatus::NotSupported;
+            }
+            const auto selected = std::find(selected_.begin(), selected_.end(), index);
+            if (selected != selected_.end()) {
+                selected_.erase(selected);
+                markDirty(DirtyFlag::Paint);
+                if (onSelectionChanged_) onSelectionChanged_(index, options_[i]);
+            }
+            return AccessibilityActionStatus::Succeeded;
+        }
+        choose(index, kind == AccessibilityActionKind::AddToSelection);
+        return AccessibilityActionStatus::Succeeded;
+    }
     return AccessibilityActionStatus::InvalidValue;
 }
 bool ListBox::selectable(int index) const noexcept { return index >= 0 && static_cast<std::size_t>(index) < options_.size() && options_[static_cast<std::size_t>(index)].enabled; }
@@ -592,17 +625,39 @@ SizeF Dropdown::measure(const Constraints& constraints) const
 }
 void Dropdown::paint(PaintContext& context)
 {
-    const auto& current = theme(); const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
-    drawFocusRing(context, bounds(), current, focused);
+    const auto& current = theme();
+    const bool focused =
+        (visualStates() & toMask(ControlVisualState::Focused)) != 0;
+    const RectF frame = context.snapRectEdges(bounds());
+    const float stroke = context.snapStrokeWidth(current.stroke.thin);
+    drawFocusRing(context, frame, current, focused);
     Color fill = current.colors.neutralBackground1.rest;
     if (!isEnabled()) fill = current.colors.neutralBackground3.rest;
     else if (open_ || (visualStates() & toMask(ControlVisualState::Pressed))) fill = current.colors.neutralBackground1.pressed;
     else if (visualStates() & toMask(ControlVisualState::Hovered)) fill = current.colors.neutralBackground1.hover;
-    context.fillStrokeRoundRect(bounds(), current.radius.medium,
-                                current.stroke.thin, fill,
-                                isEnabled()
-                                    ? current.colors.neutralStroke1
-                                    : current.colors.neutralStrokeDisabled);
+    Color outline = current.colors.neutralStroke1;
+    if (!isEnabled()) outline = current.colors.neutralStrokeDisabled;
+    else if (visualStates() & toMask(ControlVisualState::Pressed))
+        outline = current.colors.neutralStroke1Pressed;
+    else if (visualStates() & toMask(ControlVisualState::Hovered))
+        outline = current.colors.neutralStroke1Hover;
+    context.fillStrokeRoundRect(frame, current.radius.medium,
+                                stroke, fill,
+                                outline);
+    if (isEnabled()) {
+        const bool active = focused || open_;
+        const float bottomWidth = context.snapStrokeWidth(
+            active ? current.stroke.thick : current.stroke.thin);
+        const float bottomY = context.snapToPhysicalPixel(
+            frame.y + frame.height - bottomWidth);
+        const int checkpoint = context.save();
+        context.clipRoundRect(frame, current.radius.medium);
+        context.fillRect(
+            {frame.x, bottomY, frame.width, bottomWidth},
+            active ? current.colors.brandForeground1
+                   : current.colors.neutralStrokeAccessible);
+        context.restoreTo(checkpoint);
+    }
     const bool selected = !selectedIndices_.empty();
     const Color fg = !isEnabled()
         ? current.colors.neutralForegroundDisabled
@@ -614,15 +669,17 @@ void Dropdown::paint(PaintContext& context)
         if (multiselect_ && selectedIndices_.size() > 1) display += " +" + std::to_string(selectedIndices_.size() - 1);
     }
     context.drawText(
-        display, bounds().x + kOptionPadding,
+        display, frame.x + kOptionPadding,
         context.centeredTextBottom(
-            display, bounds(), current.typography.body1.size,
+            display, frame, current.typography.body1.size,
             current.typography.body1.weight,
             current.typography.body1.family),
         current.typography.body1.size, fg,
         current.typography.body1.weight,
         current.typography.body1.family);
-    drawChevron(context, bounds().x + bounds().width - 18.0f, bounds().y + bounds().height * .5f, fg, open_); clearDirty(DirtyFlag::Paint);
+    drawChevron(context, frame.x + frame.width - 18.0f,
+                frame.y + frame.height * .5f, fg, open_);
+    clearDirty(DirtyFlag::Paint);
 }
 bool Dropdown::onPointerEvent(const PointerEvent& event)
 {

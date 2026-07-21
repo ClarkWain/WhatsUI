@@ -30,9 +30,13 @@ CounterBadge, PresenceBadge, Avatar, and AvatarGroup.
   accessibility.
 - [x] CounterBadge: zero policy, overflow formatting, numeric accessibility.
 - [x] PresenceBadge: all presence states, anchored avatar geometry, named
-  status semantics and 100%/150% clipping coverage.
-- [x] Avatar/AvatarGroup: image/initials fallback, color/shape/size variants,
-  stacked/spread groups, overflow indicator and image/group semantics.
+  status semantics and 100%/150% clipping coverage. Figma's discrete Avatar
+  mapping is 6/10/12/16/20/28 DIP; the instance frame is edge-aligned and its
+  own 1-DIP white ring provides the optical separation.
+- [x] Avatar/AvatarGroup: image/initials/person-icon fallback, color/shape/
+  size variants, activity ring, stacked/spread groups, overflow indicator and
+  image/group semantics. The activity ring is painted outside its fixed Avatar
+  footprint (2 DIP through 48, 3 DIP from 56) so it never changes layout.
 - [x] Unified 100% and 150% Software visual capture personally reviewed.
 - [x] Release build, full `whatsui_` CTest suite, and `git diff --check` pass.
 
@@ -46,3 +50,7 @@ CounterBadge, PresenceBadge, Avatar, and AvatarGroup.
 - Visual review: the 150% captures were opened and reviewed for clipping,
   state color contrast, roundness, spacing, text placement, elevation, avatar
   overlap, and overflow rendering.
+- Avatar alignment review (2026-07-21): compared directly with Figma's
+  `Avatar/Avatar` component variants. Added the neutral Person fallback,
+  Figma's activity-ring guard/stroke geometry, exact PresenceBadge size table
+  and edge anchoring; the regenerated 150% capture was visually reviewed.

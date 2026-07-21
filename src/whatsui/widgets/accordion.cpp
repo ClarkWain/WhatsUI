@@ -18,7 +18,10 @@ constexpr int kHome = 36;
 constexpr int kEnd = 35;
 constexpr int kUp = 38;
 constexpr int kDown = 40;
-constexpr float kHeaderHeight = 48.0f;
+constexpr float kHeaderHeight = 44.0f;
+constexpr float kHeaderPadding = 10.0f;
+constexpr float kPanelPadding = 12.0f;
+constexpr float kPanelBottomPadding = 12.0f;
 
 float measureText(const std::string& value, const TextStyleToken& style) noexcept
 {
@@ -55,10 +58,18 @@ bool hasState(const ControlNode& node, ControlVisualState state) noexcept
 void paintFocusRing(PaintContext& context, const RectF& rect, const Theme& current, bool focused)
 {
     if (!focused) return;
-    const float inset = current.controls.focusInset;
-    context.strokeRoundRect({rect.x + inset, rect.y + inset, rect.width - inset * 2.0f,
-                             rect.height - inset * 2.0f}, current.radius.medium,
-                             current.controls.focusWidth, current.colors.strokeFocusInner);
+    const float outerWidth = context.snapStrokeWidth(current.stroke.thick);
+    const float innerWidth = context.snapStrokeWidth(current.stroke.thin);
+    const RectF outer = context.snapRectEdges(rect);
+    context.strokeRoundRect(outer, current.radius.medium, outerWidth,
+                            current.colors.strokeFocusInner);
+    const RectF inner{
+        outer.x + outerWidth, outer.y + outerWidth,
+        std::max(0.0f, outer.width - outerWidth * 2.0f),
+        std::max(0.0f, outer.height - outerWidth * 2.0f)};
+    context.strokeRoundRect(
+        inner, std::max(0.0f, current.radius.medium - outerWidth),
+        innerWidth, current.colors.strokeFocusOuter);
 }
 
 } // namespace
@@ -108,18 +119,20 @@ SizeF AccordionItem::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const float naturalWidth = std::max(kHeaderHeight,
-        measureText(header_, current.typography.body1Strong) + current.spacing.horizontal.xxl * 2.0f + 16.0f);
+        measureText(header_, current.typography.body1) +
+            kHeaderPadding * 2.0f + 16.0f);
     const float proposedWidth = std::isfinite(constraints.maxWidth)
         ? std::max(constraints.minWidth, constraints.maxWidth)
         : naturalWidth;
     float bodyHeight = 0.0f;
-    const float available = std::max(1.0f, proposedWidth - current.spacing.horizontal.xxl * 2.0f);
+    const float available =
+        std::max(1.0f, proposedWidth - kPanelPadding * 2.0f);
     if (expanded_) {
         bodyHeight = textBodyHeight(available);
         if (const auto* child = content()) {
             bodyHeight += child->measureWithConstraints({0.0f, available, 0.0f, constraints.maxHeight}).height;
         }
-        if (bodyHeight > 0.0f) bodyHeight += current.spacing.vertical.l * 2.0f;
+        if (bodyHeight > 0.0f) bodyHeight += kPanelBottomPadding;
     }
     return constraints.clamp({proposedWidth, kHeaderHeight + bodyHeight});
 }
@@ -136,10 +149,13 @@ void AccordionItem::layout(const RectF& rect)
         if (!expanded_) { child->layout({0, 0, 0, 0}); }
         else {
             const auto& current = theme();
-            const float inset = current.spacing.horizontal.xxl;
+            const float inset = kPanelPadding;
             const float textHeight = textBodyHeight(std::max(1.0f, rect.width - inset * 2.0f));
-            const float contentY = rect.y + kHeaderHeight + current.spacing.vertical.l + textHeight;
-            const float height = std::max(0.0f, rect.y + rect.height - current.spacing.vertical.l - contentY);
+            const float contentY =
+                rect.y + kHeaderHeight + textHeight;
+            const float height = std::max(
+                0.0f,
+                rect.y + rect.height - kPanelBottomPadding - contentY);
             child->layout({rect.x + inset, contentY, std::max(0.0f, rect.width - inset * 2.0f), height});
         }
     }
@@ -149,7 +165,7 @@ void AccordionItem::layout(const RectF& rect)
 void AccordionItem::paint(PaintContext& context)
 {
     const auto& current = theme();
-    const RectF headerRect = headerBounds();
+    const RectF headerRect = context.snapRectEdges(headerBounds());
     if (headerRect.width <= 0.0f || headerRect.height <= 0.0f) { clearDirty(DirtyFlag::Paint); return; }
     const bool disabled = !isEnabled();
     Color fill{0, 0, 0, 0};
@@ -158,25 +174,26 @@ void AccordionItem::paint(PaintContext& context)
     if (fill.a != 0) context.fillRoundRect(headerRect, current.radius.medium, fill);
     paintFocusRing(context, headerRect, current, hasState(*this, ControlVisualState::Focused));
 
-    const auto& titleStyle = current.typography.body1Strong;
-    const float textX = headerRect.x + current.spacing.horizontal.xxl;
+    const auto& titleStyle = current.typography.body1;
+    const float textX = headerRect.x + kHeaderPadding;
     const Color foreground = disabled ? current.colors.neutralForegroundDisabled : current.colors.neutralForeground1;
     context.drawText(header_, textX, context.centeredTextBottom(header_, headerRect, titleStyle.size, titleStyle.weight),
                      titleStyle.size, foreground, titleStyle.weight, titleStyle.family);
 
-    const float glyphSize = 16.0f;
-    const float glyphX = headerRect.x + headerRect.width - current.spacing.horizontal.xxl - glyphSize;
+    const float glyphSize = 20.0f;
+    const float glyphX =
+        headerRect.x + headerRect.width - kHeaderPadding - glyphSize;
     const float glyphY = headerRect.y + (headerRect.height - glyphSize) * 0.5f;
     drawIcon(context,
-             expanded_ ? IconName::ChevronUp : IconName::ChevronRight,
+             expanded_ ? IconName::ChevronUp : IconName::ChevronDown,
              {glyphX, glyphY, glyphSize, glyphSize},
              disabled ? current.colors.neutralForegroundDisabled
                       : current.colors.neutralForeground2,
              IconSize::Size16);
 
     if (expanded_) {
-        const float inset = current.spacing.horizontal.xxl;
-        float y = headerRect.y + headerRect.height + current.spacing.vertical.l;
+        const float inset = kPanelPadding;
+        float y = headerRect.y + headerRect.height;
         if (!body_.empty()) {
             const auto& bodyStyle = current.typography.body1;
             const float lineWidth = std::max(1.0f, bounds().width - inset * 2.0f);
@@ -189,9 +206,6 @@ void AccordionItem::paint(PaintContext& context)
         }
         ContainerNode::paint(context);
     }
-    context.fillRect({headerRect.x + current.spacing.horizontal.xxl, headerRect.y + headerRect.height - current.stroke.thin,
-                      std::max(0.0f, headerRect.width - current.spacing.horizontal.xxl * 2.0f), current.stroke.thin},
-                     current.colors.neutralStroke1);
     clearDirty(DirtyFlag::Paint);
 }
 

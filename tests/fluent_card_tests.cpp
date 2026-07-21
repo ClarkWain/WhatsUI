@@ -3,6 +3,7 @@
 // state matrix reviewable without a native desktop.
 
 #include <fstream>
+#include <cmath>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -20,7 +21,7 @@
 namespace {
 
 constexpr int kWidth = 760;
-constexpr int kHeight = 360;
+constexpr int kHeight = 376;
 
 void expect(bool condition, const char* message)
 {
@@ -48,11 +49,12 @@ private:
     wui::Color color_;
 };
 
-void savePpm(const std::string& path, const std::vector<unsigned char>& rgba)
+void savePpm(const std::string& path, const std::vector<unsigned char>& rgba,
+             int width, int height)
 {
     std::ofstream out(path, std::ios::binary);
     if (!out) throw std::runtime_error("cannot create Fluent Card visual capture");
-    out << "P6\n" << kWidth << ' ' << kHeight << "\n255\n";
+    out << "P6\n" << width << ' ' << height << "\n255\n";
     for (std::size_t index = 0; index + 3 < rgba.size(); index += 4) {
         out.put(static_cast<char>(rgba[index]));
         out.put(static_cast<char>(rgba[index + 1]));
@@ -69,6 +71,24 @@ bool containsColor(const std::vector<unsigned char>& rgba, wui::Color color)
         }
     }
     return false;
+}
+
+wui::Color pixelAt(const std::vector<unsigned char>& rgba, int width,
+                   float scale, float logicalX, float logicalY)
+{
+    const int x = static_cast<int>(std::lround(logicalX * scale));
+    const int y = static_cast<int>(std::lround(logicalY * scale));
+    const std::size_t offset =
+        static_cast<std::size_t>((y * width + x) * 4);
+    if (offset + 3 >= rgba.size()) return {};
+    return {rgba[offset], rgba[offset + 1], rgba[offset + 2],
+            rgba[offset + 3]};
+}
+
+int luminance(wui::Color color) noexcept
+{
+    return static_cast<int>(color.r) + static_cast<int>(color.g) +
+        static_cast<int>(color.b);
 }
 
 wui::PointerEvent pointer(wui::PointerAction action, wui::PointF position,
@@ -110,6 +130,31 @@ void testHeaderSlotsAreStableAndReplaceable()
     header.layout({0.0f, 0.0f, 240.0f, 36.0f});
     expect(header.action()->bounds().x >= 200.0f,
            "CardHeader trailing action must remain right aligned after media replacement");
+
+    wui::CardHeader narrow(
+        "A long title that must never enter the trailing action",
+        "Metadata is ellipsized inside the text column");
+    narrow.media(
+        std::make_unique<FixedNode>(wui::SizeF{32.0f, 32.0f}));
+    narrow.action(
+        std::make_unique<FixedNode>(wui::SizeF{32.0f, 32.0f}));
+    narrow.layout({0.0f, 0.0f, 144.0f, 36.0f});
+    expect(narrow.media()->bounds().x + narrow.media()->bounds().width +
+                   wui::theme().spacing.horizontal.m <=
+               narrow.action()->bounds().x -
+                   wui::theme().spacing.horizontal.m,
+           "A narrow CardHeader must preserve distinct media, text and trailing-action columns");
+
+    wui::CardFooter footer;
+    footer.child(
+        std::make_unique<FixedNode>(wui::SizeF{44.0f, 20.0f}));
+    footer.child(
+        std::make_unique<FixedNode>(wui::SizeF{32.0f, 20.0f}));
+    expect(std::abs(footer.measure({}).width - 88.0f) < 0.001f,
+           "CardFooter measure must equal child widths plus its 12 DIP action gap");
+    footer.layout({0.0f, 0.0f, 200.0f, 32.0f});
+    expect(std::abs(footer.children()[1]->bounds().x - 56.0f) < 0.001f,
+           "CardFooter layout must use the same 12 DIP gap as measurement");
 }
 
 void testSelectableCardStatesAndAccessibility()
@@ -174,14 +219,19 @@ std::unique_ptr<wui::Card> makeCard(wui::CardAppearance appearance, bool selecta
     return card;
 }
 
-void testSoftwareCompositionAndWriteReviewImage(const std::string& output)
+void testSoftwareCompositionAndWriteReviewImage(const std::string& output,
+                                                float scale)
 {
-    auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software, kWidth, kHeight);
+    scale = std::max(1.0f, scale);
+    const int width = static_cast<int>(std::lround(kWidth * scale));
+    const int height = static_cast<int>(std::lround(kHeight * scale));
+    auto canvas =
+        wsc::Canvas::create(wsc::Canvas::Backend::Software, width, height);
     expect(canvas && canvas->initializeContext(), "Software canvas must initialize for Fluent Card visual review");
-    wui::WhatsCanvasTextMeasurer measurer(*canvas, 1.0f);
+    wui::WhatsCanvasTextMeasurer measurer(*canvas, scale);
     wui::setTextMeasurer(&measurer);
     try {
-        wui::PaintContext paint(*canvas);
+        wui::PaintContext paint(*canvas, scale);
         auto filled = makeCard(wui::CardAppearance::Filled, true, false);
         auto alternative = makeCard(wui::CardAppearance::FilledAlternative, true, false);
         auto outline = makeCard(wui::CardAppearance::Outline, true, true);
@@ -196,10 +246,10 @@ void testSoftwareCompositionAndWriteReviewImage(const std::string& output)
         paint.drawText("Fluent Card state matrix", 24.0f, 34.0f, 20.0f,
                        wui::theme().colors.neutralForeground1, 600);
         const std::vector<std::pair<wui::Card*, wui::RectF>> cards{
-            {filled.get(), {24.0f, 56.0f, 340.0f, 128.0f}},
-            {alternative.get(), {396.0f, 56.0f, 340.0f, 128.0f}},
-            {outline.get(), {24.0f, 208.0f, 340.0f, 128.0f}},
-            {subtle.get(), {396.0f, 208.0f, 340.0f, 128.0f}},
+            {filled.get(), {24.0f, 56.0f, 340.0f, 136.0f}},
+            {alternative.get(), {396.0f, 56.0f, 340.0f, 136.0f}},
+            {outline.get(), {24.0f, 216.0f, 340.0f, 136.0f}},
+            {subtle.get(), {396.0f, 216.0f, 340.0f, 136.0f}},
         };
         for (const auto& entry : cards) {
             entry.first->layout(entry.second);
@@ -208,13 +258,21 @@ void testSoftwareCompositionAndWriteReviewImage(const std::string& output)
         }
         canvas->endFrame();
         const auto pixels = canvas->readPixelsRGBA();
-        expect(pixels.size() == static_cast<std::size_t>(kWidth * kHeight * 4),
+        expect(pixels.size() ==
+                   static_cast<std::size_t>(width * height * 4),
                "Card Software capture must return a complete RGBA frame");
-        expect(containsColor(pixels, wui::theme().colors.brandForeground1),
-               "Selected Card must render a visible brand selection stroke in Software output");
+        expect(containsColor(pixels,
+                             wui::theme().colors.neutralStroke1Selected),
+               "Selected Card must render Fluent's neutral selected stroke");
         expect(paint.paintStats().boxShadowCalls >= 4,
-               "Filled and hovered Card states must issue Fluent two-layer elevation shadows");
-        savePpm(output, pixels);
+               "Filled Card states must issue Fluent Shadow 04/08 layers");
+        const auto restShadow =
+            pixelAt(pixels, width, scale, 194.0f, 198.0f);
+        const auto hoverShadow =
+            pixelAt(pixels, width, scale, 566.0f, 198.0f);
+        expect(luminance(hoverShadow) < luminance(restShadow),
+               "Hovered Filled Card Shadow 08 must extend farther than resting Shadow 04");
+        savePpm(output, pixels, width, height);
     } catch (...) {
         wui::setTextMeasurer(nullptr);
         throw;
@@ -229,7 +287,9 @@ int main(int argc, char** argv)
     try {
         testHeaderSlotsAreStableAndReplaceable();
         testSelectableCardStatesAndAccessibility();
-        testSoftwareCompositionAndWriteReviewImage(argc > 1 ? argv[1] : "fluent_card_review.ppm");
+        testSoftwareCompositionAndWriteReviewImage(
+            argc > 1 ? argv[1] : "fluent_card_review.ppm",
+            argc > 2 ? std::stof(argv[2]) : 1.0f);
         std::cout << "WhatsUI Fluent Card tests passed\n";
         return 0;
     } catch (const std::exception& error) {

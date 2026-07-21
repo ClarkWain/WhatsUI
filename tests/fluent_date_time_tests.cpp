@@ -16,6 +16,9 @@ void testCivilValues()
 void testCalendarKeyboardAndPolicies()
 {
     wui::Calendar calendar;
+    const auto natural = calendar.measureWithConstraints({});
+    expect(natural.width == 248.0f && natural.height == 272.0f,
+           "Calendar must use seven 32-DIP rows inside its 12-DIP Fluent panel inset");
     calendar.setDisplayedMonth({2024, 2, 1});
     calendar.setSelectedDate(wui::CivilDate{2024, 2, 28});
     calendar.minimumDate(wui::CivilDate{2024, 2, 2});
@@ -30,13 +33,39 @@ void testCalendarKeyboardAndPolicies()
     calendar.onKeyEvent({0, wui::KeyAction::Down, 37}); calendar.onKeyEvent({0, wui::KeyAction::Down, 13});
     calendar.onKeyEvent({0, wui::KeyAction::Down, 39}); calendar.onKeyEvent({0, wui::KeyAction::Down, 39}); calendar.onKeyEvent({0, wui::KeyAction::Down, 13});
     expect(calendar.rangeStart().has_value() && calendar.rangeEnd().has_value(), "Range calendar must collect start and end dates");
+
+    calendar.setDisplayedMonth({2024, 2, 1});
+    calendar.setSelectionMode(wui::CalendarSelectionMode::Single);
+    calendar.layout({0, 0, 248, 272});
+    const wui::PointF day15{12.0f + 4.0f * 32.0f + 16.0f,
+                            12.0f + 32.0f + 24.0f + 2.0f * 32.0f + 16.0f};
+    expect(calendar.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Move,
+                                    wui::MouseButton::None, day15}),
+           "Calendar day hover must be retained as a visual state");
+    expect(calendar.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                                    wui::MouseButton::Left, day15}) &&
+               calendar.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Up,
+                                        wui::MouseButton::Left, day15}) &&
+               calendar.selectedDate() == wui::CivilDate{2024, 2, 15},
+           "Calendar must commit the same enabled 32-DIP hit row on pointer release");
+    const wui::PointF previousMonth{194.0f, 16.0f};
+    expect(calendar.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                                    wui::MouseButton::Left, previousMonth}) &&
+               calendar.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Up,
+                                        wui::MouseButton::Left, previousMonth}) &&
+               calendar.displayedMonth() == wui::CivilDate{2024, 1, 1},
+           "Calendar header chevron must own its complete 28-DIP button slot");
 }
 void testPickersValidateAndStep()
 {
     wui::DatePicker date;
+    expect(date.measureWithConstraints({}).height == 32.0f,
+           "DatePicker must retain the Fluent medium 32-DIP input height");
     date.text("2024-02-31"); expect(!date.isValid(), "DatePicker invalid text must be observable without locale parsing");
     date.text("2024-02-29"); expect(date.isValid() && date.value().has_value(), "DatePicker canonical ISO input must commit");
     wui::TimePicker time;
+    expect(time.measureWithConstraints({}).height == 32.0f,
+           "TimePicker must retain the Fluent medium 32-DIP input height");
     time.minuteStep(15); time.text("09:07"); expect(!time.isValid(), "TimePicker must reject values off its minute step");
     time.text("09:30"); expect(time.isValid() && time.value()->minute == 30, "TimePicker must retain canonical time value");
     time.onKeyEvent({0, wui::KeyAction::Down, 38}); expect(time.value()->minute == 45, "TimePicker arrow key must advance by configured minute step");

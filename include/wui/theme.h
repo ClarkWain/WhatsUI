@@ -22,7 +22,7 @@ struct ColorTokens {
     // state ramp; widgets must not synthesize colors by scaling an arbitrary
     // rest value.
     Interaction neutralBackground1{{255, 255, 255, 255}, {245, 245, 245, 255},
-                                   {224, 224, 224, 255}, {224, 224, 224, 255}};
+                                   {224, 224, 224, 255}, {235, 235, 235, 255}};
     Interaction neutralBackground2{{250, 250, 250, 255}, {245, 245, 245, 255},
                                    {224, 224, 224, 255}, {224, 224, 224, 255}};
     Interaction neutralBackground3{{245, 245, 245, 255}, {240, 240, 240, 255},
@@ -48,9 +48,11 @@ struct ColorTokens {
     Color neutralForeground2{66, 66, 66, 255};
     Color neutralForeground3{97, 97, 97, 255};
     Color neutralForegroundDisabled{179, 179, 179, 255};
+    Color neutralBackgroundDisabled{240, 240, 240, 255};
     Color neutralStroke1{209, 209, 209, 255};
     Color neutralStroke1Hover{199, 199, 199, 255};
     Color neutralStroke1Pressed{179, 179, 179, 255};
+    Color neutralStroke1Selected{189, 189, 189, 255};
     Color neutralStrokeAccessible{97, 97, 97, 255};
     Color neutralStrokeAccessibleHover{87, 87, 87, 255};
     Color neutralStrokeAccessiblePressed{66, 66, 66, 255};
@@ -208,6 +210,10 @@ struct TextStyleToken {
 struct TypographyTokens {
     std::string_view familyBase{kFluentWindowsFontFamily};
     std::string_view familyBaseFallback{kFluentWindowsFontFallback};
+    // Fluent reference controls use classic Segoe UI. Keep their family
+    // independent from the Windows content ramp so control labels can match
+    // the reference weight without changing application body text.
+    std::string_view familyControls{kFluentWindowsFontFallback};
     std::string_view familyMonospace{"Consolas"};
     std::string_view familyNumeric{"Bahnschrift"};
     float fontSizeBase100{10.0f};

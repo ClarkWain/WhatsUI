@@ -309,6 +309,9 @@ void writeVisualMatrix(const std::string& output, float scale)
         const auto pixels = canvas->readPixelsRGBA();
         expect(pixels.size() == static_cast<std::size_t>(width * height * 4),
                "Checkbox visual capture must return a complete RGBA frame");
+        // Keep the rendered state matrix available even when a later pixel
+        // contract fails at a fractional DPR.
+        savePpm(output, pixels, width, height);
         const auto background = wui::theme().colors.neutralBackground2.rest;
         // Index 14 is the selected circular task checkbox at logical bounds
         // {454, 254, 195, 36}. Its 20-DIP indicator starts at {462,262}; the
@@ -359,10 +362,13 @@ void writeVisualMatrix(const std::string& output, float scale)
         const auto checkmarkInk = verticalBoundsNearColor(
             pixels, width, scale, {34.5f, 136.5f, 11.0f, 11.0f},
             wui::theme().colors.onBrand, 72);
+        // Checkbox snaps the indicator's two outer edges before drawing.
+        // Compare against that rendered pixel box (not the unsnapped logical
+        // interval, whose centre differs by half a pixel at 125% DPR).
         const int indicatorTop =
-            static_cast<int>(std::floor(134.0f * scale));
+            static_cast<int>(std::lround(134.0f * scale));
         const int indicatorBottom =
-            static_cast<int>(std::ceil(150.0f * scale)) - 1;
+            static_cast<int>(std::lround(150.0f * scale)) - 1;
         const float indicatorCenter =
             (static_cast<float>(indicatorTop) +
              static_cast<float>(indicatorBottom)) *
@@ -385,7 +391,6 @@ void writeVisualMatrix(const std::string& output, float scale)
                    pixelIs(pixels, width, scale, 677.0f, 262.0f,
                            background),
                "Circular mixed Checkbox must retain its circular outer silhouette");
-        savePpm(output, pixels, width, height);
     } catch (...) {
         wui::setTextMeasurer(nullptr);
         throw;

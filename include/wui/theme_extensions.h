@@ -40,12 +40,15 @@ namespace wui {
     dark.colors.neutralForeground2 = {214, 214, 214, 255};
     dark.colors.neutralForeground3 = {173, 173, 173, 255};
     dark.colors.neutralForegroundDisabled = {92, 92, 92, 255};
+    dark.colors.neutralBackgroundDisabled = {20, 20, 20, 255};
     dark.colors.neutralStroke1 = {102, 102, 102, 255};
     dark.colors.neutralStroke1Hover = {117, 117, 117, 255};
     dark.colors.neutralStroke1Pressed = {107, 107, 107, 255};
+    dark.colors.neutralStroke1Selected = {112, 112, 112, 255};
     dark.colors.neutralStrokeAccessible = {173, 173, 173, 255};
     dark.colors.neutralStrokeAccessibleHover = {189, 189, 189, 255};
     dark.colors.neutralStrokeAccessiblePressed = {179, 179, 179, 255};
+    dark.colors.neutralStrokeDisabled = {66, 66, 66, 255};
     dark.colors.strokeFocusOuter = {0, 0, 0, 255};
     dark.colors.strokeFocusInner = {255, 255, 255, 255};
     dark.colors.brandForeground1 = {71, 158, 245, 255};

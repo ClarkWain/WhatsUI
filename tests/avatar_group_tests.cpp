@@ -33,6 +33,13 @@ void testAvatarSemanticsAndSizing()
     expect(avatar.hasImage(), "Avatar must accept a reusable ImageSource");
     avatar.clearImage();
     expect(!avatar.hasImage(), "Clearing an Avatar image must restore its initials fallback");
+
+    wui::Avatar fallback({}, wui::AvatarSize::Size32);
+    expect(fallback.displayedInitials().empty(),
+           "An unnamed Avatar must select the Fluent Person icon fallback");
+    fallback.setActive(true);
+    expect(fallback.isActive(),
+           "Avatar must expose the Fluent activity-ring state independently of its content");
 }
 
 void testAvatarGroupOverflowAndPaint()

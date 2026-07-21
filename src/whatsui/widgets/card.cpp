@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "wui/text_metrics.h"
 #include "wui/theme.h"
 
 namespace wui {
@@ -16,24 +17,68 @@ void paintElevation(PaintContext& context, const RectF& bounds, float radius, co
     }
 }
 
+float textWidth(std::string_view value, const TextStyleToken& style) noexcept
+{
+    if (const auto* measurer = textMeasurer()) {
+        return measurer
+            ->measureText(std::string(value), style.size, style.weight,
+                          theme().typography.familyBase)
+            .width;
+    }
+    return static_cast<float>(value.size()) * style.size * 0.56f;
+}
+
+std::size_t nextCodePoint(std::string_view text, std::size_t index) noexcept
+{
+    if (index >= text.size()) return text.size();
+    ++index;
+    while (index < text.size() &&
+           (static_cast<unsigned char>(text[index]) & 0xC0u) == 0x80u) {
+        ++index;
+    }
+    return index;
+}
+
+std::string ellipsize(std::string_view value, float width,
+                      const TextStyleToken& style)
+{
+    if (width <= 0.0f) return {};
+    if (textWidth(value, style) <= width) return std::string(value);
+    constexpr std::string_view mark = "…";
+    if (textWidth(mark, style) > width) return {};
+    std::size_t end = 0;
+    while (end < value.size()) {
+        const std::size_t next = nextCodePoint(value, end);
+        const std::string candidate =
+            std::string(value.substr(0, next)) + std::string(mark);
+        if (textWidth(candidate, style) > width) break;
+        end = next;
+    }
+    return std::string(value.substr(0, end)) + std::string(mark);
+}
+
 void drawFocusRing(PaintContext& context, const RectF& bounds, float radius,
                    const Theme& current, bool focused)
 {
     if (!focused) return;
     const float inset = current.controls.focusInset;
+    const float outerWidth = context.snapStrokeWidth(current.stroke.thick);
+    const float innerWidth = context.snapStrokeWidth(current.stroke.thin);
     context.strokeRoundRect(
-        {bounds.x - inset, bounds.y - inset,
-         bounds.width + inset * 2.0f,
-         bounds.height + inset * 2.0f},
-        radius + inset, current.stroke.thick,
+        context.snapRectEdges(
+            {bounds.x - inset, bounds.y - inset,
+             bounds.width + inset * 2.0f,
+             bounds.height + inset * 2.0f}),
+        radius + inset, outerWidth,
         current.colors.strokeFocusOuter);
     const float innerInset =
         std::max(0.0f, inset - current.stroke.thin * 0.5f);
     context.strokeRoundRect(
-        {bounds.x - innerInset, bounds.y - innerInset,
-         bounds.width + innerInset * 2.0f,
-         bounds.height + innerInset * 2.0f},
-        radius + innerInset, current.stroke.thin,
+        context.snapRectEdges(
+            {bounds.x - innerInset, bounds.y - innerInset,
+             bounds.width + innerInset * 2.0f,
+             bounds.height + innerInset * 2.0f}),
+        radius + innerInset, innerWidth,
         current.colors.strokeFocusInner);
 }
 
@@ -100,6 +145,7 @@ void Card::layout(const RectF& bounds)
 void Card::paint(PaintContext& context)
 {
     const Theme& current = theme();
+    const RectF renderedBounds = context.snapRectEdges(bounds());
     const float radius = size_ == CardSize::Small ? current.radius.small
                        : size_ == CardSize::Large ? current.radius.large
                                                   : current.radius.medium;
@@ -114,12 +160,12 @@ void Card::paint(PaintContext& context)
     const ElevationToken* elevation = nullptr;
     switch (appearance_) {
     case CardAppearance::Filled:
-        elevation = &current.elevation.shadow2;
+        elevation = &current.elevation.shadow4;
         break;
     case CardAppearance::FilledAlternative:
         ramp = &current.colors.neutralBackground2;
         fill = ramp->rest;
-        elevation = &current.elevation.shadow2;
+        elevation = &current.elevation.shadow4;
         break;
     case CardAppearance::Outline: stroke = true; break;
     case CardAppearance::Subtle:
@@ -130,40 +176,56 @@ void Card::paint(PaintContext& context)
         // Disabled cards remain readable but cannot look elevated or react to
         // pointer state. The neutral surface and stroke match other disabled
         // Fluent controls without baking an opacity into child content.
-        fill = current.colors.neutralBackground1.rest;
+        fill = appearance_ == CardAppearance::Outline
+            ? Color{0, 0, 0, 0}
+            : current.colors.neutralBackgroundDisabled;
         stroke = appearance_ != CardAppearance::Subtle;
-        strokeColor = current.colors.neutralStroke1;
-        elevation = nullptr;
+        strokeColor = current.colors.neutralStrokeDisabled;
+        elevation = appearance_ == CardAppearance::Filled ||
+                    appearance_ == CardAppearance::FilledAlternative
+            ? &current.elevation.shadow2
+            : nullptr;
     } else if (selected_) {
-        // Fluent selection is a neutral selected surface plus a brand stroke;
-        // a solid brand fill would make arbitrary Card children unreadable.
+        // Fluent selection keeps the content neutral and uses the selected
+        // neutral stroke. Selection must not turn arbitrary Card content into
+        // an on-brand foreground treatment.
         fill = ramp->selected;
         stroke = true;
-        strokeColor = current.colors.brandForeground1;
+        strokeColor = current.colors.neutralStroke1Selected;
         if (appearance_ == CardAppearance::Filled || appearance_ == CardAppearance::FilledAlternative) {
-            elevation = hovered ? &current.elevation.shadow4 : &current.elevation.shadow2;
+            elevation = hovered ? &current.elevation.shadow8
+                                : &current.elevation.shadow4;
         }
     } else if (pressed) {
         fill = ramp->pressed;
+        if (appearance_ == CardAppearance::Outline) {
+            stroke = true;
+            strokeColor = current.colors.neutralStroke1Pressed;
+        }
         if (appearance_ == CardAppearance::Filled || appearance_ == CardAppearance::FilledAlternative) {
-            elevation = &current.elevation.shadow2;
+            elevation = &current.elevation.shadow4;
         }
     } else if (hovered) {
         fill = ramp->hover;
+        if (appearance_ == CardAppearance::Outline) {
+            stroke = true;
+            strokeColor = current.colors.neutralStroke1Hover;
+        }
         if (appearance_ == CardAppearance::Filled || appearance_ == CardAppearance::FilledAlternative) {
-            elevation = &current.elevation.shadow4;
-        } else if (appearance_ == CardAppearance::Outline || appearance_ == CardAppearance::Subtle) {
-            elevation = &current.elevation.shadow2;
+            elevation = &current.elevation.shadow8;
         }
     }
-    drawFocusRing(context, bounds(), radius, current, focused);
-    if (elevation != nullptr) paintElevation(context, bounds(), radius, *elevation);
+    drawFocusRing(context, renderedBounds, radius, current, focused);
+    if (elevation != nullptr) {
+        paintElevation(context, renderedBounds, radius, *elevation);
+    }
     if (stroke) {
-        context.fillStrokeRoundRect(bounds(), radius,
-                                    current.stroke.thin, fill,
+        context.fillStrokeRoundRect(renderedBounds, radius,
+                                    context.snapStrokeWidth(current.stroke.thin),
+                                    fill,
                                     strokeColor);
     } else if (fill.a != 0) {
-        context.fillRoundRect(bounds(), radius, fill);
+        context.fillRoundRect(renderedBounds, radius, fill);
     }
     ContainerNode::paint(context);
     clearDirty(DirtyFlag::Paint);
@@ -274,22 +336,23 @@ SizeF CardHeader::measure(const Constraints& constraints) const
     const float titleHeight = title_.empty() ? 0.0f : current.typography.body1Strong.lineHeight;
     const float descriptionHeight = description_.empty() ? 0.0f : current.typography.caption1.lineHeight;
     float actionWidth = 0.0f, actionHeight = 0.0f, mediaWidth = 0.0f, mediaHeight = 0.0f;
-    if (const Node* mediaNode = media()) { const SizeF media = mediaNode->measureWithConstraints(constraints); mediaWidth = media.width + current.spacing.horizontal.s; mediaHeight = media.height; }
+    if (const Node* mediaNode = media()) { const SizeF media = mediaNode->measureWithConstraints(constraints); mediaWidth = media.width + current.spacing.horizontal.m; mediaHeight = media.height; }
     if (const Node* actionNode = action()) {
         const SizeF action = actionNode->measureWithConstraints(constraints);
         actionWidth = action.width + current.spacing.horizontal.m;
         actionHeight = action.height;
     }
-    const float textWidth = std::max(static_cast<float>(title_.size()) * current.typography.body1Strong.size * 0.56f,
-                                     static_cast<float>(description_.size()) * current.typography.caption1.size * 0.56f);
-    return constraints.clamp({textWidth + mediaWidth + actionWidth, std::max({titleHeight + descriptionHeight, actionHeight, mediaHeight})});
+    const float desiredTextWidth =
+        std::max(textWidth(title_, current.typography.body1Strong),
+                 textWidth(description_, current.typography.caption1));
+    return constraints.clamp({desiredTextWidth + mediaWidth + actionWidth, std::max({titleHeight + descriptionHeight, actionHeight, mediaHeight})});
 }
 
 void CardHeader::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     if (Node* mediaNode = media()) { const SizeF mediaSize = mediaNode->measureWithConstraints({0,bounds.width,0,bounds.height}); mediaNode->layout({bounds.x,bounds.y + std::max(0.0f,(bounds.height-mediaSize.height)*0.5f),mediaSize.width,mediaSize.height}); }
-    if (Node* actionNode = action()) { const SizeF actionSize = actionNode->measureWithConstraints({0,bounds.width,0,bounds.height}); actionNode->layout({bounds.x+std::max(0.0f,bounds.width-actionSize.width),bounds.y,actionSize.width,actionSize.height}); }
+    if (Node* actionNode = action()) { const SizeF actionSize = actionNode->measureWithConstraints({0,bounds.width,0,bounds.height}); actionNode->layout({bounds.x+std::max(0.0f,bounds.width-actionSize.width),bounds.y + std::max(0.0f,(bounds.height-actionSize.height)*0.5f),actionSize.width,actionSize.height}); }
     clearLayoutDirtyRecursively();
 }
 
@@ -298,19 +361,28 @@ void CardHeader::paint(PaintContext& context)
     const auto& current = theme();
     const Node* mediaNode = media();
     const Node* actionNode = action();
-    const float mediaWidth = mediaNode ? mediaNode->bounds().width + current.spacing.horizontal.s : 0.0f;
+    const float mediaWidth = mediaNode ? mediaNode->bounds().width + current.spacing.horizontal.m : 0.0f;
     const float actionWidth = actionNode ? actionNode->bounds().width + current.spacing.horizontal.m : 0.0f;
     const RectF textBounds{bounds().x + mediaWidth, bounds().y, std::max(0.0f, bounds().width - mediaWidth - actionWidth), bounds().height};
+    const float textHeight =
+        (!title_.empty() ? current.typography.body1Strong.lineHeight : 0.0f) +
+        (!description_.empty() ? current.typography.caption1.lineHeight : 0.0f);
+    const float textTop =
+        textBounds.y + std::max(0.0f, (textBounds.height - textHeight) * 0.5f);
     if (!title_.empty()) {
-        const RectF titleBox{textBounds.x, textBounds.y, textBounds.width, current.typography.body1Strong.lineHeight};
-        context.drawText(title_, titleBox.x, context.centeredTextBottom(title_, titleBox, current.typography.body1Strong.size,
+        const std::string rendered =
+            ellipsize(title_, textBounds.width, current.typography.body1Strong);
+        const RectF titleBox{textBounds.x, textTop, textBounds.width, current.typography.body1Strong.lineHeight};
+        context.drawText(rendered, titleBox.x, context.centeredTextBottom(rendered, titleBox, current.typography.body1Strong.size,
                          current.typography.body1Strong.weight), current.typography.body1Strong.size,
                          current.colors.neutralForeground1, current.typography.body1Strong.weight);
     }
     if (!description_.empty()) {
-        const RectF descriptionBox{textBounds.x, textBounds.y + current.typography.body1Strong.lineHeight, textBounds.width,
+        const std::string rendered =
+            ellipsize(description_, textBounds.width, current.typography.caption1);
+        const RectF descriptionBox{textBounds.x, textTop + current.typography.body1Strong.lineHeight, textBounds.width,
                                    current.typography.caption1.lineHeight};
-        context.drawText(description_, descriptionBox.x, context.centeredTextBottom(description_, descriptionBox,
+        context.drawText(rendered, descriptionBox.x, context.centeredTextBottom(rendered, descriptionBox,
                          current.typography.caption1.size, current.typography.caption1.weight), current.typography.caption1.size,
                          current.colors.neutralForeground3, current.typography.caption1.weight);
     }
@@ -337,7 +409,8 @@ void CardPreview::layout(const RectF& bounds)
 void CardPreview::paint(PaintContext& context)
 {
     const int checkpoint = context.save();
-    context.clipRoundRect(bounds(), theme().radius.medium);
+    context.clipRoundRect(context.snapRectEdges(bounds()),
+                          theme().radius.medium);
     ContainerNode::paint(context);
     context.restoreTo(checkpoint);
     clearDirty(DirtyFlag::Paint);
@@ -352,7 +425,7 @@ SizeF CardFooter::measure(const Constraints& constraints) const
         width += size.width;
         height = std::max(height, size.height);
     }
-    if (children().size() > 1) width += theme().spacing.horizontal.s * static_cast<float>(children().size() - 1);
+    if (children().size() > 1) width += theme().spacing.horizontal.m * static_cast<float>(children().size() - 1);
     return constraints.clamp({width, height});
 }
 void CardFooter::layout(const RectF& bounds)
@@ -362,17 +435,18 @@ void CardFooter::layout(const RectF& bounds)
         clearLayoutDirtyRecursively();
         return;
     }
-    const float gap = theme().spacing.horizontal.s;
-    const SizeF content = children().front()->measureWithConstraints({0.0f, bounds.width, 0.0f, bounds.height});
-    children().front()->layout({bounds.x, bounds.y + std::max(0.0f, (bounds.height - content.height) * 0.5f),
-                                content.width, content.height});
-    float right = bounds.x + bounds.width;
-    for (std::size_t index = children().size(); index-- > 1;) {
-        const SizeF action = children()[index]->measureWithConstraints({0.0f, bounds.width, 0.0f, bounds.height});
-        right -= action.width;
-        children()[index]->layout({right, bounds.y + std::max(0.0f, (bounds.height - action.height) * 0.5f),
-                                   action.width, action.height});
-        right -= gap;
+    const float gap = theme().spacing.horizontal.m;
+    float cursor = bounds.x;
+    for (const auto& child : children()) {
+        const SizeF action = child->measureWithConstraints(
+            {0.0f, std::max(0.0f, bounds.x + bounds.width - cursor),
+             0.0f, bounds.height});
+        child->layout(
+            {cursor,
+             bounds.y + std::max(0.0f,
+                                 (bounds.height - action.height) * 0.5f),
+             action.width, action.height});
+        cursor += action.width + gap;
     }
     clearLayoutDirtyRecursively();
 }

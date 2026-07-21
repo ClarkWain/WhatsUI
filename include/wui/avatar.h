@@ -68,6 +68,13 @@ public:
     Avatar& color(AvatarColor value) noexcept;
     void setColor(AvatarColor value) noexcept;
     [[nodiscard]] AvatarColor color() const noexcept;
+
+    // Fluent calls this the activity ring. It is a presence-of-activity
+    // affordance, not a keyboard focus indicator: the ring stays outside the
+    // Avatar's visual circle and does not change its layout footprint.
+    Avatar& active(bool value = true) noexcept;
+    void setActive(bool value) noexcept;
+    [[nodiscard]] bool isActive() const noexcept;
     Avatar& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
@@ -86,6 +93,7 @@ private:
     AvatarSize size_{AvatarSize::Size32};
     AvatarShape shape_{AvatarShape::Circular};
     AvatarColor color_{AvatarColor::Neutral};
+    bool active_{false};
 };
 
 enum class AvatarGroupLayout { Stack, Spread };

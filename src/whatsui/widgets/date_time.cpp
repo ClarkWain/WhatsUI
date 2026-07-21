@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 #include <memory>
 #include <utility>
 
@@ -18,7 +19,15 @@ namespace {
 constexpr int kEnter = 13, kSpace = 32, kEsc = 27, kLeft = 37, kUp = 38,
               kRight = 39, kDown = 40, kHome = 36, kEnd = 35, kPageUp = 33,
               kPageDown = 34;
-constexpr float kHeader = 40.0f, kWeek = 22.0f, kCell = 36.0f, kPad = 12.0f;
+// Fluent compat Calendar uses a compact 12-DIP panel inset. WhatsUI keeps the
+// newer 32-DIP row rhythm requested by the native design system while the
+// visible date affordance remains the Fluent 24-DIP button.
+constexpr float kHeader = 32.0f, kWeek = 24.0f, kCell = 32.0f, kPad = 12.0f;
+constexpr float kCalendarWidth = 7.0f * kCell + 2.0f * kPad;
+constexpr float kCalendarHeight =
+    kHeader + kWeek + 6.0f * kCell + 2.0f * kPad;
+constexpr float kDateSurface = 24.0f;
+constexpr float kHeaderButton = 28.0f;
 bool leap(int y) noexcept {
   return y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
 }
@@ -59,11 +68,13 @@ void focusRing(PaintContext &c, RectF r) {
   if (!r.width || !r.height)
     return;
   const auto &t = theme();
+  const float thin = c.snapStrokeWidth(t.stroke.thin);
+  r = c.snapRectEdges(r);
   c.strokeRoundRect({r.x - 2, r.y - 2, r.width + 4, r.height + 4},
-                    t.radius.medium + 2, t.stroke.thin,
+                    t.radius.medium + 2, thin,
                     t.colors.strokeFocusOuter);
   c.strokeRoundRect({r.x - 1, r.y - 1, r.width + 2, r.height + 2},
-                    t.radius.medium + 1, t.stroke.thin,
+                    t.radius.medium + 1, thin,
                     t.colors.strokeFocusInner);
 }
 void chevron(PaintContext &c, float x, float y, bool right, Color col) {
@@ -77,6 +88,60 @@ void disclosureChevron(PaintContext &c, float x, float y, bool up, Color col) {
 bool inRange(CivilDate x, std::optional<CivilDate> a,
              std::optional<CivilDate> b) {
   return a && b && compare(*a, x) <= 0 && compare(x, *b) <= 0;
+}
+CivilDate localToday() noexcept {
+  const std::time_t now = std::time(nullptr);
+  std::tm local{};
+#if defined(_WIN32)
+  if (localtime_s(&local, &now) != 0)
+    return {};
+#else
+  if (localtime_r(&now, &local) == nullptr)
+    return {};
+#endif
+  return {local.tm_year + 1900, local.tm_mon + 1, local.tm_mday};
+}
+bool hasState(const ControlNode &node, ControlVisualState state) noexcept {
+  return (node.visualStates() & toMask(state)) != 0;
+}
+Color pickerSurface(const ControlNode &node, const Theme &t, bool valid) {
+  if (!node.isEnabled())
+    return t.colors.neutralBackgroundDisabled;
+  if (hasState(node, ControlVisualState::Pressed))
+    return t.colors.neutralBackground1.pressed;
+  if (hasState(node, ControlVisualState::Hovered))
+    return t.colors.neutralBackground1.hover;
+  return t.colors.neutralBackground1.rest;
+}
+void paintPickerChrome(PaintContext &c, const ControlNode &node, RectF bounds,
+                       bool valid) {
+  const auto &t = theme();
+  bounds = c.snapRectEdges(bounds);
+  const bool enabled = node.isEnabled();
+  const bool isFocused = focused(node) && enabled;
+  Color stroke = !enabled ? t.colors.neutralStrokeDisabled
+                 : !valid  ? t.colors.statusDanger
+                 : hasState(node, ControlVisualState::Pressed)
+                     ? t.colors.neutralStroke1Pressed
+                 : hasState(node, ControlVisualState::Hovered)
+                     ? t.colors.neutralStroke1Hover
+                     : t.colors.neutralStroke1;
+  c.fillStrokeRoundRect(bounds, t.radius.medium,
+                        c.snapStrokeWidth(t.stroke.thin),
+                        pickerSurface(node, t, valid), stroke);
+  const Color underline =
+      !enabled ? t.colors.neutralStrokeDisabled
+      : isFocused ? t.colors.compoundBrandStroke.rest
+      : !valid ? t.colors.statusDanger
+               : t.colors.neutralStrokeAccessible;
+  const float underlineWidth =
+      c.snapStrokeWidth(isFocused ? t.stroke.thick : t.stroke.thin);
+  c.fillRect({bounds.x + t.radius.medium,
+              c.snapToPhysicalPixel(bounds.y + bounds.height -
+                                    underlineWidth),
+              std::max(0.0f, bounds.width - 2.0f * t.radius.medium),
+              underlineWidth},
+             underline);
 }
 class CalendarPopup final : public Popup {
 public:
@@ -275,8 +340,7 @@ bool Calendar::isDateEnabled(CivilDate v) const {
          (!disabled_ || !disabled_(v));
 }
 SizeF Calendar::measure(const Constraints &c) const {
-  return c.clamp(
-      {7 * kCell + 2 * kPad, kHeader + kWeek + 6 * kCell + 2 * kPad});
+  return c.clamp({kCalendarWidth, kCalendarHeight});
 }
 void Calendar::layout(const RectF &r) {
   Node::layout(r);
@@ -299,7 +363,7 @@ std::optional<CivilDate> Calendar::dateAt(PointF p) const noexcept {
 }
 void Calendar::paint(PaintContext &c) {
   const auto &t = theme();
-  const auto b = bounds();
+  const auto b = c.snapRectEdges(bounds());
   c.fillRoundRect(b, t.radius.large, t.colors.neutralBackground1.rest);
   std::string title =
       monthName(displayed_.month) + " " + std::to_string(displayed_.year);
@@ -311,9 +375,22 @@ void Calendar::paint(PaintContext &c) {
              t.typography.body1Strong.size, t.colors.neutralForeground1,
              t.typography.body1Strong.weight,
              t.typography.body1Strong.family);
-  chevron(c, b.x + b.width - kPad - 30, b.y + kHeader / 2, false,
+  const RectF previous{b.x + b.width - kPad - 2.0f * kHeaderButton, b.y + 2,
+                       kHeaderButton, kHeaderButton};
+  const RectF next{previous.x + kHeaderButton, previous.y, kHeaderButton,
+                   kHeaderButton};
+  if (hoveredHeader_ == -1 || pressedHeader_ == -1)
+    c.fillRoundRect(previous, t.radius.medium,
+                    pressedHeader_ == -1 ? t.colors.neutralBackground1.pressed
+                                         : t.colors.neutralBackground1.hover);
+  if (hoveredHeader_ == 1 || pressedHeader_ == 1)
+    c.fillRoundRect(next, t.radius.medium,
+                    pressedHeader_ == 1 ? t.colors.neutralBackground1.pressed
+                                        : t.colors.neutralBackground1.hover);
+  chevron(c, previous.x + previous.width * .5f,
+          previous.y + previous.height * .5f, false,
           t.colors.neutralForeground2);
-  chevron(c, b.x + b.width - kPad - 10, b.y + kHeader / 2, true,
+  chevron(c, next.x + next.width * .5f, next.y + next.height * .5f, true,
           t.colors.neutralForeground2);
   static constexpr const char *labels[]{"S", "M", "T", "W", "T", "F", "S"};
   for (int i = 0; i < 7; ++i) {
@@ -337,21 +414,42 @@ void Calendar::paint(PaintContext &c) {
     const bool selectedCircle = mode_ == CalendarSelectionMode::Single
                                     ? selected_ && *selected_ == v
                                     : rangeEndpoint;
-    // A range is a single continuous band. Fill each whole cell first so the
-    // colour reaches the adjacent grid cell without visual gaps, then layer
-    // the two endpoint circles on top as the explicit selection affordances.
+    const bool isToday = v == localToday();
+    const RectF surface{r.x + (r.width - kDateSurface) * .5f,
+                        r.y + (r.height - kDateSurface) * .5f,
+                        kDateSurface, kDateSurface};
+    // Range selection is a continuous 24-DIP band, matching the visible day
+    // button rather than flooding the full 32-DIP hit row.
     if (insideRange)
-      c.fillRect(r, t.colors.neutralBackground3.selected);
+      c.fillRect({r.x, surface.y, r.width, surface.height},
+                 t.colors.neutralBackground3.selected);
+    if (hoveredDate_ && *hoveredDate_ == v && isDateEnabled(v) &&
+        !selectedCircle)
+      c.fillRoundRect(surface, t.radius.medium,
+                      t.colors.neutralBackground1.hover);
+    if (pressedDate_ && *pressedDate_ == v && isDateEnabled(v) &&
+        !selectedCircle)
+      c.fillRoundRect(surface, t.radius.medium,
+                      t.colors.neutralBackground1.pressed);
     if (selectedCircle)
-      c.fillRoundRect({r.x + 3, r.y + 3, r.width - 6, r.height - 6},
-                      t.radius.circular, t.colors.brandBackground.rest);
+      c.fillStrokeRoundRect(surface, t.radius.medium,
+                            c.snapStrokeWidth(t.stroke.thin),
+                            t.colors.brandBackground.rest,
+                            t.colors.compoundBrandStroke.rest);
+    else if (isToday) {
+      const RectF marker{r.x + (r.width - 20.0f) * .5f,
+                         r.y + (r.height - 20.0f) * .5f, 20.0f, 20.0f};
+      c.fillRoundRect(marker, t.radius.circular,
+                      t.colors.brandBackground.rest);
+    }
     if (v == focused_ && focused(*this))
-      focusRing(c, {r.x + 4, r.y + 4, r.width - 8, r.height - 8});
+      focusRing(c, surface);
     const auto col = !isDateEnabled(v) ? t.colors.neutralForegroundDisabled
-                     : selectedCircle  ? t.colors.onBrand
+                     : selectedCircle || isToday ? t.colors.onBrand
                                        : t.colors.neutralForeground1;
     auto text = std::to_string(d);
-    const auto &style = t.typography.body1;
+    const auto &style =
+        isToday ? t.typography.body1Strong : t.typography.body1;
     c.drawText(text, r.x + (r.width - textWidth(text, style)) * 0.5f,
                c.centeredTextBottom(text, r, t.typography.body1.size,
                                     t.typography.body1.weight,
@@ -390,12 +488,75 @@ void Calendar::select(CivilDate v) {
   markDirty(DirtyFlag::Paint);
 }
 bool Calendar::onPointerEvent(const PointerEvent &e) {
-  if (!bounds().contains(e.position) || !isEnabled())
+  if (!isEnabled())
     return false;
+  if (e.action == PointerAction::Leave ||
+      (e.action == PointerAction::Move && !bounds().contains(e.position))) {
+    hoveredDate_.reset();
+    pressedDate_.reset();
+    hoveredHeader_ = 0;
+    pressedHeader_ = 0;
+    markDirty(DirtyFlag::Paint);
+    return true;
+  }
+  if (!bounds().contains(e.position))
+    return false;
+  if (e.action == PointerAction::Enter || e.action == PointerAction::Move) {
+    const auto b = bounds();
+    const RectF previous{b.x + b.width - kPad - 2.0f * kHeaderButton,
+                         b.y + 2, kHeaderButton, kHeaderButton};
+    const RectF next{previous.x + kHeaderButton, previous.y, kHeaderButton,
+                     kHeaderButton};
+    hoveredHeader_ = previous.contains(e.position)
+                         ? -1
+                         : next.contains(e.position) ? 1 : 0;
+    hoveredDate_ = hoveredHeader_ == 0 ? dateAt(e.position)
+                                       : std::optional<CivilDate>{};
+    markDirty(DirtyFlag::Paint);
+    return true;
+  }
   if (e.action == PointerAction::Down && primary(e)) {
     setVisualState(ControlVisualState::Focused, true);
-    if (auto d = dateAt(e.position))
-      select(*d);
+    const auto b = bounds();
+    const RectF previous{b.x + b.width - kPad - 2.0f * kHeaderButton,
+                         b.y + 2, kHeaderButton, kHeaderButton};
+    const RectF next{previous.x + kHeaderButton, previous.y, kHeaderButton,
+                     kHeaderButton};
+    pressedHeader_ = previous.contains(e.position)
+                         ? -1
+                         : next.contains(e.position) ? 1 : 0;
+    pressedDate_ = pressedHeader_ == 0 ? dateAt(e.position)
+                                       : std::optional<CivilDate>{};
+    markDirty(DirtyFlag::Paint);
+    return true;
+  }
+  if (e.action == PointerAction::Up && primary(e)) {
+    const auto b = bounds();
+    const RectF previous{b.x + b.width - kPad - 2.0f * kHeaderButton,
+                         b.y + 2, kHeaderButton, kHeaderButton};
+    const RectF next{previous.x + kHeaderButton, previous.y, kHeaderButton,
+                     kHeaderButton};
+    const int releasedHeader = previous.contains(e.position)
+                                   ? -1
+                                   : next.contains(e.position) ? 1 : 0;
+    if (releasedHeader != 0 && releasedHeader == pressedHeader_) {
+      displayed_ = addMonths(displayed_, releasedHeader);
+      focused_ = addMonths(focused_, releasedHeader);
+    }
+    const auto released = dateAt(e.position);
+    if (releasedHeader == 0 && released && pressedDate_ &&
+        *released == *pressedDate_)
+      select(*released);
+    pressedDate_.reset();
+    pressedHeader_ = 0;
+    hoveredDate_ = released;
+    markDirty(DirtyFlag::Paint);
+    return true;
+  }
+  if (e.action == PointerAction::Cancel) {
+    pressedDate_.reset();
+    pressedHeader_ = 0;
+    markDirty(DirtyFlag::Paint);
     return true;
   }
   return false;
@@ -486,24 +647,20 @@ SizeF DatePicker::measure(const Constraints &c) const {
 }
 void DatePicker::paint(PaintContext &c) {
   const auto &t = theme();
-  auto b = bounds();
-  c.fillStrokeRoundRect(
-      b, t.radius.medium, t.stroke.thin,
-      valid_ ? t.colors.neutralBackground1.rest
-             : t.colors.dangerBackground.rest,
-      valid_ ? t.colors.neutralStroke1 : t.colors.statusDanger);
+  auto b = c.snapRectEdges(bounds());
+  paintPickerChrome(c, *this, b, valid_);
   auto &s = text_.empty() ? placeholder_ : text_;
   c.drawText(s, b.x + 12,
              c.centeredTextBottom(s, b, t.typography.body1.size,
                                   t.typography.body1.weight),
              t.typography.body1.size,
-             text_.empty() ? t.colors.neutralForeground3
-                           : t.colors.neutralForeground1,
+             !isEnabled() ? t.colors.neutralForegroundDisabled
+             : text_.empty() ? t.colors.neutralForeground3
+                             : t.colors.neutralForeground1,
              t.typography.body1.weight, t.typography.body1.family);
   disclosureChevron(c, b.x + b.width - 16, b.y + b.height / 2, open_,
-                    t.colors.neutralForeground2);
-  if (focused(*this))
-    focusRing(c, b);
+                    isEnabled() ? t.colors.neutralForeground2
+                                : t.colors.neutralForegroundDisabled);
   clearDirty(DirtyFlag::Paint);
 }
 void DatePicker::validateText() {
@@ -534,7 +691,7 @@ void DatePicker::openPopup() {
   calendar->onSelect([this](auto first, auto) { commit(first); });
   Calendar *raw = calendar.get();
   auto popup = std::make_unique<Popup>();
-  popup->anchor(bounds()).preferredSize({276, 0}).onDismiss([this] {
+  popup->anchor(bounds()).preferredSize({kCalendarWidth, 0}).onDismiss([this] {
     closePopup();
   });
   popup->content(std::move(calendar));
@@ -556,10 +713,28 @@ void DatePicker::closePopup() {
   markDirty(DirtyFlag::Paint);
 }
 bool DatePicker::onPointerEvent(const PointerEvent &e) {
+  if (!isEnabled())
+    return false;
+  if (e.action == PointerAction::Enter ||
+      (e.action == PointerAction::Move && bounds().contains(e.position))) {
+    setVisualState(ControlVisualState::Hovered, true);
+    return true;
+  }
+  if (e.action == PointerAction::Leave) {
+    setVisualState(ControlVisualState::Hovered, false);
+    setVisualState(ControlVisualState::Pressed, false);
+    return true;
+  }
   if (e.action == PointerAction::Down && primary(e) &&
       bounds().contains(e.position)) {
     setVisualState(ControlVisualState::Focused, true);
+    setVisualState(ControlVisualState::Pressed, true);
     open_ ? closePopup() : openPopup();
+    return true;
+  }
+  if (e.action == PointerAction::Cancel ||
+      (e.action == PointerAction::Up && primary(e))) {
+    setVisualState(ControlVisualState::Pressed, false);
     return true;
   }
   return false;
@@ -654,24 +829,20 @@ SizeF TimePicker::measure(const Constraints &c) const {
 }
 void TimePicker::paint(PaintContext &c) {
   const auto &t = theme();
-  auto b = bounds();
-  c.fillStrokeRoundRect(
-      b, t.radius.medium, t.stroke.thin,
-      valid_ ? t.colors.neutralBackground1.rest
-             : t.colors.dangerBackground.rest,
-      valid_ ? t.colors.neutralStroke1 : t.colors.statusDanger);
+  auto b = c.snapRectEdges(bounds());
+  paintPickerChrome(c, *this, b, valid_);
   auto &s = text_.empty() ? placeholder_ : text_;
   c.drawText(s, b.x + 12,
              c.centeredTextBottom(s, b, t.typography.body1.size,
                                   t.typography.body1.weight),
              t.typography.body1.size,
-             text_.empty() ? t.colors.neutralForeground3
-                           : t.colors.neutralForeground1,
+             !isEnabled() ? t.colors.neutralForegroundDisabled
+             : text_.empty() ? t.colors.neutralForeground3
+                             : t.colors.neutralForeground1,
              t.typography.body1.weight, t.typography.body1.family);
   disclosureChevron(c, b.x + b.width - 16, b.y + b.height / 2, open_,
-                    t.colors.neutralForeground2);
-  if (focused(*this))
-    focusRing(c, b);
+                    isEnabled() ? t.colors.neutralForeground2
+                                : t.colors.neutralForegroundDisabled);
   clearDirty(DirtyFlag::Paint);
 }
 void TimePicker::validateText() {
@@ -733,10 +904,28 @@ void TimePicker::closePopup() {
   markDirty(DirtyFlag::Paint);
 }
 bool TimePicker::onPointerEvent(const PointerEvent &e) {
+  if (!isEnabled())
+    return false;
+  if (e.action == PointerAction::Enter ||
+      (e.action == PointerAction::Move && bounds().contains(e.position))) {
+    setVisualState(ControlVisualState::Hovered, true);
+    return true;
+  }
+  if (e.action == PointerAction::Leave) {
+    setVisualState(ControlVisualState::Hovered, false);
+    setVisualState(ControlVisualState::Pressed, false);
+    return true;
+  }
   if (e.action == PointerAction::Down && primary(e) &&
       bounds().contains(e.position)) {
     setVisualState(ControlVisualState::Focused, true);
+    setVisualState(ControlVisualState::Pressed, true);
     open_ ? closePopup() : openPopup();
+    return true;
+  }
+  if (e.action == PointerAction::Cancel ||
+      (e.action == PointerAction::Up && primary(e))) {
+    setVisualState(ControlVisualState::Pressed, false);
     return true;
   }
   return false;

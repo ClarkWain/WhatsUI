@@ -15,10 +15,10 @@
 namespace wui {
 namespace {
 
-constexpr float kToastWidth = 360.0f;
+constexpr float kToastWidth = 292.0f;
 constexpr float kToastMinHeight = 72.0f;
 constexpr float kToastMargin = 16.0f;
-constexpr float kToastPadding = 16.0f;
+constexpr float kToastPadding = 12.0f;
 constexpr float kToastIcon = 20.0f;
 constexpr float kToastGap = 12.0f;
 
@@ -182,15 +182,16 @@ void Toast::paint(PaintContext& context)
 {
     const auto& current = theme();
     const auto box = bounds();
-    const auto& elevation = current.elevation.shadow16;
-    context.drawBoxShadow(box, current.radius.xLarge, elevation.ambient.blur, elevation.ambient.offsetX,
+    const auto& elevation = current.elevation.shadow8;
+    context.drawBoxShadow(box, current.radius.medium, elevation.ambient.blur, elevation.ambient.offsetX,
                           elevation.ambient.offsetY, elevation.ambient.spread, elevation.ambient.color);
-    context.drawBoxShadow(box, current.radius.xLarge, elevation.key.blur, elevation.key.offsetX,
+    context.drawBoxShadow(box, current.radius.medium, elevation.key.blur, elevation.key.offsetX,
                           elevation.key.offsetY, elevation.key.spread, elevation.key.color);
-    context.fillStrokeRoundRect(box, current.radius.xLarge,
-                                current.stroke.thin,
+    context.fillStrokeRoundRect(context.snapRectEdges(box),
+                                current.radius.medium,
+                                context.snapStrokeWidth(current.stroke.thin),
                                 current.colors.surfaceRaised,
-                                current.colors.neutralStroke1);
+                                Color{0, 0, 0, 0});
 
     const RectF icon{box.x + kToastPadding, box.y + kToastPadding, kToastIcon, kToastIcon};
     const Color color = intentColor(current, intent_);
@@ -215,14 +216,10 @@ void Toast::paint(PaintContext& context)
                          current.colors.neutralForeground2, current.typography.caption1.weight);
     }
     const auto dismissBox = dismissBounds();
-    context.fillRoundRect(dismissBox, current.radius.medium,
-                          current.colors.neutralBackground1.rest);
     drawIcon(context, IconName::Dismiss, dismissBox,
              current.colors.neutralForeground2, IconSize::Size16);
     const auto action = actionBounds();
     if (!actionLabel_.empty()) {
-        context.fillRoundRect(action, current.radius.medium,
-                              current.colors.neutralBackground1.hover);
         context.drawText(actionLabel_, action.x + (action.width - measuredWidth(actionLabel_, current.typography.caption1Strong.size, current.typography.caption1Strong.weight)) * 0.5f,
                          context.centeredTextBottom(actionLabel_, action, current.typography.caption1Strong.size, current.typography.caption1Strong.weight),
                          current.typography.caption1Strong.size, current.colors.brandForeground1, current.typography.caption1Strong.weight);
@@ -389,12 +386,14 @@ void Spinner::paint(PaintContext& context)
         indicatorX = startX + labelWidth + gap;
     }
 
-    const float stroke = spinnerStrokeWidth(size_);
+    const RectF indicatorRect = context.snapRectEdges(
+        {indicatorX, indicatorY, diameter, diameter});
+    const float stroke = context.snapStrokeWidth(spinnerStrokeWidth(size_));
     const float arcInset = stroke * 0.5f;
     const RectF arcBounds{
-        indicatorX + arcInset, indicatorY + arcInset,
-        std::max(0.0f, diameter - stroke),
-        std::max(0.0f, diameter - stroke)};
+        indicatorRect.x + arcInset, indicatorRect.y + arcInset,
+        std::max(0.0f, indicatorRect.width - stroke),
+        std::max(0.0f, indicatorRect.height - stroke)};
     constexpr float twoPi = 6.28318530718f;
     const Color base{current.colors.brandForeground1.r,
                      current.colors.brandForeground1.g,
@@ -442,7 +441,7 @@ void Spinner::onDetach() noexcept { stopTicker(); }
 void Spinner::startTicker() noexcept
 {
     if (!isAttached() || !motionEnabled_ || tickerId_) return;
-    tickerId_ = Ticker::instance().add(Animation(0.9f, [this](float progress) { phase_ = progress; markDirty(DirtyFlag::Paint); }).repeat(-1));
+    tickerId_ = Ticker::instance().add(Animation(1.5f, [this](float progress) { phase_ = progress; markDirty(DirtyFlag::Paint); }).repeat(-1));
 }
 void Spinner::stopTicker() noexcept { if (tickerId_) { Ticker::instance().cancel(*tickerId_); tickerId_.reset(); } }
 

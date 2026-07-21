@@ -136,7 +136,7 @@ Color Popover::backgroundColor() const noexcept
 {
     const auto& colors = theme().colors;
     switch (appearance_) {
-    case PopoverAppearance::Inverted: return Color{36, 36, 36, 255};
+    case PopoverAppearance::Inverted: return Color{41, 41, 41, 255};
     case PopoverAppearance::Brand: return colors.brandBackground.rest;
     case PopoverAppearance::Surface: default: return colors.neutralBackground1.rest;
     }
@@ -150,37 +150,49 @@ Color Popover::foregroundColor() const noexcept
 void Popover::paintArrow(PaintContext& context, const RectF& panel, Color color) const
 {
     if (!arrow_) return;
-    const float center = std::clamp(anchor().x + anchor().width * 0.5f, panel.x + 16.0f, panel.x + panel.width - 16.0f);
+    const float center = context.snapToPhysicalPixel(std::clamp(
+        anchor().x + anchor().width * 0.5f, panel.x + 16.0f,
+        panel.x + panel.width - 16.0f));
     const bool above = isAbove(placement());
     // The arrow is painted over the panel, then its base seam is erased with
     // the panel fill.  This keeps the sloped sides visually connected to the
     // surface rather than leaving a standalone outlined triangle perched on
     // top of a horizontal border.
-    const float y = above ? panel.y + panel.height : panel.y;
+    const float pixel = context.physicalPixel();
+    const float y = context.snapToPhysicalPixel(
+        above ? panel.y + panel.height : panel.y);
     const std::vector<PointF> outer = above
-        ? std::vector<PointF>{{center - kArrowSize, y - 1.0f}, {center + kArrowSize, y - 1.0f}, {center, y + kArrowSize}}
-        : std::vector<PointF>{{center - kArrowSize, y + 1.0f}, {center + kArrowSize, y + 1.0f}, {center, y - kArrowSize}};
-    constexpr float inset = 1.25f;
+        ? std::vector<PointF>{{center - kArrowSize, y - pixel}, {center + kArrowSize, y - pixel}, {center, y + kArrowSize}}
+        : std::vector<PointF>{{center - kArrowSize, y + pixel}, {center + kArrowSize, y + pixel}, {center, y - kArrowSize}};
+    const float inset = pixel;
     const std::vector<PointF> inner = above
-        ? std::vector<PointF>{{center - kArrowSize + inset, y - 1.0f}, {center + kArrowSize - inset, y - 1.0f}, {center, y + kArrowSize - inset}}
-        : std::vector<PointF>{{center - kArrowSize + inset, y + 1.0f}, {center + kArrowSize - inset, y + 1.0f}, {center, y - kArrowSize + inset}};
-    context.fillPolygon(outer, theme().colors.neutralStroke1);
+        ? std::vector<PointF>{{center - kArrowSize + inset, y - pixel}, {center + kArrowSize - inset, y - pixel}, {center, y + kArrowSize - inset}}
+        : std::vector<PointF>{{center - kArrowSize + inset, y + pixel}, {center + kArrowSize - inset, y + pixel}, {center, y - kArrowSize + inset}};
+    // The official surface reserves a transparent 1-DIP border.  A faint
+    // Shadow16 key edge is used only around the pointer because the current
+    // backend cannot include arbitrary polygons in drawBoxShadow().
+    context.fillPolygon(outer, theme().elevation.shadow16.key.color);
     context.fillPolygon(inner, color);
     // Remove the horizontal panel border only at the arrow base.  The stroke
     // on the two sloped arrow edges remains, producing a continuous callout.
-    context.fillRect(above ? RectF{center - kArrowSize, y - 1.0f, kArrowSize * 2.0f, 1.0f}
-                            : RectF{center - kArrowSize, y, kArrowSize * 2.0f, 1.0f}, color);
+    context.fillRect(
+        above ? RectF{center - kArrowSize, y - pixel,
+                      kArrowSize * 2.0f, pixel}
+              : RectF{center - kArrowSize, y,
+                      kArrowSize * 2.0f, pixel},
+        color);
 }
 
 void Popover::paint(PaintContext& context)
 {
-    const auto panel = panelBounds();
+    const RectF panel = context.snapRectEdges(panelBounds());
     const auto& current = theme();
     const Color bg = backgroundColor();
-    paintElevation(context, panel, current.radius.large, current);
-    context.fillStrokeRoundRect(panel, current.radius.large,
-                                current.stroke.thin, bg,
-                                current.colors.neutralStroke1);
+    paintElevation(context, panel, current.radius.medium, current);
+    // Fluent PopoverSurface uses borderRadiusMedium (4 DIP) and a transparent
+    // border.  A neutral outline here doubled the edge and made the optional
+    // pointer look detached from the surface at fractional DPI.
+    context.fillRoundRect(panel, current.radius.medium, bg);
     paintArrow(context, panel, bg);
     const float contentWidth = std::max(1.0f, panel.width - kPadding * 2.0f);
     float y = panel.y + kPadding + headerHeight();
@@ -263,7 +275,13 @@ void PopoverButton::closePopover()
     markDirty(DirtyFlag::Paint);
 }
 
-TeachingPopover::TeachingPopover(std::string title, std::string body) : Popover(std::move(title), std::move(body)) {}
+TeachingPopover::TeachingPopover(std::string title, std::string body)
+    : Popover(std::move(title), std::move(body))
+{
+    // Unlike the general Popover (whose pointer is opt-in), Fluent's guided
+    // teaching surface is anchored by default.
+    showArrow(true);
+}
 TeachingPopover& TeachingPopover::primaryAction(std::string label, ActionHandler handler) { primaryLabel_ = std::move(label); primaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
 TeachingPopover& TeachingPopover::secondaryAction(std::string label, ActionHandler handler) { secondaryLabel_ = std::move(label); secondaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
 TeachingPopover& TeachingPopover::dismissLabel(std::string label) { dismissLabel_ = std::move(label); markDirty(DirtyFlag::Layout); return *this; }
@@ -277,19 +295,44 @@ const std::string& TeachingPopover::stepText() const noexcept { return stepText_
 TeachingPopoverFocusPolicy TeachingPopover::focusPolicy() const noexcept { return focusPolicy_; }
 float TeachingPopover::headerHeight() const noexcept { return stepText_.empty() ? 0.0f : theme().typography.caption1.lineHeight + theme().spacing.vertical.xs; }
 float TeachingPopover::footerHeight() const noexcept { return primaryLabel_.empty() && secondaryLabel_.empty() ? 0.0f : theme().controls.height + theme().spacing.vertical.m + theme().spacing.vertical.l; }
-SizeF TeachingPopover::measure(const Constraints& constraints) const { return Popover::measure(constraints); }
+SizeF TeachingPopover::measure(const Constraints& constraints) const
+{
+    SizeF result = Popover::measure(constraints);
+    // The Fluent teaching surface is a 288-DIP content column with 16-DIP
+    // padding on each side.
+    result.width = std::max(result.width, std::min(320.0f, constraints.maxWidth));
+    return constraints.clamp(result);
+}
 void TeachingPopover::layout(const RectF& bounds) { Popover::layout(bounds); }
 RectF TeachingPopover::primaryBounds() const noexcept
 {
     if (primaryLabel_.empty()) return {};
-    const auto panel = panelBounds(); const float width = std::max(72.0f, textWidth(primaryLabel_, theme().typography.body1Strong) + 24.0f);
-    return {panel.x + panel.width - kPadding - width, panel.y + panel.height - kPadding - theme().controls.height, width, theme().controls.height};
+    const auto panel = panelBounds();
+    const float width = std::max(
+        96.0f,
+        textWidth(primaryLabel_, theme().typography.body1Strong) + 24.0f);
+    float right = panel.x + panel.width - kPadding;
+    if (!secondaryLabel_.empty()) {
+        const float secondaryWidth = std::max(
+            96.0f,
+            textWidth(secondaryLabel_, theme().typography.body1Strong) +
+                24.0f);
+        right -= secondaryWidth + theme().spacing.horizontal.s;
+    }
+    return {right - width,
+            panel.y + panel.height - kPadding - theme().controls.height,
+            width, theme().controls.height};
 }
 RectF TeachingPopover::secondaryBounds() const noexcept
 {
     if (secondaryLabel_.empty()) return {};
-    const auto primary = primaryBounds(); const auto panel = panelBounds(); const float width = std::max(72.0f, textWidth(secondaryLabel_, theme().typography.body1Strong) + 24.0f);
-    return {primary.x - theme().spacing.horizontal.s - width, panel.y + panel.height - kPadding - theme().controls.height, width, theme().controls.height};
+    const auto panel = panelBounds();
+    const float width = std::max(
+        96.0f,
+        textWidth(secondaryLabel_, theme().typography.body1Strong) + 24.0f);
+    return {panel.x + panel.width - kPadding - width,
+            panel.y + panel.height - kPadding - theme().controls.height,
+            width, theme().controls.height};
 }
 RectF TeachingPopover::dismissBounds() const noexcept { const auto panel = panelBounds(); return {panel.x + panel.width - kPadding - 24.0f, panel.y + kPadding - 2.0f, 24.0f, 24.0f}; }
 void TeachingPopover::paint(PaintContext& context)
@@ -300,12 +343,19 @@ void TeachingPopover::paint(PaintContext& context)
         current.typography.caption1.size, current.colors.brandForeground1, current.typography.caption1.weight);
     const auto dismiss = dismissBounds();
     drawIcon(context, IconName::Dismiss, dismiss,
-             current.colors.neutralForeground2, IconSize::Size16);
+             current.colors.neutralForeground2, IconSize::Size20);
     const auto drawButton = [&](const RectF& rect, const std::string& label, bool primary) {
         if (rect.width <= 0.0f) return;
-        context.fillRoundRect(rect, current.radius.medium, primary ? current.colors.brandBackground.rest : current.colors.neutralBackground1.hover);
-        context.drawText(label, rect.x + (rect.width - textWidth(label, current.typography.body1Strong)) * 0.5f,
-            context.centeredTextBottom(label, rect, current.typography.body1Strong.size, current.typography.body1Strong.weight),
+        const RectF aligned = context.snapRectEdges(rect);
+        context.fillStrokeRoundRect(
+            aligned, current.radius.medium,
+            context.snapStrokeWidth(current.stroke.thin),
+            primary ? current.colors.brandBackground.rest
+                    : current.colors.neutralBackground1.rest,
+            primary ? current.colors.brandBackground.rest
+                    : current.colors.neutralStroke1);
+        context.drawText(label, aligned.x + (aligned.width - textWidth(label, current.typography.body1Strong)) * 0.5f,
+            context.centeredTextBottom(label, aligned, current.typography.body1Strong.size, current.typography.body1Strong.weight),
             current.typography.body1Strong.size, primary ? current.colors.onBrand : current.colors.neutralForeground1, current.typography.body1Strong.weight);
     };
     drawButton(secondaryBounds(), secondaryLabel_, false);

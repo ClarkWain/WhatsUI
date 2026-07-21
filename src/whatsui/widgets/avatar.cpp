@@ -12,6 +12,78 @@ namespace {
 
 float asFloat(AvatarSize size) noexcept { return static_cast<float>(static_cast<int>(size)); }
 
+float activityRingInset(float extent) noexcept
+{
+    // Fluent's Avatar variants use a 2-DIP ring through 48 DIP and a 3-DIP
+    // ring from 56 DIP upward. The ring intentionally overflows the Avatar
+    // root; it is therefore painted before the fill rather than expanding
+    // measure()/layout().
+    return extent >= 56.0f ? 3.0f : 2.0f;
+}
+
+float personGlyphExtent(float extent) noexcept
+{
+    // The design system uses a discrete optical scale rather than a fixed
+    // percentage. In particular, the 32-DIP default Avatar contains a
+    // 20-DIP person glyph, while the 64-DIP form contains 32 DIP.
+    if (extent < 20.0f) return 12.0f;
+    if (extent < 28.0f) return 16.0f;
+    if (extent < 40.0f) return 20.0f;
+    if (extent < 56.0f) return 24.0f;
+    if (extent < 72.0f) return 32.0f;
+    if (extent < 96.0f) return 36.0f;
+    return 48.0f;
+}
+
+void drawDefaultPerson(PaintContext& context, const RectF& avatar,
+                       Color color) noexcept
+{
+    const float glyphExtent = personGlyphExtent(std::min(avatar.width, avatar.height));
+    const RectF glyph = context.snapRectEdges(
+        {avatar.x + (avatar.width - glyphExtent) * 0.5f,
+         avatar.y + (avatar.height - glyphExtent) * 0.5f,
+         glyphExtent, glyphExtent});
+    const float stroke = context.snapStrokeWidth(glyphExtent >= 20.0f ? 1.5f : 1.0f);
+    const float halfStroke = stroke * 0.5f;
+    const PointF headCenter{glyph.x + glyph.width * 0.5f,
+                            glyph.y + glyph.height * 0.30f};
+    const float headRadius = glyphExtent * 0.18f;
+    context.strokeCircle(headCenter, std::max(0.0f, headRadius - halfStroke),
+                         stroke, color);
+
+    // This follows the Fluent "Person" silhouette: a circular head above a
+    // shallow capsule shoulder line. Keeping the stroke within the glyph
+    // avoids clipping at 125/150% fractional scales.
+    const RectF shoulders{
+        glyph.x + glyph.width * 0.13f + halfStroke,
+        glyph.y + glyph.height * 0.56f + halfStroke,
+        std::max(0.0f, glyph.width * 0.74f - stroke),
+        std::max(0.0f, glyph.height * 0.29f - stroke)};
+    context.strokeRoundRect(shoulders, std::max(0.0f, shoulders.height * 0.5f),
+                            stroke, color);
+}
+
+float groupSpacing(AvatarGroupLayout layout, float extent) noexcept
+{
+    if (layout == AvatarGroupLayout::Stack) {
+        if (extent < 24.0f) return 2.0f;
+        if (extent < 48.0f) return 4.0f;
+        if (extent < 96.0f) return 8.0f;
+        return 16.0f;
+    }
+    if (extent < 20.0f) return 8.0f;
+    if (extent < 32.0f) return 10.0f;
+    if (extent < 64.0f) return 16.0f;
+    return 24.0f;
+}
+
+float groupDivider(float extent) noexcept
+{
+    if (extent < 56.0f) return 2.0f;
+    if (extent < 72.0f) return 3.0f;
+    return 4.0f;
+}
+
 Color avatarFill(AvatarColor color, const Theme& current) noexcept
 {
     switch (color) {
@@ -103,6 +175,15 @@ AvatarShape Avatar::shape() const noexcept { return shape_; }
 Avatar& Avatar::color(AvatarColor value) noexcept { setColor(value); return *this; }
 void Avatar::setColor(AvatarColor value) noexcept { if (color_ != value) { color_ = value; markDirty(DirtyFlag::Paint); } }
 AvatarColor Avatar::color() const noexcept { return color_; }
+Avatar& Avatar::active(bool value) noexcept { setActive(value); return *this; }
+void Avatar::setActive(bool value) noexcept
+{
+    if (active_ != value) {
+        active_ = value;
+        markDirty(DirtyFlag::Paint);
+    }
+}
+bool Avatar::isActive() const noexcept { return active_; }
 Avatar& Avatar::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
 void Avatar::setAccessibleLabel(std::string value) { if (accessibleLabel_ != value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); } }
 const std::string& Avatar::accessibleLabel() const noexcept { return accessibleLabel_; }
@@ -116,9 +197,24 @@ void Avatar::paint(PaintContext& context)
 {
     const auto& current = theme();
     const float extent = std::min(bounds().width, bounds().height);
-    const RectF visual{bounds().x + (bounds().width - extent) * 0.5f,
-                       bounds().y + (bounds().height - extent) * 0.5f, extent, extent};
+    const RectF visual = context.snapRectEdges(
+        {bounds().x + (bounds().width - extent) * 0.5f,
+         bounds().y + (bounds().height - extent) * 0.5f, extent, extent});
     const float radius = shape_ == AvatarShape::Circular ? extent * 0.5f : current.radius.medium;
+
+    if (active_ && shape_ == AvatarShape::Circular) {
+        const float ringInset = activityRingInset(extent);
+        const float ringStroke = context.snapStrokeWidth(ringInset);
+        const PointF center{visual.x + visual.width * 0.5f,
+                            visual.y + visual.height * 0.5f};
+        const float ringRadius = extent * 0.5f + ringInset;
+        // Figma's Activity ring has a white guard fill and a blue OUTSIDE
+        // stroke. Painting it first leaves a 1/1.5-DIP white separator after
+        // the Avatar fill has covered its inner half.
+        context.fillCircle(center, ringRadius, current.colors.neutralBackground1.rest);
+        context.strokeCircle(center, ringRadius, ringStroke,
+                             current.colors.brandBackground.rest);
+    }
     if (hasImage() && !children().empty()) {
         const int checkpoint = context.save();
         if (shape_ == AvatarShape::Circular) context.clipRoundRect(visual, radius);
@@ -129,10 +225,12 @@ void Avatar::paint(PaintContext& context)
         context.fillRoundRect(visual, radius, avatarFill(color_, current));
         const std::string initials = displayedInitials();
         if (!initials.empty()) {
-            const float textSize = std::max(10.0f, extent * 0.42f);
+            const float textSize = std::max(8.0f, extent * 0.375f);
             context.drawText(initials, centeredTextX(initials, visual, textSize, current.typography.weightSemibold),
                              context.centeredTextBottom(initials, visual, textSize, current.typography.weightSemibold),
                              textSize, avatarText(color_, current), current.typography.weightSemibold);
+        } else {
+            drawDefaultPerson(context, visual, current.colors.neutralForeground2);
         }
     }
     clearDirty(DirtyFlag::Paint);
@@ -178,13 +276,19 @@ void AvatarGroup::setAccessibleLabel(std::string value) { if (accessibleLabel_ !
 const std::string& AvatarGroup::accessibleLabel() const noexcept { return accessibleLabel_; }
 std::size_t AvatarGroup::visibleCount() const noexcept { return std::min(maxVisible_, children().size()); }
 float AvatarGroup::avatarExtent() const noexcept { return asFloat(size_); }
-float AvatarGroup::overlap() const noexcept { return layout_ == AvatarGroupLayout::Stack ? avatarExtent() * 0.28f : 0.0f; }
+float AvatarGroup::overlap() const noexcept
+{
+    return layout_ == AvatarGroupLayout::Stack
+               ? groupSpacing(layout_, avatarExtent())
+               : -groupSpacing(layout_, avatarExtent());
+}
 SizeF AvatarGroup::measure(const Constraints& constraints) const
 {
     const std::size_t shown = visibleCount();
     if (shown == 0) return constraints.clamp({0.0f, 0.0f});
     const float extent = avatarExtent();
-    const float width = extent * static_cast<float>(shown) - overlap() * static_cast<float>(shown - 1)
+    const float width = extent * static_cast<float>(shown) -
+                        overlap() * static_cast<float>(shown - 1)
         + (children().size() > shown ? extent * 0.72f : 0.0f);
     return constraints.clamp({width, extent});
 }
@@ -201,9 +305,24 @@ void AvatarGroup::layout(const RectF& bounds)
 void AvatarGroup::paint(PaintContext& context)
 {
     const std::size_t shown = visibleCount();
-    for (std::size_t index = 0; index < shown; ++index) children()[index]->paint(context);
+    const auto& current = theme();
+    if (layout_ == AvatarGroupLayout::Stack) {
+        const float divider =
+            context.snapStrokeWidth(groupDivider(avatarExtent()));
+        for (std::size_t index = 0; index < shown; ++index) {
+            const RectF child = context.snapRectEdges(children()[index]->bounds());
+            const PointF center{child.x + child.width * 0.5f,
+                                child.y + child.height * 0.5f};
+            context.fillCircle(
+                center, std::min(child.width, child.height) * 0.5f + divider,
+                current.colors.neutralBackground2.rest);
+            children()[index]->paint(context);
+        }
+    } else {
+        for (std::size_t index = 0; index < shown; ++index)
+            children()[index]->paint(context);
+    }
     if (children().size() > shown) {
-        const auto& current = theme();
         const float extent = avatarExtent() * 0.72f;
         const float x = bounds().x + (avatarExtent() - overlap()) * static_cast<float>(shown);
         const RectF counter{x, bounds().y + (avatarExtent() - extent) * 0.5f, extent, extent};

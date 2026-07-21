@@ -101,6 +101,8 @@ private:
 
     std::vector<MenuItem> items_;
     int selectedIndex_{-1};
+    int hoveredIndex_{-1};
+    int pressedIndex_{-1};
     DismissHandler onDismiss_;
 };
 
@@ -161,6 +163,14 @@ private:
     OverlayHost* overlayHost_{nullptr};
     std::size_t overlayId_{0};
     bool open_{false};
+    bool disclosureHovered_{false};
+    bool disclosurePressed_{false};
+};
+
+enum class TooltipAppearance {
+    Surface,
+    Brand,
+    Inverted,
 };
 
 // Tooltip owns a small anchored surface.  Pointer/focus code calls showAfter
@@ -169,11 +179,13 @@ private:
 class Tooltip : public Popup {
 public:
     Tooltip& text(std::string text);
+    Tooltip& appearance(TooltipAppearance appearance) noexcept;
     Tooltip& delay(std::chrono::milliseconds delay) noexcept;
     Tooltip& showAfter(std::chrono::milliseconds elapsed) noexcept;
     Tooltip& hide() noexcept;
 
     [[nodiscard]] const std::string& text() const noexcept;
+    [[nodiscard]] TooltipAppearance appearance() const noexcept;
     [[nodiscard]] bool isVisible() const noexcept;
     [[nodiscard]] std::chrono::milliseconds delay() const noexcept;
 
@@ -186,6 +198,7 @@ private:
     std::string text_;
     std::chrono::milliseconds delay_{500};
     std::chrono::milliseconds elapsed_{0};
+    TooltipAppearance appearance_{TooltipAppearance::Surface};
     bool visible_{false};
 };
 

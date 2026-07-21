@@ -29,6 +29,16 @@ bool hasColor(const std::vector<unsigned char>& pixels, wui::Color color)
     for (std::size_t i = 0; i + 3 < pixels.size(); i += 4) if (pixels[i] == color.r && pixels[i + 1] == color.g && pixels[i + 2] == color.b && pixels[i + 3] == color.a) return true;
     return false;
 }
+bool exactPixel(const std::vector<unsigned char>& pixels, int width,
+                float scale, float x, float y, wui::Color color)
+{
+    const int px = static_cast<int>(std::lround(x * scale));
+    const int py = static_cast<int>(std::lround(y * scale));
+    const std::size_t at =
+        static_cast<std::size_t>((py * width + px) * 4);
+    return at + 3 < pixels.size() && pixels[at] == color.r &&
+           pixels[at + 1] == color.g && pixels[at + 2] == color.b;
+}
 void render(const std::string& output, float scale)
 {
     constexpr int logicalWidth = 560, logicalHeight = 210;
@@ -60,6 +70,12 @@ void render(const std::string& output, float scale)
         canvas->endFrame();
         const auto pixels = canvas->readPixelsRGBA();
         expect(!pixels.empty() && hasColor(pixels, wui::theme().colors.danger) && hasColor(pixels, wui::theme().colors.statusSuccess), "Badge visual matrix must contain semantic status colors");
+        expect(exactPixel(pixels, width, scale, 263.0f, 147.0f,
+                          wui::theme().colors.statusSuccess),
+               "Available PresenceBadge must keep its semantic fill at the exact circular center");
+        expect(exactPixel(pixels, width, scale, 323.0f, 147.0f,
+                          wui::theme().colors.onBrand),
+               "Do-not-disturb PresenceBadge mark must remain optically centered at fractional DPI");
         savePpm(output, pixels, width, height);
     } catch (...) { wui::setTextMeasurer(nullptr); throw; }
     wui::setTextMeasurer(nullptr);

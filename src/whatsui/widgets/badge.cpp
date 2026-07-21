@@ -17,8 +17,8 @@ BadgeMetrics metrics(BadgeSize size) noexcept
     switch (size) {
     case BadgeSize::Small: return {10.0f, 14.0f, 4.0f, 16.0f};
     case BadgeSize::Medium: return {12.0f, 16.0f, 6.0f, 20.0f};
-    case BadgeSize::Large: return {14.0f, 20.0f, 8.0f, 24.0f};
-    case BadgeSize::ExtraLarge: return {16.0f, 22.0f, 10.0f, 28.0f};
+    case BadgeSize::Large: return {12.0f, 16.0f, 6.0f, 24.0f};
+    case BadgeSize::ExtraLarge: return {12.0f, 16.0f, 8.0f, 32.0f};
     }
     return {12.0f, 16.0f, 6.0f, 20.0f};
 }
@@ -44,6 +44,18 @@ float estimateTextWidth(const std::string& text, float size) noexcept
     // intrinsic size even for headless composition. Paint uses actual metrics
     // for vertical placement, as all other Fluent controls do.
     return std::max(0.0f, static_cast<float>(text.size()) * size * 0.56f);
+}
+
+float presenceExtent(float avatarSize) noexcept
+{
+    // Fluent Avatar maps its presence badge to discrete Badge sizes. Keeping
+    // this table discrete prevents fractional circles at 125/150% DPI.
+    if (avatarSize >= 96.0f) return 28.0f;
+    if (avatarSize >= 64.0f) return 20.0f;
+    if (avatarSize >= 48.0f) return 16.0f;
+    if (avatarSize >= 40.0f) return 12.0f;
+    if (avatarSize >= 28.0f) return 10.0f;
+    return 6.0f;
 }
 
 float badgeRadius(BadgeShape shape, float height) noexcept
@@ -201,31 +213,49 @@ PresenceBadge& PresenceBadge::avatarSize(float value) noexcept { setAvatarSize(v
 void PresenceBadge::setAvatarSize(float value) noexcept { value = std::isfinite(value) ? std::max(16.0f, value) : 32.0f; if (avatarSize_ != value) { avatarSize_ = value; markDirty(DirtyFlag::Layout); } }
 RectF PresenceBadge::boundsForAvatar(const RectF& avatar) const noexcept
 {
-    const float extent = std::clamp(std::min(avatar.width, avatar.height) * 0.375f, 8.0f, 16.0f);
-    const float overlap = extent * 0.28f;
+    const float extent = presenceExtent(std::min(avatar.width, avatar.height));
     const bool right = position_ == PresenceBadgePosition::TopRight || position_ == PresenceBadgePosition::BottomRight;
     const bool bottom = position_ == PresenceBadgePosition::BottomRight || position_ == PresenceBadgePosition::BottomLeft;
-    return {right ? avatar.x + avatar.width - extent + overlap : avatar.x - overlap,
-            bottom ? avatar.y + avatar.height - extent + overlap : avatar.y - overlap,
+    // The Figma component aligns the status instance's frame to the Avatar's
+    // edge. Its own 1-DIP white separation ring performs the optical overlap;
+    // applying a second positional overlap makes the badge sit too far out.
+    return {right ? avatar.x + avatar.width - extent : avatar.x,
+            bottom ? avatar.y + avatar.height - extent : avatar.y,
             extent, extent};
 }
 const std::string& PresenceBadge::accessibleLabel() const noexcept { return accessibleLabel_; }
 PresenceBadge& PresenceBadge::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
 void PresenceBadge::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
 std::string PresenceBadge::generatedAccessibleLabel() const { return accessibleLabel_.empty() ? presenceText(status_) : accessibleLabel_; }
-SizeF PresenceBadge::measure(const Constraints& constraints) const { const float extent = std::clamp(avatarSize_ * 0.375f, 8.0f, 16.0f); return constraints.clamp({extent, extent}); }
+SizeF PresenceBadge::measure(const Constraints& constraints) const { const float extent = presenceExtent(avatarSize_); return constraints.clamp({extent, extent}); }
 void PresenceBadge::paint(PaintContext& context)
 {
-    const Theme& current = theme(); const RectF rect = bounds(); const float radius = current.radius.circular;
-    // White ring separates the status from the Avatar image at every Fluent
-    // avatar size. Draw it before the colored disc so it is never clipped.
-    context.fillRoundRect({rect.x - 1.0f, rect.y - 1.0f, rect.width + 2.0f, rect.height + 2.0f}, radius, current.colors.neutralBackground1.rest);
-    context.fillRoundRect(rect, radius, presenceColor(current, status_));
+    const Theme& current = theme();
+    const RectF rect = context.snapRectEdges(bounds());
+    const PointF center{rect.x + rect.width * 0.5f,
+                        rect.y + rect.height * 0.5f};
+    const float radius = std::min(rect.width, rect.height) * 0.5f;
+    const float ring = context.snapStrokeWidth(current.stroke.thin);
+    // Fluent uses a 1-DIP background gap, rendered as a true circular ring.
+    context.fillCircle(center, radius + ring,
+                       current.colors.neutralBackground1.rest);
+    context.fillCircle(center, radius, presenceColor(current, status_));
     if (status_ == PresenceStatus::DoNotDisturb) {
-        const float band = std::max(2.0f, rect.height * 0.24f);
-        context.fillRoundRect({rect.x + rect.width * 0.2f, rect.y + (rect.height - band) * 0.5f, rect.width * 0.6f, band}, band, current.colors.onBrand);
+        const float band = context.snapStrokeWidth(
+            std::max(2.0f, rect.height * 0.24f));
+        context.fillRoundRect(
+            context.snapRectEdges(
+                {rect.x + rect.width * 0.2f,
+                 rect.y + (rect.height - band) * 0.5f,
+                 rect.width * 0.6f, band}),
+            band * 0.5f, current.colors.onBrand);
     } else if (status_ == PresenceStatus::OutOfOffice) {
-        context.strokeRoundRect({rect.x + rect.width * 0.23f, rect.y + rect.height * 0.23f, rect.width * 0.54f, rect.height * 0.54f}, radius, std::max(1.0f, rect.width * 0.13f), current.colors.onBrand);
+        const float glyphRadius = rect.width * 0.27f;
+        context.strokeCircle(
+            center, glyphRadius,
+            context.snapStrokeWidth(
+                std::max(1.0f, rect.width * 0.13f)),
+            current.colors.onBrand);
     }
     clearDirty(DirtyFlag::Paint);
 }

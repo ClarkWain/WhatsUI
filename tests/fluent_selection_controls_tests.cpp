@@ -20,6 +20,12 @@ wui::KeyEvent key(int code) { return {0, wui::KeyAction::Down, code}; }
 void listBoxSelectionAndKeyboard()
 {
     wui::ListBox list({{"a", "Alpha"}, {"b", "Beta", false}, {"c", "Charlie"}});
+    expect(list.measure({0, 400, 0, 400}).height == 104.0f,
+           "Single-line Fluent ListBox rows must remain 32 DIP with 4-DIP outer padding");
+    wui::ListBox twoLine(
+        {{"a", "Alpha", std::string("Supporting detail")}});
+    expect(twoLine.measure({0, 400, 0, 400}).height == 64.0f,
+           "Two-line Fluent ListBox rows must remain 56 DIP with 4-DIP outer padding");
     list.layout({0, 0, 240, 180});
     int changes = 0;
     list.onSelectionChanged([&](int index, const wui::Option&) { changes += index + 1; });
@@ -36,6 +42,15 @@ void listBoxSelectionAndKeyboard()
     list.setSelectionMode(wui::ListBoxSelectionMode::Multiple);
     list.setActiveIndex(0);
     expect(list.onKeyEvent(key(32)) && list.selectedIndices().size() == 2, "Multiple ListBox Space must toggle active item");
+    list.setSelectedIndex(0);
+    expect(list.performAccessibilityAction(wui::AccessibilityActionKind::AddToSelection, "c") ==
+               wui::AccessibilityActionStatus::Succeeded &&
+               list.selectedIndices().size() == 2,
+           "ListBox AddToSelection must retain the existing multi-selection");
+    expect(list.performAccessibilityAction(wui::AccessibilityActionKind::RemoveFromSelection, "a") ==
+               wui::AccessibilityActionStatus::Succeeded &&
+               list.selectedIndices().size() == 1 && list.selectedIndex() == 2,
+           "ListBox RemoveFromSelection must remove only the requested multi-select option");
 }
 
 void listBoxTypeAheadWindowingAndOptionSemantics()
@@ -59,16 +74,20 @@ void listBoxTypeAheadWindowingAndOptionSemantics()
     root->appendChild(std::move(snapshotList));
     const auto snapshot = wui::snapshotAccessibilityTree(*root);
     bool sawListBox = false;
+    bool listAllowsMultiple = false;
     bool sawVisibleOption = false;
     for (const auto& entry : snapshot) {
-        sawListBox = sawListBox || entry.properties.role == wui::AccessibilityRole::ListBox;
+        if (entry.properties.role == wui::AccessibilityRole::ListBox) {
+            sawListBox = true;
+            listAllowsMultiple = entry.properties.selectionCanSelectMultiple;
+        }
         sawVisibleOption = sawVisibleOption ||
             (entry.properties.role == wui::AccessibilityRole::Option &&
              entry.properties.label == "Alpha 0" && entry.properties.bounds.has_value() &&
              entry.properties.actions.invoke);
     }
-    expect(sawListBox && sawVisibleOption,
-           "ListBox snapshot must expose visible virtual options as invokable Option children");
+    expect(sawListBox && !listAllowsMultiple && sawVisibleOption,
+           "Single-select ListBox snapshots must expose invokable Option children and their selection policy");
     const float before = list.scrollOffset();
     wui::PointerEvent wheel{0, wui::PointerType::Mouse, wui::PointerAction::Scroll, wui::MouseButton::None, {20, 40}, 0, {0, 18}};
     expect(list.onPointerEvent(wheel) && list.scrollOffset() <= before,
@@ -96,6 +115,8 @@ void overlayComboboxAndDropdown()
 
     wui::Dropdown dropdown("Pick fruit");
     dropdown.bindOverlayHost(host).addOption({"apple", "Apple"}).addOption({"banana", "Banana"});
+    expect(dropdown.measure({0, 400, 0, 80}).height == 32.0f,
+           "Fluent medium Dropdown must measure exactly 32 DIP high");
     dropdown.layout({20, 80, 220, 32});
     expect(dropdown.performAccessibilityAction(wui::AccessibilityActionKind::Expand, {}) == wui::AccessibilityActionStatus::Succeeded && dropdown.isOpen(),
            "Dropdown Expand must show ListBox overlay");

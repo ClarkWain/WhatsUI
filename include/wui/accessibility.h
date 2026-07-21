@@ -65,6 +65,12 @@ enum class AccessibilityRole {
 enum class AccessibilityActionKind {
     Invoke,
     Toggle,
+    // Selection actions are used by native adapters for virtual children
+    // (for example ListBox options).  They remain distinct from SetValue so
+    // a multi-select container can preserve Add/Remove semantics.
+    Select,
+    AddToSelection,
+    RemoveFromSelection,
     Expand,
     Collapse,
     SetValue,
@@ -118,6 +124,10 @@ struct AccessibilityProperties {
     bool mixed{false};
     // Native form semantics shared by labelled selection/range controls.
     bool required{false};
+    // Selection containers publish their policy independently of the selected
+    // child state.  Native adapters map these to UIA Selection properties.
+    bool selectionCanSelectMultiple{false};
+    bool selectionIsSelectionRequired{false};
     // An indeterminate operation is busy but intentionally has no numeric
     // value. Platform adapters can surface this as their item/status property.
     bool busy{false};

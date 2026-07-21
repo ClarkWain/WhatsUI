@@ -81,6 +81,69 @@ bool pixelNear(const std::vector<std::uint8_t>& rgba, int width, float scale,
         && near(rgba[offset + 3], color.a);
 }
 
+bool sameColor(const std::vector<std::uint8_t>& rgba, int width, int x, int y,
+               wui::Color color, int tolerance = 0)
+{
+    if (x < 0 || y < 0 || x >= width) return false;
+    const auto offset = static_cast<std::size_t>((y * width + x) * 4);
+    const auto near = [tolerance](std::uint8_t actual, std::uint8_t expected) {
+        return std::abs(static_cast<int>(actual) -
+                        static_cast<int>(expected)) <= tolerance;
+    };
+    return offset + 3 < rgba.size() && near(rgba[offset], color.r)
+        && near(rgba[offset + 1], color.g)
+        && near(rgba[offset + 2], color.b)
+        && near(rgba[offset + 3], color.a);
+}
+
+int roundedCornerMismatch(const std::vector<std::uint8_t>& rgba, int width,
+                          float scale, wui::RectF logicalBounds,
+                          float logicalCornerSize, wui::Color background)
+{
+    const int left = static_cast<int>(std::lround(logicalBounds.x * scale));
+    const int top = static_cast<int>(std::lround(logicalBounds.y * scale));
+    const int right = static_cast<int>(std::lround(
+                          (logicalBounds.x + logicalBounds.width) * scale)) -
+        1;
+    const int bottom = static_cast<int>(std::lround(
+                           (logicalBounds.y + logicalBounds.height) * scale)) -
+        1;
+    const int corner = std::max(
+        1, static_cast<int>(std::ceil(logicalCornerSize * scale)));
+    int mismatch = 0;
+    for (int dy = 0; dy < corner; ++dy) {
+        for (int dx = 0; dx < corner; ++dx) {
+            const bool topLeft =
+                !sameColor(rgba, width, left + dx, top + dy, background, 1);
+            const bool topRight =
+                !sameColor(rgba, width, right - dx, top + dy, background, 1);
+            const bool bottomLeft =
+                !sameColor(rgba, width, left + dx, bottom - dy, background, 1);
+            const bool bottomRight =
+                !sameColor(rgba, width, right - dx, bottom - dy, background, 1);
+            mismatch += topLeft != topRight;
+            mismatch += topLeft != bottomLeft;
+            mismatch += topLeft != bottomRight;
+        }
+    }
+    return mismatch;
+}
+
+int exactVerticalRun(const std::vector<std::uint8_t>& rgba, int width, int height,
+                     int x, int firstY, int lastY, wui::Color color)
+{
+    int longest = 0;
+    int current = 0;
+    for (int y = std::max(0, firstY); y <= std::min(height - 1, lastY); ++y) {
+        if (sameColor(rgba, width, x, y, color)) {
+            longest = std::max(longest, ++current);
+        } else {
+            current = 0;
+        }
+    }
+    return longest;
+}
+
 struct InkBounds {
     int top{std::numeric_limits<int>::max()};
     int bottom{-1};
@@ -196,10 +259,10 @@ void verifyShapeAndStateTokens(const std::vector<std::uint8_t>& pixels, int widt
     // A one-DIP ring has no guaranteed fully covered sample below 200% DPR.
     // Accept its deliberately antialiased edge near the token; requiring an
     // exact full token at the mathematical edge would reward duplicate overdraw.
-    expect(pixelIs(pixels, width, scale, 24, 216, background)
-               && pixelNear(pixels, width, scale, 24, 226,
+    expect(pixelIs(pixels, width, scale, 24, 226, background)
+               && pixelNear(pixels, width, scale, 32, 226,
                             colors.neutralStrokeAccessible, 28)
-               && pixelIs(pixels, width, scale, 34, 226, background),
+               && pixelIs(pixels, width, scale, 40, 226, background),
            "Unselected Radio must render as a hollow circular stroke");
 
     // Blank interior/axis samples make the state checks independent from glyph
@@ -211,20 +274,56 @@ void verifyShapeAndStateTokens(const std::vector<std::uint8_t>& pixels, int widt
     // At fractional DPR the mathematical edge is deliberately a partial-
     // coverage pixel. Keep the tolerance below the distance to adjacent state
     // tokens while allowing the expected 125% analytic-AA blend.
-    expect(pixelNear(pixels, width, scale, 24, 226, colors.neutralStrokeAccessible, 28)
-               && pixelNear(pixels, width, scale, 150, 226,
+    expect(pixelNear(pixels, width, scale, 32, 226, colors.neutralStrokeAccessible, 28)
+               && pixelNear(pixels, width, scale, 158, 226,
                             colors.neutralStrokeAccessibleHover, 28)
-               && pixelNear(pixels, width, scale, 276, 226,
+               && pixelNear(pixels, width, scale, 284, 226,
                             colors.neutralStrokeAccessiblePressed, 28)
-               && pixelNear(pixels, width, scale, 402, 226,
+               && pixelNear(pixels, width, scale, 410, 226,
                             colors.compoundBrandStroke.rest, 28)
-               && pixelIs(pixels, width, scale, 404, 226, colors.neutralBackground2.rest)
-               && pixelIs(pixels, width, scale, 410, 226,
+               && pixelIs(pixels, width, scale, 412, 226, colors.neutralBackground2.rest)
+               && pixelIs(pixels, width, scale, 418, 226,
                           colors.compoundBrandForeground1.rest),
            "Radio rest, hover, pressed and selected state tokens must be distinct");
     expect(pixelIs(pixels, width, scale, 100, 276, colors.brandBackground.rest)
                && pixelIs(pixels, width, scale, 400, 276, colors.neutralStroke1),
            "ProgressBar filled and track regions must remain visually distinct");
+}
+
+void verifyPhysicalGeometry(const std::vector<std::uint8_t>& pixels,
+                            int width, int height, float scale)
+{
+    const auto& colors = wui::theme().colors;
+    const auto background = colors.neutralBackground2.rest;
+
+    // Compare the four rasterized corners rather than merely sampling one
+    // point.  The band excludes all label ink, so this fails on clipped,
+    // one-sided or visibly jagged silhouettes without pinning every AA shade.
+    const int circularMismatch = roundedCornerMismatch(
+        pixels, width, scale, {168, 28, 32, 32}, 7.0f, background);
+    const int rectangularMismatch = roundedCornerMismatch(
+        pixels, width, scale, {24, 28, 120, 32}, 7.0f, background);
+    const int cornerSamples =
+        std::max(1, static_cast<int>(std::ceil(7.0f * scale)));
+    const int mismatchBudget = std::max(2, cornerSamples / 2);
+    expect(circularMismatch <= mismatchBudget,
+           "Circular Button silhouette must remain quadrant-symmetric");
+    expect(rectangularMismatch <= mismatchBudget,
+           "Rounded Button corners must remain quadrant-symmetric");
+
+    // The rest Input bottom edge is a one-DIP Fluent stroke snapped to the
+    // nearest whole output-pixel thickness.  Count an interior column, away
+    // from both rounded corners and text, so analytic AA cannot hide a 1.5 px
+    // regression.
+    const int physicalX = static_cast<int>(std::lround(220.0f * scale));
+    const int firstY = static_cast<int>(std::floor(111.0f * scale));
+    const int lastY = static_cast<int>(std::ceil(117.0f * scale));
+    const int expectedStroke =
+        std::max(1, static_cast<int>(std::lround(scale)));
+    expect(exactVerticalRun(pixels, width, height, physicalX, firstY, lastY,
+                            colors.neutralStrokeAccessible) ==
+               expectedStroke,
+           "Input bottom stroke must occupy the rounded one-DIP physical-pixel count");
 }
 
 } // namespace
@@ -290,6 +389,7 @@ int main(int argc, char** argv)
             verifyTextGeometry(pixels, width, height, scale);
             verifyInputPaddingGeometry();
             verifyShapeAndStateTokens(pixels, width, scale);
+            verifyPhysicalGeometry(pixels, width, height, scale);
         } catch (...) {
             wui::setTextMeasurer(nullptr);
             throw;

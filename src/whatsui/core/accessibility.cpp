@@ -124,6 +124,7 @@ AccessibilityProperties propertiesForNode(const Node& node, const Node* focused)
         properties.label = group->accessibleLabel();
         properties.value = group->value();
         properties.required = group->isRequired();
+        properties.selectionIsSelectionRequired = true;
     } else if (const auto* radio = dynamic_cast<const Radio*>(&node)) {
         properties.role = AccessibilityRole::RadioButton;
         properties.label = radio->label();
@@ -194,6 +195,8 @@ AccessibilityProperties propertiesForNode(const Node& node, const Node* focused)
     } else if (const auto* listBox = dynamic_cast<const ListBox*>(&node)) {
         properties.role = AccessibilityRole::ListBox;
         properties.label = listBox->accessibleLabel();
+        properties.selectionCanSelectMultiple =
+            listBox->selectionMode() == ListBoxSelectionMode::Multiple;
         if (const int selected = listBox->selectedIndex(); selected >= 0 && static_cast<std::size_t>(selected) < listBox->options().size()) {
             properties.value = listBox->options()[static_cast<std::size_t>(selected)].value;
         }
@@ -213,6 +216,7 @@ AccessibilityProperties propertiesForNode(const Node& node, const Node* focused)
         properties.role = AccessibilityRole::TabList;
         properties.label = tabList->accessibleLabel();
         properties.value = tabList->value();
+        properties.selectionIsSelectionRequired = true;
     } else if (const auto* tab = dynamic_cast<const Tab*>(&node)) {
         properties.role = AccessibilityRole::Tab;
         properties.label = tab->label();

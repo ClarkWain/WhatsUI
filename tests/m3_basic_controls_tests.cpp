@@ -208,9 +208,14 @@ void testFluentToggleButtonOwnsButtonStyleToggleState()
     toggle.bind(pressed);
     toggle.setSize(wui::ButtonSize::Small);
     toggle.setShape(wui::ButtonShape::Rounded);
+    toggle.setAppearance(wui::ButtonAppearance::Secondary);
+    toggle.setIcon(wui::IconName::Edit);
     int notifications = 0;
     toggle.onChange([&](bool value) { expect(value, "ToggleButton keyboard activation must select the control"); ++notifications; });
     expect(toggle.measure({}).height == 24.0f, "ToggleButton must share Fluent Button size tokens");
+    expect(toggle.appearance() == wui::ButtonAppearance::Secondary &&
+               toggle.icon() == wui::IconName::Edit,
+           "ToggleButton must expose the Figma Button appearance and semantic icon contract");
     expect(toggle.onKeyEvent({0, wui::KeyAction::Down, 32}) && pressed.get() && toggle.isChecked(),
            "ToggleButton must toggle through its bound source of truth");
     expect(notifications == 1 && toggle.accessibilityActions().toggle,

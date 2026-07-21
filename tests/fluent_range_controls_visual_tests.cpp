@@ -38,6 +38,38 @@ bool pixelIs(const std::vector<unsigned char>& rgba, int width, float scale,
         && rgba[offset + 2] == color.b && rgba[offset + 3] == color.a;
 }
 
+bool pixelNear(const std::vector<unsigned char>& rgba, int width, int height,
+               float scale, float logicalX, float logicalY, wui::Color color,
+               int physicalRadius = 1, int channelTolerance = 0)
+{
+    const int centerX =
+        static_cast<int>(std::lround(logicalX * scale));
+    const int centerY =
+        static_cast<int>(std::lround(logicalY * scale));
+    for (int y = centerY - physicalRadius;
+         y <= centerY + physicalRadius; ++y) {
+        for (int x = centerX - physicalRadius;
+             x <= centerX + physicalRadius; ++x) {
+            if (x < 0 || y < 0 || x >= width || y >= height) continue;
+            const auto offset =
+                static_cast<std::size_t>((y * width + x) * 4);
+            const auto near = [channelTolerance](std::uint8_t actual,
+                                                 std::uint8_t expected) {
+                return std::abs(static_cast<int>(actual) -
+                                static_cast<int>(expected)) <=
+                    channelTolerance;
+            };
+            if (near(rgba[offset], color.r) &&
+                near(rgba[offset + 1], color.g) &&
+                near(rgba[offset + 2], color.b) &&
+                near(rgba[offset + 3], color.a)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void draw(wui::Node& node, wui::PaintContext& paint, wui::RectF bounds)
 {
     node.layout(bounds);
@@ -84,7 +116,7 @@ int main(int argc, char** argv)
         wui::Slider sliderMedium(0, 100, 56);
         wui::Slider sliderHover(0, 100, 64); sliderHover.setVisualState(wui::ControlVisualState::Hovered, true);
         wui::Slider sliderPressed(0, 100, 72); sliderPressed.setVisualState(wui::ControlVisualState::Pressed, true);
-        wui::Slider sliderFocused(0, 100, 45); sliderFocused.setVisualState(wui::ControlVisualState::Focused, true);
+        wui::Slider sliderFocused(0, 100, 45); sliderFocused.setVisualState(wui::ControlVisualState::Focused, true); sliderFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
         wui::Slider sliderDisabled(0, 100, 70); sliderDisabled.setEnabled(false);
         draw(sliderSmall, paint, {28, 164, 270, 24});
         draw(sliderMedium, paint, {330, 160, 270, 32});
@@ -121,7 +153,7 @@ int main(int argc, char** argv)
         wui::Switch switchOn("On", true);
         wui::Switch switchHover("Hover", false); switchHover.setVisualState(wui::ControlVisualState::Hovered, true);
         wui::Switch switchPressed("Pressed", true); switchPressed.setVisualState(wui::ControlVisualState::Pressed, true);
-        wui::Switch switchFocused("Focused", true); switchFocused.setVisualState(wui::ControlVisualState::Focused, true);
+        wui::Switch switchFocused("Focused", true); switchFocused.setVisualState(wui::ControlVisualState::Focused, true); switchFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
         wui::Switch switchDisabled("Disabled", true); switchDisabled.setEnabled(false);
         draw(switchSmall, paint, {28, 404, 120, 32});
         draw(switchOn, paint, {166, 402, 110, 36});
@@ -162,18 +194,32 @@ int main(int argc, char** argv)
         canvas->endFrame();
         const auto pixels = canvas->readPixelsRGBA();
         if (pixels.size() != static_cast<std::size_t>(width * height * 4)) return 3;
+        // Preserve the state matrix even when a later pixel contract fails.
+        savePpm(output, pixels, width, height);
         // Determinate brand progress must remain a solid semantic token at
         // both 100% and 150% DPR; this also catches accidental double scaling.
-        if (!pixelIs(pixels, width, scale, 100, 309,
-                     wui::theme().colors.brandBackground.rest)) return 4;
+        if (!pixelNear(pixels, width, height, scale, 100.0f, 309.0f,
+                       wui::theme().colors.brandBackground.rest)) return 4;
         // Endpoint expansion must not paint into the one-DIP gutter outside
         // the Slider hit rect at either scale; this is geometric evidence
         // that the round pressed thumb is not being clipped by a parent.
         if (!pixelIs(pixels, width, scale, 27, 264,
                      wui::theme().colors.neutralBackground2.rest) ||
-            !pixelIs(pixels, width, scale, 600, 264,
+            !pixelIs(pixels, width, scale, 601, 264,
                      wui::theme().colors.neutralBackground2.rest)) return 5;
-        savePpm(output, pixels, width, height);
+        // Switch geometry is state-independent: medium uses an 18-DIP thumb
+        // with 20-DIP travel, small uses 14 DIP with 16-DIP travel. Sampling
+        // inside the official radius rejects the old 14-DIP medium-off thumb.
+        if (!pixelNear(pixels, width, height, scale, 311.0f, 420.0f,
+                       wui::theme().colors.neutralForeground3) ||
+            !pixelNear(pixels, width, height, scale, 205.0f, 420.0f,
+                       wui::theme().colors.onBrand)) return 6;
+        // Medium Slider's white inset ring is centred at radius 6 inside its
+        // 20-DIP brand thumb; the centre itself must remain brand coloured.
+        if (!pixelNear(pixels, width, height, scale, 480.0f, 176.0f,
+                       wui::theme().colors.brandBackground.rest) ||
+            !pixelNear(pixels, width, height, scale, 486.0f, 176.0f,
+                       wui::theme().colors.onBrand, 2, 40)) return 7;
         wui::setTextMeasurer(nullptr);
         return 0;
     } catch (...) {

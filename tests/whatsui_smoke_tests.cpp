@@ -1,3 +1,4 @@
+#include <cmath>
 #include <memory>
 #include <cstdio>
 #include <stdexcept>
@@ -244,8 +245,27 @@ void testPaintContextScaleFactor()
 {
     wui::PaintContext context(2.0f);
     expect(context.scaleFactor() == 2.0f, "PaintContext should preserve a valid DPR");
+    expect(context.physicalPixel() == 0.5f,
+           "PaintContext should expose one physical pixel in logical units");
+    expect(context.snapToPhysicalPixel(1.26f) == 1.5f,
+           "PaintContext should snap positions to the nearest device pixel");
+    expect(context.snapStrokeWidth(1.0f) == 1.0f,
+           "A one-DIP stroke should stay exactly two pixels at 200% DPR");
+    const auto snapped = context.snapRectEdges({0.26f, 0.74f, 9.49f, 5.01f});
+    expect(snapped.x == 0.5f && snapped.y == 0.5f
+               && snapped.width == 9.5f && snapped.height == 5.5f,
+           "PaintContext should snap both rectangle edges without accumulating size drift");
+    context.setScaleFactor(0.8f);
+    expect(std::fabs(context.physicalPixel() - 1.25f) < 0.0001f
+               && std::fabs(context.snapToPhysicalPixel(1.26f) - 1.25f)
+                      < 0.0001f
+               && std::fabs(context.snapStrokeWidth(1.0f) - 1.25f)
+                      < 0.0001f,
+           "PaintContext physical-pixel snapping should also support valid DPR below one");
     context.setScaleFactor(0.0f);
     expect(context.scaleFactor() == 1.0f, "PaintContext should normalize invalid DPR to 1");
+    expect(std::fabs(context.physicalPixel() - 1.0f) < 0.0001f,
+           "PaintContext physical pixel should follow a sanitized DPR");
 }
 
 void testImageSourcesAreInternedAcrossRebuiltNodes()
@@ -843,8 +863,11 @@ void testFocusedControlsPaintAFluentFocusRing()
     button.layout({10.0f, 10.0f, 80.0f, 32.0f});
     const auto buttonRest = paintCommandCount(button);
     button.setVisualState(wui::ControlVisualState::Focused, true);
+    expect(paintCommandCount(button) == buttonRest,
+           "Pointer-style logical Button focus must not paint a keyboard outline");
+    button.setVisualState(wui::ControlVisualState::FocusVisible, true);
     expect(paintCommandCount(button) == buttonRest + 2,
-           "Focused Button must paint the Fluent outer and inner focus strokes");
+           "Focus-visible Button must paint the Fluent outer and inner focus strokes");
 
     wui::Checkbox checkbox("Complete");
     checkbox.layout({10.0f, 10.0f, 120.0f, 24.0f});
@@ -860,8 +883,11 @@ void testFocusedControlsPaintAFluentFocusRing()
     icon.layout({10.0f, 10.0f, 32.0f, 32.0f});
     const auto iconRest = paintCommandCount(icon);
     icon.setVisualState(wui::ControlVisualState::Focused, true);
+    expect(paintCommandCount(icon) == iconRest,
+           "Pointer-style logical IconButton focus must not paint a keyboard outline");
+    icon.setVisualState(wui::ControlVisualState::FocusVisible, true);
     expect(paintCommandCount(icon) == iconRest + 2,
-           "Focused IconButton must paint the Fluent outer and inner focus strokes");
+           "Focus-visible IconButton must paint the Fluent outer and inner focus strokes");
 
     wui::Radio radio("Choice", true);
     radio.layout({10.0f, 10.0f, 120.0f, 32.0f});

@@ -21,6 +21,8 @@ void populateTree(wui::Tree& tree)
 void testStableIdentityAndDisclosure()
 {
     wui::Tree tree; populateTree(tree);
+    expect(tree.rowHeight() == 32.0f,
+           "Medium Tree must use the Fluent 32-DIP row token");
     auto* files = tree.visibleItems().front();
     auto* readme = tree.visibleItems()[1];
     expect(files->isExpanded() && readme->id() == "readme", "expanded Tree must flatten nested stable items");
@@ -31,6 +33,17 @@ void testStableIdentityAndDisclosure()
     expect(readme->level() == 2, "collapsed ancestors must not change retained TreeItem semantic level");
     files->setExpanded(true);
     expect(tree.visibleItems()[1] == readme, "expand/collapse must retain nested TreeItem identity");
+
+    // The expand chevron owns the full official 24-DIP slot, not only the
+    // visible 16-DIP glyph. Clicking near the slot edge must still toggle.
+    tree.layout({0, 0, 300, 96});
+    const wui::PointF disclosureEdge{23.0f, 16.0f};
+    expect(files->onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                                  wui::MouseButton::Left, disclosureEdge}) &&
+               files->onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Up,
+                                      wui::MouseButton::Left, disclosureEdge}) &&
+               !files->isExpanded(),
+           "Tree disclosure must expose the full 24-DIP Fluent icon slot");
 }
 
 void testKeyboardAndDisabledSelection()

@@ -26,6 +26,17 @@ bool hasColor(const std::vector<unsigned char>& pixels, wui::Color color)
     for (std::size_t i = 0; i + 3 < pixels.size(); i += 4) if (pixels[i] == color.r && pixels[i + 1] == color.g && pixels[i + 2] == color.b && pixels[i + 3] == color.a) return true;
     return false;
 }
+bool pixelIs(const std::vector<unsigned char>& pixels, int width, float scale,
+             float x, float y, wui::Color color)
+{
+    const int px = std::clamp(static_cast<int>(std::lround(x * scale)), 0, width - 1);
+    const int py = std::max(0, static_cast<int>(std::lround(y * scale)));
+    const std::size_t offset = (static_cast<std::size_t>(py) * static_cast<std::size_t>(width) +
+                                static_cast<std::size_t>(px)) * 4;
+    return offset + 3 < pixels.size() && pixels[offset] == color.r &&
+           pixels[offset + 1] == color.g && pixels[offset + 2] == color.b &&
+           pixels[offset + 3] == color.a;
+}
 void render(const std::string& output, float scale)
 {
     scale = std::max(1.0f, scale); const int width = static_cast<int>(std::lround(kWidth * scale)), height = static_cast<int>(std::lround(kHeight * scale));
@@ -41,13 +52,19 @@ void render(const std::string& output, float scale)
         project.addItem("readme", "README.md"); auto& src = project.addItem("src", "src"); src.addItem("widgets", "widgets"); src.addItem("tree", "tree.cpp");
         auto& packages = tree.addItem("packages", "packages"); packages.setExpanded(false);
         auto& generated = tree.addItem("generated", "Generated files"); generated.setEnabled(false);
-        tree.addItem("settings", "Settings"); tree.layout({28, 88, 300, 200}); tree.select("tree"); tree.paint(paint);
+        tree.addItem("settings", "Settings"); tree.layout({28, 88, 300, 200}); tree.select("tree");
+        if (auto* selected = tree.selectedItem()) selected->setVisualState(wui::ControlVisualState::Focused, true);
+        tree.paint(paint);
         paint.drawText("Collapsed branch", 390, 112, 14, theme.colors.neutralForeground2, 600);
-        wui::Tree compact; auto& archive = compact.addItem("archive", "Archive"); archive.addItem("2025", "2025"); archive.setExpanded(false); compact.addItem("notes", "Notes");
-        compact.layout({390, 132, 230, 96}); compact.paint(paint);
+        wui::Tree compact; compact.rowHeight(24); auto& archive = compact.addItem("archive", "Archive"); archive.addItem("2025", "2025"); archive.setExpanded(false); auto& notes = compact.addItem("notes", "Notes");
+        notes.setVisualState(wui::ControlVisualState::Hovered, true);
+        compact.layout({390, 132, 230, 72}); compact.paint(paint);
         canvas->endFrame(); const auto pixels = canvas->readPixelsRGBA();
         expect(pixels.size() == static_cast<std::size_t>(width * height * 4), "Tree capture must have complete RGBA pixels");
         expect(hasColor(pixels, theme.colors.neutralBackground1.selected), "Tree visual must show selected row treatment");
+        expect(pixelIs(pixels, width, scale, 600, 168,
+                       theme.colors.neutralBackground1.hover),
+               "Small Tree hover must fill its exact 24-DIP row state");
         savePpm(output, pixels, width, height);
     } catch (...) { wui::setTextMeasurer(nullptr); throw; }
     wui::setTextMeasurer(nullptr);

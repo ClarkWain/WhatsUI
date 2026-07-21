@@ -476,15 +476,25 @@ AccessibilityActionStatus UiWindow::performAccessibilityAction(
             target = target->children()[index].get();
         }
         auto* listBox = dynamic_cast<ListBox*>(target);
-        if (listBox == nullptr || optionIndex >= listBox->options().size() ||
-            request.kind != AccessibilityActionKind::Invoke) {
+        if (listBox == nullptr || optionIndex >= listBox->options().size()) {
             return AccessibilityActionStatus::ElementNotAvailable;
         }
         const auto& option = listBox->options()[optionIndex];
         if (!option.enabled) return AccessibilityActionStatus::ElementNotEnabled;
         EventDispatchScope dispatchScope(*this);
-        const auto status = listBox->performAccessibilityAction(
-            AccessibilityActionKind::SetValue, option.value);
+        AccessibilityActionKind listAction = AccessibilityActionKind::SetValue;
+        switch (request.kind) {
+        case AccessibilityActionKind::Invoke:
+        case AccessibilityActionKind::Select:
+            break;
+        case AccessibilityActionKind::AddToSelection:
+        case AccessibilityActionKind::RemoveFromSelection:
+            listAction = request.kind;
+            break;
+        default:
+            return AccessibilityActionStatus::NotSupported;
+        }
+        const auto status = listBox->performAccessibilityAction(listAction, option.value);
         if (status == AccessibilityActionStatus::Succeeded) {
             platformWindow_->requestRedraw();
         }

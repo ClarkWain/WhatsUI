@@ -8,12 +8,14 @@
 #include <utility>
 #include <vector>
 
+#include "wui/text_metrics.h"
 #include "wui/theme.h"
 
 namespace wui {
 namespace {
 
 constexpr float kPi = 3.14159265358979323846f;
+constexpr float kItemGap = 2.0f;
 
 float itemSize(RatingSize size) noexcept
 {
@@ -24,6 +26,45 @@ float itemSize(RatingSize size) noexcept
     case RatingSize::ExtraLarge: return 28.0f;
     }
     return 16.0f;
+}
+
+float rowHeight(RatingSize size) noexcept
+{
+    return std::max(16.0f, itemSize(size));
+}
+
+float itemOffset(int index, RatingSize size) noexcept
+{
+    return static_cast<float>(index) * (itemSize(size) + kItemGap);
+}
+
+float itemsWidth(int count, RatingSize size) noexcept
+{
+    if (count <= 0) return 0.0f;
+    return itemSize(size) * static_cast<float>(count) +
+        kItemGap * static_cast<float>(count - 1);
+}
+
+float labelGap(RatingSize size) noexcept
+{
+    switch (size) {
+    case RatingSize::Small:
+    case RatingSize::Medium: return 4.0f;
+    case RatingSize::Large: return 6.0f;
+    case RatingSize::ExtraLarge: return 8.0f;
+    }
+    return 4.0f;
+}
+
+float textRunWidth(std::string_view text, float size, int weight) noexcept
+{
+    if (const auto* measurer = textMeasurer()) {
+        return measurer
+            ->measureText(std::string(text), size, weight,
+                          theme().typography.familyBase)
+            .width;
+    }
+    return static_cast<float>(text.size()) * size * 0.56f;
 }
 
 Color selectedColor(const Theme& current, RatingColor color) noexcept
@@ -74,7 +115,7 @@ void fillShape(PaintContext& context, const RectF& item, RatingShape shape, Colo
 void strokeShape(PaintContext& context, const RectF& item, RatingShape shape, Color color)
 {
     const float inset = std::max(1.0f, item.width * 0.1f);
-    const float stroke = theme().stroke.thin;
+    const float stroke = context.snapStrokeWidth(theme().stroke.thin);
     const RectF outer{item.x + inset, item.y + inset,
                       std::max(0.0f, item.width - inset * 2.0f),
                       std::max(0.0f, item.height - inset * 2.0f)};
@@ -95,20 +136,27 @@ void drawItem(PaintContext& context, const RectF& item, RatingShape shape,
               float fraction, Color active, bool interactive)
 {
     const Theme& current = theme();
+    const RectF renderedItem = context.snapRectEdges(item);
     if (interactive) {
-        strokeShape(context, item, shape, active);
+        strokeShape(context, renderedItem, shape, active);
     } else {
-        fillShape(context, item, shape, current.colors.neutralBackground3.pressed);
+        fillShape(context, renderedItem, shape,
+                  current.colors.neutralBackground3.pressed);
     }
     fraction = std::clamp(fraction, 0.0f, 1.0f);
     if (fraction <= 0.0f) return;
     if (fraction >= 1.0f) {
-        fillShape(context, item, shape, active);
+        fillShape(context, renderedItem, shape, active);
         return;
     }
     const int checkpoint = context.save();
-    context.clipRect({item.x, item.y, item.width * fraction, item.height});
-    fillShape(context, item, shape, active);
+    const float clipRight = context.snapToPhysicalPixel(
+        renderedItem.x + renderedItem.width * fraction);
+    context.clipRect(
+        {renderedItem.x, renderedItem.y,
+         std::max(0.0f, clipRight - renderedItem.x),
+         renderedItem.height});
+    fillShape(context, renderedItem, shape, active);
     context.restoreTo(checkpoint);
 }
 
@@ -116,15 +164,24 @@ void drawFocusOutline(PaintContext& context, const RectF& bounds)
 {
     const Theme& current = theme();
     const float inset = current.controls.focusInset;
+    const RectF aligned = context.snapRectEdges(bounds);
     const std::vector<PointF> points{
-        {bounds.x - inset, bounds.y - inset},
-        {bounds.x + bounds.width + inset, bounds.y - inset},
-        {bounds.x + bounds.width + inset, bounds.y + bounds.height + inset},
-        {bounds.x - inset, bounds.y + bounds.height + inset},
+        {context.snapToPhysicalPixel(aligned.x - inset),
+         context.snapToPhysicalPixel(aligned.y - inset)},
+        {context.snapToPhysicalPixel(aligned.x + aligned.width + inset),
+         context.snapToPhysicalPixel(aligned.y - inset)},
+        {context.snapToPhysicalPixel(aligned.x + aligned.width + inset),
+         context.snapToPhysicalPixel(aligned.y + aligned.height + inset)},
+        {context.snapToPhysicalPixel(aligned.x - inset),
+         context.snapToPhysicalPixel(aligned.y + aligned.height + inset)},
     };
-    context.strokePolygon(points, current.controls.focusWidth + current.stroke.thick,
+    context.strokePolygon(points, context.snapStrokeWidth(
+                                      current.controls.focusWidth +
+                                      current.stroke.thick),
                           current.colors.strokeFocusOuter);
-    context.strokePolygon(points, current.controls.focusWidth, current.colors.strokeFocusInner);
+    context.strokePolygon(
+        points, context.snapStrokeWidth(current.controls.focusWidth),
+        current.colors.strokeFocusInner);
 }
 
 std::string formatNumber(float value)
@@ -274,10 +331,15 @@ float Rating::normalized(float value) const noexcept
 float Rating::valueAt(float x) const noexcept
 {
     const float size = itemSize(size_);
-    const float local = std::clamp(x - bounds().x, 0.0f,
-                                   std::max(0.0f, size * maximum_ - 0.001f));
-    const int item = std::min(maximum_ - 1, static_cast<int>(local / size));
-    if (step_ == 0.5f && local - item * size < size * 0.5f) {
+    const float stride = size + kItemGap;
+    const float local = std::clamp(
+        x - bounds().x, 0.0f,
+        std::max(0.0f, itemsWidth(maximum_, size_) - 0.001f));
+    const int item =
+        std::min(maximum_ - 1, static_cast<int>(local / stride));
+    const float withinItem =
+        std::clamp(local - static_cast<float>(item) * stride, 0.0f, size);
+    if (step_ == 0.5f && withinItem < size * 0.5f) {
         return static_cast<float>(item) + 0.5f;
     }
     return static_cast<float>(item + 1);
@@ -292,24 +354,29 @@ void Rating::commit(float value)
 
 SizeF Rating::measure(const Constraints& constraints) const
 {
-    const float size = itemSize(size_);
-    return constraints.clamp({size * static_cast<float>(maximum_), size});
+    return constraints.clamp(
+        {itemsWidth(maximum_, size_), rowHeight(size_)});
 }
 
 void Rating::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const float size = itemSize(size_);
+    const float y = bounds().y + (bounds().height - size) * 0.5f;
     const float shown = hoveredValue_.value_or(value());
     Color active = selectedColor(current, color_);
     if (!isEnabled()) active = current.colors.neutralForegroundDisabled;
     for (int index = 0; index < maximum_; ++index) {
         const float fraction = std::clamp(shown - static_cast<float>(index), 0.0f, 1.0f);
-        drawItem(context, {bounds().x + size * index, bounds().y, size, size},
+        drawItem(context,
+                 {bounds().x + itemOffset(index, size_), y, size, size},
                  shape_, fraction, active, true);
     }
     if ((visualStates() & toMask(ControlVisualState::Focused)) != 0) {
-        drawFocusOutline(context, {bounds().x, bounds().y, size * maximum_, size});
+        drawFocusOutline(
+            context,
+            {bounds().x, bounds().y, itemsWidth(maximum_, size_),
+             rowHeight(size_)});
     }
     clearDirty(DirtyFlag::Paint);
 }
@@ -473,11 +540,16 @@ SizeF RatingDisplay::measure(const Constraints& constraints) const
     const float labelSize = size_ == RatingSize::Large ? current.typography.fontSizeBase300
         : size_ == RatingSize::ExtraLarge ? current.typography.fontSizeBase400
         : current.typography.fontSizeBase200;
-    float width = size * items + current.spacing.horizontal.xs;
-    width += valueText().size() * labelSize * 0.56f;
-    if (count_) width += current.spacing.horizontal.xs + 2.0f * labelSize * 0.56f
-        + countText().size() * labelSize * 0.56f;
-    return constraints.clamp({width, std::max(size, labelSize * 1.35f)});
+    float width = itemsWidth(items, size_) + labelGap(size_);
+    width += textRunWidth(valueText(), labelSize,
+                          current.typography.weightSemibold);
+    if (count_) {
+        width += labelGap(size_) +
+            textRunWidth("· " + countText(), labelSize,
+                         current.typography.weightRegular);
+    }
+    return constraints.clamp(
+        {width, std::max(rowHeight(size_), labelSize * 1.35f)});
 }
 
 void RatingDisplay::paint(PaintContext& context)
@@ -490,21 +562,24 @@ void RatingDisplay::paint(PaintContext& context)
     for (int index = 0; index < items; ++index) {
         const float fraction = compact_ ? 1.0f
             : std::clamp(shown - static_cast<float>(index), 0.0f, 1.0f);
-        drawItem(context, {bounds().x + size * index,
+        drawItem(context, {bounds().x + itemOffset(index, size_),
                            bounds().y + (bounds().height - size) * 0.5f, size, size},
                  shape_, fraction, active, false);
     }
     const float labelSize = size_ == RatingSize::Large ? current.typography.fontSizeBase300
         : size_ == RatingSize::ExtraLarge ? current.typography.fontSizeBase400
         : current.typography.fontSizeBase200;
-    float textX = bounds().x + size * items + current.spacing.horizontal.xs;
+    float textX =
+        bounds().x + itemsWidth(items, size_) + labelGap(size_);
     const float textBottom = context.centeredTextBottom(valueText(), bounds(), labelSize,
                                                          current.typography.weightSemibold);
     context.drawText(valueText(), textX, textBottom, labelSize,
                      current.colors.neutralForeground1, current.typography.weightSemibold);
-    textX += valueText().size() * labelSize * 0.56f;
+    textX += textRunWidth(valueText(), labelSize,
+                          current.typography.weightSemibold);
     if (count_) {
-        const std::string count = " · " + countText();
+        textX += labelGap(size_);
+        const std::string count = "· " + countText();
         context.drawText(count, textX, textBottom, labelSize, current.colors.neutralForeground1);
     }
     clearDirty(DirtyFlag::Paint);

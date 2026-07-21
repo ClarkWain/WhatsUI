@@ -6,6 +6,9 @@
 #include <numeric>
 #include <unordered_set>
 
+#include "wui/icons.h"
+#include "wui/runtime.h"
+#include "wui/text_metrics.h"
 #include "wui/theme.h"
 
 namespace wui {
@@ -18,9 +21,29 @@ bool focused(const ControlNode& control) noexcept
     return (control.visualStates() & toMask(ControlVisualState::Focused)) != 0;
 }
 
-float textWidth(const std::string& value, float size) noexcept
+float textWidth(const std::string& value, const TextStyleToken& style) noexcept
 {
-    return std::max(1.0f, static_cast<float>(value.size()) * size * .55f);
+    if (const auto* measurer = textMeasurer())
+        return measurer->measureText(value, style.size, style.weight).width;
+    return std::max(1.0f, static_cast<float>(value.size()) * style.size * .55f);
+}
+
+void paintCellFocus(PaintContext& context, RectF cell, const Theme& current)
+{
+    cell = context.snapRectEdges(cell);
+    const float outerWidth = context.snapStrokeWidth(current.stroke.thick);
+    const float innerWidth = context.snapStrokeWidth(current.stroke.thin);
+    // Figma 9249:10060: a 2-DIP black outline reaches the row divider; a
+    // white 1-DIP inset at 2 DIP keeps the focus cue legible on selection.
+    context.strokeRoundRect(
+        {cell.x + 1.0f, cell.y + 1.0f, std::max(0.0f, cell.width - 2.0f),
+         std::max(0.0f, cell.height - 1.0f)},
+        current.radius.medium, outerWidth, current.colors.strokeFocusInner);
+    context.strokeRoundRect(
+        {cell.x + 3.0f, cell.y + 3.0f, std::max(0.0f, cell.width - 6.0f),
+         std::max(0.0f, cell.height - 5.0f)},
+        std::max(0.0f, current.radius.medium - 2.0f), innerWidth,
+        current.colors.strokeFocusOuter);
 }
 } // namespace
 
@@ -125,8 +148,8 @@ std::vector<TableAccessibilityEntry> Table::accessibilityEntries() const
     }
     return result;
 }
-float Table::headerHeight() const noexcept { return 36.0f; }
-float Table::rowHeight() const noexcept { return std::max(40.0f, theme().controls.height); }
+float Table::headerHeight() const noexcept { return 32.0f; }
+float Table::rowHeight() const noexcept { return 44.0f; }
 
 std::vector<float> Table::columnWidths() const
 {
@@ -195,55 +218,76 @@ void Table::paintRowDecoration(PaintContext&, std::size_t, const RectF&) const {
 
 void Table::paint(PaintContext& context)
 {
-    const auto& current = theme(); const RectF rect = bounds();
+    const auto& current = theme(); const RectF rect = context.snapRectEdges(bounds());
     if (rect.width <= 0 || rect.height <= 0) return;
     context.fillRoundRect(rect, current.radius.medium, current.colors.neutralBackground1.rest);
-    const RectF header{rect.x, rect.y, rect.width, std::min(headerHeight(), rect.height)};
-    context.fillRoundRect(header, current.radius.medium, current.colors.neutralBackground2.rest);
+    const RectF header = context.snapRectEdges(
+        {rect.x, rect.y, rect.width, std::min(headerHeight(), rect.height)});
+    context.fillRoundRect(header, current.radius.medium,
+                          current.colors.neutralBackground1.rest);
     const auto widths = columnWidths(); float x = rect.x;
     for (std::size_t c = 0; c < columns_.size(); ++c) {
         const auto& col = columns_[c]; const float w = widths[c];
-        std::string label = col.label;
         const auto direction = columnSortDirection(c);
-        if (direction == TableSortDirection::Ascending) label += "  ^";
-        else if (direction == TableSortDirection::Descending) label += "  v";
-        const auto& style = current.typography.caption1Strong;
-        float tx = x + current.spacing.horizontal.m;
-        const float labelWidth = textWidth(label, style.size);
-        if (col.alignment == TableColumnAlignment::Center) tx = x + std::max(0.0f, (w - labelWidth) * .5f);
-        else if (col.alignment == TableColumnAlignment::End) tx = x + std::max(0.0f, w - labelWidth - current.spacing.horizontal.m);
+        const auto& style = current.typography.body1;
+        const float sortWidth =
+            direction == TableSortDirection::None ? 0.0f : 16.0f;
+        const float contentWidth = textWidth(col.label, style) + sortWidth;
+        float tx = x + current.spacing.horizontal.s;
+        if (col.alignment == TableColumnAlignment::Center) tx = x + std::max(0.0f, (w - contentWidth) * .5f);
+        else if (col.alignment == TableColumnAlignment::End) tx = x + std::max(0.0f, w - contentWidth - current.spacing.horizontal.s);
         const int cellClip = context.save();
         context.clipRect({x + 1.0f, header.y, std::max(0.0f, w - 2.0f), header.height});
-        context.drawText(label, tx, context.centeredTextBottom(label, {x, header.y, w, header.height}, style.size, style.weight), style.size,
+        context.drawText(col.label, tx, context.centeredTextBottom(col.label, {x, header.y, w, header.height}, style.size, style.weight), style.size,
                          current.colors.neutralForeground2, style.weight, style.family);
+        if (direction != TableSortDirection::None) {
+            const RectF icon{tx + textWidth(col.label, style) + 4.0f,
+                             header.y + (header.height - 12.0f) * .5f,
+                             12.0f, 12.0f};
+            drawIcon(context,
+                     direction == TableSortDirection::Ascending
+                         ? IconName::ChevronUp
+                         : IconName::ChevronDown,
+                     icon, current.colors.neutralForeground2,
+                     IconSize::Size12);
+        }
         context.restoreTo(cellClip);
         x += w;
     }
-    context.fillRect({rect.x, header.y + header.height - current.stroke.thin, rect.width, current.stroke.thin}, current.colors.neutralStroke1);
+    const float divider = context.snapStrokeWidth(current.stroke.thin);
+    context.fillRect({rect.x,
+                      context.snapToPhysicalPixel(header.y + header.height -
+                                                  divider),
+                      rect.width, divider},
+                     current.colors.neutralStroke1);
     const int clip = context.save(); context.clipRect({rect.x, rect.y + header.height, rect.width, std::max(0.0f, rect.height - header.height)});
     for (std::size_t r = firstVisibleRow(); r < lastVisibleRowExclusive(); ++r) {
-        const RectF row = rowBounds(r); if (row.y >= rect.y + rect.height) break;
+        const RectF row = context.snapRectEdges(rowBounds(r)); if (row.y >= rect.y + rect.height) break;
         paintRowDecoration(context, r, row);
         float cellX = rect.x;
         for (std::size_t c = 0; c < columns_.size(); ++c) {
             const float w = widths[c]; const std::string text = c < rows_[r].cells.size() ? rows_[r].cells[c] : std::string{};
             const auto& style = current.typography.body1;
-            float tx = cellX + current.spacing.horizontal.m;
-            const float cellWidth = textWidth(text, style.size);
+            float tx = cellX + current.spacing.horizontal.s;
+            const float cellWidth = textWidth(text, style);
             if (columns_[c].alignment == TableColumnAlignment::Center) tx = cellX + std::max(0.0f, (w - cellWidth) * .5f);
-            else if (columns_[c].alignment == TableColumnAlignment::End) tx = cellX + std::max(0.0f, w - cellWidth - current.spacing.horizontal.m);
+            else if (columns_[c].alignment == TableColumnAlignment::End) tx = cellX + std::max(0.0f, w - cellWidth - current.spacing.horizontal.l);
             const Color fg = rows_[r].enabled ? current.colors.neutralForeground1 : current.colors.neutralForegroundDisabled;
             const int cellClip = context.save();
             context.clipRect({cellX + 1.0f, row.y, std::max(0.0f, w - 2.0f), row.height});
             context.drawText(text, tx, context.centeredTextBottom(text, {cellX, row.y, w, row.height}, style.size, style.weight), style.size, fg, style.weight, style.family);
             context.restoreTo(cellClip);
-            if (isCellFocused(r, c) && focused(*this)) context.strokeRoundRect({cellX + 2, row.y + 2, std::max(0.0f, w - 4), std::max(0.0f, row.height - 4)}, current.radius.small, current.controls.focusWidth, current.colors.strokeFocusInner);
+            if (isCellFocused(r, c) && focused(*this))
+                paintCellFocus(context, {cellX, row.y, w, row.height}, current);
             cellX += w;
         }
-        context.fillRect({rect.x, row.y + row.height - current.stroke.thin, rect.width, current.stroke.thin}, current.colors.neutralStroke1);
+        context.fillRect({rect.x,
+                          context.snapToPhysicalPixel(row.y + row.height -
+                                                      divider),
+                          rect.width, divider},
+                         current.colors.neutralStroke1);
     }
     context.restoreTo(clip);
-    if (focused(*this)) context.strokeRoundRect({rect.x + current.controls.focusInset, rect.y + current.controls.focusInset, rect.width - current.controls.focusInset * 2, rect.height - current.controls.focusInset * 2}, current.radius.medium, current.controls.focusWidth, current.colors.strokeFocusInner);
     clearDirty(DirtyFlag::Paint);
 }
 bool Table::onPointerEvent(const PointerEvent& event)
@@ -342,6 +386,5 @@ void DataGrid::paintRowDecoration(PaintContext& context, std::size_t row, const 
 {
     const auto& current = theme();
     if (isRowSelected(row)) context.fillRect(rect, current.colors.neutralBackground1.selected);
-    else if (row == focusedRow_ && focused(*this)) context.fillRect(rect, current.colors.neutralBackground1.hover);
 }
 } // namespace wui

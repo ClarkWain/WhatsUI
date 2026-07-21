@@ -76,21 +76,6 @@ constexpr std::size_t kMaximumUndoEntries = 100;
             std::max(0.0f, bounds.height - verticalPadding * 2.0f)};
 }
 
-[[nodiscard]] float snapToPhysicalPixel(float logical, float scale) noexcept
-{
-    scale = std::max(1.0f, scale);
-    return std::round(logical * scale) / scale;
-}
-
-[[nodiscard]] float snapThicknessToPhysicalPixels(float logical,
-                                                  float scale) noexcept
-{
-    scale = std::max(1.0f, scale);
-    return static_cast<float>(
-               std::max(1L, std::lround(logical * scale))) /
-           scale;
-}
-
 void drawBottomStroke(PaintContext& context, const RectF& bounds, float radius,
                       float thickness, Color color, float progress = 1.0f)
 {
@@ -99,21 +84,19 @@ void drawBottomStroke(PaintContext& context, const RectF& bounds, float radius,
         thickness <= 0.0f || color.a == 0 || progress <= 0.0f) {
         return;
     }
-    const float scale = std::max(1.0f, context.scaleFactor());
-    const float snappedThickness =
-        snapThicknessToPhysicalPixels(thickness, scale);
+    const float snappedThickness = context.snapStrokeWidth(thickness);
     const float intendedWidth = bounds.width * progress;
     const float intendedLeft =
         bounds.x + (bounds.width - intendedWidth) * 0.5f;
-    const float left = snapToPhysicalPixel(intendedLeft, scale);
+    const float left = context.snapToPhysicalPixel(intendedLeft);
     const float right =
-        snapToPhysicalPixel(intendedLeft + intendedWidth, scale);
+        context.snapToPhysicalPixel(intendedLeft + intendedWidth);
     const float bottom =
-        snapToPhysicalPixel(bounds.y + bounds.height, scale);
+        context.snapToPhysicalPixel(bounds.y + bounds.height);
     const RectF segment{
         left,
         bottom - snappedThickness,
-        std::max(1.0f / scale, right - left),
+        std::max(context.physicalPixel(), right - left),
         snappedThickness,
     };
     // Match Fluent's clipped ::after construction. At full width the input's
@@ -831,15 +814,15 @@ void TextInput::paint(PaintContext& context)
     const auto& text = showPlaceholder ? placeholder_ : controller_.text();
 
     const auto& current = theme();
+    const RectF renderedBounds = context.snapRectEdges(bounds());
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     const bool enabled = isEnabled();
     const bool hovered =
         (visualStates() & toMask(ControlVisualState::Hovered)) != 0;
     const bool pressed =
         (visualStates() & toMask(ControlVisualState::Pressed)) != 0;
-    const float scale = std::max(1.0f, context.scaleFactor());
     const float outlineStrokeWidth =
-        snapThicknessToPhysicalPixels(current.stroke.thin, scale);
+        context.snapStrokeWidth(current.stroke.thin);
     syncFocusIndicatorAnimation(focused && enabled);
     if (focused && enabled) {
         ensureCaretBlinkAnimation();
@@ -872,13 +855,13 @@ void TextInput::paint(PaintContext& context)
 
     if (appearance_ == InputAppearance::Outline || !enabled ||
         (invalid_ && !focused)) {
-        context.fillStrokeRoundRect(bounds(), current.radius.medium,
+        context.fillStrokeRoundRect(renderedBounds, current.radius.medium,
                                     outlineStrokeWidth, surface, outerStroke);
     } else if (filled && surface.a != 0) {
-        context.fillRoundRect(bounds(), current.radius.medium, surface);
+        context.fillRoundRect(renderedBounds, current.radius.medium, surface);
     }
     if (!filled || !enabled || (invalid_ && !focused)) {
-        drawBottomStroke(context, bounds(),
+        drawBottomStroke(context, renderedBounds,
                          appearance_ == InputAppearance::Underline
                              ? current.radius.none
                              : current.radius.medium,
@@ -891,7 +874,7 @@ void TextInput::paint(PaintContext& context)
         const Color indicator = pressed
             ? current.colors.compoundBrandStroke.pressed
             : current.colors.compoundBrandStroke.rest;
-        drawBottomStroke(context, bounds(),
+        drawBottomStroke(context, renderedBounds,
                          appearance_ == InputAppearance::Underline
                              ? current.radius.none
                              : current.radius.medium,
@@ -901,7 +884,7 @@ void TextInput::paint(PaintContext& context)
     const auto selection = controller_.selection();
     const auto composition = controller_.composition();
     const RectF viewport =
-        textViewport(bounds(), current, focused, size_, multiline_);
+        textViewport(renderedBounds, current, focused, size_, multiline_);
     const float lineHeight = editableLineHeight(current);
     const auto lines = editableLines(controller_.text(), current.typography.body1.size, viewport.width,
                                      lineHeight, multiline_);
@@ -974,18 +957,17 @@ void TextInput::paint(PaintContext& context)
                                                      current.typography.body1.size);
                 const float endX = linePrefixWidth(controller_.text(), line, compositionEnd,
                                                    current.typography.body1.size);
-                const float physicalPixel = 1.0f / scale;
+                const float physicalPixel = context.physicalPixel();
                 const float underlineLeft =
-                    snapToPhysicalPixel(viewport.x + startX, scale);
+                    context.snapToPhysicalPixel(viewport.x + startX);
                 const float underlineRight =
-                    snapToPhysicalPixel(viewport.x + endX, scale);
-                const float underlineY = snapToPhysicalPixel(
+                    context.snapToPhysicalPixel(viewport.x + endX);
+                const float underlineY = context.snapToPhysicalPixel(
                     context.centeredTextBottom(
                         "Ag", lineBox, current.typography.body1.size,
                         current.typography.body1.weight,
                         current.typography.body1.family) +
-                        current.controls.focusInset,
-                    scale);
+                        current.controls.focusInset);
                 context.fillRect(
                     {underlineLeft, underlineY,
                      std::max(physicalPixel,
@@ -1009,11 +991,11 @@ void TextInput::paint(PaintContext& context)
         const float caretY = multiline_
             ? viewport.y + lineHeight * static_cast<float>(caretLineIndex) - verticalOffset
             : viewport.y + std::max(0.0f, (viewport.height - lineHeight) * 0.5f);
-        const float physicalPixel = 1.0f / scale;
-        const float snappedX = snapToPhysicalPixel(caretX, scale);
-        const float snappedTop = snapToPhysicalPixel(caretY, scale);
+        const float physicalPixel = context.physicalPixel();
+        const float snappedX = context.snapToPhysicalPixel(caretX);
+        const float snappedTop = context.snapToPhysicalPixel(caretY);
         const float snappedBottom =
-            snapToPhysicalPixel(caretY + lineHeight, scale);
+            context.snapToPhysicalPixel(caretY + lineHeight);
         context.fillRect({snappedX, snappedTop, physicalPixel,
                           std::max(physicalPixel, snappedBottom - snappedTop)},
                          current.colors.brandForeground1);

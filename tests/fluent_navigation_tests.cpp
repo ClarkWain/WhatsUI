@@ -18,7 +18,11 @@ void testToolbarAndLinkActivation()
     wui::Toolbar toolbar;
     toolbar.addItem("Cut").onInvoke([&] { ++invoked; });
     toolbar.addItem("Paste", wui::ToolbarItemAppearance::Primary).onInvoke([&] { invoked += 2; });
-    toolbar.layout({0, 0, 240, 32});
+    toolbar.layout({0, 0, 240, 40});
+    expect(toolbar.children().front()->bounds().height == 32.0f,
+           "Fluent medium Toolbar items must use a 32-DIP visual and hit target");
+    expect(toolbar.measure({0, 400, 0, 80}).height == 40.0f,
+           "Fluent medium Toolbar surface must be 40 DIP high");
     expect(toolbar.children().size() == 2, "Toolbar must retain one real control per item");
     auto* cut = dynamic_cast<wui::ToolbarItem*>(toolbar.children().front().get());
     expect(cut != nullptr, "Toolbar items must expose their own control contract");
@@ -39,14 +43,15 @@ void testToolbarOrientationAndOverflow()
 {
     wui::Toolbar toolbar;
     toolbar.addItem("New"); toolbar.addItem("Open"); toolbar.addItem("Save"); toolbar.addItem("Export");
-    toolbar.layout({0, 0, 108, 32});
+    toolbar.layout({0, 0, 108, 40});
     expect(toolbar.overflowedItems().size() >= 1 && toolbar.overflowedItems().back() == "Export",
            "Toolbar must deterministically collapse trailing commands that do not fit");
     std::size_t overflowCount = 0;
     toolbar.onOverflow([&](const std::vector<std::string>& items) { overflowCount = items.size(); });
-    expect(toolbar.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Up, wui::MouseButton::Left, {96, 16}}) &&
+    expect(toolbar.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Down, wui::MouseButton::Left, {96, 16}}) &&
+               toolbar.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Up, wui::MouseButton::Left, {96, 16}}) &&
                overflowCount == toolbar.overflowedItems().size(),
-           "Toolbar overflow affordance must expose its hidden command list without implicit menus");
+           "Toolbar overflow affordance must use a full press/release state before exposing hidden commands");
     toolbar.setOrientation(wui::ToolbarOrientation::Vertical);
     toolbar.layout({0, 0, 80, 64});
     expect(toolbar.measure({0, 100, 0, 400}).height > toolbar.measure({0, 400, 0, 100}).height,
@@ -74,7 +79,11 @@ void testTabsKeyboardAndPanelIdentity()
     tabs.addTab("appearance", "Appearance", false);
     tabs.addTab("advanced", "Advanced");
     tabs.onChange([&](const std::string&) { ++changes; });
-    tabs.layout({0, 0, 440, 40});
+    tabs.layout({0, 0, 440, 52});
+    expect(tabs.measure({0, 440, 0, 80}).height == 44.0f &&
+               tabs.children().front()->bounds().height == 44.0f &&
+               tabs.children().front()->bounds().y == 4.0f,
+           "Fluent medium TabList must center 44-DIP tabs inside a taller host");
     expect(tabs.value() == "general", "First enabled Tab must become the initial selection");
     expect(tabs.onKeyEvent({0, wui::KeyAction::Down, 39}) && tabs.value() == "advanced" && changes == 1,
            "Automatic TabList arrows must skip disabled tabs while selecting the next enabled tab");
@@ -104,6 +113,8 @@ void testBreadcrumbCollapseAndSemantics()
     breadcrumb.addItem("WhatsUI").onInvoke([&] { ++invoked; });
     breadcrumb.addItem("Design").current();
     breadcrumb.layout({0, 0, 360, 24});
+    expect(breadcrumb.measure({0, 600, 0, 80}).height == 32.0f,
+           "Fluent Breadcrumb items must use a stable 32-DIP row");
     const auto hidden = breadcrumb.hiddenItems();
     expect(hidden.size() == 1 && hidden.front() == "Projects",
            "Breadcrumb must collapse middle destinations while retaining first and final context");

@@ -15,6 +15,8 @@ public:
     using wui::Table::Table;
     using wui::Table::columnWidths;
     using wui::Table::columnAt;
+    using wui::Table::headerHeight;
+    using wui::Table::rowHeight;
 };
 
 class TestSurface final : public wui::RenderSurface {
@@ -68,6 +70,8 @@ std::vector<wui::TableRow> rows()
 void testPassiveTableWindowing()
 {
     InspectTable table(columns()); table.setRows(rows()).maxVisibleRows(2).accessibleLabel("Release table");
+    expect(table.headerHeight() == 32.0f && table.rowHeight() == 44.0f,
+           "Medium Table must use a 32-DIP header and Figma 9249:10060 44-DIP cell content");
     table.layout({0, 0, 440, 116});
     expect(table.accessibleLabel() == "Release table" && table.firstVisibleRow() == 0 && table.lastVisibleRowExclusive() == 3,
            "Table must retain a stable passive data model and one-row paint buffer");

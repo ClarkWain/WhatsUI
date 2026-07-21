@@ -613,7 +613,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                     Text("Keep the next important thing in view").style(type.windows.body).color(muted)),
                 Spacer().flex(1.0f),
                 If(hasStoredCompleted).then([clearCompleted, requestConfirmation] {
-                    return Button("Clear done").accessibilityId("todo.clear-completed").variant(wui::ButtonVariant::Ghost)
+                    return Button("Clear done").accessibilityId("todo.clear-completed").appearance(wui::ButtonAppearance::Secondary)
                         .onClick([clearCompleted, requestConfirmation] {
                             requestConfirmation("Clear completed tasks?",
                                                 "Completed tasks will be removed from My day.",
@@ -689,7 +689,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                         Row().align(wui::Alignment::Center).gap(6.0f).children(
                                             Text(metadata).maxLines(1).ellipsis().style(metadataStyle)
                                                 .color(item.important ? wui::Color{0, 95, 184, 255} : wui::Color{97, 97, 97, 255}).flex(1.0f),
-                                            Button("Edit").accessibilityId(automationPrefix + ".edit").variant(wui::ButtonVariant::Ghost)
+                                            Button("Edit").accessibilityId(automationPrefix + ".edit").appearance(wui::ButtonAppearance::Subtle)
                                                 .onClick([edit, id = item.id] { edit(id); }),
                                             IconButton(wui::IconName::Delete, "Delete task").accessibilityId(automationPrefix + ".delete")
                                                 .onClick([remove, id = item.id, requestConfirmation] {
@@ -732,7 +732,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                     Row().align(wui::Alignment::Center).gap(6.0f).children(
                                         Text(metadata).maxLines(1).ellipsis().style(metadataStyle)
                                             .color({117, 117, 117, 255}).flex(1.0f),
-                                        Button("Edit").accessibilityId(automationPrefix + ".edit").variant(wui::ButtonVariant::Ghost)
+                                        Button("Edit").accessibilityId(automationPrefix + ".edit").appearance(wui::ButtonAppearance::Subtle)
                                             .onClick([edit, id = item.id] { edit(id); }),
                                         IconButton(wui::IconName::Delete, "Delete task").accessibilityId(automationPrefix + ".delete")
                                             .onClick([remove, id = item.id, requestConfirmation] {
@@ -903,12 +903,12 @@ int main(int argc, char** argv)
 #else
     int width = 640;
     int height = 560;
-    constexpr float scaleFactor = 2.0f;
+    float scaleFactor = 2.0f;
 
     // Keep capture paths explicit so a CI job can write into an empty build
     // directory and compare exactly the same four scene files each run.
     // Stable headless contract for visual review:
-    //   WhatsUITodoApp <output-dir> --size <width>x<height>
+    //   WhatsUITodoApp <output-dir> --size <width>x<height> --scale <dpr>
     // The output directory remains the first positional argument for existing
     // CI jobs; unknown arguments fail loudly instead of silently changing a
     // golden capture.
@@ -919,6 +919,12 @@ int main(int argc, char** argv)
             if (++index >= argc || std::sscanf(argv[index], "%dx%d", &width, &height) != 2
                 || width < 240 || height < 320) {
                 std::cerr << "--size expects WIDTHxHEIGHT (minimum 240x320)" << std::endl;
+                return 2;
+            }
+        } else if (argument == "--scale") {
+            if (++index >= argc || std::sscanf(argv[index], "%f", &scaleFactor) != 1
+                || !std::isfinite(scaleFactor) || scaleFactor < 0.5f || scaleFactor > 4.0f) {
+                std::cerr << "--scale expects a finite DPR between 0.5 and 4.0" << std::endl;
                 return 2;
             }
         } else if (argument.rfind("--", 0) == 0) {

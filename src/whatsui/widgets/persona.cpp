@@ -201,6 +201,9 @@ float Persona::textBlockHeight() const noexcept
     const auto lines = textLines();
     float total = 0.0f;
     for (std::size_t i = 0; i < lines.size(); ++i) total += textStyle(i).lineHeight;
+    // Fluent's secondary line overlaps the primary line box by 2 DIP. This
+    // is deliberate optical leading, not an arbitrary glyph-baseline nudge.
+    if (lines.size() > 1) total -= theme().spacing.vertical.xxs;
     return total;
 }
 
@@ -257,6 +260,15 @@ void Persona::layout(const RectF& bounds)
     } else {
         indicatorBounds = {bounds.x, bounds.y + std::max(0.0f, (bounds.height - indicator) * 0.5f), indicator, indicator};
     }
+    if (presenceOnly_ && textAlignment_ == PersonaTextAlignment::Start &&
+        textPosition_ != PersonaTextPosition::Below &&
+        size_ != PersonaSize::ExtraLarge && size_ != PersonaSize::Huge) {
+        const float primaryLine = textLines().empty()
+            ? 0.0f
+            : textStyle(0).lineHeight;
+        indicatorBounds.y =
+            bounds.y + std::max(0.0f, (primaryLine - indicator) * 0.5f);
+    }
     if (!children().empty()) {
         children().front()->layout(indicatorBounds);
         if (!presenceOnly_ && children().size() > 1) {
@@ -276,21 +288,32 @@ void Persona::paint(PaintContext& context)
     const bool hovered = interactive && (visualStates() & toMask(ControlVisualState::Hovered)) != 0;
     const bool pressed = interactive && (visualStates() & toMask(ControlVisualState::Pressed)) != 0;
     const bool focused = interactive && (visualStates() & toMask(ControlVisualState::Focused)) != 0;
-    if (hovered || pressed) context.fillRoundRect(bounds(), current.radius.medium, pressed ? current.colors.neutralBackground1.pressed : current.colors.neutralBackground1.hover);
+    const RectF renderedBounds = context.snapRectEdges(bounds());
+    if (hovered || pressed) {
+        context.fillRoundRect(
+            renderedBounds, current.radius.medium,
+            pressed ? current.colors.neutralBackground1.pressed
+                    : current.colors.neutralBackground1.hover);
+    }
     if (focused) {
         const float outer = current.controls.focusInset;
         context.strokeRoundRect(
-            {bounds().x - outer, bounds().y - outer,
-             bounds().width + outer * 2.0f, bounds().height + outer * 2.0f},
-            current.radius.medium + outer, current.stroke.thin,
+            context.snapRectEdges(
+                {renderedBounds.x - outer, renderedBounds.y - outer,
+                 renderedBounds.width + outer * 2.0f,
+                 renderedBounds.height + outer * 2.0f}),
+            current.radius.medium + outer,
+            context.snapStrokeWidth(current.stroke.thick),
             current.colors.strokeFocusOuter);
         context.strokeRoundRect(
-            {bounds().x - current.stroke.thin,
-             bounds().y - current.stroke.thin,
-             bounds().width + current.stroke.thin * 2.0f,
-             bounds().height + current.stroke.thin * 2.0f},
+            context.snapRectEdges(
+                {renderedBounds.x - current.stroke.thin,
+                 renderedBounds.y - current.stroke.thin,
+                 renderedBounds.width + current.stroke.thin * 2.0f,
+                 renderedBounds.height + current.stroke.thin * 2.0f}),
             current.radius.medium + current.stroke.thin,
-            current.stroke.thin, current.colors.strokeFocusInner);
+            context.snapStrokeWidth(current.stroke.thin),
+            current.colors.strokeFocusInner);
     }
 
     ContainerNode::paint(context);
@@ -309,6 +332,7 @@ void Persona::paint(PaintContext& context)
     }
     float y = textBounds.y + (textPosition_ == PersonaTextPosition::Below || textAlignment_ == PersonaTextAlignment::Start ? 0.0f : std::max(0.0f, (textBounds.height - totalHeight) * 0.5f));
     for (std::size_t index = 0; index < lines.size(); ++index) {
+        if (index == 1) y -= current.spacing.vertical.xxs;
         const TextLineStyle style = textStyle(index);
         const std::string rendered = ellipsize(lines[index], textBounds.width, style);
         const float lineWidth = textWidth(rendered, style);

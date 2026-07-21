@@ -363,6 +363,60 @@ void expectRangeValueProperties(IUIAutomation& automation,
            "Native determinate ProgressBar must expose UIA RangeValue");
 }
 
+void expectSelectionPatterns(IUIAutomation& automation, IUIAutomationElement& root)
+{
+    auto group = findNamedControl(
+        automation, root, UIA_GroupControlTypeId, L"Native choices");
+    auto first = findNamedControl(
+        automation, root, UIA_RadioButtonControlTypeId, L"First choice");
+    auto second = findNamedControl(
+        automation, root, UIA_RadioButtonControlTypeId, L"Second choice");
+    expect(static_cast<bool>(group) && static_cast<bool>(first) && static_cast<bool>(second),
+           "Native UIA fixture must expose the RadioGroup and its RadioButton children");
+
+    ComPtr<IUIAutomationSelectionPattern> selection;
+    expectSucceeded(group->GetCurrentPatternAs(
+                        UIA_SelectionPatternId, __uuidof(IUIAutomationSelectionPattern),
+                        reinterpret_cast<void**>(selection.put())),
+                    "RadioGroup must expose the UIA Selection pattern");
+    expect(static_cast<bool>(selection),
+           "RadioGroup returned no UIA Selection pattern provider");
+    BOOL multiple = TRUE;
+    BOOL required = FALSE;
+    expectSucceeded(selection->get_CurrentCanSelectMultiple(&multiple),
+                    "Unable to read UIA Selection.CanSelectMultiple");
+    expectSucceeded(selection->get_CurrentIsSelectionRequired(&required),
+                    "Unable to read UIA Selection.IsSelectionRequired");
+    expect(multiple == FALSE && required != FALSE,
+           "RadioGroup must retain its exclusive, required selection policy");
+
+    ComPtr<IUIAutomationSelectionItemPattern> firstItem;
+    expectSucceeded(first->GetCurrentPatternAs(
+                        UIA_SelectionItemPatternId,
+                        __uuidof(IUIAutomationSelectionItemPattern),
+                        reinterpret_cast<void**>(firstItem.put())),
+                    "RadioButton must expose the UIA SelectionItem pattern");
+    expect(static_cast<bool>(firstItem),
+           "RadioButton returned no UIA SelectionItem pattern provider");
+    ComPtr<IUIAutomationTogglePattern> radioToggle;
+    (void)first->GetCurrentPatternAs(
+        UIA_TogglePatternId, __uuidof(IUIAutomationTogglePattern),
+        reinterpret_cast<void**>(radioToggle.put()));
+    expect(!radioToggle,
+           "RadioButton must use SelectionItem rather than incorrectly exposing UIA Toggle");
+    BOOL firstSelected = FALSE;
+    expectSucceeded(firstItem->get_CurrentIsSelected(&firstSelected),
+                    "Unable to read UIA SelectionItem.IsSelected");
+    expect(firstSelected != FALSE,
+           "The RadioGroup's initial selected option must be reflected by SelectionItem");
+
+    ComPtr<IUIAutomationElement> container;
+    expectSucceeded(firstItem->get_CurrentSelectionContainer(container.put()),
+                    "Unable to read UIA SelectionItem.SelectionContainer");
+    expect(static_cast<bool>(container) && currentName(*container.get()) == L"Native choices",
+           "RadioButton SelectionItem must resolve its owning RadioGroup");
+}
+
 void queryNativeUia(HWND hwnd, bool validateFocus, RECT expectedButtonBounds)
 {
     ScopedCom com;
@@ -410,6 +464,7 @@ void queryNativeUia(HWND hwnd, bool validateFocus, RECT expectedButtonBounds)
         *automation.get(), *root.get(), hwnd, expectedButtonBounds);
     expectNativeFormAndBusyProperties(*automation.get(), *root.get());
     expectRangeValueProperties(*automation.get(), *root.get());
+    expectSelectionPatterns(*automation.get(), *root.get());
 }
 
 struct NativeActionState {
@@ -714,6 +769,44 @@ void invokeNativeUiaActions(HWND hwnd)
            "Retained UIA patterns must resolve the latest published snapshot");
 }
 
+void invokeNativeUiaSelection(HWND hwnd)
+{
+    ScopedCom com;
+    expectSucceeded(com.result(), "COM initialization failed for UIA selection");
+    ComPtr<IUIAutomation> automation;
+    expectSucceeded(CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
+                                     IID_PPV_ARGS(automation.put())),
+                    "Unable to create the UI Automation selection client");
+    ComPtr<IUIAutomationElement> root;
+    expectSucceeded(automation->ElementFromHandle(hwnd, root.put()),
+                    "ElementFromHandle failed for UIA selection");
+    auto second = findNamedControl(
+        *automation.get(), *root.get(), UIA_RadioButtonControlTypeId, L"Second choice");
+    expect(static_cast<bool>(second),
+           "Native UIA fixture must expose the second RadioButton for SelectionItem action");
+    ComPtr<IUIAutomationSelectionItemPattern> selectionItem;
+    expectSucceeded(second->GetCurrentPatternAs(
+                        UIA_SelectionItemPatternId,
+                        __uuidof(IUIAutomationSelectionItemPattern),
+                        reinterpret_cast<void**>(selectionItem.put())),
+                    "Second RadioButton must expose the UIA SelectionItem pattern");
+    expect(static_cast<bool>(selectionItem),
+           "Second RadioButton returned no UIA SelectionItem pattern provider");
+    expectSucceeded(selectionItem->Select(),
+                    "UIA SelectionItem.Select failed for RadioButton");
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    bool selected = false;
+    do {
+        BOOL state = FALSE;
+        if (SUCCEEDED(selectionItem->get_CurrentIsSelected(&state))) selected = state != FALSE;
+        if (selected) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    } while (std::chrono::steady_clock::now() < deadline);
+    expect(selected,
+           "Retained UIA SelectionItem must observe its post-Select RadioButton state");
+}
+
 void expectNativeUiaActionState(HWND hwnd)
 {
     ScopedCom com;
@@ -960,6 +1053,11 @@ void exerciseNativeUiaActions(wui::UiWindow& window, HWND hwnd,
     // A fresh client must observe the same state as the retained providers.
     runUiaWorkOffUiThread(window, [hwnd] { expectNativeUiaActionState(hwnd); },
                           "UIA post-action state query timed out");
+    // SelectionItem::Select is deliberately exercised after the SetFocus
+    // assertion because UI Automation clients are permitted to move native
+    // focus while querying/activating a RadioButton.
+    runUiaWorkOffUiThread(window, [hwnd] { invokeNativeUiaSelection(hwnd); },
+                          "UIA selection dispatch timed out");
 }
 
 void exerciseNativeUiaEvents(wui::UiWindow& window, HWND hwnd)
@@ -1165,6 +1263,7 @@ void testNativeUiaRoot()
                                  wui::ui::RadioGroup()
                                      .accessibleLabel("Native choices")
                                      .required()
+                                     .value("first")
                                      .option("first", "First choice")
                                      .option("second", "Second choice"),
                                  wui::ui::Switch("Native required switch").required(),

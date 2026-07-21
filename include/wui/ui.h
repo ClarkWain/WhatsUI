@@ -494,6 +494,30 @@ public:
         node_->setShape(value);
         return std::move(self());
     }
+
+    Button&& icon(wui::IconName value) &&
+    {
+        node_->setIcon(value);
+        return std::move(self());
+    }
+
+    Button&& iconStyle(wui::IconStyle value) &&
+    {
+        node_->setIconStyle(value);
+        return std::move(self());
+    }
+
+    Button&& iconPosition(wui::ButtonIconPosition value) &&
+    {
+        node_->setIconPosition(value);
+        return std::move(self());
+    }
+
+    Button&& iconOnly(bool value = true) &&
+    {
+        node_->setIconOnly(value);
+        return std::move(self());
+    }
 };
 
 class Checkbox : public BuilderBase<Checkbox, wui::Checkbox> {
@@ -523,6 +547,11 @@ public:
     ToggleButton&& onChange(std::function<void(bool)> handler) && { node_->onChange(std::move(handler)); return std::move(self()); }
     ToggleButton&& size(wui::ButtonSize value) && { node_->setSize(value); return std::move(self()); }
     ToggleButton&& shape(wui::ButtonShape value) && { node_->setShape(value); return std::move(self()); }
+    ToggleButton&& appearance(wui::ButtonAppearance value) && { node_->setAppearance(value); return std::move(self()); }
+    ToggleButton&& icon(wui::IconName value) && { node_->setIcon(value); return std::move(self()); }
+    ToggleButton&& iconStyle(wui::IconStyle value) && { node_->setIconStyle(value); return std::move(self()); }
+    ToggleButton&& iconPosition(wui::ButtonIconPosition value) && { node_->setIconPosition(value); return std::move(self()); }
+    ToggleButton&& iconOnly(bool value = true) && { node_->setIconOnly(value); return std::move(self()); }
 };
 
 class CompoundButton : public BuilderBase<CompoundButton, wui::CompoundButton> {
@@ -673,6 +702,7 @@ public:
     Avatar&& size(wui::AvatarSize value) && { node_->setSize(value); return std::move(self()); }
     Avatar&& shape(wui::AvatarShape value) && { node_->setShape(value); return std::move(self()); }
     Avatar&& color(wui::AvatarColor value) && { node_->setColor(value); return std::move(self()); }
+    Avatar&& active(bool value = true) && { node_->setActive(value); return std::move(self()); }
     Avatar&& accessibleLabel(std::string value) && { node_->setAccessibleLabel(std::move(value)); return std::move(self()); }
 };
 

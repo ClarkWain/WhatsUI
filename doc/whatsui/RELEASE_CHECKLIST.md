@@ -79,19 +79,35 @@ an automated pass.
 | 2026-07-15, Windows/MSVC Release, native interactive UIA | A separate MTA UIA client retained providers while invoking a Button, toggling a Checkbox, setting editable text, and moving focus; the GLFW UI thread pumped and republished immutable state. The full Release suite ran with four workers, its sole transient MSBuild `.tlog` contention was rerun serially, and a fresh installed `WhatsUI::Glfw` consumer was configured, linked, and executed. | Invoke/Toggle/Value/SetFocus reached the real controls on the UI thread; callbacks, framework focus, refreshed retained Toggle/Value state, stable automation IDs, and **67/67** tests were verified. The external consumer exited **0**. | UIA property/focus/structure events, Selection/Text ranges, disabled/error-path matrix, 100%/150%/200% Narrator validation, or release approval. |
 | 2026-07-15, Windows/MSVC Release, native UIA events | A real HWND was observed by MTA property/focus/structure handlers while the UI thread changed control state, appended semantic content, and moved the native window. Event emission used a posted UI-thread flush after action COM stacks unwound. | Name, IsEnabled, ToggleState, Value, BoundingRectangle, focus, and ChildrenInvalidated events arrived; retained RuntimeId stayed stable; identical republishes produced no event storm; the native test passed repeatedly. | Selection/Text ranges, Invoke event occurrence, disabled/error-path matrix, 100%/150%/200% Narrator validation, or release approval. |
 | 2026-07-19, Windows/MSVC Release, Fluent visual alignment | Shared text baseline changed from a line-height approximation to normalized ascent/descent metrics; Todo row, mixed Checkbox, and Slider endpoint geometry were reviewed. Strict semantic-pixel gates ran at 100/125/150/200%, followed by a full serial Release suite. | Button/Label/Input rendered-ink centres are within one physical pixel; Todo completion/title centres align; component artifacts were inspected; **128/128** CTest tests passed. | Native multi-monitor movement, installed IME/Narrator evidence, signed artifacts, or release-owner approval. |
+| 2026-07-21, Windows/MSVC Release, isolated `build-release-gate` | Fresh configure with WhatsCanvas, tests, examples, and the GLFW/UIA host enabled; complete serial build, then CTest. The initial four-worker CTest run passed **175/177** and exposed only recursive MSBuild `.tlog` contention in two WhatsCanvas tests; both were rerun serially from the same clean output directory. | **177/177** tests passed, including DirectWrite DPI, all Fluent 100/125/150/200% pixel gates, Todo regression/review/performance, package consumers, real GLFW/UIA `Selection` + `SelectionItem`, and the current Todo demo targets. | A tagged clean candidate, installed IME/multi-monitor/Narrator evidence, release archive/signing, or legal/release-owner approval. |
 
 Retain the command logs with the candidate tag before changing any engineering
 row above to checked. Re-run the matrix from a fresh output directory whenever
 the package/export graph, compiler toolset, or submodule revision changes.
+
+### Windows renderer test scheduling
+
+Some WhatsCanvas CTest entries intentionally invoke `cmake --build` internally.
+On Windows they share MSBuild `.tlog` files, so a broad CTest run with multiple
+workers can create a false failure from concurrent child builds. The release
+gate must use a serial CTest invocation (or isolate those self-building tests
+into a non-overlapping shard):
+
+```powershell
+ctest --test-dir build-release-gate -C Release --output-on-failure --parallel 1
+```
+
+This is a scheduling requirement, not an exemption: any test that fails when
+rerun serially is a release failure.
 
 ## Explicitly blocked M5 items
 
 The following are not complete merely because a headless archive or demo was
 created:
 
-- Interactive Windows UI Automation patterns/events/text ranges and
-  screen-reader sign-off. The read-only native tree and HWND smoke are now
-  engineering evidence, not Narrator release approval.
+- Interactive Windows UI Automation text ranges and screen-reader sign-off.
+  The native tree now covers Invoke/Toggle/Value/Selection patterns and events,
+  but this is engineering evidence, not Narrator release approval.
 - Final ABI/source compatibility and deprecation policy. A proposed policy is
   available in [COMPATIBILITY_POLICY_1_0_DRAFT.md](COMPATIBILITY_POLICY_1_0_DRAFT.md);
   it is not final until the release owner approves the exact candidate's

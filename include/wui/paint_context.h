@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -72,6 +73,37 @@ public:
     [[nodiscard]] float scaleFactor() const noexcept
     {
         return scaleFactor_;
+    }
+
+    // Shared logical-to-physical alignment contract for controls. Components
+    // used to duplicate these formulas, which let Button, Input and selection
+    // controls round the same one-DIP stroke differently at 125%/150% DPR.
+    [[nodiscard]] float physicalPixel() const noexcept
+    {
+        return 1.0f / scaleFactor_;
+    }
+
+    [[nodiscard]] float snapToPhysicalPixel(float logical) const noexcept
+    {
+        return std::round(logical * scaleFactor_) / scaleFactor_;
+    }
+
+    [[nodiscard]] float snapStrokeWidth(float logicalWidth) const noexcept
+    {
+        if (logicalWidth <= 0.0f) return 0.0f;
+        return static_cast<float>(
+                   std::max(1L, std::lround(logicalWidth * scaleFactor_))) /
+               scaleFactor_;
+    }
+
+    [[nodiscard]] RectF snapRectEdges(const RectF& rect) const noexcept
+    {
+        const float left = snapToPhysicalPixel(rect.x);
+        const float top = snapToPhysicalPixel(rect.y);
+        const float right = snapToPhysicalPixel(rect.x + rect.width);
+        const float bottom = snapToPhysicalPixel(rect.y + rect.height);
+        return {left, top, std::max(0.0f, right - left),
+                std::max(0.0f, bottom - top)};
     }
 
     [[nodiscard]] float canvasCoordinateScale() const noexcept

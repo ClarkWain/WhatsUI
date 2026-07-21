@@ -31,9 +31,10 @@ git submodule update --init --recursive
 if errorlevel 1 goto :failure
 
 echo [2/3] Configuring %CONFIG% Todo demo...
-rem Keep the interactive Windows demo on the Fluent-quality text stack even
-rem when this build directory was previously configured for a small backend.
-cmake -S "%ROOT%" -B "%BUILD_DIR%" -G "Visual Studio 17 2022" -A x64 -DWHATSUI_WITH_WHATSCANVAS=ON -DWHATSUI_BUILD_EXAMPLES=ON -DWHATSUI_BUILD_TESTS=OFF -DWHATSUI_ENABLE_ADVANCED_TEXT=ON -DWHATSCANVAS_ENABLE_FREETYPE_RASTERIZER=ON -DWHATSCANVAS_ENABLE_OPENTYPE_SHAPING=ON
+rem Keep the interactive Windows demo on the native DirectWrite path. It is
+rem materially sharper for small Fluent UI text than the grayscale FreeType
+rem atlas on the supported Windows desktop configuration.
+cmake -S "%ROOT%" -B "%BUILD_DIR%" -G "Visual Studio 17 2022" -A x64 -DWHATSUI_WITH_WHATSCANVAS=ON -DWHATSUI_BUILD_EXAMPLES=ON -DWHATSUI_BUILD_TESTS=OFF -DWHATSUI_ENABLE_ADVANCED_TEXT=ON -DWHATSCANVAS_ENABLE_FREETYPE_RASTERIZER=OFF -DWHATSCANVAS_ENABLE_OPENTYPE_SHAPING=ON
 if errorlevel 1 goto :failure
 
 echo [3/3] Building WhatsUITodoGlfw...

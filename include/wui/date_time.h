@@ -57,6 +57,8 @@ private:
     [[nodiscard]] RectF dayBounds(CivilDate value) const noexcept; [[nodiscard]] std::optional<CivilDate> dateAt(PointF point) const noexcept;
     void moveFocus(int days); void select(CivilDate value); void setFocused(CivilDate value);
     CivilDate displayed_{1970,1,1}; CivilDate focused_{1970,1,1}; std::optional<CivilDate> selected_; std::optional<CivilDate> rangeStart_, rangeEnd_;
+    std::optional<CivilDate> hoveredDate_, pressedDate_;
+    int hoveredHeader_{0}, pressedHeader_{0}; // -1 previous, +1 next.
     std::optional<CivilDate> minimum_, maximum_; CalendarSelectionMode mode_{CalendarSelectionMode::Single}; DisablePredicate disabled_; SelectHandler onSelect_;
 };
 

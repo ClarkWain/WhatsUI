@@ -18,6 +18,9 @@ namespace {
 constexpr float kLabelGap = 8.0f;
 constexpr float kIndicatorSize = 16.0f;
 constexpr float kRadioHeight = 32.0f;
+constexpr float kRadioHitSize = 32.0f;
+constexpr float kSwitchHorizontalPadding = 8.0f;
+constexpr float kSwitchLabelNearPadding = 4.0f;
 constexpr float kGroupGap = 4.0f;
 constexpr float kHorizontalGroupGap = 12.0f;
 constexpr float kDividerLabelGap = 12.0f;
@@ -50,6 +53,13 @@ constexpr float kDividerLabelGap = 12.0f;
 [[nodiscard]] float sliderCrossAxisSize(SliderSize size) noexcept
 {
     return size == SliderSize::Small ? 24.0f : 32.0f;
+}
+
+[[nodiscard]] float sliderThumbInnerRadius(SliderSize size) noexcept
+{
+    // Fluent Slider's white inset ring is a 12-DIP circle in the 20-DIP
+    // medium thumb and a 10-DIP circle in the 16-DIP small thumb.
+    return size == SliderSize::Small ? 5.0f : 6.0f;
 }
 
 [[nodiscard]] float progressHeight(ProgressBarThickness thickness) noexcept
@@ -117,16 +127,41 @@ void drawFocusRing(PaintContext& context, const RectF& bounds, const Theme& curr
     if (!focused) return;
     if (radius < 0.0f) radius = current.radius.medium;
     const float inset = current.controls.focusInset;
+    const float outerStroke = context.snapStrokeWidth(current.stroke.thick);
+    const float innerStroke = context.snapStrokeWidth(current.stroke.thin);
     // A Fluent focus indicator is two *strokes*, not two opaque rounded
     // rectangles. Filling the inner layer makes the ring appear as a muddy
     // halo and can obscure the control's own disabled/selected treatment.
     context.strokeRoundRect({bounds.x - inset, bounds.y - inset,
                              bounds.width + inset * 2.0f, bounds.height + inset * 2.0f},
-                            radius + inset, current.stroke.thick, current.colors.strokeFocusOuter);
-    const float innerInset = std::max(0.0f, inset - current.stroke.thin * 0.5f);
+                            radius + inset, outerStroke, current.colors.strokeFocusOuter);
+    const float innerInset = std::max(0.0f, inset - innerStroke * 0.5f);
     context.strokeRoundRect({bounds.x - innerInset, bounds.y - innerInset,
                              bounds.width + innerInset * 2.0f, bounds.height + innerInset * 2.0f},
-                            radius + innerInset, current.stroke.thin, current.colors.strokeFocusInner);
+                            radius + innerInset, innerStroke, current.colors.strokeFocusInner);
+}
+
+void drawInsideFocusRing(PaintContext& context, const RectF& bounds,
+                         const Theme& current, bool focused, float radius)
+{
+    if (!focused) return;
+    const RectF aligned = context.snapRectEdges(bounds);
+    const auto strokeInside = [&](float logicalWidth, Color color) {
+        const float width = context.snapStrokeWidth(logicalWidth);
+        const float half = width * 0.5f;
+        context.strokeRoundRect(
+            {aligned.x + half, aligned.y + half,
+             std::max(0.0f, aligned.width - width),
+             std::max(0.0f, aligned.height - width)},
+            std::max(0.0f, radius - half), width, color);
+    };
+
+    // Fluent's Figma Switch focus variant keeps both strokes inside the
+    // exact 56x36 root: a 3-DIP white guard underneath a 2-DIP black focus
+    // stroke.  Paint the wider guard first so its remaining inner edge
+    // separates the focus stroke from the track without growing the root.
+    strokeInside(current.stroke.thicker, current.colors.strokeFocusInner);
+    strokeInside(current.stroke.thick, current.colors.strokeFocusOuter);
 }
 
 [[nodiscard]] bool parseFloat(std::string_view text, float& result) noexcept
@@ -170,10 +205,15 @@ SizeF Radio::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     if (stackedLabel_ && !label_.empty()) {
-        return constraints.clamp({std::max(kIndicatorSize, labelWidth(label_, current)),
-                                  kIndicatorSize + current.spacing.vertical.xs + current.typography.body1.lineHeight});
+        return constraints.clamp({std::max(kRadioHitSize, labelWidth(label_, current)),
+                                  kRadioHitSize + current.spacing.vertical.xs +
+                                      current.typography.body1.lineHeight});
     }
-    return constraints.clamp({kIndicatorSize + (label_.empty() ? 0.0f : kLabelGap + labelWidth(label_, current)),
+    return constraints.clamp({kRadioHitSize +
+                                  (label_.empty()
+                                       ? 0.0f
+                                       : current.spacing.horizontal.xs +
+                                             labelWidth(label_, current)),
                               kRadioHeight});
 }
 void Radio::paint(PaintContext& context)
@@ -181,10 +221,22 @@ void Radio::paint(PaintContext& context)
     const auto& current = theme();
     const bool enabled = isEnabled();
     const bool selected = isSelected();
-    const RectF indicator{bounds().x, bounds().y + (bounds().height - kIndicatorSize) * 0.5f, kIndicatorSize, kIndicatorSize};
-    const PointF indicatorCenter{indicator.x + indicator.width * 0.5f,
-                                 indicator.y + indicator.height * 0.5f};
+    const float indicatorX = stackedLabel_
+        ? bounds().x + (bounds().width - kIndicatorSize) * 0.5f
+        : bounds().x + (kRadioHitSize - kIndicatorSize) * 0.5f;
+    const float indicatorY = stackedLabel_
+        ? bounds().y + (kRadioHitSize - kIndicatorSize) * 0.5f
+        : bounds().y + (bounds().height - kIndicatorSize) * 0.5f;
+    const RectF indicator{
+        indicatorX,
+        indicatorY,
+        kIndicatorSize, kIndicatorSize};
+    const PointF indicatorCenter{
+        context.snapToPhysicalPixel(indicator.x + indicator.width * 0.5f),
+        context.snapToPhysicalPixel(indicator.y + indicator.height * 0.5f)};
     const float indicatorRadius = indicator.width * 0.5f;
+    const float indicatorStroke =
+        context.snapStrokeWidth(current.stroke.thin);
     drawFocusRing(context, bounds(), current,
                   enabled
                       && (visualStates() & toMask(ControlVisualState::FocusVisible)) != 0,
@@ -215,16 +267,21 @@ void Radio::paint(PaintContext& context)
     // adds a 10-DIP compound-brand dot (16 * 0.625), leaving a visible annular
     // gap; it is not a solid brand disc with an inverse white dot.
     context.strokeCircle(indicatorCenter,
-                         indicatorRadius - current.stroke.thin * 0.5f,
-                         current.stroke.thin, border);
+                         indicatorRadius - indicatorStroke * 0.5f,
+                         indicatorStroke, border);
     if (selected) {
         constexpr float kCheckedDotScale = 0.625f;
+        // Match Fluent's 16-DIP ::after element with transform: scale(.625).
+        // Keeping this as one transformed circle, rather than rounding a
+        // separate 10-DIP diameter, is what preserves symmetry at 125% DPR.
         context.fillCircle(indicatorCenter,
                            indicator.width * kCheckedDotScale * 0.5f, dot);
     }
     if (!label_.empty()) {
         if (stackedLabel_) {
-            const RectF labelBox{bounds().x, indicator.y + indicator.height + current.spacing.vertical.xs,
+            const RectF labelBox{bounds().x,
+                                 bounds().y + kRadioHitSize +
+                                     current.spacing.vertical.xs,
                                  bounds().width, current.typography.body1.lineHeight};
             const float x = labelBox.x + std::max(0.0f, (labelBox.width - labelWidth(label_, current)) * 0.5f);
             context.drawText(label_, x,
@@ -237,7 +294,9 @@ void Radio::paint(PaintContext& context)
                              current.typography.body1.weight,
                              current.typography.body1.family);
         } else {
-            context.drawText(label_, indicator.x + indicator.width + kLabelGap,
+            context.drawText(label_,
+                             bounds().x + kRadioHitSize +
+                                 current.spacing.horizontal.xs,
                              context.centeredTextBottom(
                                  label_, bounds(),
                                  current.typography.body1.size,
@@ -528,13 +587,23 @@ SizeF Switch::measure(const Constraints& constraints) const
     const auto& current = theme();
     const std::string displayLabel = required_ && !label_.empty() ? label_ + " *" : label_;
     const float trackWidth = switchWidth(size_);
+    const float trackSlotWidth =
+        trackWidth + kSwitchHorizontalPadding * 2.0f;
     const float controlHeight = switchControlHeight(size_);
-    if (displayLabel.empty()) return constraints.clamp({trackWidth, controlHeight});
+    if (displayLabel.empty())
+        return constraints.clamp({trackSlotWidth, controlHeight});
     if (labelPosition_ == SwitchLabelPosition::Above) {
-        return constraints.clamp({std::max(trackWidth, labelWidth(displayLabel, current)),
+        return constraints.clamp(
+            {std::max(trackSlotWidth,
+                      labelWidth(displayLabel, current) +
+                          kSwitchHorizontalPadding * 2.0f),
                                   controlHeight + current.typography.body1.lineHeight});
     }
-    return constraints.clamp({trackWidth + kLabelGap + labelWidth(displayLabel, current), controlHeight});
+    return constraints.clamp(
+        {trackSlotWidth + kSwitchLabelNearPadding +
+             labelWidth(displayLabel, current) +
+             kSwitchHorizontalPadding,
+         controlHeight});
 }
 void Switch::paint(PaintContext& context)
 {
@@ -542,24 +611,55 @@ void Switch::paint(PaintContext& context)
     const std::string displayLabel = required_ && !label_.empty() ? label_ + " *" : label_;
     const float trackWidth = switchWidth(size_);
     const float trackHeight = switchHeight(size_);
-    float trackX = bounds().x;
+    const float trackSlotWidth =
+        trackWidth + kSwitchHorizontalPadding * 2.0f;
+    float trackX = bounds().x + kSwitchHorizontalPadding;
     float trackY = bounds().y + (bounds().height - trackHeight) * 0.5f;
     RectF labelBox = bounds();
     if (!displayLabel.empty() && labelPosition_ == SwitchLabelPosition::Before) {
-        trackX = bounds().x + labelWidth(displayLabel, current) + kLabelGap;
-        labelBox = {bounds().x, bounds().y, labelWidth(displayLabel, current), bounds().height};
+        const float textWidth = labelWidth(displayLabel, current);
+        labelBox = {bounds().x + kSwitchHorizontalPadding, bounds().y,
+                    textWidth, bounds().height};
+        trackX = bounds().x + textWidth +
+                 kSwitchHorizontalPadding +
+                 kSwitchLabelNearPadding +
+                 kSwitchHorizontalPadding;
     } else if (!displayLabel.empty() && labelPosition_ == SwitchLabelPosition::Above) {
-        labelBox = {bounds().x, bounds().y, bounds().width, current.typography.body1.lineHeight};
+        labelBox = {bounds().x + kSwitchHorizontalPadding, bounds().y,
+                    std::max(0.0f, bounds().width -
+                                      kSwitchHorizontalPadding * 2.0f),
+                    current.typography.body1.lineHeight};
         trackY = bounds().y + current.typography.body1.lineHeight +
                  (bounds().height - current.typography.body1.lineHeight - trackHeight) * 0.5f;
     } else if (!displayLabel.empty()) {
-        labelBox = {trackX + trackWidth + kLabelGap, bounds().y,
-                    std::max(0.0f, bounds().width - trackWidth - kLabelGap), bounds().height};
+        labelBox = {
+            bounds().x + trackSlotWidth + kSwitchLabelNearPadding,
+            bounds().y,
+            std::max(0.0f,
+                     bounds().width - trackSlotWidth -
+                         kSwitchLabelNearPadding -
+                         kSwitchHorizontalPadding),
+            bounds().height};
     }
-    const RectF track{trackX, trackY, trackWidth, trackHeight};
-    drawFocusRing(context, track, current,
-                  (visualStates() & toMask(ControlVisualState::Focused)) != 0,
-                  current.radius.circular);
+    const RectF track = context.snapRectEdges(
+        {trackX, trackY, trackWidth, trackHeight});
+    const float contentWidth = displayLabel.empty()
+        ? trackSlotWidth
+        : labelPosition_ == SwitchLabelPosition::Above
+            ? std::max(trackSlotWidth,
+                       labelWidth(displayLabel, current) +
+                           kSwitchHorizontalPadding * 2.0f)
+            : trackSlotWidth + kSwitchLabelNearPadding +
+                  labelWidth(displayLabel, current) +
+                  kSwitchHorizontalPadding;
+    const RectF focusBounds{
+        bounds().x, bounds().y,
+        std::min(bounds().width, contentWidth), bounds().height};
+    drawInsideFocusRing(
+        context, focusBounds, current,
+        enabled && (visualStates() &
+                    toMask(ControlVisualState::FocusVisible)) != 0,
+        current.radius.medium);
     StateProperty<Color> activeTrack{current.colors.brandBackground.rest};
     activeTrack.set(ControlVisualState::Hovered, current.colors.brandBackground.hover)
         .set(ControlVisualState::Pressed, current.colors.brandBackground.pressed);
@@ -579,15 +679,21 @@ void Switch::paint(PaintContext& context)
         thumb = on ? current.colors.neutralBackground1.rest : current.colors.neutralForegroundDisabled;
         text = current.colors.neutralForegroundDisabled;
     }
+    const float trackStroke =
+        context.snapStrokeWidth(current.stroke.thin);
     context.fillStrokeRoundRect(track, current.radius.circular,
-                                current.stroke.thin, trackColor, border);
-    float thumbSize = on && size_ == SwitchSize::Medium ? 18.0f : 14.0f;
-    if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0 && enabled) {
-        thumbSize = std::min(trackHeight - current.stroke.thin * 2.0f, thumbSize + 2.0f);
-    }
-    const float inset = (trackHeight - thumbSize) * 0.5f;
+                                trackStroke, trackColor, border);
+    // The thumb keeps the same geometry in both states. Fluent positions a
+    // medium 18-DIP thumb at x=1 and x=21 in its 40-DIP track (20-DIP travel),
+    // and a small 14-DIP thumb at x=1 and x=17 (16-DIP travel).
+    float thumbSize = trackHeight - 2.0f;
+    thumbSize = context.snapToPhysicalPixel(thumbSize);
+    const float inset = (track.height - thumbSize) * 0.5f;
     const float thumbX = on ? track.x + track.width - thumbSize - inset : track.x + inset;
-    context.fillRoundRect({thumbX, track.y + (track.height - thumbSize) * 0.5f, thumbSize, thumbSize}, current.radius.circular, thumb);
+    const PointF thumbCenter{
+        context.snapToPhysicalPixel(thumbX + thumbSize * 0.5f),
+        context.snapToPhysicalPixel(track.y + track.height * 0.5f)};
+    context.fillCircle(thumbCenter, thumbSize * 0.5f, thumb);
     if (!displayLabel.empty()) {
         context.drawText(displayLabel, labelBox.x,
                          context.centeredTextBottom(
@@ -702,26 +808,32 @@ void Slider::setValueFromPointer(float coordinate)
 void Slider::paint(PaintContext& context)
 {
     const auto& current = theme(); const bool enabled = isEnabled();
-    const float baseThumbSize = sliderThumbSize(size_);
-    const float trackSize = sliderTrackSize(size_);
+    const float baseThumbSize =
+        context.snapToPhysicalPixel(sliderThumbSize(size_));
+    const float trackSize =
+        context.snapStrokeWidth(sliderTrackSize(size_));
     const float fraction = normalizedValue();
     RectF track{};
     RectF active{};
     float thumbCenterX = 0.0f;
     float thumbCenterY = 0.0f;
     if (orientation_ == SliderOrientation::Horizontal) {
-        track = {bounds().x + baseThumbSize * 0.5f,
-                 bounds().y + (bounds().height - trackSize) * 0.5f,
-                 std::max(0.0f, bounds().width - baseThumbSize), trackSize};
-        thumbCenterX = track.x + track.width * fraction;
+        track = context.snapRectEdges(
+            {bounds().x + baseThumbSize * 0.5f,
+             bounds().y + (bounds().height - trackSize) * 0.5f,
+             std::max(0.0f, bounds().width - baseThumbSize), trackSize});
+        thumbCenterX =
+            context.snapToPhysicalPixel(track.x + track.width * fraction);
         thumbCenterY = track.y + track.height * 0.5f;
         active = {track.x, track.y, track.width * fraction, track.height};
     } else {
-        track = {bounds().x + (bounds().width - trackSize) * 0.5f,
-                 bounds().y + baseThumbSize * 0.5f, trackSize,
-                 std::max(0.0f, bounds().height - baseThumbSize)};
+        track = context.snapRectEdges(
+            {bounds().x + (bounds().width - trackSize) * 0.5f,
+             bounds().y + baseThumbSize * 0.5f, trackSize,
+             std::max(0.0f, bounds().height - baseThumbSize)});
         thumbCenterX = track.x + track.width * 0.5f;
-        thumbCenterY = track.y + track.height * (1.0f - fraction);
+        thumbCenterY = context.snapToPhysicalPixel(
+            track.y + track.height * (1.0f - fraction));
         active = {track.x, thumbCenterY, track.width,
                   std::max(0.0f, track.y + track.height - thumbCenterY)};
     }
@@ -734,8 +846,10 @@ void Slider::paint(PaintContext& context)
     if (!enabled) { fill = current.colors.neutralForegroundDisabled; thumb = current.colors.neutralForegroundDisabled; }
     context.fillRoundRect(track, current.radius.circular, inactiveTrack);
     context.fillRoundRect(active, current.radius.circular, fill);
-    const float thumbSize = (visualStates() & toMask(ControlVisualState::Pressed)) != 0
-        ? baseThumbSize + 2.0f : baseThumbSize;
+    const float thumbSize =
+        (visualStates() & toMask(ControlVisualState::Pressed)) != 0
+        ? context.snapToPhysicalPixel(baseThumbSize + 2.0f)
+        : baseThumbSize;
     // The pressed thumb expands by 2 DIP.  Its unpressed centre is anchored
     // at the first/last track point, so blindly expanding it makes a minimum
     // or maximum thumb overhang its own hit rect by one DIP.  A parent clip
@@ -750,17 +864,27 @@ void Slider::paint(PaintContext& context)
                                     std::max(bounds().y, bounds().y + bounds().height - thumbSize));
     const RectF thumbBounds{thumbX, thumbY, thumbSize, thumbSize};
     drawFocusRing(context, thumbBounds, current,
-                  (visualStates() & toMask(ControlVisualState::Focused)) != 0,
+                  enabled
+                      && (visualStates() &
+                          toMask(ControlVisualState::FocusVisible)) != 0,
                   current.radius.circular);
-    context.fillRoundRect(thumbBounds, current.radius.circular, thumb);
+    const PointF renderedThumbCenter{
+        thumbBounds.x + thumbBounds.width * 0.5f,
+        thumbBounds.y + thumbBounds.height * 0.5f};
+    context.fillCircle(renderedThumbCenter, thumbSize * 0.5f, thumb);
     if (enabled) {
         // A thin white inset is the visual anchor that distinguishes a
         // Fluent slider thumb from a generic flat coloured disc.
-        const float ringInset = current.stroke.thin;
-        context.strokeRoundRect({thumbBounds.x + ringInset, thumbBounds.y + ringInset,
-                                 std::max(0.0f, thumbBounds.width - ringInset * 2.0f),
-                                 std::max(0.0f, thumbBounds.height - ringInset * 2.0f)},
-                                current.radius.circular, current.stroke.thin, current.colors.onBrand);
+        const float ringStroke =
+            context.snapStrokeWidth(thumbSize * 0.05f);
+        const float innerRadius = sliderThumbInnerRadius(size_);
+        // Compose the inset from two filled circles. A one-pixel stroked
+        // circle can become entirely fractional coverage at 100% DPR; the
+        // shared filled silhouettes retain a clean white band and brand core.
+        context.fillCircle(renderedThumbCenter, innerRadius,
+                           current.colors.onBrand);
+        context.fillCircle(renderedThumbCenter,
+                           std::max(0.0f, innerRadius - ringStroke), thumb);
     }
     clearDirty(DirtyFlag::Paint);
 }

@@ -13,7 +13,7 @@ namespace {
 constexpr int kEnter = 13, kSpace = 32, kHome = 36, kEnd = 35;
 constexpr int kLeft = 37, kUp = 38, kRight = 39, kDown = 40;
 constexpr float kIndent = 24.0f;
-constexpr float kDisclosure = 16.0f;
+constexpr float kDisclosureSlot = 24.0f;
 
 bool state(const ControlNode& node, ControlVisualState value) noexcept
 { return (node.visualStates() & toMask(value)) != 0; }
@@ -57,29 +57,37 @@ std::size_t TreeItem::depth() const noexcept
 }
 RectF TreeItem::disclosureBounds() const noexcept
 {
-    const float x = bounds().x + static_cast<float>(depth()) * kIndent + 4.0f;
-    return {x, bounds().y + (bounds().height - kDisclosure) * .5f, kDisclosure, kDisclosure};
+    const float x = bounds().x + static_cast<float>(depth()) * kIndent;
+    return {x, bounds().y + (bounds().height - kDisclosureSlot) * .5f,
+            kDisclosureSlot, kDisclosureSlot};
 }
 SizeF TreeItem::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
-    const float natural = static_cast<float>(depth()) * kIndent + kDisclosure + current.spacing.horizontal.s +
+    const float natural = static_cast<float>(depth()) * kIndent + kDisclosureSlot + current.spacing.horizontal.xs +
         textWidth(label_, current.typography.body1) + current.spacing.horizontal.m;
     return constraints.clamp({std::max(80.0f, natural), 32.0f});
 }
 void TreeItem::paint(PaintContext& context)
 {
     const auto& current = theme();
-    const RectF rect = bounds();
+    const RectF rect = context.snapRectEdges(bounds());
     if (rect.width <= 0 || rect.height <= 0) return;
     const bool disabled = !isEnabled();
     Color background{0, 0, 0, 0};
     if (selected_) background = current.colors.neutralBackground1.selected;
     else if (!disabled && state(*this, ControlVisualState::Pressed)) background = current.colors.neutralBackground1.pressed;
     else if (!disabled && state(*this, ControlVisualState::Hovered)) background = current.colors.neutralBackground1.hover;
-    if (background.a) context.fillRoundRect(rect, current.radius.small, background);
-    if (state(*this, ControlVisualState::Focused)) context.strokeRoundRect(rect, current.radius.small,
-        current.controls.focusWidth, current.colors.strokeFocusInner);
+    if (background.a)
+        context.fillRoundRect(rect, current.radius.medium, background);
+    if (state(*this, ControlVisualState::Focused))
+        context.strokeRoundRect(
+            {rect.x + 1.0f, rect.y + 1.0f,
+             std::max(0.0f, rect.width - 2.0f),
+             std::max(0.0f, rect.height - 2.0f)},
+            current.radius.medium,
+            context.snapStrokeWidth(current.stroke.thick),
+            current.colors.strokeFocusInner);
     const RectF glyph = disclosureBounds();
     if (hasChildren()) {
         const Color glyphColor = disabled ? current.colors.neutralForegroundDisabled : current.colors.neutralForeground2;
@@ -88,7 +96,10 @@ void TreeItem::paint(PaintContext& context)
                            : IconName::ChevronRight,
                  glyph, glyphColor, IconSize::Size16);
     }
-    const float x = glyph.x + glyph.width + current.spacing.horizontal.s;
+    // Fluent TreeItemLayout uses a 24-DIP expand-icon slot and 2-DIP main
+    // content inset. Leaf rows retain the same slot so labels remain aligned
+    // with sibling branches.
+    const float x = glyph.x + glyph.width + current.spacing.horizontal.xs;
     const auto& style = current.typography.body1;
     context.drawText(label_, x, context.centeredTextBottom(label_, rect, style.size, style.weight), style.size,
         disabled ? current.colors.neutralForegroundDisabled : current.colors.neutralForeground1, style.weight, style.family);

@@ -31,6 +31,12 @@ must remain equivalent.
 
 - Supports controlled and uncontrolled values, clamping, step snapping,
   horizontal and vertical orientation, and small/medium sizing.
+- Small uses a 16 DIP thumb, 5 DIP inner radius, 2 DIP rail, and a 24 DIP
+  minimum cross-axis hit area. Medium uses a 20 DIP thumb, 6 DIP inner radius,
+  4 DIP rail, and a 32 DIP minimum cross-axis hit area.
+- The thumb uses a white inset equal to 20% of its diameter and a one-physical-
+  pixel outline. The rail, thumb centre, and outline thickness are snapped
+  once in final framebuffer space at fractional DPR.
 - Pointer drag and keyboard arrows, Home, and End must use the same normalization
   path. The vertical maximum is at the top.
 - The accessibility value is writable only while the control is enabled.
@@ -50,6 +56,8 @@ must remain equivalent.
 - Medium uses a 16 DIP indicator with a 2 DIP corner radius and the dedicated
   12 DIP filled checkmark glyph. Large uses a 20 DIP indicator and 16 DIP
   glyph.
+- The medium 16 DIP indicator is centred inside a 32 DIP leading hit slot.
+  Label-after starts after that slot plus the Fluent horizontal-XS gap.
 - The icon font's em box is not the checkmark's visible ink box. Checkbox
   applies a 1 DIP downward optical correction so the mark itself, rather than
   only its font metrics, is vertically centred; this removes the 1.5 px
@@ -88,6 +96,13 @@ The crop comes from this complete native OpenGL framebuffer:
   compound-brand centre dot. The 2 DIP annular gap between dot and stroke
   remains transparent; the selected state is not a solid brand disc with a
   white dot.
+- The 10 DIP dot is implemented as the official 16 DIP pseudo-element scaled
+  by `0.625`, retaining one shared centre through rasterization. Fluent uses
+  this construction specifically to avoid 125% DPI rounding errors.
+- Like Checkbox, the indicator occupies a centred 16 DIP box inside a 32 DIP
+  leading hit slot. The label begins after that slot plus the horizontal-XS
+  gap, so measure, paint, pointer hit testing, and keyboard focus share one
+  geometry.
 - Unchecked border states use `neutralStrokeAccessible`,
   `neutralStrokeAccessibleHover`, and `neutralStrokeAccessiblePressed`.
   Checked border/dot states use the separate compound-brand stroke/foreground
@@ -101,6 +116,15 @@ The crop comes from this complete native OpenGL framebuffer:
   committed on form submission.
 - Supports small/medium sizes and before/above/after label placement. Required,
   disabled, focus, hover, and pressed states stay visually distinct.
+- Medium is a 40×20 DIP track with an 18 DIP thumb and 20 DIP travel. Small is
+  a 32×16 DIP track with a 14 DIP thumb and 16 DIP travel. The thumb geometry
+  is identical in off/on states; only its position and state tokens change.
+- The track is centred inside an 8 DIP horizontal hit margin on each side, so
+  an unlabeled Medium Switch measures 56 DIP wide and Small measures 48 DIP.
+- The Medium keyboard-focus variant keeps the exact 56×36 DIP root. Its
+  4-DIP corner and white 3-DIP / black 2-DIP guard strokes are painted inside
+  that root; the focus treatment must not expand to 60×40 or allow the 40×20
+  track to protrude through a constrained diagnostic frame.
 - The complete label and indicator form one hit target and expose Toggle
   semantics.
 

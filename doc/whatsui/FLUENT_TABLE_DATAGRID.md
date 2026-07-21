@@ -69,5 +69,5 @@ owning grid's row selection API. The generic visual-path dispatcher cannot
 resolve virtual descendants by itself.
 
 Behaviour and Software visual test sources are `fluent_table_tests.cpp` and
-`fluent_table_visual_tests.cpp`; both render at 100% and 150% when registered
-by the central CMake test manifest.
+`fluent_table_visual_tests.cpp`; the visual matrix renders at 100%, 125%,
+150%, and 200% through the central CMake test manifest.
