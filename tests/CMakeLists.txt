@@ -421,7 +421,13 @@ set_tests_properties(whatsui_component_gallery_view_model_tests PROPERTIES
 add_executable(WhatsUIComponentGalleryNavigationTests
     component_gallery_navigation_tests.cpp
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/application/gallery_router.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/domain/component_catalog.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/domain/component_descriptor.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/components/component_card.cpp
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/components/navigation_rail.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/components/page_header.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/pages/all_components_page.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view_model/gallery_view_model.cpp
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view_model/navigation_view_model.cpp
 )
 target_include_directories(WhatsUIComponentGalleryNavigationTests PRIVATE

@@ -5,8 +5,13 @@
 #include <string_view>
 #include <vector>
 
+#include "application/gallery_router.h"
+#include "domain/component_catalog.h"
 #include "domain/gallery_route.h"
 #include "view/components/navigation_rail.h"
+#include "view/components/page_header.h"
+#include "view/pages/all_components_page.h"
+#include "view_model/gallery_view_model.h"
 #include "view_model/navigation_view_model.h"
 #include "wui/accessibility.h"
 #include "wui/basic_controls.h"
@@ -49,6 +54,74 @@ public:
 
 private:
     GalleryRoute route_;
+};
+
+class FakeSurface final : public wui::RenderSurface {
+public:
+    [[nodiscard]] wui::CanvasBackend backend() const noexcept override
+    {
+        return wui::CanvasBackend::Software;
+    }
+    [[nodiscard]] wui::SizeF framebufferSize() const noexcept override
+    {
+        return {640.0f, 360.0f};
+    }
+    void beginFrame() override {}
+    void endFrame() override {}
+    void resize(wui::SizeF) override {}
+};
+
+class FakeClipboard final : public wui::Clipboard {
+public:
+    void setText(std::string_view text) override { text_ = text; }
+    [[nodiscard]] std::string getText() const override { return text_; }
+    [[nodiscard]] bool hasText() const override { return !text_.empty(); }
+
+private:
+    std::string text_;
+};
+
+class FakeCursor final : public wui::CursorService {
+public:
+    void setCursor(wui::CursorIcon) override {}
+};
+
+class FakeTextInput final : public wui::TextInputSession {
+public:
+    void activate() override {}
+    void deactivate() override {}
+    void setCaretRect(const wui::RectF&) override {}
+    void setSurroundingText(std::string_view, std::size_t, std::size_t) override {}
+};
+
+class FakeWindow final : public wui::PlatformWindow {
+public:
+    [[nodiscard]] wui::WindowId id() const noexcept override { return 1; }
+    [[nodiscard]] wui::WindowMetrics metrics() const noexcept override
+    {
+        return {{320.0f, 180.0f}, {640.0f, 360.0f}, 2.0f};
+    }
+    void show() override { open_ = true; }
+    void close() override { open_ = false; }
+    [[nodiscard]] bool isOpen() const noexcept override { return open_; }
+    [[nodiscard]] bool isFocused() const noexcept override { return true; }
+    void setTitle(std::string_view title) override { title_ = title; }
+    [[nodiscard]] std::string title() const override { return title_; }
+    void requestRedraw() override { ++redraws; }
+    [[nodiscard]] wui::RenderSurface& surface() override { return surface_; }
+    [[nodiscard]] wui::Clipboard& clipboard() override { return clipboard_; }
+    [[nodiscard]] wui::CursorService& cursor() override { return cursor_; }
+    [[nodiscard]] wui::TextInputSession& textInput() override { return textInput_; }
+
+    int redraws{0};
+
+private:
+    bool open_{true};
+    std::string title_;
+    FakeSurface surface_;
+    FakeClipboard clipboard_;
+    FakeCursor cursor_;
+    FakeTextInput textInput_;
 };
 
 class NavigationBinding final {
@@ -126,6 +199,31 @@ void collectButtons(wui::Node& node, std::vector<wui::Button*>& buttons)
             collectButtons(*child, buttons);
         }
     }
+}
+
+void collectToggleButtons(wui::Node& node, std::vector<wui::ToggleButton*>& buttons)
+{
+    if (auto* button = dynamic_cast<wui::ToggleButton*>(&node)) {
+        buttons.push_back(button);
+    }
+    if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
+        for (const auto& child : container->children()) {
+            collectToggleButtons(*child, buttons);
+        }
+    }
+}
+
+const wui::AccessibilitySnapshotEntry* findAccessibleEntry(
+    const wui::AccessibilitySnapshot& snapshot,
+    wui::AccessibilityRole role,
+    std::string_view label)
+{
+    for (const auto& entry : snapshot) {
+        if (entry.properties.role == role && entry.properties.label == label) {
+            return &entry;
+        }
+    }
+    return nullptr;
 }
 
 void expectNavigatorMatches(const NavigationViewModel& viewModel,
@@ -237,6 +335,135 @@ void testUnknownRailKeyDoesNotCorruptNavigationState()
     expectNavigatorMatches(viewModel, navigator);
 }
 
+void expectRouterState(const GalleryRouter& router,
+                       const NavigationViewModel& viewModel,
+                       const wui::UiWindow& window,
+                       GalleryRoute route,
+                       std::size_t stackSize)
+{
+    expect(router.currentRoute() == route && viewModel.currentRoute().get() == route,
+           "GalleryRouter and NavigationViewModel must expose one active route");
+    expect(window.navigator().size() == stackSize
+               && window.navigator().currentKey() != nullptr
+               && *window.navigator().currentKey() == galleryRouteKey(route),
+           "GalleryRouter route must match the active Navigator entry");
+    expect(window.root() == window.navigator().current() && window.root() != nullptr,
+           "GalleryRouter must mount the active Navigator page into UiWindow");
+    const auto* page = dynamic_cast<const RoutePage*>(window.root());
+    expect(page != nullptr && page->route() == route,
+           "Mounted route page must represent the observable route");
+}
+
+void testProductionRouterOwnsNavigationStateAndHistory()
+{
+    NavigationViewModel viewModel;
+    auto platform = std::make_unique<FakeWindow>();
+    auto* platformRaw = platform.get();
+    wui::UiWindow window(std::move(platform));
+    int factoryCalls = 0;
+    GalleryRouter router(
+        window, viewModel,
+        [&](GalleryRoute route, GalleryRouter&) -> std::unique_ptr<wui::Node> {
+            ++factoryCalls;
+            expect(viewModel.currentRoute().get() == route,
+                   "Router must publish route state before its lazy page factory runs");
+            return std::make_unique<RoutePage>(route);
+        });
+
+    router.start(GalleryRoute::Controls);
+    expectRouterState(router, viewModel, window, GalleryRoute::Controls, 1);
+    expect(factoryCalls == 1 && platformRaw->redraws > 0,
+           "Starting GalleryRouter must build and invalidate one root page");
+
+    ComponentDescriptor button;
+    button.id = "button";
+    router.openComponent(button);
+    expectRouterState(router, viewModel, window, GalleryRoute::ButtonDetail, 2);
+    expect(router.canGoBack() && factoryCalls == 2,
+           "Opening Button must push one detail destination");
+
+    router.refresh();
+    expectRouterState(router, viewModel, window, GalleryRoute::ButtonDetail, 2);
+    expect(factoryCalls == 3 && router.canGoBack(),
+           "Refreshing must rebuild the active page without losing history");
+
+    router.goBack();
+    expectRouterState(router, viewModel, window, GalleryRoute::Controls, 1);
+    expect(!router.canGoBack() && factoryCalls == 4,
+           "Going back must lazily rebuild and restore the originating top-level route");
+
+    router.navigate(GalleryRoute::About);
+    expectRouterState(router, viewModel, window, GalleryRoute::About, 1);
+    expect(!router.canGoBack() && factoryCalls == 5,
+           "Top-level navigation must replace history rather than append it");
+
+    router.shutdown();
+    expect(window.navigator().empty() && window.root() == nullptr
+               && viewModel.currentRoute().get() == GalleryRoute::Overview,
+           "Router shutdown must clear Navigator ownership and reset navigation state");
+}
+
+void testPageHeadingProjectsAccessibleSemantics()
+{
+    auto header = gallery_components::buildPageHeader(
+        {"CATALOG", "All components", "Browse the catalog.", {}});
+    const auto snapshot = wui::snapshotAccessibilityTree(*header);
+    const auto* heading = findAccessibleEntry(
+        snapshot, wui::AccessibilityRole::Heading, "All components");
+    expect(heading != nullptr,
+           "Gallery page title must project a Heading accessibility role");
+}
+
+void testCategoryTogglesExposeCheckedAndMutuallyExclusiveAccessibility()
+{
+    ComponentCatalog catalog;
+    GalleryViewModel viewModel(catalog);
+    auto page = whatsui::gallery::view::pages::buildAllComponentsPage(viewModel, {});
+    std::vector<wui::ToggleButton*> toggles;
+    collectToggleButtons(*page, toggles);
+    expect(toggles.size() == 6,
+           "All Components must expose one ToggleButton per visible category");
+
+    auto findToggle = [&](std::string_view label) -> wui::ToggleButton* {
+        for (auto* toggle : toggles) {
+            if (toggle->label() == label) return toggle;
+        }
+        return nullptr;
+    };
+    auto* all = findToggle("All");
+    auto* controls = findToggle("Controls");
+    expect(all != nullptr && controls != nullptr && all->isChecked()
+               && !controls->isChecked(),
+           "Category toggles must begin with exactly All selected");
+
+    auto snapshot = wui::snapshotAccessibilityTree(*page);
+    const auto* allEntry = findAccessibleEntry(
+        snapshot, wui::AccessibilityRole::Button, "All");
+    const auto* controlsEntry = findAccessibleEntry(
+        snapshot, wui::AccessibilityRole::Button, "Controls");
+    expect(allEntry != nullptr && allEntry->properties.checked == true
+               && allEntry->properties.actions.toggle
+               && controlsEntry != nullptr && controlsEntry->properties.checked == false
+               && controlsEntry->properties.actions.toggle,
+           "Category ToggleButtons must expose checked state and Toggle actions");
+
+    expect(controls->performAccessibilityAction(
+               wui::AccessibilityActionKind::Toggle, {})
+               == wui::AccessibilityActionStatus::Succeeded,
+           "An unselected category must be selectable through accessibility");
+    expect(viewModel.selectedCategory().get() == ComponentCategory::Controls
+               && controls->isChecked() && !all->isChecked(),
+           "Selecting a category must update ViewModel and mutually exclusive Toggle state");
+
+    expect(controls->performAccessibilityAction(
+               wui::AccessibilityActionKind::Toggle, {})
+               == wui::AccessibilityActionStatus::Succeeded,
+           "The selected category must safely handle a repeated Toggle action");
+    expect(viewModel.selectedCategory().get() == ComponentCategory::Controls
+               && controls->isChecked(),
+           "A repeated Toggle action must not leave the category group unselected");
+}
+
 void disableSystemFailureDialogs()
 {
 #ifdef _MSC_VER
@@ -259,6 +486,9 @@ int main()
         testNavigationRailInvokesSevenAccessibleDestinations();
         testSelectedRailStateTracksViewModelRebuild();
         testUnknownRailKeyDoesNotCorruptNavigationState();
+        testProductionRouterOwnsNavigationStateAndHistory();
+        testPageHeadingProjectsAccessibleSemantics();
+        testCategoryTogglesExposeCheckedAndMutuallyExclusiveAccessibility();
         std::puts("Component Gallery navigation tests passed");
         return 0;
     } catch (const std::exception& error) {
