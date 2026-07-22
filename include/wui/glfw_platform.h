@@ -10,7 +10,7 @@
 //   wui::UiApp app(std::move(host));
 //   auto& window = app.openWindow("Hello", {800, 600});
 //   window.setRoot(buildUi());
-//   return app.host()->run();
+//   return wui::runGlfwUiApp(app);
 //
 // 2. One-liner (for simple apps):
 //   return wui::runGlfwApp("Title", {800, 600}, std::move(rootNode));
@@ -28,6 +28,11 @@ namespace wui {
 
 // Create a GLFW-backed PlatformHost. Call once at program start.
 [[nodiscard]] std::unique_ptr<PlatformHost> createGlfwPlatformHost();
+
+// Drive an existing UiApp created with createGlfwPlatformHost(). This installs
+// the same input bridge and frame pipeline used by the convenience overloads.
+// Windows and their UI trees remain owned by the caller's UiApp.
+int runGlfwUiApp(UiApp& app);
 
 // Convenience: create a single-window app and run the event loop.
 // Returns the exit code (0 on normal close).

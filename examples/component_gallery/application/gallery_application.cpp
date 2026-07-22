@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "wui/glfw_platform.h"
+
 namespace whatsui::gallery {
 
 GalleryApplication::GalleryApplication(std::unique_ptr<wui::PlatformHost> host,
@@ -34,8 +36,7 @@ void GalleryApplication::start(GalleryRoute initialRoute)
 int GalleryApplication::run()
 {
     start();
-    if (app_.host() == nullptr) throw std::runtime_error("GalleryApplication has no platform host");
-    return app_.host()->run();
+    return wui::runGlfwUiApp(app_);
 }
 
 void GalleryApplication::close()

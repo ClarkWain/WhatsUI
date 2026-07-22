@@ -1045,107 +1045,110 @@ std::unique_ptr<PlatformHost> createGlfwPlatformHost()
     return std::make_unique<GlfwPlatformHost>();
 }
 
+namespace {
+
+GlfwPlatformWindow& requireGlfwWindow(UiWindow& window)
+{
+    auto* glfwWindow = dynamic_cast<GlfwPlatformWindow*>(&window.platformWindow());
+    if (glfwWindow == nullptr) {
+        throw std::invalid_argument("runGlfwUiApp requires GLFW-backed windows");
+    }
+    return *glfwWindow;
+}
+
+void wireGlfwInput(UiWindow& window)
+{
+    auto& glfwWindow = requireGlfwWindow(window);
+    glfwWindow.onPointerEvent = [&window](const PointerEvent& event) {
+        window.dispatchPointer(event);
+    };
+    glfwWindow.onKeyEvent = [&window](const KeyEvent& event) {
+        window.dispatchKey(event);
+    };
+    glfwWindow.onTextInput = [&window](const TextInputEvent& event) {
+        window.dispatchTextInput(event);
+    };
+    glfwWindow.onCompositionInput = [&window](const CompositionInputEvent& event) {
+        window.dispatchComposition(event);
+    };
+    glfwWindow.onFocusChanged = [&window](bool focused) {
+        window.onPlatformFocusChanged(focused);
+    };
+}
+
+void renderGlfwWindow(UiWindow& window, bool hadActiveAnimations)
+{
+    auto& platformWindow = window.platformWindow();
+    if (!platformWindow.isOpen()) return;
+
+    auto& glfwWindow = requireGlfwWindow(window);
+    if (!glfwWindow.needsRedraw() && !hadActiveAnimations) return;
+    glfwWindow.clearRedraw();
+    glfwMakeContextCurrent(glfwWindow.glfwWindow());
+
+    window.update();
+    const auto metrics = platformWindow.metrics();
+    auto& surface = static_cast<GlfwRenderSurface&>(platformWindow.surface());
+    surface.setDevicePixelRatio(metrics.scaleFactor);
+    glfwWindow.textMeasurer().setScaleFactor(1.0f);
+    setTextMeasurer(&glfwWindow.textMeasurer());
+    window.layout();
+
+    PaintContext context(surface.canvas(), metrics.scaleFactor, true);
+    window.prepare(context);
+    platformWindow.surface().beginFrame();
+    window.paint(context);
+    platformWindow.surface().endFrame();
+    window.captureCompletedRendererStats(context);
+    setTextMeasurer(nullptr);
+}
+
+void installGlfwDriver(UiApp& app, GlfwPlatformHost& host)
+{
+    for (const auto& window : app.windows()) {
+        wireGlfwInput(*window);
+    }
+
+    host.setFrameCallback(
+        [&app, &host, lastFrame = std::chrono::steady_clock::now()]() mutable {
+            const auto now = std::chrono::steady_clock::now();
+            const float deltaSeconds = std::clamp(
+                std::chrono::duration<float>(now - lastFrame).count(), 0.0f, 0.1f);
+            lastFrame = now;
+
+            const bool hadActiveAnimations = Ticker::instance().hasActive();
+            if (hadActiveAnimations) Ticker::instance().tick(deltaSeconds);
+
+            host.discardClosedWindows();
+            app.removeClosedWindows();
+
+            for (const auto& window : app.windows()) {
+                wireGlfwInput(*window);
+                renderGlfwWindow(*window, hadActiveAnimations);
+            }
+        });
+}
+
+} // namespace
+
+int runGlfwUiApp(UiApp& app)
+{
+    auto* host = dynamic_cast<GlfwPlatformHost*>(app.host());
+    if (host == nullptr) {
+        throw std::invalid_argument("runGlfwUiApp requires a GLFW-backed UiApp");
+    }
+    installGlfwDriver(app, *host);
+    return host->run();
+}
+
 // --- Convenience one-liner ---
 
 int runGlfwApp(std::string title, SizeF size, GlfwRootFactory rootFactory)
 {
-    auto hostPtr = std::make_unique<GlfwPlatformHost>();
-    GlfwPlatformHost* host = hostPtr.get();
-
-    UiApp app(std::move(hostPtr));
+    UiApp app(createGlfwPlatformHost());
     auto& uiWindow = app.openWindow(std::move(title), size);
     uiWindow.setRoot(rootFactory(uiWindow));
-
-    // Get the concrete platform window to wire event callbacks
-    auto& pw = uiWindow.platformWindow();
-    // We know it's GlfwPlatformWindow since we created it via GlfwPlatformHost
-    GlfwPlatformWindow* glfwWin = static_cast<GlfwPlatformWindow*>(&pw);
-
-    // Wire event callbacks to dispatch into the UI tree
-    glfwWin->onPointerEvent = [&uiWindow](const PointerEvent& event) {
-        uiWindow.dispatchPointer(event);
-    };
-
-    glfwWin->onKeyEvent = [&uiWindow](const KeyEvent& event) {
-        uiWindow.dispatchKey(event);
-    };
-
-    glfwWin->onTextInput = [&uiWindow](const TextInputEvent& event) {
-        uiWindow.dispatchTextInput(event);
-    };
-    glfwWin->onCompositionInput = [&uiWindow](const CompositionInputEvent& event) {
-        uiWindow.dispatchComposition(event);
-    };
-    glfwWin->onFocusChanged = [&uiWindow](bool focused) {
-        uiWindow.onPlatformFocusChanged(focused);
-    };
-
-    // Set frame callback: flush structural updates, tick animations, layout, paint
-    host->setFrameCallback([&app, host, lastFrame = std::chrono::steady_clock::now()]() mutable {
-        const auto now = std::chrono::steady_clock::now();
-        const float deltaSeconds = std::clamp(
-            std::chrono::duration<float>(now - lastFrame).count(), 0.0f, 0.1f);
-        lastFrame = now;
-
-        const bool hadActiveAnimations = Ticker::instance().hasActive();
-        // The ticker is application-scoped: advance it exactly once per host
-        // frame, regardless of how many windows are currently open.
-        if (hadActiveAnimations) {
-            Ticker::instance().tick(deltaSeconds);
-        }
-
-        // An animation can close a native peer during this callback. Purge
-        // the host's non-owning pointer first, then release the UI owner.
-        // This keeps both the current and the next event-loop iteration free
-        // of stale native-window pointers.
-        host->discardClosedWindows();
-        app.removeClosedWindows();
-
-        for (const auto& winPtr : app.windows()) {
-            auto& win = *winPtr;
-            auto& platformWin = win.platformWindow();
-
-            if (!platformWin.isOpen()) continue;
-
-            // Ensure GL context is current before rendering
-            auto* glfwWin = static_cast<GlfwPlatformWindow*>(&platformWin);
-            if (!glfwWin->needsRedraw() && !hadActiveAnimations) continue;
-            // Consume this request before rendering. Invalidations raised by
-            // update/layout/paint intentionally schedule one more frame.
-            glfwWin->clearRedraw();
-            glfwMakeContextCurrent(glfwWin->glfwWindow());
-
-            // Commit deferred state changes at the window frame boundary.
-            win.update();
-
-            // Measure, layout and paint against the same font backend and DPR.
-            auto m = platformWin.metrics();
-            auto& glfwSurface = static_cast<GlfwRenderSurface&>(platformWin.surface());
-            // WhatsCanvas now owns DPR in its root transform.  Text layout
-            // metrics therefore stay in logical coordinates while drawText
-            // is rasterized at the physical DPR by Canvas.
-            glfwSurface.setDevicePixelRatio(m.scaleFactor);
-            glfwWin->textMeasurer().setScaleFactor(1.0f);
-            setTextMeasurer(&glfwWin->textMeasurer());
-            win.layout();
-
-            // Paint
-            PaintContext ctx(glfwSurface.canvas(), m.scaleFactor, true);
-            win.prepare(ctx);
-            platformWin.surface().beginFrame();
-
-            win.paint(ctx);
-
-            platformWin.surface().endFrame();
-            // WhatsCanvas only finalizes command execution/draw-call counts
-            // at endFrame(). Sample after that boundary so FrameStats never
-            // presents a pre-flush command count as completed GPU work.
-            win.captureCompletedRendererStats(ctx);
-            setTextMeasurer(nullptr);
-        }
-    });
-
-    return host->run();
+    return runGlfwUiApp(app);
 }
 
 int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root)
