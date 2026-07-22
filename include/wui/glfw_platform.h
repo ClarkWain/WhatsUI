@@ -29,6 +29,11 @@ namespace wui {
 // Create a GLFW-backed PlatformHost. Call once at program start.
 [[nodiscard]] std::unique_ptr<PlatformHost> createGlfwPlatformHost();
 
+// Returns true only for a host created by createGlfwPlatformHost(). This is
+// primarily useful for full-control application wrappers that accept an
+// abstract PlatformHost but require the GLFW frame driver.
+[[nodiscard]] bool isGlfwPlatformHost(const PlatformHost* host) noexcept;
+
 // Drive an existing UiApp created with createGlfwPlatformHost(). This installs
 // the same input bridge and frame pipeline used by the convenience overloads.
 // Windows and their UI trees remain owned by the caller's UiApp.

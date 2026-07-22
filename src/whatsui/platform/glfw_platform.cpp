@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_set>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -1045,7 +1046,41 @@ std::unique_ptr<PlatformHost> createGlfwPlatformHost()
     return std::make_unique<GlfwPlatformHost>();
 }
 
+bool isGlfwPlatformHost(const PlatformHost* host) noexcept
+{
+    return dynamic_cast<const GlfwPlatformHost*>(host) != nullptr;
+}
+
 namespace {
+
+class TextMeasurerScope final {
+public:
+    explicit TextMeasurerScope(TextMeasurer* measurer) noexcept
+        : previous_(textMeasurer())
+    {
+        setTextMeasurer(measurer);
+    }
+
+    ~TextMeasurerScope() { setTextMeasurer(previous_); }
+
+    TextMeasurerScope(const TextMeasurerScope&) = delete;
+    TextMeasurerScope& operator=(const TextMeasurerScope&) = delete;
+
+private:
+    TextMeasurer* previous_{nullptr};
+};
+
+class FrameCallbackScope final {
+public:
+    explicit FrameCallbackScope(GlfwPlatformHost& host) noexcept : host_(&host) {}
+    ~FrameCallbackScope() { host_->setFrameCallback({}); }
+
+    FrameCallbackScope(const FrameCallbackScope&) = delete;
+    FrameCallbackScope& operator=(const FrameCallbackScope&) = delete;
+
+private:
+    GlfwPlatformHost* host_;
+};
 
 GlfwPlatformWindow& requireGlfwWindow(UiWindow& window)
 {
@@ -1091,7 +1126,7 @@ void renderGlfwWindow(UiWindow& window, bool hadActiveAnimations)
     auto& surface = static_cast<GlfwRenderSurface&>(platformWindow.surface());
     surface.setDevicePixelRatio(metrics.scaleFactor);
     glfwWindow.textMeasurer().setScaleFactor(1.0f);
-    setTextMeasurer(&glfwWindow.textMeasurer());
+    TextMeasurerScope textMeasurerScope(&glfwWindow.textMeasurer());
     window.layout();
 
     PaintContext context(surface.canvas(), metrics.scaleFactor, true);
@@ -1100,17 +1135,38 @@ void renderGlfwWindow(UiWindow& window, bool hadActiveAnimations)
     window.paint(context);
     platformWindow.surface().endFrame();
     window.captureCompletedRendererStats(context);
-    setTextMeasurer(nullptr);
+}
+
+using WiredWindowIds = std::unordered_set<WindowId>;
+
+void syncGlfwInput(UiApp& app, WiredWindowIds& wiredWindows)
+{
+    WiredWindowIds activeWindows;
+    activeWindows.reserve(app.windows().size());
+    for (const auto& window : app.windows()) {
+        const WindowId id = window->id();
+        activeWindows.insert(id);
+        if (wiredWindows.insert(id).second) {
+            wireGlfwInput(*window);
+        }
+    }
+    for (auto it = wiredWindows.begin(); it != wiredWindows.end();) {
+        if (activeWindows.find(*it) == activeWindows.end()) {
+            it = wiredWindows.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void installGlfwDriver(UiApp& app, GlfwPlatformHost& host)
 {
-    for (const auto& window : app.windows()) {
-        wireGlfwInput(*window);
-    }
+    WiredWindowIds wiredWindows;
+    syncGlfwInput(app, wiredWindows);
 
     host.setFrameCallback(
-        [&app, &host, lastFrame = std::chrono::steady_clock::now()]() mutable {
+        [&app, &host, wiredWindows = std::move(wiredWindows),
+         lastFrame = std::chrono::steady_clock::now()]() mutable {
             const auto now = std::chrono::steady_clock::now();
             const float deltaSeconds = std::clamp(
                 std::chrono::duration<float>(now - lastFrame).count(), 0.0f, 0.1f);
@@ -1121,9 +1177,9 @@ void installGlfwDriver(UiApp& app, GlfwPlatformHost& host)
 
             host.discardClosedWindows();
             app.removeClosedWindows();
+            syncGlfwInput(app, wiredWindows);
 
             for (const auto& window : app.windows()) {
-                wireGlfwInput(*window);
                 renderGlfwWindow(*window, hadActiveAnimations);
             }
         });
@@ -1138,6 +1194,7 @@ int runGlfwUiApp(UiApp& app)
         throw std::invalid_argument("runGlfwUiApp requires a GLFW-backed UiApp");
     }
     installGlfwDriver(app, *host);
+    FrameCallbackScope callbackScope(*host);
     return host->run();
 }
 

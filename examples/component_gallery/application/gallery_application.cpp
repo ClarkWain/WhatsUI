@@ -12,6 +12,10 @@ GalleryApplication::GalleryApplication(std::unique_ptr<wui::PlatformHost> host,
                                        wui::SizeF initialSize)
     : app_(std::move(host))
 {
+    if (!wui::isGlfwPlatformHost(app_.host())) {
+        throw std::invalid_argument(
+            "GalleryApplication requires a host returned by createGlfwPlatformHost");
+    }
     if (!pageFactory) {
         throw std::invalid_argument("GalleryApplication requires a page factory");
     }

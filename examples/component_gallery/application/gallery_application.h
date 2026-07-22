@@ -15,6 +15,8 @@ public:
     using PageFactory = std::function<std::unique_ptr<wui::Node>(
         GalleryRoute, GalleryViewModels&, GalleryRouter&)>;
 
+    // The interactive gallery requires a host returned by
+    // wui::createGlfwPlatformHost(); incompatible hosts fail in the constructor.
     GalleryApplication(std::unique_ptr<wui::PlatformHost> host, PageFactory pageFactory,
                        std::string title = "WhatsUI Component Gallery",
                        wui::SizeF initialSize = {1280.0f, 800.0f});
