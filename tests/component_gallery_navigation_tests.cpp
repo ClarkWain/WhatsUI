@@ -6,6 +6,9 @@
 #include <vector>
 
 #ifdef _MSC_VER
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <crtdbg.h>
 #include <windows.h>
 #endif
