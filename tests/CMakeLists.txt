@@ -390,6 +390,56 @@ add_test(NAME whatsui_fluent_navigation COMMAND WhatsUIFluentNavigationTests)
 set_tests_properties(whatsui_fluent_navigation PROPERTIES
     LABELS "fluent;toolbar;tabs;link;breadcrumb;accessibility")
 
+set(WHATSUI_COMPONENT_GALLERY_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/../examples/component_gallery")
+
+add_executable(WhatsUIComponentGalleryViewModelTests
+    component_gallery_view_model_tests.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/domain/component_catalog.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/domain/component_descriptor.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view_model/button_detail_view_model.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view_model/gallery_view_model.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view_model/navigation_view_model.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view_model/visual_qa_view_model.cpp
+)
+target_include_directories(WhatsUIComponentGalleryViewModelTests PRIVATE
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR})
+target_link_libraries(WhatsUIComponentGalleryViewModelTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIComponentGalleryViewModelTests PRIVATE cxx_std_17)
+if(TARGET WhatsCanvas::Software)
+    target_link_libraries(WhatsUIComponentGalleryViewModelTests PRIVATE WhatsCanvas::Software)
+endif()
+if(WHATSUI_ENABLE_SANITIZERS)
+    whatsui_prepare_sanitized_executable(WhatsUIComponentGalleryViewModelTests)
+endif()
+add_test(NAME whatsui_component_gallery_view_model_tests
+    COMMAND WhatsUIComponentGalleryViewModelTests)
+set_tests_properties(whatsui_component_gallery_view_model_tests PROPERTIES
+    LABELS "gallery;unit;viewmodel"
+    TIMEOUT 30)
+
+add_executable(WhatsUIComponentGalleryNavigationTests
+    component_gallery_navigation_tests.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/application/gallery_router.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/components/navigation_rail.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view_model/navigation_view_model.cpp
+)
+target_include_directories(WhatsUIComponentGalleryNavigationTests PRIVATE
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR})
+target_link_libraries(WhatsUIComponentGalleryNavigationTests PRIVATE WhatsUI::WhatsUI)
+target_compile_features(WhatsUIComponentGalleryNavigationTests PRIVATE cxx_std_17)
+if(TARGET WhatsCanvas::Software)
+    target_link_libraries(WhatsUIComponentGalleryNavigationTests PRIVATE WhatsCanvas::Software)
+endif()
+if(WHATSUI_ENABLE_SANITIZERS)
+    whatsui_prepare_sanitized_executable(WhatsUIComponentGalleryNavigationTests)
+endif()
+add_test(NAME whatsui_component_gallery_navigation_tests
+    COMMAND WhatsUIComponentGalleryNavigationTests)
+set_tests_properties(whatsui_component_gallery_navigation_tests PROPERTIES
+    LABELS "gallery;navigation;interaction;accessibility"
+    TIMEOUT 30)
+
 add_executable(WhatsUIFluentSelectionControlsTests fluent_selection_controls_tests.cpp)
 target_link_libraries(WhatsUIFluentSelectionControlsTests PRIVATE WhatsUI::WhatsUI)
 target_compile_features(WhatsUIFluentSelectionControlsTests PRIVATE cxx_std_17)
