@@ -98,6 +98,8 @@ UiWindow::UiWindow(std::unique_ptr<PlatformWindow> platformWindow)
         deactivateTextInputSession();
         focusManager_.clear();
         inputRouter_.clearHover();
+        inputRouter_.setRoot(nullptr);
+        uiRoot_.setBorrowedContent(nullptr);
     });
     overlayHost_.bindFocusManager(focusManager_);
     overlayHost_.setOnChange([this] { onOverlayChanged(); });
