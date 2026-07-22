@@ -4,6 +4,13 @@
 #include <string_view>
 #include <vector>
 
+#include "domain/component_catalog.h"
+#include "domain/gallery_route.h"
+#include "view_model/button_detail_view_model.h"
+#include "view_model/gallery_view_model.h"
+#include "view_model/navigation_view_model.h"
+#include "view_model/visual_qa_view_model.h"
+
 #ifdef _MSC_VER
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -11,13 +18,6 @@
 #include <crtdbg.h>
 #include <windows.h>
 #endif
-
-#include "domain/component_catalog.h"
-#include "domain/gallery_route.h"
-#include "view_model/button_detail_view_model.h"
-#include "view_model/gallery_view_model.h"
-#include "view_model/navigation_view_model.h"
-#include "view_model/visual_qa_view_model.h"
 
 namespace {
 

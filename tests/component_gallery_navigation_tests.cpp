@@ -5,6 +5,13 @@
 #include <string_view>
 #include <vector>
 
+#include "domain/gallery_route.h"
+#include "view/components/navigation_rail.h"
+#include "view_model/navigation_view_model.h"
+#include "wui/accessibility.h"
+#include "wui/basic_controls.h"
+#include "wui/runtime.h"
+
 #ifdef _MSC_VER
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -12,13 +19,6 @@
 #include <crtdbg.h>
 #include <windows.h>
 #endif
-
-#include "domain/gallery_route.h"
-#include "view/components/navigation_rail.h"
-#include "view_model/navigation_view_model.h"
-#include "wui/accessibility.h"
-#include "wui/basic_controls.h"
-#include "wui/runtime.h"
 
 namespace {
 
