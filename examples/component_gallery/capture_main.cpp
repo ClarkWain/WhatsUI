@@ -6,10 +6,11 @@
 #include <stdexcept>
 #include <string>
 
-#include "domain/component_catalog.h"
-#include "view/app_shell_view.h"
-#include "view/pages/overview_page.h"
-#include "view_model/gallery_view_model.h"
+#include "application/gallery_router.h"
+#include "capture/headless_platform.h"
+#include "domain/gallery_route.h"
+#include "view/gallery_page_factory.h"
+#include "view_model/gallery_view_models.h"
 #include "wsc/Canvas.h"
 #include "wui/paint_context.h"
 #include "wui/theme.h"
@@ -18,18 +19,38 @@
 namespace {
 
 struct CaptureOptions {
-    std::filesystem::path output{"component_gallery_overview.ppm"};
+    std::filesystem::path output;
+    whatsui::gallery::GalleryRoute route{whatsui::gallery::GalleryRoute::Overview};
     int width{1280};
     int height{800};
     float scale{1.5f};
 };
+
+whatsui::gallery::GalleryRoute parseRoute(const std::string& value)
+{
+    using whatsui::gallery::GalleryRoute;
+    if (value == "overview") return GalleryRoute::Overview;
+    if (value == "all-components") return GalleryRoute::AllComponents;
+    if (value == "controls") return GalleryRoute::Controls;
+    if (value == "add-ons") return GalleryRoute::AddOns;
+    if (value == "visual-qa") return GalleryRoute::VisualQa;
+    if (value == "about") return GalleryRoute::About;
+    if (value == "button-detail") return GalleryRoute::ButtonDetail;
+    throw std::invalid_argument(
+        "--route expects overview|all-components|controls|add-ons|visual-qa|about|button-detail");
+}
 
 CaptureOptions parseOptions(int argc, char** argv)
 {
     CaptureOptions options;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
-        if (argument == "--size") {
+        if (argument == "--route") {
+            if (++index >= argc) {
+                throw std::invalid_argument("--route expects a route name");
+            }
+            options.route = parseRoute(argv[index]);
+        } else if (argument == "--size") {
             if (++index >= argc || std::sscanf(argv[index], "%dx%d", &options.width,
                                                 &options.height) != 2 ||
                 options.width < 960 || options.height < 640) {
@@ -45,6 +66,10 @@ CaptureOptions parseOptions(int argc, char** argv)
         } else {
             options.output = argument;
         }
+    }
+    if (options.output.empty()) {
+        options.output = "component_gallery_"
+            + std::string(whatsui::gallery::galleryRouteKey(options.route)) + ".ppm";
     }
     return options;
 }
@@ -64,21 +89,32 @@ void capture(const CaptureOptions& options)
     }
     wui::setTextMeasurer(&text);
 
-    whatsui::gallery::ComponentCatalog catalog;
-    whatsui::gallery::GalleryViewModel gallery(catalog);
-    auto content = whatsui::gallery::view::pages::buildOverviewPage(catalog, gallery, {});
-    auto root = whatsui::gallery::view::buildAppShell(
-        whatsui::gallery::GalleryRoute::Overview, std::move(content));
-    root->layout({0.0f, 0.0f, static_cast<float>(options.width),
-                  static_cast<float>(options.height)});
+    wui::setTheme(wui::Theme{});
+    wui::UiApp application(
+        whatsui::gallery::capture::createHeadlessPlatformHost(options.scale));
+    auto& window = application.openWindow(
+        "WhatsUI Component Gallery Capture",
+        {static_cast<float>(options.width), static_cast<float>(options.height)});
+    whatsui::gallery::GalleryViewModels viewModels;
+    whatsui::gallery::GalleryRouter router(
+        window, viewModels.navigation(),
+        [&viewModels](whatsui::gallery::GalleryRoute route,
+                      whatsui::gallery::GalleryRouter& activeRouter) {
+            return whatsui::gallery::view::buildGalleryPage(
+                route, viewModels, activeRouter);
+        });
+    router.start(options.route);
+
     wui::PaintContext paint(*canvas, options.scale);
-    root->prepare(paint);
     for (int pass = 0; pass < 2; ++pass) {
+        window.update();
+        window.layout();
+        window.prepare(paint);
         canvas->beginFrame();
         paint.fillRect({0.0f, 0.0f, static_cast<float>(options.width),
                         static_cast<float>(options.height)},
                        wui::theme().colors.background);
-        root->paint(paint);
+        window.paint(paint);
         canvas->endFrame();
     }
     if (!options.output.parent_path().empty()) {

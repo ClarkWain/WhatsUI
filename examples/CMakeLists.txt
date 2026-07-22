@@ -100,7 +100,10 @@ if(WIN32)
     target_link_libraries(WhatsUIComponentGalleryCore PUBLIC Shell32)
 endif()
 
-add_executable(WhatsUIComponentGalleryApp component_gallery/capture_main.cpp)
+add_executable(WhatsUIComponentGalleryApp
+    component_gallery/capture_main.cpp
+    component_gallery/capture/headless_platform.cpp
+)
 target_link_libraries(WhatsUIComponentGalleryApp
     PRIVATE WhatsUIComponentGalleryCore WhatsCanvas::Software)
 target_compile_features(WhatsUIComponentGalleryApp PRIVATE cxx_std_17)
