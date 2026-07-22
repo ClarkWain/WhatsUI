@@ -11,6 +11,7 @@
 #include "wui/accessibility.h"
 #include "wui/basic_controls.h"
 #include "wui/runtime.h"
+#include "wui/widgets.h"
 
 #ifdef _MSC_VER
 #ifndef NOMINMAX
