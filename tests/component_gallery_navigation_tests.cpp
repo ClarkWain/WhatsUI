@@ -41,6 +41,11 @@ public:
     }
 
     [[nodiscard]] GalleryRoute route() const noexcept { return route_; }
+    [[nodiscard]] wui::SizeF measure(const wui::Constraints& constraints) const override
+    {
+        return constraints.clamp({1.0f, 1.0f});
+    }
+    void paint(wui::PaintContext&) override {}
 
 private:
     GalleryRoute route_;
