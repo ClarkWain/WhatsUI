@@ -22,6 +22,29 @@ std::string scaleLabel(float scale)
     return stream.str();
 }
 
+class WindowScaleProbe final : public wui::Node {
+public:
+    WindowScaleProbe(wui::UiWindow& window, VisualQaViewModel& viewModel)
+        : window_(&window)
+        , viewModel_(&viewModel)
+    {
+    }
+
+    [[nodiscard]] wui::SizeF measure(const wui::Constraints&) const override { return {}; }
+
+    void prepare(wui::PaintContext& context) override
+    {
+        wui::Node::prepare(context);
+        viewModel_->setActualScaleFactor(window_->platformWindow().metrics().scaleFactor);
+    }
+
+    void paint(wui::PaintContext&) override {}
+
+private:
+    wui::UiWindow* window_;
+    VisualQaViewModel* viewModel_;
+};
+
 void setInteractionState(wui::Button& button, InteractionPreview interaction)
 {
     for (const auto state : {wui::ControlVisualState::Hovered,
@@ -58,22 +81,23 @@ std::unique_ptr<wui::Node> buildProfileControls(VisualQaViewModel& viewModel)
         {"200%", DpiProfile::Dpi200},
     }};
     auto row = std::make_unique<wui::Row>();
-    auto buttons = std::make_shared<std::vector<std::pair<DpiProfile, wui::Button*>>>();
+    auto buttons = std::make_shared<std::vector<std::pair<DpiProfile, wui::ToggleButton*>>>();
     row->setGap(6.0f);
     row->setAlign(wui::Alignment::Center);
     for (const auto& [label, profile] : profiles) {
-        auto button = std::make_unique<wui::Button>(label);
-        button->setAppearance(profile == viewModel.selectedDpi().get()
-            ? wui::ButtonAppearance::Primary
-            : wui::ButtonAppearance::Subtle);
+        auto button = std::make_unique<wui::ToggleButton>(
+            label, profile == viewModel.selectedDpi().get());
+        button->setAppearance(wui::ButtonAppearance::Subtle);
         auto* raw = button.get();
         buttons->push_back({profile, raw});
-        button->onClick([&viewModel, profile, buttons] {
+        button->onChange([&viewModel, profile, buttons, raw](bool checked) {
+            if (!checked) {
+                raw->setChecked(true);
+                return;
+            }
             viewModel.selectDpi(profile);
             for (const auto& [candidate, item] : *buttons) {
-                item->setAppearance(candidate == profile
-                    ? wui::ButtonAppearance::Primary
-                    : wui::ButtonAppearance::Subtle);
+                item->setChecked(candidate == profile);
             }
         });
         row->appendChild(std::move(button));
@@ -106,26 +130,25 @@ std::unique_ptr<wui::Node> buildActiveDpi(VisualQaViewModel& viewModel)
         .intoNode();
 }
 
-std::unique_ptr<wui::Node> buildThemeControls(VisualQaViewModel& viewModel)
+std::unique_ptr<wui::Node> buildThemeControls(
+    VisualQaViewModel& viewModel,
+    const ApplyVisualQaThemeHandler& applyTheme)
 {
     auto row = std::make_unique<wui::Row>();
     row->setGap(6.0f);
-    auto buttons = std::make_shared<std::vector<std::pair<ThemePreview, wui::Button*>>>();
     for (const auto& [label, theme] : std::array<std::pair<const char*, ThemePreview>, 2>{{
              {"Light preview", ThemePreview::Light}, {"Dark preview", ThemePreview::Dark}}}) {
-        auto button = std::make_unique<wui::Button>(label);
-        button->setAppearance(theme == viewModel.selectedTheme().get()
-            ? wui::ButtonAppearance::Primary
-            : wui::ButtonAppearance::Subtle);
+        auto button = std::make_unique<wui::ToggleButton>(
+            label, theme == viewModel.selectedTheme().get());
+        button->setAppearance(wui::ButtonAppearance::Subtle);
         auto* raw = button.get();
-        buttons->push_back({theme, raw});
-        button->onClick([&viewModel, theme, buttons] {
-            viewModel.selectTheme(theme);
-            for (const auto& [candidate, item] : *buttons) {
-                item->setAppearance(candidate == theme
-                    ? wui::ButtonAppearance::Primary
-                    : wui::ButtonAppearance::Subtle);
+        button->onChange([&viewModel, theme, applyTheme, raw](bool checked) {
+            if (!checked) {
+                raw->setChecked(true);
+                return;
             }
+            viewModel.selectTheme(theme);
+            if (applyTheme) applyTheme(theme);
         });
         row->appendChild(std::move(button));
     }
@@ -141,21 +164,23 @@ std::unique_ptr<wui::Node> buildInteractionControls(VisualQaViewModel& viewModel
         {"Disabled", InteractionPreview::Disabled},
     }};
     auto row = std::make_unique<wui::Row>();
-    auto buttons = std::make_shared<std::vector<std::pair<InteractionPreview, wui::Button*>>>();
+    auto buttons = std::make_shared<
+        std::vector<std::pair<InteractionPreview, wui::ToggleButton*>>>();
     row->setGap(6.0f);
     for (const auto& [label, state] : states) {
-        auto button = std::make_unique<wui::Button>(label);
-        button->setAppearance(state == viewModel.selectedInteraction().get()
-            ? wui::ButtonAppearance::Primary
-            : wui::ButtonAppearance::Subtle);
+        auto button = std::make_unique<wui::ToggleButton>(
+            label, state == viewModel.selectedInteraction().get());
+        button->setAppearance(wui::ButtonAppearance::Subtle);
         auto* raw = button.get();
         buttons->push_back({state, raw});
-        button->onClick([&viewModel, state, buttons] {
+        button->onChange([&viewModel, state, buttons, raw](bool checked) {
+            if (!checked) {
+                raw->setChecked(true);
+                return;
+            }
             viewModel.selectInteraction(state);
             for (const auto& [candidate, item] : *buttons) {
-                item->setAppearance(candidate == state
-                    ? wui::ButtonAppearance::Primary
-                    : wui::ButtonAppearance::Subtle);
+                item->setChecked(candidate == state);
             }
         });
         row->appendChild(std::move(button));
@@ -255,7 +280,8 @@ std::unique_ptr<wui::Node> buildSampleRuns()
 
 std::unique_ptr<wui::Node> buildVisualQaPage(
     VisualQaViewModel& viewModel,
-    wui::UiWindow& window)
+    wui::UiWindow& window,
+    ApplyVisualQaThemeHandler applyTheme)
 {
     using namespace wui::ui;
     wui::Button* preview = nullptr;
@@ -268,10 +294,11 @@ std::unique_ptr<wui::Node> buildVisualQaPage(
                 .children(
                     view::components::buildPageHeader({"QUALITY", "Visual QA", "Inspect active scale, control states, and clearly-labelled sample evidence.", {}}),
                     buildActiveDpi(viewModel),
-                    buildThemeControls(viewModel),
+                    buildThemeControls(viewModel, applyTheme),
                     buildStateMatrix(viewModel, preview),
                     buildInspectorEntry(window),
-                    buildSampleRuns()))
+                    buildSampleRuns(),
+                    std::make_unique<WindowScaleProbe>(window, viewModel)))
         .intoNode();
     bindInteraction(*root, *preview, viewModel);
     return root;

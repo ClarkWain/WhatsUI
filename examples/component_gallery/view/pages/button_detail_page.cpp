@@ -81,22 +81,22 @@ std::unique_ptr<wui::Node> buildChoiceRow(
 {
     using namespace wui::ui;
     auto row = std::make_unique<wui::Row>();
-    auto buttons = std::make_shared<std::vector<std::pair<Enum, wui::Button*>>>();
+    auto buttons = std::make_shared<std::vector<std::pair<Enum, wui::ToggleButton*>>>();
     row->setGap(6.0f);
     row->setAlign(wui::Alignment::Center);
     for (const auto& [label, value] : choices) {
-        auto button = std::make_unique<wui::Button>(label);
-        button->setAppearance(value == selected
-            ? wui::ButtonAppearance::Primary
-            : wui::ButtonAppearance::Subtle);
+        auto button = std::make_unique<wui::ToggleButton>(label, value == selected);
+        button->setAppearance(wui::ButtonAppearance::Subtle);
         auto* raw = button.get();
         buttons->push_back({value, raw});
-        button->onClick([onSelect, value, buttons] {
+        button->onChange([onSelect, value, buttons, raw](bool checked) {
+            if (!checked) {
+                raw->setChecked(true);
+                return;
+            }
             onSelect(value);
             for (const auto& [candidate, item] : *buttons) {
-                item->setAppearance(candidate == value
-                    ? wui::ButtonAppearance::Primary
-                    : wui::ButtonAppearance::Subtle);
+                item->setChecked(candidate == value);
             }
         });
         row->appendChild(std::move(button));

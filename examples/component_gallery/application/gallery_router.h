@@ -2,7 +2,6 @@
 
 #include <functional>
 #include <memory>
-#include <vector>
 
 #include "domain/component_descriptor.h"
 #include "domain/gallery_route.h"
@@ -42,7 +41,6 @@ private:
     wui::UiWindow* window_{nullptr};
     NavigationViewModel* navigation_{nullptr};
     PageFactory pageFactory_;
-    std::vector<GalleryRoute> routeStack_;
 };
 
 } // namespace whatsui::gallery

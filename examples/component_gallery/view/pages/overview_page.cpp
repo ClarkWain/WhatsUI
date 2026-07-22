@@ -89,7 +89,9 @@ std::unique_ptr<wui::Node> buildHero(GalleryViewModel& gallery, const NavigateHa
                                         .style(wui::IconStyle::Filled)
                                         .color(current.colors.accent),
                                     Text("Live components").size(13.0f).weight(600),
-                                    Button("Try me").appearance(wui::ButtonAppearance::Primary)))))
+                                    Badge("INTERACTIVE PREVIEW")
+                                        .appearance(wui::BadgeAppearance::Tint)
+                                        .color(wui::BadgeColor::Brand)))))
         .intoNode();
 }
 
@@ -101,7 +103,7 @@ std::unique_ptr<wui::Node> buildCategoryPreview(wui::IconName icon)
         .align(wui::Alignment::Center)
         .children(
             Icon(icon).size(wui::IconSize::Size20).color(wui::theme().colors.accent),
-            Button("Explore").appearance(wui::ButtonAppearance::Secondary))
+            Text("Category preview").size(12.0f).weight(600))
         .intoNode();
 }
 
@@ -151,14 +153,14 @@ std::unique_ptr<wui::Node> buildQaSummary(const ComponentCatalog& catalog, const
                     Column()
                         .gap(4.0f)
                         .children(
-                            Text("Visual quality snapshot").size(16.0f).weight(600),
-                            Text(componentCount + " catalog entries · 4 DPI targets · Software and OpenGL")
+                            Text("Visual quality sample").size(16.0f).weight(600),
+                            Text(componentCount + " catalog entries · 4 review targets · 2 render backends")
                                 .size(12.0f)
                                 .color(current.colors.textMuted)),
                     Spacer().flex(1.0f),
-                    Badge("PASSING")
+                    Badge("SAMPLE DATA")
                         .appearance(wui::BadgeAppearance::Tint)
-                        .color(wui::BadgeColor::Success),
+                        .color(wui::BadgeColor::Warning),
                     Button("Open QA")
                         .appearance(wui::ButtonAppearance::Subtle)
                         .onClick([navigate] { if (navigate) navigate(GalleryRoute::VisualQa); })))

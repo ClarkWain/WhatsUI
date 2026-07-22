@@ -5,6 +5,20 @@
 #include <utility>
 
 namespace whatsui::gallery {
+namespace {
+
+GalleryRoute routeForKey(std::string_view key) noexcept
+{
+    for (const auto route : {GalleryRoute::Overview, GalleryRoute::AllComponents,
+                             GalleryRoute::Controls, GalleryRoute::AddOns,
+                             GalleryRoute::VisualQa, GalleryRoute::About,
+                             GalleryRoute::ButtonDetail}) {
+        if (galleryRouteKey(route) == key) return route;
+    }
+    return GalleryRoute::Overview;
+}
+
+} // namespace
 
 GalleryRouter::GalleryRouter(wui::UiWindow& window, NavigationViewModel& navigation,
                              PageFactory pageFactory)
@@ -24,17 +38,17 @@ GalleryRouter::~GalleryRouter()
 
 void GalleryRouter::start(GalleryRoute initialRoute)
 {
-    if (routeStack_.empty()) installRoot(initialRoute);
+    if (window_->navigator().empty()) installRoot(initialRoute);
 }
 
 void GalleryRouter::navigate(GalleryRoute route)
 {
     if (route == GalleryRoute::ButtonDetail) {
-        if (routeStack_.empty()) installRoot(GalleryRoute::Overview);
+        if (window_->navigator().empty()) installRoot(GalleryRoute::Overview);
         if (currentRoute() != route) pushDetail(route);
         return;
     }
-    if (routeStack_.size() == 1 && currentRoute() == route) return;
+    if (window_->navigator().size() == 1 && currentRoute() == route) return;
     installRoot(route);
 }
 
@@ -47,7 +61,7 @@ void GalleryRouter::openComponent(const ComponentDescriptor& component)
 
 void GalleryRouter::refresh()
 {
-    if (routeStack_.empty() || window_ == nullptr) return;
+    if (window_ == nullptr || window_->navigator().empty()) return;
     const GalleryRoute route = currentRoute();
     window_->navigator().replace(std::string(galleryRouteKey(route)),
                                  [this, route] { return buildPage(route); },
@@ -56,26 +70,28 @@ void GalleryRouter::refresh()
 
 bool GalleryRouter::canGoBack() const noexcept
 {
-    return routeStack_.size() > 1 && window_ != nullptr && window_->navigator().canPop();
+    return window_ != nullptr && window_->navigator().canPop();
 }
 
 void GalleryRouter::goBack()
 {
     if (!canGoBack()) return;
+    const auto& pages = window_->navigator().pages();
+    navigation_->select(routeForKey(pages[pages.size() - 2].key));
     (void)window_->navigator().pop();
-    routeStack_.pop_back();
-    navigation_->select(routeStack_.back());
 }
 
 void GalleryRouter::shutdown() noexcept
 {
     if (window_ != nullptr) window_->navigator().clear();
-    routeStack_.clear();
+    if (navigation_ != nullptr) navigation_->select(GalleryRoute::Overview);
 }
 
 GalleryRoute GalleryRouter::currentRoute() const noexcept
 {
-    return routeStack_.empty() ? GalleryRoute::Overview : routeStack_.back();
+    return navigation_ == nullptr
+        ? GalleryRoute::Overview
+        : navigation_->currentRoute().get();
 }
 
 wui::UiWindow& GalleryRouter::window() noexcept
@@ -92,21 +108,19 @@ std::unique_ptr<wui::Node> GalleryRouter::buildPage(GalleryRoute route)
 
 void GalleryRouter::installRoot(GalleryRoute route)
 {
+    navigation_->select(route);
     window_->navigator().clear();
     window_->navigator().setRoot(std::string(galleryRouteKey(route)),
                                  [this, route] { return buildPage(route); },
                                  wui::PageRetention::DisposeOnHide);
-    routeStack_.assign(1, route);
-    navigation_->select(route);
 }
 
 void GalleryRouter::pushDetail(GalleryRoute route)
 {
+    navigation_->select(route);
     window_->navigator().push(std::string(galleryRouteKey(route)),
                               [this, route] { return buildPage(route); },
                               wui::PageRetention::DisposeOnHide);
-    routeStack_.push_back(route);
-    navigation_->select(route);
 }
 
 } // namespace whatsui::gallery

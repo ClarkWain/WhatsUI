@@ -13,14 +13,14 @@
 namespace whatsui::gallery::view::pages {
 namespace {
 
-void applyTheme(wui::UiWindow& window, wui::Theme next);
-
 void dismissTopDialog(wui::UiWindow& window)
 {
     (void)window.dismissTopDialog();
 }
 
-std::unique_ptr<wui::Dialog> buildCommandPaletteDialog(wui::UiWindow& window)
+std::unique_ptr<wui::Dialog> buildCommandPaletteDialog(
+    wui::UiWindow& window,
+    ApplyGalleryThemeHandler applyTheme)
 {
     using namespace wui::ui;
     return Dialog()
@@ -41,15 +41,15 @@ std::unique_ptr<wui::Dialog> buildCommandPaletteDialog(wui::UiWindow& window)
                             Button("Apply light demo preset")
                                 .appearance(wui::ButtonAppearance::Subtle)
                                 .icon(wui::IconName::Circle)
-                                .onClick([&window] {
-                                    applyTheme(window, wui::Theme{});
+                                .onClick([&window, applyTheme] {
+                                    if (applyTheme) applyTheme(wui::Theme{}, false);
                                     dismissTopDialog(window);
                                 }),
                             Button("Apply dark demo preset")
                                 .appearance(wui::ButtonAppearance::Subtle)
                                 .icon(wui::IconName::Square)
-                                .onClick([&window] {
-                                    applyTheme(window, wui::fluentDarkTheme());
+                                .onClick([&window, applyTheme] {
+                                    if (applyTheme) applyTheme(wui::fluentDarkTheme(), true);
                                     dismissTopDialog(window);
                                 }),
                             Button("Close")
@@ -107,12 +107,6 @@ std::unique_ptr<wui::Dialog> buildInspectorDialog(wui::UiWindow& window)
         .intoDialog();
 }
 
-void applyTheme(wui::UiWindow& window, wui::Theme next)
-{
-    wui::setTheme(next);
-    if (auto* root = window.root()) root->markDirty(wui::DirtyFlag::Style);
-}
-
 wui::Theme violetDemoPreset()
 {
     wui::Theme next;
@@ -165,7 +159,7 @@ std::unique_ptr<wui::Node> buildInspectorPreview()
         .intoNode();
 }
 
-std::unique_ptr<wui::Node> buildThemeStudio(wui::UiWindow& window)
+std::unique_ptr<wui::Node> buildThemeStudio(ApplyGalleryThemeHandler applyTheme)
 {
     using namespace wui::ui;
     return Card()
@@ -186,30 +180,46 @@ std::unique_ptr<wui::Node> buildThemeStudio(wui::UiWindow& window)
                         .wrap()
                         .color(wui::theme().colors.textMuted),
                     Row().gap(8.0f).children(
-                        Button("Light").onClick([&window] { applyTheme(window, wui::Theme{}); }),
-                        Button("Dark").onClick([&window] { applyTheme(window, wui::fluentDarkTheme()); })),
+                        Button("Light").onClick([applyTheme] {
+                            if (applyTheme) applyTheme(wui::Theme{}, false);
+                        }),
+                        Button("Dark").onClick([applyTheme] {
+                            if (applyTheme) applyTheme(wui::fluentDarkTheme(), true);
+                        })),
                     Row().gap(8.0f).children(
                         Button("Blue preset").appearance(wui::ButtonAppearance::Subtle)
-                            .onClick([&window] { applyTheme(window, wui::Theme{}); }),
+                            .onClick([applyTheme] {
+                                if (applyTheme) applyTheme(wui::Theme{}, false);
+                            }),
                         Button("Violet preset").appearance(wui::ButtonAppearance::Subtle)
-                            .onClick([&window] { applyTheme(window, violetDemoPreset()); })),
+                            .onClick([applyTheme] {
+                                if (applyTheme) applyTheme(violetDemoPreset(), false);
+                            })),
                     Row().gap(8.0f).children(
                         Button("Default radius preset").appearance(wui::ButtonAppearance::Subtle)
-                            .onClick([&window] { applyTheme(window, wui::Theme{}); }),
+                            .onClick([applyTheme] {
+                                if (applyTheme) applyTheme(wui::Theme{}, false);
+                            }),
                         Button("Soft radius preset").appearance(wui::ButtonAppearance::Subtle)
-                            .onClick([&window] { applyTheme(window, softRadiusDemoPreset()); }))))
+                            .onClick([applyTheme] {
+                                if (applyTheme) applyTheme(softRadiusDemoPreset(), false);
+                            }))))
         .intoNode();
 }
 
 } // namespace
 
-std::unique_ptr<wui::Node> buildAddonsPage(wui::UiWindow& window)
+std::unique_ptr<wui::Node> buildAddonsPage(
+    wui::UiWindow& window,
+    ApplyGalleryThemeHandler applyTheme)
 {
     using namespace wui::ui;
     view::components::ComponentCardConfig commands{
         "Command Palette", "Search and invoke common gallery actions.", "Developer tool",
         wui::IconName::Search, "Open palette", 112.0f,
-        [&window] { (void)window.showDialog(buildCommandPaletteDialog(window)); }};
+        [&window, applyTheme] {
+            (void)window.showDialog(buildCommandPaletteDialog(window, applyTheme));
+        }};
     view::components::ComponentCardConfig inspector{
         "UI Inspector", "Inspect the active retained node tree without mutating it.", "Diagnostics",
         wui::IconName::TaskList, "Inspect tree", 112.0f,
@@ -226,7 +236,7 @@ std::unique_ptr<wui::Node> buildAddonsPage(wui::UiWindow& window)
                     Row().gap(12.0f).align(wui::Alignment::Stretch).children(
                         view::components::buildComponentCard(std::move(commands), buildCommandPreview()),
                         view::components::buildComponentCard(std::move(inspector), buildInspectorPreview())),
-                    buildThemeStudio(window)))
+                    buildThemeStudio(std::move(applyTheme))))
         .intoNode();
 }
 

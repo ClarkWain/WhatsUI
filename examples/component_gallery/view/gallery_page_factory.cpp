@@ -14,6 +14,8 @@
 #include "view/pages/overview_page.h"
 #include "view/pages/visual_qa_page.h"
 #include "view_model/gallery_view_models.h"
+#include "wui/theme.h"
+#include "wui/theme_extensions.h"
 
 namespace whatsui::gallery::view {
 namespace {
@@ -40,9 +42,21 @@ std::unique_ptr<wui::Node> buildPageContent(GalleryRoute route,
     case GalleryRoute::Controls:
         return buildControlsPage([&router] { router.navigate(GalleryRoute::ButtonDetail); });
     case GalleryRoute::AddOns:
-        return buildAddonsPage(router.window());
+        return buildAddonsPage(router.window(), [&router, &viewModels](wui::Theme theme,
+                                                                       bool dark) {
+            viewModels.visualQa().selectTheme(
+                dark ? ThemePreview::Dark : ThemePreview::Light);
+            wui::setTheme(theme);
+            router.refresh();
+        });
     case GalleryRoute::VisualQa:
-        return buildVisualQaPage(viewModels.visualQa(), router.window());
+        return buildVisualQaPage(
+            viewModels.visualQa(), router.window(), [&router](ThemePreview theme) {
+                wui::setTheme(theme == ThemePreview::Dark
+                    ? wui::fluentDarkTheme()
+                    : wui::Theme{});
+                router.refresh();
+            });
     case GalleryRoute::About:
         return buildAboutPage([](const std::string& url) {
             (void)openExternalUrl(url);
@@ -62,7 +76,8 @@ std::unique_ptr<wui::Node> buildGalleryPage(GalleryRoute route,
                                             GalleryViewModels& viewModels,
                                             GalleryRouter& router)
 {
-    return buildAppShell(route, buildPageContent(route, viewModels, router),
+    return buildAppShell(viewModels.navigation().currentRoute().get(),
+                         buildPageContent(route, viewModels, router),
                          [&router](GalleryRoute target) { router.navigate(target); });
 }
 

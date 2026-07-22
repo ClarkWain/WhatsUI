@@ -90,21 +90,25 @@ std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
     }};
 
     auto categoryRow = std::make_unique<wui::Row>();
-    auto categoryButtons = std::make_shared<std::vector<std::pair<ComponentCategory, wui::Button*>>>();
+    auto categoryButtons = std::make_shared<
+        std::vector<std::pair<ComponentCategory, wui::ToggleButton*>>>();
     categoryRow->setGap(6.0f);
     categoryRow->setAlign(wui::Alignment::Center);
     for (const auto category : categories) {
         const bool selected = viewModel.selectedCategory().get() == category;
-        auto button = std::make_unique<wui::Button>(std::string(componentCategoryName(category)));
-        button->setAppearance(selected ? wui::ButtonAppearance::Primary : wui::ButtonAppearance::Subtle);
+        auto button = std::make_unique<wui::ToggleButton>(
+            std::string(componentCategoryName(category)), selected);
+        button->setAppearance(wui::ButtonAppearance::Subtle);
         auto* raw = button.get();
         categoryButtons->push_back({category, raw});
-        button->onClick([&viewModel, category, categoryButtons] {
+        button->onChange([&viewModel, category, categoryButtons, raw](bool checked) {
+            if (!checked) {
+                raw->setChecked(true);
+                return;
+            }
             viewModel.selectCategory(category);
             for (const auto& [value, item] : *categoryButtons) {
-                item->setAppearance(value == category
-                    ? wui::ButtonAppearance::Primary
-                    : wui::ButtonAppearance::Subtle);
+                item->setChecked(value == category);
             }
         });
         categoryRow->appendChild(std::move(button));

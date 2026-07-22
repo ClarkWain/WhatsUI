@@ -24,6 +24,7 @@ std::unique_ptr<wui::Node> buildTextBlock(PageHeaderConfig config)
             .intoNode());
     }
     text->appendChild(Text(std::move(config.title))
+        .role(wui::TextRole::Heading)
         .size(28.0f)
         .lineHeight(36.0f)
         .weight(600)
