@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "responsive_layouts.h"
 #include "wui/theme.h"
 #include "wui/ui.h"
 
@@ -12,9 +13,11 @@ std::unique_ptr<wui::Node> buildPreviewHeading(const PreviewSurfaceConfig& confi
 {
     using namespace wui::ui;
     const auto& colors = wui::theme().colors;
-    auto heading = std::make_unique<wui::Row>();
-    heading->setGap(12.0f);
-    heading->setAlign(wui::Alignment::Center);
+    // A status badge must never compete with the explanatory copy for a
+    // 267-DIP viewport.  The reusable responsive row remains a normal Fluent
+    // heading on desktop and stacks its semantic pieces in compact layouts.
+    auto heading = std::make_unique<ResponsiveRow>();
+    heading->gap(12.0f).align(wui::Alignment::Center);
     heading->appendChild(Column()
         .gap(2.0f)
         .children(
