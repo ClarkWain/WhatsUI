@@ -38,15 +38,18 @@ std::unique_ptr<wui::Node> buildCheckboxSection()
 {
     using namespace wui::ui;
     return view::components::buildPreviewSurface(
-        {"Checkbox", "Binary and mixed selection", "Interactive", 176.0f, true},
-        Column()
-            .gap(12.0f)
-            .align(wui::Alignment::Start)
+        {"Checkbox", "Binary and mixed selection", "Interactive", 216.0f, true},
+        Box()
+            .width(220.0f)
             .children(
-                Checkbox("Unchecked option", false),
-                Checkbox("Checked option", true),
-                Checkbox("Mixed selection").mixed(),
-                Checkbox("Disabled option", false).enabled(false))
+                Column()
+                    .gap(12.0f)
+                    .align(wui::Alignment::Stretch)
+                    .children(
+                        Checkbox("Unchecked option", false),
+                        Checkbox("Checked option", true),
+                        Checkbox("Mixed selection").mixed(),
+                        Checkbox("Disabled option", false).enabled(false)))
             .intoNode());
 }
 
