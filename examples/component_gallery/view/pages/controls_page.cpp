@@ -1,9 +1,11 @@
 #include "controls_page.h"
 
 #include <utility>
+#include <vector>
 
 #include "view/components/page_header.h"
 #include "view/components/preview_surface.h"
+#include "view/components/responsive_action_grid.h"
 #include "wui/theme.h"
 #include "wui/ui.h"
 
@@ -14,45 +16,28 @@ std::unique_ptr<wui::Node> buildButtonSection(const std::function<void()>& onOpe
 {
     using namespace wui::ui;
     return view::components::buildPreviewSurface(
-        {"Button", "Appearance and intent", "Interactive", 176.0f, true},
-        Column()
-            .gap(14.0f)
-            .align(wui::Alignment::Center)
-            .children(
-                Row()
-                    .gap(8.0f)
-                    .children(
-                        Button("Primary").appearance(wui::ButtonAppearance::Primary),
-                        Button("Secondary").appearance(wui::ButtonAppearance::Secondary),
-                        Button("Subtle").appearance(wui::ButtonAppearance::Subtle),
-                        Button("Danger").appearance(wui::ButtonAppearance::Danger)),
-                Button("Open Button detail")
-                    .appearance(wui::ButtonAppearance::Transparent)
-                    .icon(wui::IconName::ChevronRight)
-                    .iconPosition(wui::ButtonIconPosition::After)
-                    .onClick(onOpenDetail))
-            .intoNode());
+        {"Button", "Appearance and intent", "Interactive", 224.0f, true},
+        Column().gap(14.0f).align(wui::Alignment::Center).children(
+            std::make_unique<view::components::ResponsiveActionGrid>(
+                std::vector<view::components::ResponsiveActionGrid::ItemFactory>{
+                    [] { return Button("Primary").appearance(wui::ButtonAppearance::Primary).intoNode(); },
+                    [] { return Button("Secondary").appearance(wui::ButtonAppearance::Secondary).intoNode(); },
+                    [] { return Button("Subtle").appearance(wui::ButtonAppearance::Subtle).intoNode(); },
+                    [] { return Button("Danger").appearance(wui::ButtonAppearance::Danger).intoNode(); },
+                }, 520.0f, 0.0f, 200.0f),
+            Button("Open Button detail").appearance(wui::ButtonAppearance::Transparent)
+                .icon(wui::IconName::ChevronRight).iconPosition(wui::ButtonIconPosition::After)
+                .onClick(onOpenDetail)).intoNode());
 }
-
 std::unique_ptr<wui::Node> buildCheckboxSection()
 {
     using namespace wui::ui;
     return view::components::buildPreviewSurface(
         {"Checkbox", "Binary and mixed selection", "Interactive", 216.0f, true},
-        Box()
-            .width(220.0f)
-            .children(
-                Column()
-                    .gap(12.0f)
-                    .align(wui::Alignment::Stretch)
-                    .children(
-                        Checkbox("Unchecked option", false),
-                        Checkbox("Checked option", true),
-                        Checkbox("Mixed selection").mixed(),
-                        Checkbox("Disabled option", false).enabled(false)))
-            .intoNode());
+        Column().gap(12.0f).align(wui::Alignment::Stretch).children(
+            Checkbox("Unchecked", false), Checkbox("Checked option", true),
+            Checkbox("Mixed selection").mixed(), Checkbox("Disabled option", false).enabled(false)).intoNode());
 }
-
 std::unique_ptr<wui::Node> buildToggleSection()
 {
     using namespace wui::ui;

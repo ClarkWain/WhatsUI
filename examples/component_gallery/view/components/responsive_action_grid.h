@@ -19,10 +19,12 @@ public:
 
     explicit ResponsiveActionGrid(std::vector<ItemFactory> factories,
                                   float compactBreakpoint = 520.0f,
-                                  float singleColumnBreakpoint = 210.0f)
+                                  float singleColumnBreakpoint = 210.0f,
+                                  float preferredWidth = 0.0f)
         : factories_(std::move(factories))
         , compactBreakpoint_(compactBreakpoint)
         , singleColumnBreakpoint_(singleColumnBreakpoint)
+        , preferredWidth_(preferredWidth)
     {
     }
 
@@ -33,8 +35,10 @@ public:
         const auto columns = columnsFor(constraints.maxWidth);
         const auto rows = (factories_.size() + columns - 1) / columns;
         const float height = rows == 0 ? 0.0f : rows * kItemHeight + (rows - 1) * kGap;
-        const float width = columns == 4 ? std::min(constraints.maxWidth, 440.0f)
-                                         : constraints.maxWidth;
+        const float width = preferredWidth_ > 0.0f
+            ? std::min(constraints.maxWidth, preferredWidth_)
+            : columns == 4 ? std::min(constraints.maxWidth, 440.0f)
+                           : constraints.maxWidth;
         return constraints.clamp({width, height});
     }
 
@@ -102,6 +106,7 @@ private:
     std::vector<ItemFactory> factories_;
     float compactBreakpoint_{520.0f};
     float singleColumnBreakpoint_{210.0f};
+    float preferredWidth_{0.0f};
     std::size_t contentColumns_{0};
 };
 

@@ -238,6 +238,18 @@ void collectToggleButtons(wui::Node& node, std::vector<wui::ToggleButton*>& butt
     }
 }
 
+void collectRadios(wui::Node& node, std::vector<wui::Radio*>& radios)
+{
+    if (auto* radio = dynamic_cast<wui::Radio*>(&node)) {
+        radios.push_back(radio);
+    }
+    if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
+        for (const auto& child : container->children()) {
+            collectRadios(*child, radios);
+        }
+    }
+}
+
 const wui::AccessibilitySnapshotEntry* findAccessibleEntry(
     const wui::AccessibilitySnapshot& snapshot,
     wui::AccessibilityRole role,
@@ -461,15 +473,19 @@ void testPageHeadingProjectsAccessibleSemantics()
            "Gallery page title must project a Heading accessibility role");
 }
 
-void testCategoryTogglesExposeCheckedAndMutuallyExclusiveAccessibility()
+void testCategorySelectionAdaptsBetweenDesktopAndCompactAccessibility()
 {
     ComponentCatalog catalog;
     GalleryViewModel viewModel(catalog);
     auto page = whatsui::gallery::view::pages::buildAllComponentsPage(viewModel, {});
+
+    // The desktop catalog keeps dense ToggleButtons, preserving the existing
+    // quick filter affordance at usable page widths.
+    page->layout({0.0f, 0.0f, 800.0f, 640.0f});
     std::vector<wui::ToggleButton*> toggles;
     collectToggleButtons(*page, toggles);
     expect(toggles.size() == 10,
-           "All Components must expose one ToggleButton per visible category");
+           "Desktop All Components must expose one ToggleButton per category");
 
     auto findToggle = [&](std::string_view label) -> wui::ToggleButton* {
         for (auto* toggle : toggles) {
@@ -514,6 +530,42 @@ void testCategoryTogglesExposeCheckedAndMutuallyExclusiveAccessibility()
     expect(viewModel.selectedCategory().get() == ComponentCategory::Controls
                && controls->isChecked(),
            "A repeated Toggle action must not leave the category group unselected");
+
+    // A 267-DIP page cannot fit ten labelled toggles. The same catalog must
+    // instead expose real radio buttons: a single-column, keyboard and UIA
+    // reachable exclusive selection control rather than clipped content.
+    page->layout({0.0f, 0.0f, 267.0f, 640.0f});
+    std::vector<wui::Radio*> radios;
+    collectRadios(*page, radios);
+    expect(radios.size() == 10,
+           "Compact All Components must expose one RadioButton per category");
+    auto findRadio = [&](std::string_view label) -> wui::Radio* {
+        for (auto* radio : radios) {
+            if (radio->label() == label) return radio;
+        }
+        return nullptr;
+    };
+    auto* compactAll = findRadio("All");
+    auto* compactControls = findRadio("Controls");
+    expect(compactAll != nullptr && compactControls != nullptr
+               && !compactAll->isSelected() && compactControls->isSelected(),
+           "Compact category radios must preserve the ViewModel selection after resize");
+
+    snapshot = wui::snapshotAccessibilityTree(*page);
+    const auto* compactControlsEntry = findAccessibleEntry(
+        snapshot, wui::AccessibilityRole::RadioButton, "Controls");
+    expect(compactControlsEntry != nullptr
+               && compactControlsEntry->properties.checked == true
+               && compactControlsEntry->properties.actions.toggle,
+           "Compact category filters must expose checked RadioButton Toggle semantics");
+
+    expect(compactAll->performAccessibilityAction(
+               wui::AccessibilityActionKind::Toggle, {})
+               == wui::AccessibilityActionStatus::Succeeded,
+           "A compact category must remain selectable through accessibility");
+    expect(viewModel.selectedCategory().get() == ComponentCategory::All
+               && compactAll->isSelected() && !compactControls->isSelected(),
+           "Compact radio selection must remain mutually exclusive and update the ViewModel");
 }
 
 void testResponsiveShellKeepsNarrowContentUsableAndNavigationReachable()
@@ -665,7 +717,7 @@ int main()
         testUnknownRailKeyDoesNotCorruptNavigationState();
         testProductionRouterOwnsNavigationStateAndHistory();
         testPageHeadingProjectsAccessibleSemantics();
-        testCategoryTogglesExposeCheckedAndMutuallyExclusiveAccessibility();
+        testCategorySelectionAdaptsBetweenDesktopAndCompactAccessibility();
         testResponsiveShellKeepsNarrowContentUsableAndNavigationReachable();
         testResponsiveShellRetainsDesktopRailAtAndAboveBreakpoint();
         testResponsiveShellSwitchesModesWhenOneWindowCrossesBreakpoint();

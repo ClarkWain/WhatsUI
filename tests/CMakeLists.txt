@@ -475,6 +475,29 @@ if(TARGET WhatsUIComponentGalleryApp)
                 TIMEOUT 30
         )
     endforeach()
+    # The desktop captures above guard the general gallery. These routes own
+    # dense choice/action subtrees, so capture them at the 267-DIP compact
+    # viewport as a regression gate against horizontal clipping.
+    foreach(whatsui_gallery_route IN ITEMS
+            all-components
+            controls
+            button-detail)
+        string(REPLACE "-" "_" whatsui_gallery_test_suffix
+            "${whatsui_gallery_route}")
+        add_test(
+            NAME "whatsui_component_gallery_compact_capture_${whatsui_gallery_test_suffix}"
+            COMMAND WhatsUIComponentGalleryApp
+                --route "${whatsui_gallery_route}"
+                --size 267x640
+                "${WHATSUI_COMPONENT_GALLERY_CAPTURE_DIR}/compact-${whatsui_gallery_route}.ppm"
+        )
+        set_tests_properties(
+            "whatsui_component_gallery_compact_capture_${whatsui_gallery_test_suffix}"
+            PROPERTIES
+                LABELS "component-gallery;capture;compact;smoke"
+                TIMEOUT 30
+        )
+    endforeach()
 endif()
 
 add_executable(WhatsUIFluentSelectionControlsTests fluent_selection_controls_tests.cpp)
