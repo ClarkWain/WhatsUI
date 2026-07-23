@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdio>
 #include <memory>
 #include <stdexcept>
@@ -8,6 +9,7 @@
 #include "application/gallery_router.h"
 #include "domain/component_catalog.h"
 #include "domain/gallery_route.h"
+#include "view/app_shell_view.h"
 #include "view/components/navigation_rail.h"
 #include "view/components/page_header.h"
 #include "view/pages/all_components_page.h"
@@ -56,6 +58,16 @@ private:
     GalleryRoute route_;
 };
 
+class ResponsivePageProbe final : public wui::Node {
+public:
+    [[nodiscard]] wui::SizeF measure(const wui::Constraints& constraints) const override
+    {
+        return constraints.clamp({1.0f, 1.0f});
+    }
+
+    void paint(wui::PaintContext&) override {}
+};
+
 class FakeSurface final : public wui::RenderSurface {
 public:
     [[nodiscard]] wui::CanvasBackend backend() const noexcept override
@@ -96,10 +108,22 @@ public:
 
 class FakeWindow final : public wui::PlatformWindow {
 public:
+    explicit FakeWindow(wui::SizeF logicalSize = {320.0f, 180.0f}, float scale = 2.0f)
+        : metrics_{{logicalSize.width, logicalSize.height},
+                   {logicalSize.width * scale, logicalSize.height * scale}, scale}
+    {
+    }
+
     [[nodiscard]] wui::WindowId id() const noexcept override { return 1; }
     [[nodiscard]] wui::WindowMetrics metrics() const noexcept override
     {
-        return {{320.0f, 180.0f}, {640.0f, 360.0f}, 2.0f};
+        return metrics_;
+    }
+    void setLogicalSize(wui::SizeF logicalSize) noexcept
+    {
+        metrics_.logicalSize = logicalSize;
+        metrics_.framebufferSize = {logicalSize.width * metrics_.scaleFactor,
+                                    logicalSize.height * metrics_.scaleFactor};
     }
     void show() override { open_ = true; }
     void close() override { open_ = false; }
@@ -118,6 +142,7 @@ public:
 private:
     bool open_{true};
     std::string title_;
+    wui::WindowMetrics metrics_;
     FakeSurface surface_;
     FakeClipboard clipboard_;
     FakeCursor cursor_;
@@ -224,6 +249,28 @@ const wui::AccessibilitySnapshotEntry* findAccessibleEntry(
         }
     }
     return nullptr;
+}
+
+const wui::AccessibilitySnapshotEntry* findAccessibleEntryById(
+    const wui::AccessibilitySnapshot& snapshot,
+    std::string_view automationId)
+{
+    for (const auto& entry : snapshot) {
+        if (entry.properties.automationId == automationId) return &entry;
+    }
+    return nullptr;
+}
+
+wui::AccessibilityActionRequest invokeRequest(
+    const wui::AccessibilitySnapshotEntry& entry)
+{
+    wui::AccessibilityActionRequest request;
+    request.kind = wui::AccessibilityActionKind::Invoke;
+    request.path = entry.path;
+    request.expectedRole = entry.properties.role;
+    request.automationId = entry.properties.automationId;
+    request.expectedLabel = entry.properties.label;
+    return request;
 }
 
 void expectNavigatorMatches(const NavigationViewModel& viewModel,
@@ -469,6 +516,131 @@ void testCategoryTogglesExposeCheckedAndMutuallyExclusiveAccessibility()
            "A repeated Toggle action must not leave the category group unselected");
 }
 
+void testResponsiveShellKeepsNarrowContentUsableAndNavigationReachable()
+{
+    auto platform = std::make_unique<FakeWindow>(wui::SizeF{680.0f, 520.0f});
+    wui::UiWindow window(std::move(platform));
+    auto page = std::make_unique<ResponsivePageProbe>();
+    auto* const pageProbe = page.get();
+    GalleryRoute selectedRoute = GalleryRoute::Overview;
+    window.setRoot(whatsui::gallery::view::buildAppShell(
+        window, GalleryRoute::Overview, std::move(page),
+        [&selectedRoute](GalleryRoute route) { selectedRoute = route; }));
+    window.update();
+    window.layout();
+
+    expect(pageProbe->bounds().x == 0.0f && pageProbe->bounds().y == 48.0f
+               && pageProbe->bounds().width == 680.0f
+               && pageProbe->bounds().height == 472.0f,
+           "A sub-720 DIP Gallery must reserve a compact top bar, not consume content width with a rail");
+
+    auto snapshot = window.accessibilitySnapshot();
+    const auto* const openNavigation = findAccessibleEntryById(
+        snapshot, "gallery.navigation.open");
+    expect(openNavigation != nullptr
+               && openNavigation->properties.role == wui::AccessibilityRole::Button
+               && openNavigation->properties.label == "Open navigation"
+               && openNavigation->properties.actions.invoke,
+           "The compact Gallery shell must expose an invokable Open navigation control");
+    expect(window.performAccessibilityAction(invokeRequest(*openNavigation))
+               == wui::AccessibilityActionStatus::Succeeded,
+           "Open navigation must work through the window accessibility boundary");
+
+    window.update();
+    window.layout();
+    snapshot = window.accessibilitySnapshot();
+    constexpr std::array<std::string_view, 6> compactDestinationIds{
+        "gallery.navigation.overview", "gallery.navigation.all-components",
+        "gallery.navigation.controls", "gallery.navigation.add-ons",
+        "gallery.navigation.visual-qa", "gallery.navigation.about"};
+    for (const auto id : compactDestinationIds) {
+        const auto* const destination = findAccessibleEntryById(snapshot, id);
+        expect(destination != nullptr
+                   && destination->properties.role == wui::AccessibilityRole::Button
+                   && destination->properties.actions.invoke,
+               "Every Gallery route must remain reachable through the compact navigation Drawer");
+    }
+
+    const auto* const controls = findAccessibleEntryById(
+        snapshot, "gallery.navigation.controls");
+    expect(controls != nullptr
+               && window.performAccessibilityAction(invokeRequest(*controls))
+                      == wui::AccessibilityActionStatus::Succeeded
+               && selectedRoute == GalleryRoute::Controls,
+           "A compact navigation destination must invoke the same Gallery route callback as the rail");
+}
+
+void testResponsiveShellRetainsDesktopRailAtAndAboveBreakpoint()
+{
+    auto platform = std::make_unique<FakeWindow>(wui::SizeF{720.0f, 520.0f});
+    wui::UiWindow window(std::move(platform));
+    auto page = std::make_unique<ResponsivePageProbe>();
+    auto* const pageProbe = page.get();
+    GalleryRoute selectedRoute = GalleryRoute::Overview;
+    window.setRoot(whatsui::gallery::view::buildAppShell(
+        window, GalleryRoute::Overview, std::move(page),
+        [&selectedRoute](GalleryRoute route) { selectedRoute = route; }));
+    window.update();
+    window.layout();
+
+    expect(pageProbe->bounds().x == 232.0f && pageProbe->bounds().y == 0.0f
+               && pageProbe->bounds().width == 488.0f
+               && pageProbe->bounds().height == 520.0f,
+           "A 720 DIP Gallery must retain the desktop rail and allocate the remaining width to content");
+
+    const auto snapshot = window.accessibilitySnapshot();
+    expect(findAccessibleEntryById(snapshot, "gallery.navigation.open") == nullptr,
+           "Desktop Gallery navigation must not render the compact Drawer trigger");
+    for (const GalleryRoute route : {GalleryRoute::Overview, GalleryRoute::AllComponents,
+                                     GalleryRoute::Controls, GalleryRoute::AddOns,
+                                     GalleryRoute::VisualQa, GalleryRoute::About}) {
+        const auto* const destination = findAccessibleEntry(
+            snapshot, wui::AccessibilityRole::Button, galleryRouteTitle(route));
+        expect(destination != nullptr && destination->properties.actions.invoke,
+               "Desktop Gallery rail must retain every directly invokable route");
+    }
+    const auto* const about = findAccessibleEntry(
+        snapshot, wui::AccessibilityRole::Button, "About");
+    expect(about != nullptr
+               && window.performAccessibilityAction(invokeRequest(*about))
+                      == wui::AccessibilityActionStatus::Succeeded
+               && selectedRoute == GalleryRoute::About,
+           "Desktop rail destinations must keep their original route callbacks");
+}
+
+void testResponsiveShellSwitchesModesWhenOneWindowCrossesBreakpoint()
+{
+    auto platform = std::make_unique<FakeWindow>(wui::SizeF{720.0f, 520.0f});
+    auto* const platformProbe = platform.get();
+    wui::UiWindow window(std::move(platform));
+    auto page = std::make_unique<ResponsivePageProbe>();
+    auto* const pageProbe = page.get();
+    window.setRoot(whatsui::gallery::view::buildAppShell(
+        window, GalleryRoute::Overview, std::move(page)));
+    window.update();
+    window.layout();
+    expect(pageProbe->bounds().x == 232.0f && pageProbe->bounds().width == 488.0f,
+           "The resize fixture must begin in desktop rail mode at 720 DIP");
+
+    platformProbe->setLogicalSize({680.0f, 520.0f});
+    window.layout();
+    expect(pageProbe->bounds().x == 0.0f && pageProbe->bounds().y == 48.0f
+               && pageProbe->bounds().width == 680.0f,
+           "Resizing below 720 DIP must replace the rail with compact navigation in the same UiWindow");
+    expect(findAccessibleEntryById(window.accessibilitySnapshot(), "gallery.navigation.open")
+               != nullptr,
+           "The compact navigation trigger must appear after a live narrow resize");
+
+    platformProbe->setLogicalSize({720.0f, 520.0f});
+    window.layout();
+    expect(pageProbe->bounds().x == 232.0f && pageProbe->bounds().y == 0.0f
+               && pageProbe->bounds().width == 488.0f,
+           "Resizing back to 720 DIP must restore the desktop rail without rebuilding the page");
+    expect(findAccessibleEntryById(window.accessibilitySnapshot(), "gallery.navigation.open")
+               == nullptr,
+           "The compact navigation trigger must not remain in the desktop accessibility tree after resize");
+}
+
 void disableSystemFailureDialogs()
 {
 #ifdef _MSC_VER
@@ -494,6 +666,9 @@ int main()
         testProductionRouterOwnsNavigationStateAndHistory();
         testPageHeadingProjectsAccessibleSemantics();
         testCategoryTogglesExposeCheckedAndMutuallyExclusiveAccessibility();
+        testResponsiveShellKeepsNarrowContentUsableAndNavigationReachable();
+        testResponsiveShellRetainsDesktopRailAtAndAboveBreakpoint();
+        testResponsiveShellSwitchesModesWhenOneWindowCrossesBreakpoint();
         std::puts("Component Gallery navigation tests passed");
         return 0;
     } catch (const std::exception& error) {
