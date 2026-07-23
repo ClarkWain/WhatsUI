@@ -80,21 +80,29 @@ std::unique_ptr<wui::Node> buildComponent(
 std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
 {
     using namespace wui::ui;
-    constexpr std::array<ComponentCategory, 6> categories{{
+    constexpr std::array<ComponentCategory, 10> categories{{
         ComponentCategory::All,
         ComponentCategory::Controls,
         ComponentCategory::Inputs,
         ComponentCategory::Feedback,
         ComponentCategory::Navigation,
         ComponentCategory::DataDisplay,
+        ComponentCategory::Layout,
+        ComponentCategory::Identity,
+        ComponentCategory::DateTime,
+        ComponentCategory::Overlays,
     }};
 
-    auto categoryRow = std::make_unique<wui::Row>();
+    auto primaryCategoryRow = std::make_unique<wui::Row>();
+    auto secondaryCategoryRow = std::make_unique<wui::Row>();
     auto categoryButtons = std::make_shared<
         std::vector<std::pair<ComponentCategory, wui::ToggleButton*>>>();
-    categoryRow->setGap(6.0f);
-    categoryRow->setAlign(wui::Alignment::Center);
-    for (const auto category : categories) {
+    for (auto* row : {primaryCategoryRow.get(), secondaryCategoryRow.get()}) {
+        row->setGap(6.0f);
+        row->setAlign(wui::Alignment::Center);
+    }
+    for (std::size_t index = 0; index < categories.size(); ++index) {
+        const auto category = categories[index];
         const bool selected = viewModel.selectedCategory().get() == category;
         auto button = std::make_unique<wui::ToggleButton>(
             std::string(componentCategoryName(category)), selected);
@@ -111,7 +119,8 @@ std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
                 item->setChecked(value == category);
             }
         });
-        categoryRow->appendChild(std::move(button));
+        auto& row = index < 5 ? primaryCategoryRow : secondaryCategoryRow;
+        row->appendChild(std::move(button));
     }
 
     return Column()
@@ -123,7 +132,12 @@ std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
                 .onChange([&viewModel](const std::string& value) {
                     viewModel.setSearchQuery(value);
                 }),
-            std::move(categoryRow))
+            Column()
+                .gap(6.0f)
+                .align(wui::Alignment::Stretch)
+                .children(
+                    std::move(primaryCategoryRow),
+                    std::move(secondaryCategoryRow)))
         .intoNode();
 }
 

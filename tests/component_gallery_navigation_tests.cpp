@@ -421,7 +421,7 @@ void testCategoryTogglesExposeCheckedAndMutuallyExclusiveAccessibility()
     auto page = whatsui::gallery::view::pages::buildAllComponentsPage(viewModel, {});
     std::vector<wui::ToggleButton*> toggles;
     collectToggleButtons(*page, toggles);
-    expect(toggles.size() == 6,
+    expect(toggles.size() == 10,
            "All Components must expose one ToggleButton per visible category");
 
     auto findToggle = [&](std::string_view label) -> wui::ToggleButton* {
@@ -432,6 +432,11 @@ void testCategoryTogglesExposeCheckedAndMutuallyExclusiveAccessibility()
     };
     auto* all = findToggle("All");
     auto* controls = findToggle("Controls");
+    expect(findToggle("Layout") != nullptr
+               && findToggle("Identity") != nullptr
+               && findToggle("Date and time") != nullptr
+               && findToggle("Overlays") != nullptr,
+           "All Components must expose filters for every catalog category");
     expect(all != nullptr && controls != nullptr && all->isChecked()
                && !controls->isChecked(),
            "Category toggles must begin with exactly All selected");

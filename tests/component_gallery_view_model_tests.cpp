@@ -55,6 +55,12 @@ ComponentCatalog testCatalog()
                                    {"path"}));
     components.push_back(component("table", "Table", ComponentCategory::DataDisplay,
                                    {"grid"}));
+    components.push_back(component("divider", "Divider", ComponentCategory::Layout,
+                                   {"separator"}));
+    components.push_back(component("avatar", "Avatar", ComponentCategory::Identity,
+                                   {"person"}));
+    components.push_back(component("calendar", "Calendar", ComponentCategory::DateTime,
+                                   {"date"}));
     components.push_back(component("dialog", "Dialog", ComponentCategory::Overlays,
                                    {"modal"}));
     return ComponentCatalog(std::move(components));
@@ -136,6 +142,19 @@ void testGalleryFiltersByCategoryNameAndKeyword()
     expect(viewModel.resultCount().get() == 1
                && viewModel.visibleComponents().get().front().id == "checkbox",
            "Search and category filters must compose");
+
+    viewModel.selectCategory(ComponentCategory::All);
+    viewModel.setSearchQuery("");
+
+    for (const auto category : {ComponentCategory::Layout,
+                                ComponentCategory::Identity,
+                                ComponentCategory::DateTime,
+                                ComponentCategory::Overlays}) {
+        viewModel.selectCategory(category);
+        expect(viewModel.resultCount().get() == 1
+                   && viewModel.visibleComponents().get().front().category == category,
+               "Every catalog category must be selectable through the ViewModel");
+    }
 
     viewModel.selectCategory(ComponentCategory::All);
     viewModel.setSearchQuery("NoTiFiCaTiOn");
