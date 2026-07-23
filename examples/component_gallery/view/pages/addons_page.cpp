@@ -6,9 +6,12 @@
 
 #include "view/components/component_card.h"
 #include "view/components/page_header.h"
+#include "view/components/responsive_layouts.h"
 #include "wui/theme_extensions.h"
 #include "wui/ui.h"
 #include "wui/ui_inspector.h"
+
+using namespace wui::ui;
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -20,47 +23,49 @@ void dismissTopDialog(wui::UiWindow& window)
 
 std::unique_ptr<wui::Dialog> buildCommandPaletteDialog(
     wui::UiWindow& window,
-    ApplyGalleryThemeHandler applyTheme)
+    ApplyGalleryThemeHandler applyTheme
+)
 {
-    using namespace wui::ui;
     return Dialog()
         .maxWidth(560.0f)
         .dismissOnBackdrop()
         .content(
             Box()
-                .width(520.0f)
-                .padding(20.0f)
+            .width(520.0f)
+            .padding(20.0f)
+            .children(
+                Column()
+                .gap(12.0f)
+                .align(wui::Alignment::Stretch)
                 .children(
-                    Column()
-                        .gap(12.0f)
-                        .align(wui::Alignment::Stretch)
-                        .children(
-                            Text("Sample command palette").size(18.0f).weight(600),
-                            Text("Fixed page-local actions; filtering and command registration are outside this demo.")
-                                .size(11.0f).wrap().color(wui::theme().colors.textMuted),
-                            Button("Apply light demo preset")
-                                .appearance(wui::ButtonAppearance::Subtle)
-                                .icon(wui::IconName::Circle)
-                                .onClick([&window, applyTheme] {
-                                    if (applyTheme) applyTheme(wui::Theme{}, false);
-                                    dismissTopDialog(window);
-                                }),
-                            Button("Apply dark demo preset")
-                                .appearance(wui::ButtonAppearance::Subtle)
-                                .icon(wui::IconName::Square)
-                                .onClick([&window, applyTheme] {
-                                    if (applyTheme) applyTheme(wui::fluentDarkTheme(), true);
-                                    dismissTopDialog(window);
-                                }),
-                            Button("Close")
-                                .appearance(wui::ButtonAppearance::Secondary)
-                                .onClick([&window] { dismissTopDialog(window); }))))
+                    Text("Sample command palette").size(18.0f).weight(600),
+                    Text("Fixed page-local actions; filtering and command registration are outside this demo.")
+                        .size(11.0f).wrap().color(wui::theme().colors.textMuted),
+                    Button("Apply light demo preset")
+                        .appearance(wui::ButtonAppearance::Subtle)
+                        .icon(wui::IconName::Circle)
+                        .onClick([&window, applyTheme] {
+                            if (applyTheme) applyTheme(wui::Theme{}, false);
+                            dismissTopDialog(window);
+                        }),
+                    Button("Apply dark demo preset")
+                        .appearance(wui::ButtonAppearance::Subtle)
+                        .icon(wui::IconName::Square)
+                        .onClick([&window, applyTheme] {
+                            if (applyTheme) applyTheme(wui::fluentDarkTheme(), true);
+                            dismissTopDialog(window);
+                        }),
+                    Button("Close")
+                        .appearance(wui::ButtonAppearance::Secondary)
+                        .onClick([&window] { dismissTopDialog(window); })
+                )
+            )
+        )
         .intoDialog();
 }
 
 std::unique_ptr<wui::Dialog> buildInspectorDialog(wui::UiWindow& window)
 {
-    using namespace wui::ui;
     auto entries = std::make_unique<wui::Column>();
     entries->setGap(6.0f);
     entries->setAlign(wui::Alignment::Stretch);
@@ -79,7 +84,8 @@ std::unique_ptr<wui::Dialog> buildInspectorDialog(wui::UiWindow& window)
                     Spacer().flex(1.0f),
                     Text(std::to_string(entry.childCount) + " children")
                         .size(10.0f)
-                        .color(wui::theme().colors.textMuted))
+                        .color(wui::theme().colors.textMuted)
+                )
                 .intoNode());
         }
     }
@@ -89,21 +95,24 @@ std::unique_ptr<wui::Dialog> buildInspectorDialog(wui::UiWindow& window)
         .dismissOnBackdrop()
         .content(
             Box()
-                .width(580.0f)
-                .padding(20.0f)
+            .width(580.0f)
+            .padding(20.0f)
+            .children(
+                Column()
+                .gap(14.0f)
+                .align(wui::Alignment::Stretch)
                 .children(
-                    Column()
-                        .gap(14.0f)
-                        .align(wui::Alignment::Stretch)
-                        .children(
-                            Text("Live UI inspector").size(18.0f).weight(600),
-                            Text("Read-only snapshot of the active WhatsUI node tree.")
-                                .size(12.0f)
-                                .color(wui::theme().colors.textMuted),
-                            std::move(entries),
-                            Button("Close")
-                                .appearance(wui::ButtonAppearance::Secondary)
-                                .onClick([&window] { dismissTopDialog(window); }))))
+                    Text("Live UI inspector").size(18.0f).weight(600),
+                    Text("Read-only snapshot of the active WhatsUI node tree.")
+                        .size(12.0f)
+                        .color(wui::theme().colors.textMuted),
+                    std::move(entries),
+                    Button("Close")
+                        .appearance(wui::ButtonAppearance::Secondary)
+                        .onClick([&window] { dismissTopDialog(window); })
+                )
+            )
+        )
         .intoDialog();
 }
 
@@ -140,7 +149,6 @@ wui::Theme softRadiusDemoPreset()
 
 std::unique_ptr<wui::Node> buildCommandPreview()
 {
-    using namespace wui::ui;
     return Row()
         .gap(8.0f)
         .align(wui::Alignment::Center)
@@ -150,60 +158,75 @@ std::unique_ptr<wui::Node> buildCommandPreview()
 
 std::unique_ptr<wui::Node> buildInspectorPreview()
 {
-    using namespace wui::ui;
     return Column()
         .gap(6.0f)
         .children(
             Row().gap(8.0f).children(Badge("0"), Text("UiRoot").size(11.0f)),
-            Row().gap(8.0f).children(Badge("1"), Text("ScrollView").size(11.0f)))
+            Row().gap(8.0f).children(Badge("1"), Text("ScrollView").size(11.0f))
+        )
         .intoNode();
 }
 
 std::unique_ptr<wui::Node> buildThemeStudio(ApplyGalleryThemeHandler applyTheme)
 {
-    using namespace wui::ui;
     return Card()
         .appearance(wui::CardAppearance::Outline)
         .children(
             Column()
-                .gap(14.0f)
-                .align(wui::Alignment::Stretch)
-                .children(
-                    Row().gap(10.0f).align(wui::Alignment::Center).children(
-                        Icon(wui::IconName::Edit).color(wui::theme().colors.accent),
-                        Text("Theme Studio demo").size(16.0f).weight(600),
-                        Spacer().flex(1.0f),
-                        Badge("LIMITED DEMO").appearance(wui::BadgeAppearance::Tint).color(wui::BadgeColor::Warning)),
-                    Text("This sample changes only light/dark, accent, and radius tokens. It does not import, export, or persist themes.")
-                        .size(12.0f)
-                        .lineHeight(18.0f)
-                        .wrap()
-                        .color(wui::theme().colors.textMuted),
-                    Row().gap(8.0f).children(
-                        Button("Light").onClick([applyTheme] {
+            .gap(14.0f)
+            .align(wui::Alignment::Stretch)
+            .children(
+                [] {
+                    auto heading = std::make_unique<view::components::ResponsiveRow>();
+                    heading->gap(10.0f).align(wui::Alignment::Center);
+                    heading->appendChild(Icon(wui::IconName::Edit)
+                        .color(wui::theme().colors.accent).intoNode());
+                    heading->appendChild(Text("Theme Studio demo").size(16.0f).weight(600).intoNode());
+                    heading->appendChild(Spacer().flex(1.0f).intoNode());
+                    heading->appendChild(Badge("LIMITED DEMO").appearance(wui::BadgeAppearance::Tint)
+                        .color(wui::BadgeColor::Warning).intoNode());
+                    return heading;
+                }(),
+
+                Text("This sample changes only light/dark, accent, and radius tokens. It does not import, export, or persist themes.")
+                    .size(12.0f)
+                    .lineHeight(18.0f)
+                    .wrap()
+                    .color(wui::theme().colors.textMuted),
+
+                view::components::buildResponsiveFlow(8.0f,
+                    Button("Light").onClick([applyTheme] {
+                        if (applyTheme) applyTheme(wui::Theme{}, false);
+                    }),
+                    Button("Dark").onClick([applyTheme] {
+                        if (applyTheme) applyTheme(wui::fluentDarkTheme(), true);
+                    })
+                ),
+
+                view::components::buildResponsiveFlow(8.0f,
+                    Button("Blue preset").appearance(wui::ButtonAppearance::Subtle)
+                        .onClick([applyTheme] {
                             if (applyTheme) applyTheme(wui::Theme{}, false);
                         }),
-                        Button("Dark").onClick([applyTheme] {
-                            if (applyTheme) applyTheme(wui::fluentDarkTheme(), true);
-                        })),
-                    Row().gap(8.0f).children(
-                        Button("Blue preset").appearance(wui::ButtonAppearance::Subtle)
-                            .onClick([applyTheme] {
-                                if (applyTheme) applyTheme(wui::Theme{}, false);
-                            }),
-                        Button("Violet preset").appearance(wui::ButtonAppearance::Subtle)
-                            .onClick([applyTheme] {
-                                if (applyTheme) applyTheme(violetDemoPreset(), false);
-                            })),
-                    Row().gap(8.0f).children(
-                        Button("Default radius preset").appearance(wui::ButtonAppearance::Subtle)
-                            .onClick([applyTheme] {
-                                if (applyTheme) applyTheme(wui::Theme{}, false);
-                            }),
-                        Button("Soft radius preset").appearance(wui::ButtonAppearance::Subtle)
-                            .onClick([applyTheme] {
-                                if (applyTheme) applyTheme(softRadiusDemoPreset(), false);
-                            }))))
+                    Button("Violet preset").appearance(wui::ButtonAppearance::Subtle)
+                        .onClick([applyTheme] {
+                            if (applyTheme) applyTheme(violetDemoPreset(), false);
+                        })
+                ),
+
+                view::components::buildResponsiveFlow(8.0f,
+                    Button("Default radius preset").appearance(wui::ButtonAppearance::Subtle)
+                        .onClick([applyTheme] {
+                            if (applyTheme) applyTheme(wui::Theme{}, false);
+                        }),
+                    Button("Soft radius preset").appearance(wui::ButtonAppearance::Subtle)
+                        .onClick([applyTheme] {
+                            if (applyTheme) applyTheme(softRadiusDemoPreset(), false);
+                        }
+                    )
+                )
+            )
+        )
         .intoNode();
 }
 
@@ -213,7 +236,6 @@ std::unique_ptr<wui::Node> buildAddonsPage(
     wui::UiWindow& window,
     ApplyGalleryThemeHandler applyTheme)
 {
-    using namespace wui::ui;
     view::components::ComponentCardConfig commands{
         "Command Palette", "Search and invoke common gallery actions.", "Developer tool",
         wui::IconName::Search, "Open palette", 112.0f,
@@ -228,15 +250,24 @@ std::unique_ptr<wui::Node> buildAddonsPage(
     return ScrollView()
         .children(
             Column()
-                .gap(20.0f)
-                .padding({32.0f, 32.0f, 40.0f, 32.0f})
-                .align(wui::Alignment::Stretch)
-                .children(
-                    view::components::buildPageHeader({"TOOLS", "Add-ons", "Focused utilities built on public WhatsUI dialog, inspector, and theme APIs.", {}}),
-                    Row().gap(12.0f).align(wui::Alignment::Stretch).children(
-                        view::components::buildComponentCard(std::move(commands), buildCommandPreview()),
-                        view::components::buildComponentCard(std::move(inspector), buildInspectorPreview())),
-                    buildThemeStudio(std::move(applyTheme))))
+            .gap(20.0f)
+            .padding({32.0f, 32.0f, 40.0f, 32.0f})
+            .align(wui::Alignment::Stretch)
+            .children(
+                view::components::buildPageHeader({"TOOLS", "Add-ons", "Focused utilities built on public WhatsUI dialog, inspector, and theme APIs.", {}}),
+                [] (view::components::ComponentCardConfig commands,
+                    view::components::ComponentCardConfig inspector) {
+                    auto cards = std::make_unique<view::components::ResponsiveRow>();
+                    cards->gap(12.0f).align(wui::Alignment::Stretch);
+                    cards->appendChild(view::components::buildComponentCard(
+                        std::move(commands), buildCommandPreview()));
+                    cards->appendChild(view::components::buildComponentCard(
+                        std::move(inspector), buildInspectorPreview()));
+                    return cards;
+                }(std::move(commands), std::move(inspector)),
+                buildThemeStudio(std::move(applyTheme))
+            )
+        )
         .intoNode();
 }
 
