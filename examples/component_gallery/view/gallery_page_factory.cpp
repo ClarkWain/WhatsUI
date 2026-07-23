@@ -76,7 +76,7 @@ std::unique_ptr<wui::Node> buildGalleryPage(GalleryRoute route,
                                             GalleryViewModels& viewModels,
                                             GalleryRouter& router)
 {
-    return buildAppShell(viewModels.navigation().currentRoute().get(),
+    return buildAppShell(router.window(), viewModels.navigation().currentRoute().get(),
                          buildPageContent(route, viewModels, router),
                          [&router](GalleryRoute target) { router.navigate(target); });
 }

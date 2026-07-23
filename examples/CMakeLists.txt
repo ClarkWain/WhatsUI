@@ -79,9 +79,11 @@ set(WHATSUI_COMPONENT_GALLERY_SOURCES
     component_gallery/view/app_shell_view.cpp
     component_gallery/view/gallery_page_factory.cpp
     component_gallery/view/components/component_card.cpp
+    component_gallery/view/components/compact_navigation.cpp
     component_gallery/view/components/navigation_rail.cpp
     component_gallery/view/components/page_header.cpp
     component_gallery/view/components/preview_surface.cpp
+    component_gallery/view/components/responsive_gallery_shell.cpp
     component_gallery/view/pages/about_page.cpp
     component_gallery/view/pages/addons_page.cpp
     component_gallery/view/pages/all_components_page.cpp

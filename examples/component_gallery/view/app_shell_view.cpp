@@ -6,6 +6,8 @@
 #include <utility>
 
 #include "view/components/navigation_rail.h"
+#include "view/components/compact_navigation.h"
+#include "view/components/responsive_gallery_shell.h"
 #include "wui/theme.h"
 #include "wui/ui.h"
 
@@ -54,25 +56,30 @@ GalleryRoute routeForId(const std::string& id) noexcept
 
 } // namespace
 
-std::unique_ptr<wui::Node> buildAppShell(GalleryRoute selectedRoute,
+std::unique_ptr<wui::Node> buildAppShell(wui::UiWindow& window,
+                                         GalleryRoute selectedRoute,
                                          std::unique_ptr<wui::Node> pageContent,
                                          ShellNavigateHandler navigate)
 {
     if (!pageContent) throw std::invalid_argument("App shell requires page content");
-    pageContent->setFlex(1.0f);
-    auto rail = components::buildNavigationRail(
-        railConfig(selectedRoute),
-        [navigate = std::move(navigate)](const std::string& id) {
-            if (navigate) navigate(routeForId(id));
+    const auto config = railConfig(selectedRoute);
+    return std::make_unique<components::ResponsiveGalleryShell>(
+        window, std::move(pageContent),
+        [config, navigate = std::move(navigate), &window](bool compact) {
+            if (compact) {
+                return components::buildCompactNavigationBar(
+                    config,
+                    [navigate](GalleryRoute route) {
+                        if (navigate) navigate(route);
+                    },
+                    window);
+            }
+            return components::buildNavigationRail(
+                config,
+                [navigate](const std::string& id) {
+                    if (navigate) navigate(routeForId(id));
+                });
         });
-
-    using namespace wui::ui;
-    return Box()
-        .background(wui::theme().colors.background)
-        .children(Row()
-                      .align(wui::Alignment::Stretch)
-                      .children(std::move(rail), std::move(pageContent)))
-        .intoNode();
 }
 
 } // namespace whatsui::gallery::view
