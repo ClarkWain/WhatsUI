@@ -6,6 +6,8 @@
 
 #include "view/components/component_card.h"
 #include "view/components/page_header.h"
+#include "view/components/responsive_overview_hero.h"
+#include "view/components/responsive_column_pair.h"
 #include "wui/theme.h"
 #include "wui/ui.h"
 
@@ -114,7 +116,7 @@ std::unique_ptr<wui::Node> buildCategories(GalleryViewModel& gallery, const Navi
     rows->setAlign(wui::Alignment::Stretch);
 
     for (std::size_t index = 0; index < kFeatures.size(); index += 2) {
-        auto row = std::make_unique<wui::Row>();
+        auto row = std::make_unique<view::components::ResponsiveColumnPair>();
         row->setGap(12.0f);
         row->setAlign(wui::Alignment::Stretch);
         for (std::size_t offset = 0; offset < 2; ++offset) {
@@ -183,7 +185,7 @@ std::unique_ptr<wui::Node> buildOverviewPage(
                 .align(wui::Alignment::Stretch)
                 .children(
                     view::components::buildPageHeader({"GALLERY", "Overview", "A living catalog of WhatsUI components and quality evidence.", {}}),
-                    buildHero(gallery, navigate),
+                    view::components::buildResponsiveOverviewHero(gallery, navigate),
                     Text("Explore by category").size(20.0f).weight(600),
                     buildCategories(gallery, navigate),
                     buildQaSummary(catalog, navigate)))

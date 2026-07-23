@@ -84,6 +84,8 @@ set(WHATSUI_COMPONENT_GALLERY_SOURCES
     component_gallery/view/components/page_header.cpp
     component_gallery/view/components/preview_surface.cpp
     component_gallery/view/components/responsive_gallery_shell.cpp
+    component_gallery/view/components/responsive_column_pair.cpp
+    component_gallery/view/components/responsive_overview_hero.cpp
     component_gallery/view/pages/about_page.cpp
     component_gallery/view/pages/addons_page.cpp
     component_gallery/view/pages/all_components_page.cpp

@@ -2,9 +2,14 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include "wui/app.h"
 #include "wui/node.h"
+
+namespace wui {
+class Column;
+}
 
 namespace whatsui::gallery::view::components {
 
@@ -29,6 +34,7 @@ public:
 
 private:
     void updateNavigationMode(bool compact);
+    void applyPageInsets();
 
     wui::UiWindow* window_{nullptr};
     wui::Node* pageContent_{nullptr};
@@ -36,6 +42,8 @@ private:
     NavigationFactory navigationFactory_;
     bool compact_{false};
     bool modeInitialized_{false};
+    wui::Column* pageColumn_{nullptr};
+    std::optional<wui::InsetsF> desktopPageInsets_;
 };
 
 } // namespace whatsui::gallery::view::components

@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "wui/theme.h"
+#include "wui/widgets.h"
 
 namespace whatsui::gallery::view::components {
 
@@ -33,6 +34,7 @@ void ResponsiveGalleryShell::layout(const wui::RectF& bounds)
     if (!modeInitialized_ || nextCompact != compact_) {
         updateNavigationMode(nextCompact);
     }
+    applyPageInsets();
 
     if (compact_) {
         constexpr float kTopBarHeight = 48.0f;
@@ -100,6 +102,29 @@ void ResponsiveGalleryShell::updateNavigationMode(bool compact)
     auto navigation = navigationFactory_(compact_);
     navigation_ = navigation.get();
     appendChild(std::move(navigation));
+}
+
+void ResponsiveGalleryShell::applyPageInsets()
+{
+    // Gallery pages are ScrollView > Column. Keep this responsive policy in
+    // the shell so page view code remains about content rather than window
+    // metrics. A 16 DIP inset preserves a useful content viewport at 267 DIP.
+    if (pageColumn_ == nullptr) {
+        auto* scroll = dynamic_cast<wui::ScrollView*>(pageContent_);
+        if (scroll == nullptr || scroll->children().empty()) return;
+        pageColumn_ = dynamic_cast<wui::Column*>(scroll->children().front().get());
+        if (pageColumn_ == nullptr) return;
+        desktopPageInsets_ = pageColumn_->padding();
+    }
+    if (!desktopPageInsets_) return;
+    const wui::InsetsF desired = compact_
+        ? wui::InsetsF{16.0f, 16.0f, 16.0f, 32.0f}
+        : *desktopPageInsets_;
+    const auto current = pageColumn_->padding();
+    if (current.left != desired.left || current.top != desired.top ||
+        current.right != desired.right || current.bottom != desired.bottom) {
+        pageColumn_->setPadding(desired);
+    }
 }
 
 } // namespace whatsui::gallery::view::components
