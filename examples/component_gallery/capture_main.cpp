@@ -53,8 +53,8 @@ CaptureOptions parseOptions(int argc, char** argv)
         } else if (argument == "--size") {
             if (++index >= argc || std::sscanf(argv[index], "%dx%d", &options.width,
                                                 &options.height) != 2 ||
-                options.width < 960 || options.height < 640) {
-                throw std::invalid_argument("--size expects WIDTHxHEIGHT (minimum 960x640)");
+                options.width < 240 || options.height < 320) {
+                throw std::invalid_argument("--size expects WIDTHxHEIGHT (minimum 240x320)");
             }
         } else if (argument == "--scale") {
             if (++index >= argc || std::sscanf(argv[index], "%f", &options.scale) != 1 ||
