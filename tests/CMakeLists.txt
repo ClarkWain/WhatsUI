@@ -446,6 +446,34 @@ set_tests_properties(whatsui_component_gallery_navigation_tests PROPERTIES
     LABELS "gallery;navigation;interaction;accessibility"
     TIMEOUT 30)
 
+if(TARGET WhatsUIComponentGalleryApp)
+    set(WHATSUI_COMPONENT_GALLERY_CAPTURE_DIR
+        "${CMAKE_CURRENT_BINARY_DIR}/component_gallery_captures")
+    foreach(whatsui_gallery_route IN ITEMS
+            overview
+            all-components
+            controls
+            add-ons
+            visual-qa
+            about
+            button-detail)
+        string(REPLACE "-" "_" whatsui_gallery_test_suffix
+            "${whatsui_gallery_route}")
+        add_test(
+            NAME "whatsui_component_gallery_capture_${whatsui_gallery_test_suffix}"
+            COMMAND WhatsUIComponentGalleryApp
+                --route "${whatsui_gallery_route}"
+                "${WHATSUI_COMPONENT_GALLERY_CAPTURE_DIR}/${whatsui_gallery_route}.ppm"
+        )
+        set_tests_properties(
+            "whatsui_component_gallery_capture_${whatsui_gallery_test_suffix}"
+            PROPERTIES
+                LABELS "component-gallery;capture;smoke"
+                TIMEOUT 30
+        )
+    endforeach()
+endif()
+
 add_executable(WhatsUIFluentSelectionControlsTests fluent_selection_controls_tests.cpp)
 target_link_libraries(WhatsUIFluentSelectionControlsTests PRIVATE WhatsUI::WhatsUI)
 target_compile_features(WhatsUIFluentSelectionControlsTests PRIVATE cxx_std_17)
