@@ -17,6 +17,7 @@
 #include <iterator>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -296,6 +297,39 @@ ElementKey keyFor(const SnapshotModel& model, std::size_t index)
                 ? entry.properties.automationId : std::string{},
             entry.path,
             entry.properties.role};
+}
+
+// Selection role classification.  Kept at namespace scope so both the
+// SnapshotProvider pattern implementations and raiseSnapshotEvents (which
+// dispatches UIA selection events) share the same predicate set.
+[[nodiscard]] inline bool isSelectionContainerRole(AccessibilityRole role) noexcept
+{
+    return role == AccessibilityRole::RadioGroup || role == AccessibilityRole::ListBox ||
+           role == AccessibilityRole::TabList;
+}
+
+[[nodiscard]] inline std::optional<std::size_t> selectionContainerIndex(
+    const SnapshotModel& model, std::size_t index) noexcept
+{
+    if (index == kSyntheticRoot || index >= model.entries.size()) return std::nullopt;
+    auto parent = model.parents[index];
+    while (parent) {
+        if (isSelectionContainerRole(model.entries[*parent].properties.role)) return parent;
+        parent = model.parents[*parent];
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] inline bool isSelectionItem(const SnapshotModel& model,
+                                          std::size_t index) noexcept
+{
+    if (index == kSyntheticRoot || index >= model.entries.size()) return false;
+    const auto role = model.entries[index].properties.role;
+    if (role != AccessibilityRole::RadioButton && role != AccessibilityRole::Option &&
+        role != AccessibilityRole::Tab) {
+        return false;
+    }
+    return selectionContainerIndex(model, index).has_value();
 }
 
 class SnapshotProvider final : public IRawElementProviderSimple,
@@ -963,36 +997,6 @@ private:
         return resolved && supportsToggle(*resolved);
     }
 
-    [[nodiscard]] static bool isSelectionContainerRole(AccessibilityRole role) noexcept
-    {
-        return role == AccessibilityRole::RadioGroup || role == AccessibilityRole::ListBox ||
-               role == AccessibilityRole::TabList;
-    }
-
-    [[nodiscard]] static std::optional<std::size_t> selectionContainerIndex(
-        const SnapshotModel& model, std::size_t index) noexcept
-    {
-        if (index == kSyntheticRoot || index >= model.entries.size()) return std::nullopt;
-        auto parent = model.parents[index];
-        while (parent) {
-            if (isSelectionContainerRole(model.entries[*parent].properties.role)) return parent;
-            parent = model.parents[*parent];
-        }
-        return std::nullopt;
-    }
-
-    [[nodiscard]] static bool isSelectionItem(const SnapshotModel& model,
-                                              std::size_t index) noexcept
-    {
-        if (index == kSyntheticRoot || index >= model.entries.size()) return false;
-        const auto role = model.entries[index].properties.role;
-        if (role != AccessibilityRole::RadioButton && role != AccessibilityRole::Option &&
-            role != AccessibilityRole::Tab) {
-            return false;
-        }
-        return selectionContainerIndex(model, index).has_value();
-    }
-
     [[nodiscard]] static bool supportsSelectionContainer(const Resolution& resolved) noexcept
     {
         return resolved.second != kSyntheticRoot &&
@@ -1426,6 +1430,11 @@ void raiseSnapshotEvents(const std::shared_ptr<ProviderState>& state,
 {
     if (!UiaClientsAreListening()) return;
 
+    // Selection containers whose selected-item set changed within this batch.
+    // Populated during the per-entry diff below so we can raise one
+    // Selection_Invalidated event per container instead of one per moved item.
+    std::unordered_set<std::size_t> dirtySelectionContainers;
+
     // Structure precedes property and focus notifications so clients refresh
     // the fragment tree before interpreting state changes on retained nodes.
     if (!sameChildren(previous, kSyntheticRoot, current, kSyntheticRoot)) {
@@ -1507,11 +1516,18 @@ void raiseSnapshotEvents(const std::shared_ptr<ProviderState>& state,
         const bool expandedChanged = supportsExpandCollapsePattern(oldProperties) &&
             supportsExpandCollapsePattern(newProperties) &&
             oldProperties.expanded != newProperties.expanded;
+        // Selection-item state change is projected independently of the Toggle
+        // pattern: Option and Tab items are selectable but not toggleable, and
+        // even for RadioButtons UIA clients expect the SelectionItem event in
+        // addition to any Toggle property change.
+        const bool selectionChanged =
+            isSelectionItem(current, *currentIndex) &&
+            oldProperties.checked != newProperties.checked;
         const UiaRect oldBounds = previous.screenBounds(oldIndex);
         const UiaRect newBounds = current.screenBounds(*currentIndex);
         const bool boundsChanged = meaningfullyDifferent(oldBounds, newBounds);
         if (!nameChanged && !enabledChanged && !requiredChanged && !busyChanged && !toggleChanged &&
-            !valueChanged && !expandedChanged && !boundsChanged) continue;
+            !valueChanged && !expandedChanged && !boundsChanged && !selectionChanged) continue;
 
         auto* provider = eventProvider(state, current, *currentIndex);
         if (!provider) continue;
@@ -1553,7 +1569,38 @@ void raiseSnapshotEvents(const std::shared_ptr<ProviderState>& state,
         if (boundsChanged) {
             raiseRectProperty(provider, oldBounds, newBounds);
         }
+        if (selectionChanged) {
+            // UIA distinguishes single- and multi-select semantics: exclusive
+            // containers raise ElementSelected on the item that gained
+            // selection; multi-select containers raise Added/Removed per item.
+            const auto container = selectionContainerIndex(current, *currentIndex);
+            const bool multi = container &&
+                current.entries[*container].properties.selectionCanSelectMultiple;
+            const bool nowSelected = newProperties.checked.value_or(false);
+            if (nowSelected) {
+                (void)UiaRaiseAutomationEvent(
+                    provider,
+                    multi ? UIA_SelectionItem_ElementAddedToSelectionEventId
+                          : UIA_SelectionItem_ElementSelectedEventId);
+            } else if (multi) {
+                (void)UiaRaiseAutomationEvent(
+                    provider, UIA_SelectionItem_ElementRemovedFromSelectionEventId);
+            }
+            if (container) {
+                dirtySelectionContainers.insert(*container);
+            }
+        }
         provider->Release();
+    }
+
+    // Selection containers whose selected-item set changed must raise
+    // Selection_Invalidated so assistive tech can refresh the current
+    // selection collection in one query, independent of the per-item events.
+    for (const std::size_t containerIndex : dirtySelectionContainers) {
+        if (auto* provider = eventProvider(state, current, containerIndex)) {
+            (void)UiaRaiseAutomationEvent(provider, UIA_Selection_InvalidatedEventId);
+            provider->Release();
+        }
     }
 
     // Focus properties are delivered after all other property changes. The
