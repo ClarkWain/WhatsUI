@@ -1145,14 +1145,31 @@ void exerciseNativeUiaEvents(wui::UiWindow& window, HWND hwnd)
     expect(GetWindowRect(hwnd, &expectedWindowBounds) != FALSE,
            "GetWindowRect failed after the UIA bounds event fixture moved");
     // complete() becomes true as soon as the first event of every required
-    // category arrives. Drain the remainder of that same publication batch
-    // without publishing another snapshot before taking the no-op baseline.
+    // category arrives.  Cross-apartment UIA marshalling can lag hundreds of
+    // milliseconds behind the provider-side UiaRaise* call, and Windows itself
+    // raises a delayed UIA_BoundingRectangle event for HWND SetWindowPos
+    // callers, so a fixed sleep is not a reliable baseline: drain until the
+    // client handler counters stay quiescent for a full window.
+    int quiescentEvents = -1;
+    auto quiescentSince = std::chrono::steady_clock::now();
     const auto drainDeadline = std::chrono::steady_clock::now()
-        + std::chrono::milliseconds(100);
+        + std::chrono::seconds(3);
     while (std::chrono::steady_clock::now() < drainDeadline) {
         glfwPollEvents();
         window.update();
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        int currentEvents = 0;
+        {
+            std::lock_guard lock(state.mutex);
+            currentEvents = state.totalEvents();
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (currentEvents != quiescentEvents) {
+            quiescentEvents = currentEvents;
+            quiescentSince = now;
+        } else if (now - quiescentSince >= std::chrono::milliseconds(500)) {
+            break;
+        }
     }
     int eventCountBeforeDuplicate = 0;
     bool boundsMatch = false;
@@ -1173,12 +1190,40 @@ void exerciseNativeUiaEvents(wui::UiWindow& window, HWND hwnd)
 
     // Publishing an identical immutable model must be a true no-op for UIA
     // clients; otherwise every frame would generate an accessibility storm.
+    // The steady-state layout loop below intentionally does not observe the
+    // counter, because delayed cross-apartment delivery of the initial event
+    // batch may still be in flight; the post-loop quiescence check below is
+    // what proves that no NEW events were raised by the identical publishes.
     const auto quietDeadline = std::chrono::steady_clock::now()
         + std::chrono::milliseconds(200);
     while (std::chrono::steady_clock::now() < quietDeadline) {
         window.layout();
         pumpNativeUi(window);
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    // Wait for the UIA event pipeline to become fully quiescent again so any
+    // delayed delivery of the setup batch has landed before we assert the
+    // no-duplicate invariant.
+    int quiescentEventsAfter = -1;
+    auto quiescentSinceAfter = std::chrono::steady_clock::now();
+    const auto postQuietDeadline = std::chrono::steady_clock::now()
+        + std::chrono::seconds(3);
+    while (std::chrono::steady_clock::now() < postQuietDeadline) {
+        glfwPollEvents();
+        window.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        int currentEvents = 0;
+        {
+            std::lock_guard lock(state.mutex);
+            currentEvents = state.totalEvents();
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (currentEvents != quiescentEventsAfter) {
+            quiescentEventsAfter = currentEvents;
+            quiescentSinceAfter = now;
+        } else if (now - quiescentSinceAfter >= std::chrono::milliseconds(500)) {
+            break;
+        }
     }
     bool duplicateFree = false;
     {

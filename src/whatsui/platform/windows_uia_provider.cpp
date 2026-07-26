@@ -1355,6 +1355,71 @@ const std::string& rootName(const SnapshotModel& model) noexcept
     return model.windowTitle;
 }
 
+// Fast-path equality for UIA event coalescing.  Two SnapshotModels compare
+// equal here only when a UIA client would observe no property, focus, or
+// structure change between them, so publish() can skip the entire event
+// pipeline instead of relying on the per-field diff to reach an empty
+// verdict on every steady-state frame.
+[[nodiscard]] bool snapshotsSemanticallyIdentical(
+    const SnapshotModel& previous, const SnapshotModel& current) noexcept
+{
+    if (previous.entries.size() != current.entries.size()) return false;
+    if (previous.semanticRoot != current.semanticRoot) return false;
+    if (previous.windowTitle != current.windowTitle) return false;
+    // windowBounds is materialised by casting GetWindowRect() integer pixels
+    // to double, so an exact byte-wise compare is well defined here.
+    if (previous.windowBounds.left != current.windowBounds.left ||
+        previous.windowBounds.top != current.windowBounds.top ||
+        previous.windowBounds.width != current.windowBounds.width ||
+        previous.windowBounds.height != current.windowBounds.height) {
+        return false;
+    }
+    for (std::size_t index = 0; index < previous.entries.size(); ++index) {
+        const auto& a = previous.entries[index];
+        const auto& b = current.entries[index];
+        if (a.path != b.path || a.depth != b.depth) return false;
+        const auto& pa = a.properties;
+        const auto& pb = b.properties;
+        if (pa.role != pb.role) return false;
+        if (pa.label != pb.label) return false;
+        if (pa.description != pb.description) return false;
+        if (pa.automationId != pb.automationId) return false;
+        if (pa.enabled != pb.enabled) return false;
+        if (pa.focused != pb.focused) return false;
+        if (pa.bounds.has_value() != pb.bounds.has_value()) return false;
+        if (pa.bounds && (pa.bounds->x != pb.bounds->x ||
+                          pa.bounds->y != pb.bounds->y ||
+                          pa.bounds->width != pb.bounds->width ||
+                          pa.bounds->height != pb.bounds->height)) {
+            return false;
+        }
+        if (pa.checked != pb.checked) return false;
+        if (pa.mixed != pb.mixed) return false;
+        if (pa.required != pb.required) return false;
+        if (pa.selectionCanSelectMultiple != pb.selectionCanSelectMultiple) return false;
+        if (pa.selectionIsSelectionRequired != pb.selectionIsSelectionRequired) return false;
+        if (pa.busy != pb.busy) return false;
+        if (pa.live != pb.live) return false;
+        if (pa.expanded != pb.expanded) return false;
+        if (pa.level != pb.level) return false;
+        if (pa.value != pb.value) return false;
+        if (pa.numericValue != pb.numericValue) return false;
+        if (pa.minimumValue != pb.minimumValue) return false;
+        if (pa.maximumValue != pb.maximumValue) return false;
+        if (pa.smallChange != pb.smallChange) return false;
+        if (pa.largeChange != pb.largeChange) return false;
+        if (pa.actions.invoke != pb.actions.invoke ||
+            pa.actions.toggle != pb.actions.toggle ||
+            pa.actions.expandCollapse != pb.actions.expandCollapse ||
+            pa.actions.setValue != pb.actions.setValue ||
+            pa.actions.focus != pb.actions.focus ||
+            pa.actions.valueReadOnly != pb.actions.valueReadOnly) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void raiseSnapshotEvents(const std::shared_ptr<ProviderState>& state,
                          const SnapshotModel& previous,
                          const SnapshotModel& current) noexcept
@@ -1738,6 +1803,10 @@ void UiaSnapshotBridge::publish(AccessibilitySnapshot snapshot, WindowMetrics me
     // synchronously can re-enter an MTA client that is still completing its
     // Invoke/Toggle/Value/SetFocus COM call and deadlock the UI thread.
     if (!previous) return;
+    // Fast path: republishing a model whose UIA-observable state is identical
+    // to the previous one must not raise any events, otherwise steady-state
+    // layout would generate an accessibility storm for assistive tech clients.
+    if (snapshotsSemanticallyIdentical(*previous, *latest)) return;
     if (!impl_->pendingEventBaseline) {
         impl_->pendingEventBaseline = std::move(previous);
     }
