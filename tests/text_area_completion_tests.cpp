@@ -187,6 +187,45 @@ void testDisabledTextAreaRejectsAllEditingRoutes()
            "Disabled editing routes must not mutate TextArea content");
 }
 
+void testTextInputPublishesAccessibilityTextModel()
+{
+    // Slice B of the UIA TextRange rollout: TextInput must populate
+    // AccessibilityProperties::textModel from its retained
+    // TextEditingController and opt into AccessibilityActionCapabilities::text
+    // so a future ITextProvider can read the model without introducing a
+    // second source of truth. See doc/whatsui/UIA_TEXT_PATTERN_DESIGN.md.
+    wui::TextInput input("Type here");
+    input.setAccessibleLabel("Reply");
+    input.text("hello world");
+    input.controller().setSelection({6, 11});
+    input.controller().setComposition({0, 5});
+    input.layout({0.0f, 0.0f, 200.0f, 32.0f});
+
+    const auto snapshot = wui::snapshotAccessibilityTree(input);
+    expect(snapshot.size() == 1, "TextInput must project one accessibility entry");
+    const auto& properties = snapshot.front().properties;
+    expect(properties.role == wui::AccessibilityRole::TextField,
+           "TextInput must expose the TextField role");
+    expect(properties.actions.text,
+           "TextInput must opt into the UIA Text pattern");
+    expect(properties.actions.setValue,
+           "TextInput must retain the setValue action");
+    expect(properties.textModel.has_value(),
+           "TextInput must publish an AccessibilityTextModel");
+    const auto& model = *properties.textModel;
+    expect(model.text == "hello world",
+           "AccessibilityTextModel.text must mirror the controller text");
+    expect(model.selection.start == 6 && model.selection.end == 11,
+           "AccessibilityTextModel.selection must mirror the controller selection");
+    expect(model.composition.start == 0 && model.composition.end == 5,
+           "AccessibilityTextModel.composition must mirror the composition range");
+    expect(near(model.documentBounds.width, 200.0f)
+               && near(model.documentBounds.height, 32.0f),
+           "AccessibilityTextModel.documentBounds must reflect the laid-out node bounds");
+    expect(model.caretBounds.has_value(),
+           "AccessibilityTextModel.caretBounds must be populated for a text field");
+}
+
 } // namespace
 
 int main()
@@ -194,5 +233,6 @@ int main()
     testWheelConsumesOnlyAvailableDistanceAndCaretFollowsBothWays();
     testPointerSelectionAndCompositionAcrossVisualLines();
     testDisabledTextAreaRejectsAllEditingRoutes();
+    testTextInputPublishesAccessibilityTextModel();
     std::cout << "WhatsUI TextArea completion tests passed\n";
 }
