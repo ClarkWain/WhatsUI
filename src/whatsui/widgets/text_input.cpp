@@ -1320,6 +1320,9 @@ AccessibilityActionCapabilities TextInput::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.setValue = true;
+    // Opt into the UIA Text/TextRange pattern; core/accessibility.cpp
+    // populates AccessibilityProperties::textModel for this node.
+    actions.text = true;
     return actions;
 }
 

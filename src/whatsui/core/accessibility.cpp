@@ -206,6 +206,25 @@ AccessibilityProperties propertiesForNode(const Node& node, const Node* focused)
             ? input->placeholder()
             : input->accessibleLabel();
         properties.value = input->controller().text();
+        // Slice A of the UIA TextRange rollout (see
+        // doc/whatsui/UIA_TEXT_PATTERN_DESIGN.md) added AccessibilityTextModel.
+        // Slice B (this) populates it from the retained TextEditingController
+        // so a later stage can expose ITextProvider / ITextRangeProvider
+        // without introducing a second source of truth for the text state.
+        // lineBreaks are intentionally left empty here: stage 2 will thread
+        // wrapped line offsets through from TextLayoutProvider::layoutText
+        // so the Narrator line and the visible wrapped line stay identical.
+        // caretBounds is always populated; a consumer that only cares about
+        // the visible caret should look at AccessibilityProperties::focused.
+        AccessibilityTextModel textModel;
+        textModel.text = input->controller().text();
+        const auto& sel = input->controller().selection();
+        textModel.selection = {sel.start, sel.end};
+        const auto& comp = input->controller().composition();
+        textModel.composition = {comp.start, comp.end};
+        textModel.documentBounds = input->bounds();
+        textModel.caretBounds = input->caretRect();
+        properties.textModel = std::move(textModel);
     } else if (const auto* toolbar = dynamic_cast<const Toolbar*>(&node)) {
         properties.role = AccessibilityRole::Toolbar;
         properties.label = toolbar->accessibleLabel();
