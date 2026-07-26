@@ -151,7 +151,7 @@ void testComputedNotifiesObservers()
     wui::Computed<int> doubled([&x] { return x.get() * 2; }, x);
 
     std::vector<int> observed;
-    doubled.subscribe([&observed](const int& value) { observed.push_back(value); });
+    (void)doubled.subscribe([&observed](const int& value) { observed.push_back(value); });
 
     x.set(5);
     x.set(5); // same computed value, should not notify
@@ -169,7 +169,7 @@ void testComputedSkipsSameValue()
     wui::Computed<int> minVal([&a, &b] { return std::min(a.get(), b.get()); }, a, b);
 
     int notifyCount = 0;
-    minVal.subscribe([&notifyCount](const int&) { ++notifyCount; });
+    (void)minVal.subscribe([&notifyCount](const int&) { ++notifyCount; });
 
     b.set(7); // min stays 4
     expect(notifyCount == 0, "Computed should not notify when result unchanged");
@@ -187,7 +187,7 @@ void testComputedUnsubscribesOnDestruction()
 
     {
         wui::Computed<int> derived([&src] { return src.get(); }, src);
-        derived.subscribe([&notifyCount](const int&) { ++notifyCount; });
+        (void)derived.subscribe([&notifyCount](const int&) { ++notifyCount; });
         src.set(2);
         expect(notifyCount == 1, "Should notify while Computed is alive");
     }
@@ -220,7 +220,7 @@ void testStateObserverCanUnsubscribeDuringNotification()
         ++firstCalls;
         state.unsubscribe(firstId);
     });
-    state.subscribe([&](const int&) { ++secondCalls; });
+    (void)state.subscribe([&](const int&) { ++secondCalls; });
 
     state.set(1);
     state.set(2);
@@ -245,7 +245,7 @@ void testNestedStateUpdateRemainsWellDefined()
 {
     wui::State<int> state{0};
     std::vector<int> observed;
-    state.subscribe([&](const int& value) {
+    (void)state.subscribe([&](const int& value) {
         observed.push_back(value);
         if (value == 1) {
             state.set(2);
@@ -262,13 +262,13 @@ void testNestedStateUpdatePreservesDeliveryOrderForAllObservers()
 {
     wui::State<int> state{0};
     std::vector<std::string> events;
-    state.subscribe([&](const int& value) {
+    (void)state.subscribe([&](const int& value) {
         events.push_back("a" + std::to_string(value));
         if (value == 1) {
             state.set(2);
         }
     });
-    state.subscribe([&](const int& value) { events.push_back("b" + std::to_string(value)); });
+    (void)state.subscribe([&](const int& value) { events.push_back("b" + std::to_string(value)); });
 
     state.set(1);
     expect(events == std::vector<std::string>{"a1", "b1", "a2", "b2"},
