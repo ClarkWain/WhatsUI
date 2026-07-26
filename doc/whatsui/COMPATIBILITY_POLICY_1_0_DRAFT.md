@@ -129,6 +129,36 @@ release-note classification to be reviewed. A stable API must not expose an
 unversioned third-party type unless that third-party ABI is part of the same
 documented package boundary.
 
+## Accessibility and UI Automation behavior boundary
+
+The accessibility snapshot and the Windows UI Automation adapter carry
+behavior contracts that a consumer or assistive-tech client depends on even
+when the source signature has not changed. The 1.0 candidate must record
+these as behavior guarantees, backed by a regression test, before the release
+owner may approve:
+
+- `AccessibilitySnapshot` field set. The candidate must enumerate the
+  `AccessibilityProperties` fields that a Windows adapter publishes to UIA
+  (`snapshotsSemanticallyIdentical` in `windows_uia_provider.cpp` is the
+  source of truth for the identity-equal set) and mark them as covered by
+  the accessibility snapshot contract.
+- Idempotent publication. Republishing an accessibility snapshot whose
+  UIA-observable state is identical to the previously published snapshot
+  must be a no-op for UIA event listeners. This is enforced by
+  `whatsui_windows_uia_native_smoke_tests`.
+- Delivery timing is not a stability guarantee. Cross-apartment marshalling
+  latency and system-generated events (for example, the delayed
+  `UIA_BoundingRectangle` event that Windows raises for HWND `SetWindowPos`
+  callers) are outside the WhatsUI contract; tests must use quiescence-based
+  waits rather than fixed sleeps.
+- Retained provider identity. A `RuntimeId` returned for a stable
+  `automationId` must remain equal across republished snapshots within the
+  same native window lifetime.
+
+New patterns or events added later must either follow this same record-and-
+test discipline or be documented as experimental and excluded from the
+stable-API manifest.
+
 ## Release-owner record (intentionally unapproved)
 
 | Required record | Value |
@@ -139,6 +169,7 @@ documented package boundary.
 | Approved source/ABI exceptions | _None recorded_ |
 | Approved package profiles and compiler/CRT tuples | _Pending candidate validation_ |
 | Stable-API manifest and experimental-header inventory | _Pending candidate validation_ |
+| Behavior-regression test manifest (accessibility, UIA, IME, DPI, native) | _Pending candidate validation_ |
 | Legal/SBOM approver and evidence link | _Pending_ |
 
 Do not replace these placeholders with an automated test result. Approval is a
