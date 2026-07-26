@@ -84,6 +84,12 @@ struct AccessibilityActionCapabilities {
     bool setValue{false};
     bool focus{false};
     bool valueReadOnly{false};
+    // The control publishes a full TextModel for its editable content and
+    // opts into the future UIA Text/TextRange pattern. See
+    // doc/whatsui/UIA_TEXT_PATTERN_DESIGN.md for the surface contract.
+    // Consumers must populate AccessibilityProperties::textModel on every
+    // publish when this flag is true.
+    bool text{false};
 };
 
 enum class AccessibilityActionStatus {
@@ -100,6 +106,45 @@ enum class AccessibilityActionStatus {
 // Semantic data belonging to one control or logical content node.  Labels and
 // descriptions are plain UTF-8 text; value is deliberately optional because a
 // Button normally has no value while a Slider or editable TextField does.
+// Selection range within the editable text of an accessibility text model.
+// Byte offsets refer to UTF-8 bytes in AccessibilityTextModel::text and
+// remain in sync with wui::TextRange from wui/text_input.h. An empty range
+// (start == end) represents a caret position; TextRange{0, 0} together with
+// an empty text field means the control has no caret.
+struct AccessibilityTextRange {
+    std::size_t start{0};
+    std::size_t end{0};
+
+    [[nodiscard]] constexpr bool empty() const noexcept { return start == end; }
+    [[nodiscard]] friend constexpr bool operator==(
+        const AccessibilityTextRange& lhs, const AccessibilityTextRange& rhs) noexcept
+    {
+        return lhs.start == rhs.start && lhs.end == rhs.end;
+    }
+    [[nodiscard]] friend constexpr bool operator!=(
+        const AccessibilityTextRange& lhs, const AccessibilityTextRange& rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
+};
+
+// Immutable text-pattern payload for accessibility snapshots. See
+// doc/whatsui/UIA_TEXT_PATTERN_DESIGN.md for the shared-model contract and
+// the mapping onto Windows UIA_TextPattern. Byte offsets are UTF-8 offsets
+// into `text`. `lineBreaks` lists the byte offset of each visual line's
+// first character (a monotonically increasing sequence that does not
+// include 0). `documentBounds` is the logical client-space rectangle of
+// the whole editor; `caretBounds` is populated only when the control owns
+// keyboard focus.
+struct AccessibilityTextModel {
+    std::string text;
+    AccessibilityTextRange selection{};
+    AccessibilityTextRange composition{};
+    std::vector<std::size_t> lineBreaks;
+    RectF documentBounds{};
+    std::optional<RectF> caretBounds;
+};
+
 struct AccessibilityProperties {
     AccessibilityRole role{AccessibilityRole::Unknown};
     std::string label;
@@ -149,6 +194,10 @@ struct AccessibilityProperties {
     std::optional<double> maximumValue;
     std::optional<double> smallChange;
     std::optional<double> largeChange;
+    // Populated only when actions.text is true. See AccessibilityTextModel
+    // and doc/whatsui/UIA_TEXT_PATTERN_DESIGN.md for the shared-model
+    // contract exposed as the future UIA Text/TextRange pattern.
+    std::optional<AccessibilityTextModel> textModel;
     AccessibilityActionCapabilities actions{};
 
     [[nodiscard]] bool hasAccessibleName() const noexcept

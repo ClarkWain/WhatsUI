@@ -214,6 +214,21 @@ whole surface:
    `TextModel`, plumb line breaks and caret bounds through TextInput/TextArea,
    extend `snapshotsSemanticallyIdentical`. Add the unit-level text-unit
    walker library. No `IUIAutomationTextProvider` yet.
+   - **Slice A (landed):** `AccessibilityTextRange` + `AccessibilityTextModel`
+     records on `AccessibilityProperties::textModel`; the
+     `AccessibilityActionCapabilities::text` opt-in flag; the UTF-8
+     grapheme walker in `wui/text_units.h` with combining-mark, ZWJ,
+     Regional Indicator (UAX #29 GB12/GB13), and emoji-modifier support;
+     the UIA provider's `snapshotsSemanticallyIdentical` fast path now
+     compares text/selection/composition/lineBreaks/documentBounds/
+     caretBounds so future populated snapshots do not accidentally
+     short-circuit; `whatsui_text_units_tests` (ASCII, CJK, combining
+     marks, ZWJ, RI pairs, emoji modifier, invalid UTF-8).
+   - **Slice B (pending):** wire `TextInput` and `TextArea` to populate
+     their `AccessibilityTextModel` from the existing
+     `TextEditingController` and reuse `TextLayoutProvider::layoutText`
+     output for `lineBreaks`. Add a snapshot regression test that a
+     TextInput publishes coherent text/selection/lineBreaks.
 2. **Read-only pattern**. Implement `ITextProvider` + `ITextRangeProvider`
    with the read-only subset (`DocumentRange`, `GetSelection`,
    `RangeFromPoint`, `GetText`, `GetBoundingRectangles`, `Move` by all units,
@@ -221,7 +236,9 @@ whole surface:
    the diff loop. Add the native smoke test.
 3. **Interactive `Select` and `ScrollIntoView`**. Add the two new
    `AccessibilityActionKind` values, the UI-thread handlers, and the round-trip
-   test that the UIA client can steer selection.
+   test that the UIA client can steer selection. This is also the stage that
+   adds `ITextProvider2::GetActiveComposition` returning a range over
+   `TextModel::composition` and the matching regression tests.
 
 Each PR MUST include the regression tests for that stage. Narrator manual
 verification joins the Windows 1.0 release-candidate evidence per the
