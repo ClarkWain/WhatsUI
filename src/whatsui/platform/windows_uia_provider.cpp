@@ -1417,8 +1417,31 @@ const std::string& rootName(const SnapshotModel& model) noexcept
             pa.actions.expandCollapse != pb.actions.expandCollapse ||
             pa.actions.setValue != pb.actions.setValue ||
             pa.actions.focus != pb.actions.focus ||
-            pa.actions.valueReadOnly != pb.actions.valueReadOnly) {
+            pa.actions.valueReadOnly != pb.actions.valueReadOnly ||
+            pa.actions.text != pb.actions.text) {
             return false;
+        }
+        if (pa.textModel.has_value() != pb.textModel.has_value()) return false;
+        if (pa.textModel) {
+            const auto& ta = *pa.textModel;
+            const auto& tb = *pb.textModel;
+            if (ta.text != tb.text) return false;
+            if (ta.selection != tb.selection) return false;
+            if (ta.composition != tb.composition) return false;
+            if (ta.lineBreaks != tb.lineBreaks) return false;
+            if (ta.documentBounds.x != tb.documentBounds.x ||
+                ta.documentBounds.y != tb.documentBounds.y ||
+                ta.documentBounds.width != tb.documentBounds.width ||
+                ta.documentBounds.height != tb.documentBounds.height) {
+                return false;
+            }
+            if (ta.caretBounds.has_value() != tb.caretBounds.has_value()) return false;
+            if (ta.caretBounds && (ta.caretBounds->x != tb.caretBounds->x ||
+                                    ta.caretBounds->y != tb.caretBounds->y ||
+                                    ta.caretBounds->width != tb.caretBounds->width ||
+                                    ta.caretBounds->height != tb.caretBounds->height)) {
+                return false;
+            }
         }
     }
     return true;

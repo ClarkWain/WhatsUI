@@ -46,6 +46,22 @@ add_test(
     COMMAND WhatsUIStateTests
 )
 
+add_executable(WhatsUITextUnitsTests
+    text_units_tests.cpp
+)
+
+target_link_libraries(WhatsUITextUnitsTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUITextUnitsTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_text_units_tests
+    COMMAND WhatsUITextUnitsTests
+)
+
 add_executable(WhatsUIWindowTests
     window_tests.cpp
 )
