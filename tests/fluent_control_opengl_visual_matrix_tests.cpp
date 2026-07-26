@@ -354,6 +354,14 @@ int run(const std::string& outputPath, float scale)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // Disable GLFW's per-monitor DPI scaling so the physical framebuffer
+    // matches the size we pass to glfwCreateWindow. Otherwise, on a Windows
+    // host whose desktop scale is different from the test's scale argument,
+    // GLFW rescales the window and the framebuffer ends up larger than the
+    // canvas expects, leaving the top-left quadrant containing the button
+    // matrix inside the requested logical bounds but the rest of the frame
+    // as uninitialised (black) pixels that the assertions then read.
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
     GLFWwindow* window = glfwCreateWindow(
         width, height, "WhatsUI Fluent control matrix", nullptr, nullptr);
     if (window == nullptr) {
@@ -612,21 +620,23 @@ int run(const std::string& outputPath, float scale)
     writePpm(outputPath, pixels, width, height);
 
     // Action family: resolve the full primary state ramp and retain a real
-    // selected surface for the toggle action.
-    expect(colorNear(pixels, width, height,
-                     physical(kColumns[0] + 6, scale),
-                     physical(58, scale),
-                     colors.brandBackground.rest, 3),
+    // selected surface for the toggle action. Search the button region for
+    // the expected fill instead of sampling a single point: at 150/200% the
+    // Fluent 4 DIP corner radius rounds up past 6 physical pixels, so the
+    // previous fixed sample fell outside the rounded corner and read the
+    // transparent background instead of brandBackground. The Toggle and
+    // Disabled probes below already use findColor for the same reason.
+    expect(findColor(pixels, width, height, scale,
+                     {kColumns[0], 42, 132, 32},
+                     colors.brandBackground.rest, 3).valid(),
            "Primary Button rest state must use brandBackground");
-    expect(colorNear(pixels, width, height,
-                     physical(kColumns[1] + 6, scale),
-                     physical(58, scale),
-                     colors.brandBackground.hover, 3),
+    expect(findColor(pixels, width, height, scale,
+                     {kColumns[1], 42, 132, 32},
+                     colors.brandBackground.hover, 3).valid(),
            "Primary Button hover state must use brandBackgroundHover");
-    expect(colorNear(pixels, width, height,
-                     physical(kColumns[2] + 6, scale),
-                     physical(58, scale),
-                     colors.brandBackground.pressed, 3),
+    expect(findColor(pixels, width, height, scale,
+                     {kColumns[2], 42, 132, 32},
+                     colors.brandBackground.pressed, 3).valid(),
            "Primary Button pressed state must use brandBackgroundPressed");
     expect(findColor(pixels, width, height, scale,
                      {kColumns[4], 42, 132, 32},
@@ -638,11 +648,11 @@ int run(const std::string& outputPath, float scale)
            "Disabled Button must expose the disabled surface");
 
     // CompoundButton shares the primary state ramp with Button while keeping
-    // both text lines inside one 52-DIP command surface.
-    expect(colorNear(pixels, width, height,
-                     physical(kColumns[1] + 6, scale),
-                     physical(440, scale),
-                     colors.brandBackground.hover, 3),
+    // both text lines inside one 52-DIP command surface. Use findColor for
+    // the same DPI-independent reason as the Button probes above.
+    expect(findColor(pixels, width, height, scale,
+                     {kColumns[1], 414, 132, 52},
+                     colors.brandBackground.hover, 3).valid(),
            "Primary CompoundButton hover must use brandBackgroundHover");
     expect(findColor(pixels, width, height, scale,
                      {kColumns[5], 414, 132, 52},
