@@ -227,23 +227,76 @@ Each PR MUST include the regression tests for that stage. Narrator manual
 verification joins the Windows 1.0 release-candidate evidence per the
 compatibility policy.
 
-## Open questions
+## Answered decisions
 
-- Grapheme walker: bundle ICU segmenter, use HarfBuzz cluster info that
-  WhatsCanvas already computes, or write a Unicode 15 grapheme table
-  targeted at the CJK and emoji corpora WhatsUI already tests? Cost varies
-  by an order of magnitude.
-- Line-break source: does TextInput's paint pass already surface wrap
-  offsets that can be reused, or does the Text pattern need its own
-  measurement that mirrors the paint layout? Prefer reuse to keep the
-  Narrator output identical to the visible text.
-- Coordinate precision for `GetBoundingRectangles`: aggregate contiguous
-  glyphs per visual line into one rectangle, or ship per-glyph rectangles?
-  Narrator typically wants one rectangle per visual line; per-glyph adds
-  memory pressure without observable benefit.
-- Composition ranges: expose the IMM32 composition range as a UIA range
-  with the `IsActiveComposition` attribute (`ITextProvider2`) or restrict
-  the 1.0 pattern to committed text? Deferring to a follow-up avoids the
-  `ITextProvider2` COM cast for the first release.
+The four scoping questions the original draft left open have all been
+resolved after auditing the existing text pipeline. Each answer is now a
+binding decision for the rollout below.
 
-Answering these three questions is a prerequisite to starting stage 1.
+### Grapheme walker source — UTF-8 code-point walker for stage 1
+
+`third_party/WhatsCanvas` and `wui/text_metrics.h` do not expose HarfBuzz
+`hb_glyph_info_t::cluster` values. Reusing them would require a new API on
+`TextLayoutProvider` in both WhatsUI and WhatsCanvas, which is out of scope
+for the 1.0 candidate.
+
+Stage 1 therefore ships a **UTF-8 code-point walker** plus a small combining-
+mark table (Unicode class `Mn`/`Mc`/`Me` and the Regional Indicator + Emoji
+Modifier code points already exercised by WhatsUI's shaping tests) so common
+CJK, accented Latin, and simple emoji clusters advance as one grapheme.
+Complex emoji ZWJ sequences are documented as best-effort; the reserved
+`NotSupported` sentinel is not used on `Character` boundaries so Narrator
+never stalls on unknown clusters.
+
+If a HarfBuzz-cluster path becomes necessary later (e.g. tailored emoji
+sequences), a follow-up PR can extend `TextLayoutProvider` with a
+`textClusters()` method and swap the walker; the `TextUnit` mapping table in
+this doc stays the same.
+
+### Line-break source — reuse `TextLayoutProvider::layoutText`
+
+`TextLayoutProvider::layoutText` already returns a
+`std::vector<TextLayoutLine>` where every entry carries `sourceStart` /
+`sourceLength` UTF-8 byte offsets and the `EditableLine` helper in
+`src/whatsui/widgets/text_input.cpp` already relies on that output for the
+wrapped multi-line editor. The Text pattern MUST reuse the same call so the
+Narrator line and the visible line stay identical, including RTL and CJK
+wrap points.
+
+Concretely, `TextModel::lineBreaks` is populated from
+`layoutText(...).sourceStart` (skipping the first entry, which is always 0),
+and the `Line` unit's move/expand table indexes into that vector. When no
+layout provider is registered (headless tests, minimal hosts), the same
+`editableLines` fallback that TextInput uses today produces the values so
+the Text pattern still returns coherent lines.
+
+### Bounding-rectangle granularity — one rectangle per visual line
+
+UIA clients (Narrator, JAWS, NVDA) all read the reply from
+`GetBoundingRectangles` as "one rectangle per visible line touched by the
+range", and Narrator's "read from cursor" flow collapses per-glyph
+rectangles into per-line rectangles internally. Per-glyph rectangles would
+also multiply the `SAFEARRAY` size for every text query.
+
+The Text pattern therefore emits **exactly one screen-space rectangle per
+visual line** intersecting the range, computed from the reused
+`TextLayoutLine` vector plus the existing `measureText(prefix)` width so
+the leading and trailing partial-line rectangles honor the range endpoints.
+
+### Composition ranges — expose committed text in stage 1/2, active
+composition in stage 3
+
+`TextEditingController::composition()` already tracks the IMM32 composition
+range as a `TextRange`, so `TextModel::composition` can be published today.
+Surfacing it through UIA, however, requires `IUIAutomationTextProvider2`
+(`GetActiveComposition` / `GetConversionTarget`), which is a distinct COM
+interface WhatsUI's provider does not implement yet.
+
+Decision: stages 1 and 2 ship `ITextProvider` only and return **committed
+text** through every method. `TextModel::composition` is still carried on
+the snapshot so the diff loop can raise a `Text_TextChangedEventId` when
+composition boundaries move (Narrator can then re-read the changed range),
+but no dedicated composition range is exposed through UIA. Stage 3 adds the
+`ITextProvider2` QueryInterface, `GetActiveComposition` returning a range
+over `TextModel::composition`, and matching regression tests.
+
