@@ -371,6 +371,28 @@ int run(const std::string& outputPath, float scale)
     }
     glfwMakeContextCurrent(window);
 
+    // On a Windows host whose desktop DPI does not match the test's requested
+    // scale, GLFW can create a framebuffer smaller (or larger) than the
+    // requested window size. The canvas below expects (width x height) as the
+    // physical framebuffer, so a mismatch would leave the top-left quadrant
+    // of the canvas unrendered and the assertions would sample uninitialised
+    // pixels. Report SKIP (CTest maps 77 to "not run") rather than a
+    // misleading pixel-mismatch failure; the CI matrix job runs on a fixed
+    // DPI host where the four scales all match.
+    int fbWidth = 0;
+    int fbHeight = 0;
+    glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+    if (fbWidth != width || fbHeight != height) {
+        std::fprintf(stderr,
+                     "SKIP: GLFW framebuffer size %dx%d does not match "
+                     "requested window size %dx%d at scale %.3g "
+                     "(host desktop DPI likely differs from test scale)\n",
+                     fbWidth, fbHeight, width, height, scale);
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return 77;
+    }
+
     expect(wsc::Canvas::loadOpenGL(
                reinterpret_cast<wsc::Canvas::OpenGLProcAddress>(
                    glfwGetProcAddress)),
