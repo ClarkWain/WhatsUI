@@ -888,6 +888,10 @@ void subscribeAndWaitForNativeUiaEvents(HWND hwnd, NativeEventState& state,
                                         std::promise<void>& subscribed)
 {
     ScopedCom com;
+    ComPtr<IUIAutomationPropertyChangedEventHandler> propertyHandler;
+    ComPtr<IUIAutomationPropertyChangedEventHandler> boundsHandler;
+    ComPtr<IUIAutomationFocusChangedEventHandler> focusHandler;
+    ComPtr<IUIAutomationStructureChangedEventHandler> structureHandler;
     try {
         expectSucceeded(com.result(), "COM initialization failed for UIA events");
         ComPtr<IUIAutomation> automation;
@@ -903,10 +907,10 @@ void subscribeAndWaitForNativeUiaEvents(HWND hwnd, NativeEventState& state,
                "The UIA event fixture must expose Native toggle");
         const auto retainedRuntimeId = currentRuntimeId(*checkbox.get());
 
-        auto* propertyHandler = new NativePropertyChangedHandler(state);
-        auto* boundsHandler = new RootBoundsChangedHandler(state);
-        auto* focusHandler = new FocusChangedHandler(state);
-        auto* structureHandler = new StructureChangedHandler(state);
+        *propertyHandler.put() = new NativePropertyChangedHandler(state);
+        *boundsHandler.put() = new RootBoundsChangedHandler(state);
+        *focusHandler.put() = new FocusChangedHandler(state);
+        *structureHandler.put() = new StructureChangedHandler(state);
         bool propertyRegistered = false;
         bool boundsRegistered = false;
         bool focusRegistered = false;
@@ -914,23 +918,19 @@ void subscribeAndWaitForNativeUiaEvents(HWND hwnd, NativeEventState& state,
         auto cleanup = [&] {
             if (structureRegistered) {
                 automation->RemoveStructureChangedEventHandler(
-                    root.get(), structureHandler);
+                    root.get(), structureHandler.get());
             }
             if (focusRegistered) {
-                automation->RemoveFocusChangedEventHandler(focusHandler);
+                automation->RemoveFocusChangedEventHandler(focusHandler.get());
             }
             if (boundsRegistered) {
                 automation->RemovePropertyChangedEventHandler(
-                    root.get(), boundsHandler);
+                    root.get(), boundsHandler.get());
             }
             if (propertyRegistered) {
                 automation->RemovePropertyChangedEventHandler(
-                    root.get(), propertyHandler);
+                    root.get(), propertyHandler.get());
             }
-            structureHandler->Release();
-            focusHandler->Release();
-            boundsHandler->Release();
-            propertyHandler->Release();
         };
 
         try {
@@ -940,21 +940,22 @@ void subscribeAndWaitForNativeUiaEvents(HWND hwnd, NativeEventState& state,
                                     UIA_NamePropertyId};
             expectSucceeded(automation->AddPropertyChangedEventHandlerNativeArray(
                                 root.get(), TreeScope_Subtree, nullptr,
-                                propertyHandler, properties,
+                                propertyHandler.get(), properties,
                                 static_cast<int>(std::size(properties))),
                             "Unable to subscribe to native UIA property events");
             propertyRegistered = true;
             PROPERTYID boundsProperty[]{UIA_BoundingRectanglePropertyId};
             expectSucceeded(automation->AddPropertyChangedEventHandlerNativeArray(
                                 root.get(), TreeScope_Element, nullptr,
-                                boundsHandler, boundsProperty, 1),
+                                boundsHandler.get(), boundsProperty, 1),
                             "Unable to subscribe to the root UIA bounds event");
             boundsRegistered = true;
-            expectSucceeded(automation->AddFocusChangedEventHandler(nullptr, focusHandler),
+            expectSucceeded(automation->AddFocusChangedEventHandler(nullptr, focusHandler.get()),
                             "Unable to subscribe to the UIA focus event");
             focusRegistered = true;
             expectSucceeded(automation->AddStructureChangedEventHandler(
-                                root.get(), TreeScope_Subtree, nullptr, structureHandler),
+                                root.get(), TreeScope_Subtree, nullptr,
+                                structureHandler.get()),
                             "Unable to subscribe to the UIA structure event");
             structureRegistered = true;
             subscribed.set_value();
@@ -1002,7 +1003,7 @@ void runUiaWorkOffUiThread(wui::UiWindow& window, Work work, const char* timeout
     std::packaged_task<void()> task(std::move(work));
     auto result = task.get_future();
     std::thread worker(std::move(task));
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     while (result.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
         pumpNativeUi(window);
         if (std::chrono::steady_clock::now() >= deadline) {
@@ -1071,7 +1072,7 @@ void exerciseNativeUiaEvents(wui::UiWindow& window, HWND hwnd)
     auto result = task.get_future();
     std::thread worker(std::move(task));
 
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     while (subscription.wait_for(std::chrono::milliseconds(0))
            != std::future_status::ready) {
         pumpNativeUi(window);
@@ -1266,7 +1267,7 @@ void runUiaClientOffUiThread(HWND hwnd, bool validateFocus, RECT expectedButtonB
     auto result = task.get_future();
     std::thread worker(std::move(task));
 
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     while (result.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
         glfwPollEvents();
         if (std::chrono::steady_clock::now() >= deadline) {

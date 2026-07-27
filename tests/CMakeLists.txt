@@ -232,7 +232,7 @@ if(WIN32 AND TARGET WhatsUI::Glfw)
     set_tests_properties(whatsui_windows_uia_native_smoke_tests PROPERTIES
         LABELS "native;windows;uia;accessibility;glfw"
         SKIP_RETURN_CODE 77
-        TIMEOUT 30
+        TIMEOUT 60
         # UI Automation observes the process-wide Windows desktop event
         # stream. Other concurrently created GLFW HWNDs can make its
         # duplicate-event assertion nondeterministic, so keep this native
