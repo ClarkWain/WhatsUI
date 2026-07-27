@@ -397,13 +397,6 @@ add_test(NAME whatsui_fluent_selection_controls_tests COMMAND WhatsUIFluentSelec
 set_tests_properties(whatsui_fluent_selection_controls_tests PROPERTIES
     LABELS "fluent;listbox;combobox;dropdown;accessibility")
 
-add_executable(WhatsUIAvatarGroupTests avatar_group_tests.cpp)
-target_link_libraries(WhatsUIAvatarGroupTests PRIVATE WhatsUI::WhatsUI)
-target_compile_features(WhatsUIAvatarGroupTests PRIVATE cxx_std_17)
-add_test(NAME whatsui_avatar_group_tests COMMAND WhatsUIAvatarGroupTests)
-set_tests_properties(whatsui_avatar_group_tests PROPERTIES
-    LABELS "fluent;avatar;group;presence;accessibility")
-
 add_executable(WhatsUIFluentIconsTests fluent_icons_tests.cpp)
 target_link_libraries(WhatsUIFluentIconsTests PRIVATE WhatsUI::WhatsUI)
 target_compile_features(WhatsUIFluentIconsTests PRIVATE cxx_std_17)
@@ -415,6 +408,13 @@ set_tests_properties(whatsui_fluent_icons PROPERTIES
 # behavior tests that pull widget paint objects must also resolve the bridge's
 # Canvas symbols even when they do not create a real Canvas themselves.
 if(TARGET WhatsCanvasSoftware)
+    add_executable(WhatsUIAvatarGroupTests avatar_group_tests.cpp)
+    target_link_libraries(WhatsUIAvatarGroupTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
+    target_compile_features(WhatsUIAvatarGroupTests PRIVATE cxx_std_17)
+    add_test(NAME whatsui_avatar_group_tests COMMAND WhatsUIAvatarGroupTests)
+    set_tests_properties(whatsui_avatar_group_tests PROPERTIES
+        LABELS "fluent;avatar;group;presence;accessibility")
+
     target_link_libraries(WhatsUIFluentIconsTests PRIVATE WhatsCanvas::Software)
     add_executable(WhatsUIFluentIconsVisualTests fluent_icons_visual_tests.cpp)
     target_link_libraries(WhatsUIFluentIconsVisualTests
@@ -451,7 +451,6 @@ if(TARGET WhatsCanvasSoftware)
     target_link_libraries(WhatsUIFluentTreeTests PRIVATE WhatsCanvas::Software)
     target_link_libraries(WhatsUIFluentNavigationTests PRIVATE WhatsCanvas::Software)
     target_link_libraries(WhatsUIFluentSelectionControlsTests PRIVATE WhatsCanvas::Software)
-    target_link_libraries(WhatsUIAvatarGroupTests PRIVATE WhatsCanvas::Software)
 
     add_executable(WhatsUIFluentDrawerVisualTests fluent_drawer_visual_tests.cpp)
     target_link_libraries(WhatsUIFluentDrawerVisualTests PRIVATE WhatsUI::WhatsUI WhatsCanvas::Software)
