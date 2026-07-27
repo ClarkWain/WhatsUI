@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
-#include <locale>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -197,21 +196,15 @@ std::string formatNumber(float value)
 
 std::string formatCount(std::uint64_t value)
 {
-    try {
-        std::ostringstream stream;
-        stream.imbue(std::locale(""));
-        stream << value;
-        return stream.str();
-    } catch (...) {
-        // A stripped-down deployment may not have the OS locale installed.
-        // Preserve a readable deterministic fallback instead of failing paint.
-        std::string result = std::to_string(value);
-        for (std::ptrdiff_t index = static_cast<std::ptrdiff_t>(result.size()) - 3;
-             index > 0; index -= 3) {
-            result.insert(static_cast<std::size_t>(index), ",");
-        }
-        return result;
+    // The default visible count must be cross-platform deterministic for
+    // tests, screenshots, and accessible text. Applications that need locale-
+    // specific formatting can override it through RatingDisplay::countFormatter.
+    std::string result = std::to_string(value);
+    for (std::ptrdiff_t index = static_cast<std::ptrdiff_t>(result.size()) - 3;
+         index > 0; index -= 3) {
+        result.insert(static_cast<std::size_t>(index), ",");
     }
+    return result;
 }
 
 bool primary(const PointerEvent& event) noexcept
