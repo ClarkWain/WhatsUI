@@ -7,6 +7,7 @@ out/
 *.VC.db
 *.VC.opendb
 build_glfw/
+.codex-assets/
 
 # Local CMake configurations, package-install prefixes, and visual-review
 # output are reproducible artifacts; source-controlled visual baselines are
