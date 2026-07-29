@@ -9,7 +9,9 @@ int main()
 {
     try {
         whatsui::gallery::GalleryApplication application(
-            wui::createGlfwPlatformHost(), whatsui::gallery::view::buildGalleryPage);
+            wui::createGlfwPlatformHost(), 
+            whatsui::gallery::view::buildGalleryPage
+        );
         return application.run();
     } catch (const std::exception& error) {
         std::cerr << "WhatsUI Component Gallery: " << error.what() << std::endl;

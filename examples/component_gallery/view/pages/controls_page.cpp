@@ -9,15 +9,19 @@
 #include "wui/theme.h"
 #include "wui/ui.h"
 
+using namespace wui::ui;
+
 namespace whatsui::gallery::view::pages {
 namespace {
 
 std::unique_ptr<wui::Node> buildButtonSection(const std::function<void()>& onOpenDetail)
 {
-    using namespace wui::ui;
     return view::components::buildPreviewSurface(
         {"Button", "Appearance and intent", "Interactive", 224.0f, true},
-        Column().gap(14.0f).align(wui::Alignment::Center).children(
+        Column()
+        .gap(14.0f)
+        .align(wui::Alignment::Center)
+        .children(
             std::make_unique<view::components::ResponsiveActionGrid>(
                 std::vector<view::components::ResponsiveActionGrid::ItemFactory>{
                     [] { return Button("Primary").appearance(wui::ButtonAppearance::Primary).intoNode(); },
@@ -25,36 +29,50 @@ std::unique_ptr<wui::Node> buildButtonSection(const std::function<void()>& onOpe
                     [] { return Button("Subtle").appearance(wui::ButtonAppearance::Subtle).intoNode(); },
                     [] { return Button("Danger").appearance(wui::ButtonAppearance::Danger).intoNode(); },
                 }, 520.0f, 0.0f, 200.0f),
-            Button("Open Button detail").appearance(wui::ButtonAppearance::Transparent)
-                .icon(wui::IconName::ChevronRight).iconPosition(wui::ButtonIconPosition::After)
-                .onClick(onOpenDetail)).intoNode());
+
+            Button("Open Button detail")
+            .appearance(wui::ButtonAppearance::Transparent)
+            .icon(wui::IconName::ChevronRight)
+            .iconPosition(wui::ButtonIconPosition::After)
+            .onClick(onOpenDetail)
+        )
+        .intoNode());
 }
+
 std::unique_ptr<wui::Node> buildCheckboxSection()
 {
-    using namespace wui::ui;
     return view::components::buildPreviewSurface(
         {"Checkbox", "Binary and mixed selection", "Interactive", 216.0f, true},
-        Column().gap(12.0f).align(wui::Alignment::Stretch).children(
-            Checkbox("Unchecked", false), Checkbox("Checked option", true),
-            Checkbox("Mixed selection").mixed(), Checkbox("Disabled option", false).enabled(false)).intoNode());
+        Column()
+        .gap(12.0f)
+        .align(wui::Alignment::Stretch)
+        .children(
+            Checkbox("Unchecked", false),
+            Checkbox("Checked option", true),
+            Checkbox("Mixed selection").mixed(),
+            Checkbox("Disabled option", false).enabled(false)
+        )
+        .intoNode());
 }
+
 std::unique_ptr<wui::Node> buildToggleSection()
 {
-    using namespace wui::ui;
     return view::components::buildPreviewSurface(
         {"Toggle", "Switches and toggle buttons", "Interactive", 176.0f, true},
         Column()
-            .gap(14.0f)
-            .align(wui::Alignment::Start)
+        .gap(14.0f)
+        .align(wui::Alignment::Start)
+        .children(
+            Switch("Enable notifications", true),
+            Switch("Use compact layout", false),
+            Row()
+            .gap(8.0f)
             .children(
-                Switch("Enable notifications", true),
-                Switch("Use compact layout", false),
-                Row()
-                    .gap(8.0f)
-                    .children(
-                        ToggleButton("Pinned", true).icon(wui::IconName::Important),
-                        ToggleButton("Favorite", false).icon(wui::IconName::Star)))
-            .intoNode());
+                ToggleButton("Pinned", true).icon(wui::IconName::Important),
+                ToggleButton("Favorite", false).icon(wui::IconName::Star)
+            )
+        )
+        .intoNode());
 }
 
 std::unique_ptr<wui::Node> buildSliderSection()
@@ -81,37 +99,38 @@ std::unique_ptr<wui::Node> buildSliderSection()
         zoomLabel->setValue("Zoom · " + std::to_string(static_cast<int>(value)) + "%");
     });
 
-    using namespace wui::ui;
     return view::components::buildPreviewSurface(
         {"Slider", "Continuous and stepped values", "Interactive", 176.0f, true},
         Column()
-            .gap(16.0f)
-            .align(wui::Alignment::Stretch)
-            .children(
-                std::move(volumeText),
-                std::move(volume),
-                std::move(zoomText),
-                std::move(zoom))
-            .intoNode());
+        .gap(16.0f)
+        .align(wui::Alignment::Stretch)
+        .children(
+            std::move(volumeText),
+            std::move(volume),
+            std::move(zoomText),
+            std::move(zoom)
+        )
+        .intoNode());
 }
 
 } // namespace
 
 std::unique_ptr<wui::Node> buildControlsPage(std::function<void()> onOpenButtonDetail)
 {
-    using namespace wui::ui;
     return ScrollView()
         .children(
             Column()
-                .gap(20.0f)
-                .padding({32.0f, 32.0f, 40.0f, 32.0f})
-                .align(wui::Alignment::Stretch)
-                .children(
-                    view::components::buildPageHeader({"COMPONENTS", "Controls", "Core interactive controls rendered with their real WhatsUI implementations.", {}}),
-                    buildButtonSection(onOpenButtonDetail),
-                    buildCheckboxSection(),
-                    buildToggleSection(),
-                    buildSliderSection()))
+            .gap(20.0f)
+            .padding({32.0f, 32.0f, 40.0f, 32.0f})
+            .align(wui::Alignment::Stretch)
+            .children(
+                view::components::buildPageHeader({"COMPONENTS", "Controls", "Core interactive controls rendered with their real WhatsUI implementations.", {}}),
+                buildButtonSection(onOpenButtonDetail),
+                buildCheckboxSection(),
+                buildToggleSection(),
+                buildSliderSection()
+            )
+        )
         .intoNode();
 }
 

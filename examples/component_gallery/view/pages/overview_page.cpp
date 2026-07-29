@@ -11,6 +11,8 @@
 #include "wui/theme.h"
 #include "wui/ui.h"
 
+using namespace wui::ui;
+
 namespace whatsui::gallery::view::pages {
 namespace {
 
@@ -30,7 +32,6 @@ constexpr std::array<CategoryFeature, 4> kFeatures{{
 
 std::unique_ptr<wui::Node> buildHero(GalleryViewModel& gallery, const NavigateHandler& navigate)
 {
-    using namespace wui::ui;
     const auto& current = wui::theme();
     return Box()
         .background(current.colors.surface)
@@ -38,74 +39,81 @@ std::unique_ptr<wui::Node> buildHero(GalleryViewModel& gallery, const NavigateHa
         .padding(32.0f)
         .children(
             Row()
-                .gap(28.0f)
-                .align(wui::Alignment::Center)
+            .gap(28.0f)
+            .align(wui::Alignment::Center)
+            .children(
+                Column()
+                .gap(14.0f)
+                .align(wui::Alignment::Start)
+                .children(
+                    Badge("FLUENT 2 FOR C++")
+                        .appearance(wui::BadgeAppearance::Tint)
+                        .color(wui::BadgeColor::Brand),
+                    Text("Build polished native interfaces faster.")
+                        .size(32.0f)
+                        .lineHeight(40.0f)
+                        .weight(600)
+                        .wrap()
+                        .color(current.colors.text),
+                    Text("Explore production-ready WhatsUI components, states, tokens, and developer tooling in one live gallery.")
+                        .size(14.0f)
+                        .lineHeight(22.0f)
+                        .wrap()
+                        .color(current.colors.textMuted),
+                    Row()
+                    .gap(8.0f)
+                    .children(
+                        Button("Browse all components")
+                            .appearance(wui::ButtonAppearance::Primary)
+                            .icon(wui::IconName::ChevronRight)
+                            .iconPosition(wui::ButtonIconPosition::After)
+                            .onClick([&gallery, navigate] {
+                                gallery.clearFilters();
+                                if (navigate) navigate(GalleryRoute::AllComponents);
+                            }),
+                        Button("Visual QA")
+                            .appearance(wui::ButtonAppearance::Secondary)
+                            .onClick([navigate] {
+                                if (navigate) navigate(GalleryRoute::VisualQa);
+                            })
+                    )
+                ),
+
+                Box()
+                .width(220.0f)
+                .height(180.0f)
+                .radius(current.radius.xxLarge)
+                .background(current.colors.surfaceAlt)
+                .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
                 .children(
                     Column()
-                        .gap(14.0f)
-                        .align(wui::Alignment::Start)
-                        .children(
-                            Badge("FLUENT 2 FOR C++")
-                                .appearance(wui::BadgeAppearance::Tint)
-                                .color(wui::BadgeColor::Brand),
-                            Text("Build polished native interfaces faster.")
-                                .size(32.0f)
-                                .lineHeight(40.0f)
-                                .weight(600)
-                                .wrap()
-                                .color(current.colors.text),
-                            Text("Explore production-ready WhatsUI components, states, tokens, and developer tooling in one live gallery.")
-                                .size(14.0f)
-                                .lineHeight(22.0f)
-                                .wrap()
-                                .color(current.colors.textMuted),
-                            Row()
-                                .gap(8.0f)
-                                .children(
-                                    Button("Browse all components")
-                                        .appearance(wui::ButtonAppearance::Primary)
-                                        .icon(wui::IconName::ChevronRight)
-                                        .iconPosition(wui::ButtonIconPosition::After)
-                                        .onClick([&gallery, navigate] {
-                                            gallery.clearFilters();
-                                            if (navigate) navigate(GalleryRoute::AllComponents);
-                                        }),
-                                    Button("Visual QA")
-                                        .appearance(wui::ButtonAppearance::Secondary)
-                                        .onClick([navigate] {
-                                            if (navigate) navigate(GalleryRoute::VisualQa);
-                                        }))),
-                    Box()
-                        .width(220.0f)
-                        .height(180.0f)
-                        .radius(current.radius.xxLarge)
-                        .background(current.colors.surfaceAlt)
-                        .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
-                        .children(
-                            Column()
-                                .gap(10.0f)
-                                .align(wui::Alignment::Center)
-                                .children(
-                                    Icon(wui::IconName::TaskList)
-                                        .size(wui::IconSize::Size24)
-                                        .style(wui::IconStyle::Filled)
-                                        .color(current.colors.accent),
-                                    Text("Live components").size(13.0f).weight(600),
-                                    Badge("INTERACTIVE PREVIEW")
-                                        .appearance(wui::BadgeAppearance::Tint)
-                                        .color(wui::BadgeColor::Brand)))))
+                    .gap(10.0f)
+                    .align(wui::Alignment::Center)
+                    .children(
+                        Icon(wui::IconName::TaskList)
+                            .size(wui::IconSize::Size24)
+                            .style(wui::IconStyle::Filled)
+                            .color(current.colors.accent),
+                        Text("Live components").size(13.0f).weight(600),
+                        Badge("INTERACTIVE PREVIEW")
+                            .appearance(wui::BadgeAppearance::Tint)
+                            .color(wui::BadgeColor::Brand)
+                    )
+                )
+            )
+        )
         .intoNode();
 }
 
 std::unique_ptr<wui::Node> buildCategoryPreview(wui::IconName icon)
 {
-    using namespace wui::ui;
     return Row()
         .gap(10.0f)
         .align(wui::Alignment::Center)
         .children(
             Icon(icon).size(wui::IconSize::Size20).color(wui::theme().colors.accent),
-            Text("Category preview").size(12.0f).weight(600))
+            Text("Category preview").size(12.0f).weight(600)
+        )
         .intoNode();
 }
 
@@ -142,30 +150,32 @@ std::unique_ptr<wui::Node> buildCategories(GalleryViewModel& gallery, const Navi
 
 std::unique_ptr<wui::Node> buildQaSummary(const ComponentCatalog& catalog, const NavigateHandler& navigate)
 {
-    using namespace wui::ui;
     const auto& current = wui::theme();
     const std::string componentCount = std::to_string(catalog.components().size());
     return Card()
         .appearance(wui::CardAppearance::FilledAlternative)
         .children(
             Row()
-                .gap(20.0f)
-                .align(wui::Alignment::Center)
+            .gap(20.0f)
+            .align(wui::Alignment::Center)
+            .children(
+                Column()
+                .gap(4.0f)
                 .children(
-                    Column()
-                        .gap(4.0f)
-                        .children(
-                            Text("Visual quality sample").size(16.0f).weight(600),
-                            Text(componentCount + " catalog entries · 4 review targets · 2 render backends")
-                                .size(12.0f)
-                                .color(current.colors.textMuted)),
-                    Spacer().flex(1.0f),
-                    Badge("SAMPLE DATA")
-                        .appearance(wui::BadgeAppearance::Tint)
-                        .color(wui::BadgeColor::Warning),
-                    Button("Open QA")
-                        .appearance(wui::ButtonAppearance::Subtle)
-                        .onClick([navigate] { if (navigate) navigate(GalleryRoute::VisualQa); })))
+                    Text("Visual quality sample").size(16.0f).weight(600),
+                    Text(componentCount + " catalog entries · 4 review targets · 2 render backends")
+                        .size(12.0f)
+                        .color(current.colors.textMuted)
+                ),
+                Spacer().flex(1.0f),
+                Badge("SAMPLE DATA")
+                    .appearance(wui::BadgeAppearance::Tint)
+                    .color(wui::BadgeColor::Warning),
+                Button("Open QA")
+                    .appearance(wui::ButtonAppearance::Subtle)
+                    .onClick([navigate] { if (navigate) navigate(GalleryRoute::VisualQa); })
+            )
+        )
         .intoNode();
 }
 
@@ -176,19 +186,20 @@ std::unique_ptr<wui::Node> buildOverviewPage(
     GalleryViewModel& gallery,
     NavigateHandler navigate)
 {
-    using namespace wui::ui;
     return ScrollView()
         .children(
             Column()
-                .gap(24.0f)
-                .padding({32.0f, 32.0f, 40.0f, 32.0f})
-                .align(wui::Alignment::Stretch)
-                .children(
-                    view::components::buildPageHeader({"GALLERY", "Overview", "A living catalog of WhatsUI components and quality evidence.", {}}),
-                    view::components::buildResponsiveOverviewHero(gallery, navigate),
-                    Text("Explore by category").size(20.0f).weight(600),
-                    buildCategories(gallery, navigate),
-                    buildQaSummary(catalog, navigate)))
+            .gap(24.0f)
+            .padding({32.0f, 32.0f, 40.0f, 32.0f})
+            .align(wui::Alignment::Stretch)
+            .children(
+                view::components::buildPageHeader({"GALLERY", "Overview", "A living catalog of WhatsUI components and quality evidence.", {}}),
+                view::components::buildResponsiveOverviewHero(gallery, navigate),
+                Text("Explore by category").size(20.0f).weight(600),
+                buildCategories(gallery, navigate),
+                buildQaSummary(catalog, navigate)
+            )
+        )
         .intoNode();
 }
 
