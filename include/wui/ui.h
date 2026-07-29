@@ -323,6 +323,75 @@ public:
         node_->setHeight(height);
         return std::move(self());
     }
+
+    // Interaction — lazily attaches an InteractionArea to the underlying
+    // Container. Every setter is opt-in; a Box that does not call any of them
+    // paints and routes events exactly as before this API existed.
+    Box&& onClick(std::function<void()> handler) &&
+    {
+        node_->setOnClick(std::move(handler));
+        return std::move(self());
+    }
+
+    Box&& onPointerDown(std::function<bool(const wui::PointerEvent&)> handler) &&
+    {
+        node_->setOnPointerDown(std::move(handler));
+        return std::move(self());
+    }
+
+    Box&& onPointerMove(std::function<bool(const wui::PointerEvent&)> handler) &&
+    {
+        node_->setOnPointerMove(std::move(handler));
+        return std::move(self());
+    }
+
+    Box&& onPointerUp(std::function<bool(const wui::PointerEvent&)> handler) &&
+    {
+        node_->setOnPointerUp(std::move(handler));
+        return std::move(self());
+    }
+
+    Box&& onHoverChange(std::function<void(bool)> handler) &&
+    {
+        node_->setOnHoverChange(std::move(handler));
+        return std::move(self());
+    }
+
+    Box&& onFocusChange(std::function<void(bool)> handler) &&
+    {
+        node_->setOnFocusChange(std::move(handler));
+        return std::move(self());
+    }
+
+    Box&& onKey(std::function<bool(const wui::KeyEvent&)> handler) &&
+    {
+        node_->setOnKey(std::move(handler));
+        return std::move(self());
+    }
+
+    Box&& hoverBackground(Color color) &&
+    {
+        node_->setHoverBackground(color);
+        return std::move(self());
+    }
+
+    Box&& pressedBackground(Color color) &&
+    {
+        node_->setPressedBackground(color);
+        return std::move(self());
+    }
+
+    Box&& accessibleRole(wui::AccessibilityRole role) &&
+    {
+        node_->setAccessibleRole(role);
+        return std::move(self());
+    }
+
+    Box&& accessibleLabel(std::string label) &&
+    {
+        node_->setAccessibleLabel(std::move(label));
+        return std::move(self());
+    }
 };
 
 class Spacer : public BuilderBase<Spacer, wui::Spacer> {

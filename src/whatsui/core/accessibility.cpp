@@ -308,6 +308,16 @@ AccessibilityProperties propertiesForNode(const Node& node, const Node* focused)
         properties.label = message->title().empty() ? message->body() : message->title();
         properties.description = message->title().empty() ? std::string{} : message->body();
         properties.live = true;
+    } else if (const auto* container = dynamic_cast<const Container*>(&node);
+               container != nullptr && container->interaction() != nullptr) {
+        // Container with an attached InteractionArea projects the role and
+        // label the caller declared (e.g. wui::ui::Box().accessibleRole(...).
+        // accessibleLabel(...)) so a nav row, tile, or clickable card
+        // surfaces the correct UIA semantics without inheriting from
+        // ControlNode.
+        const auto& interaction = *container->interaction();
+        properties.role = interaction.accessibleRole;
+        properties.label = interaction.accessibleLabel;
     } else {
         return properties;
     }

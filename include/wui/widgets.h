@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "wui/icons.h"
+#include "wui/interaction.h"
 #include "wui/node.h"
 #include "wui/state.h"
 
@@ -269,11 +270,40 @@ public:
     void setHeight(float height) noexcept;
     void clearHeight() noexcept;
 
+    // Attach an InteractionArea on demand. The container stays a pure layout
+    // shell until any interaction setter is called; from that point on it
+    // participates in pointer/keyboard/accessibility routing exactly like a
+    // Fluent control, and its paint pass picks up hover/pressed backgrounds.
+    void setOnClick(std::function<void()> handler);
+    void setOnPointerDown(std::function<bool(const PointerEvent&)> handler);
+    void setOnPointerMove(std::function<bool(const PointerEvent&)> handler);
+    void setOnPointerUp(std::function<bool(const PointerEvent&)> handler);
+    void setOnHoverChange(std::function<void(bool)> handler);
+    void setOnFocusChange(std::function<void(bool)> handler);
+    void setOnKey(std::function<bool(const KeyEvent&)> handler);
+    void setHoverBackground(Color color) noexcept;
+    void setPressedBackground(Color color) noexcept;
+    void setAccessibleRole(AccessibilityRole role) noexcept;
+    void setAccessibleLabel(std::string label);
+    [[nodiscard]] const InteractionArea* interaction() const noexcept
+    {
+        return interaction_.get();
+    }
+
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
     void paint(PaintContext& context) override;
+    EventResult onPointerEvent(const PointerEvent& event,
+                               EventContext& context) override;
+    bool onPointerEvent(const PointerEvent& event) override;
+    bool onKeyEvent(const KeyEvent& event) override;
+    [[nodiscard]] AccessibilityActionCapabilities accessibilityActions() const noexcept override;
+    AccessibilityActionStatus performAccessibilityAction(
+        AccessibilityActionKind kind, std::string_view value) override;
 
 private:
+    InteractionArea& ensureInteraction();
+
     Color background_{0, 0, 0, 0};
     float radius_{0.0f};
     InsetsF padding_{};
@@ -281,6 +311,7 @@ private:
     Alignment verticalAlignment_{Alignment::Stretch};
     std::optional<float> width_;
     std::optional<float> height_;
+    std::unique_ptr<InteractionArea> interaction_;
 };
 
 enum class CardAppearance { Filled, FilledAlternative, Outline, Subtle };

@@ -112,11 +112,318 @@ void Container::layout(const RectF& bounds)
 
 void Container::paint(PaintContext& context)
 {
-    if (background_.a > 0) {
-        context.fillRoundRect(bounds(), radius_, background_);
+    Color fill = background_;
+    if (interaction_ != nullptr) {
+        const auto states = interaction_->states;
+        if ((states & toMask(ControlVisualState::Pressed)) != 0 &&
+            interaction_->pressedBackground.has_value()) {
+            fill = *interaction_->pressedBackground;
+        } else if ((states & toMask(ControlVisualState::Hovered)) != 0 &&
+                   interaction_->hoverBackground.has_value()) {
+            fill = *interaction_->hoverBackground;
+        }
+    }
+    if (fill.a > 0) {
+        context.fillRoundRect(bounds(), radius_, fill);
     }
     ContainerNode::paint(context);
     clearDirty(DirtyFlag::Paint);
+}
+
+InteractionArea& Container::ensureInteraction()
+{
+    if (interaction_ == nullptr) {
+        interaction_ = std::make_unique<InteractionArea>();
+    }
+    return *interaction_;
+}
+
+void Container::setOnClick(std::function<void()> handler)
+{
+    ensureInteraction().onClick = std::move(handler);
+}
+
+void Container::setOnPointerDown(std::function<bool(const PointerEvent&)> handler)
+{
+    ensureInteraction().onPointerDown = std::move(handler);
+}
+
+void Container::setOnPointerMove(std::function<bool(const PointerEvent&)> handler)
+{
+    ensureInteraction().onPointerMove = std::move(handler);
+}
+
+void Container::setOnPointerUp(std::function<bool(const PointerEvent&)> handler)
+{
+    ensureInteraction().onPointerUp = std::move(handler);
+}
+
+void Container::setOnHoverChange(std::function<void(bool)> handler)
+{
+    ensureInteraction().onHoverChange = std::move(handler);
+}
+
+void Container::setOnFocusChange(std::function<void(bool)> handler)
+{
+    ensureInteraction().onFocusChange = std::move(handler);
+}
+
+void Container::setOnKey(std::function<bool(const KeyEvent&)> handler)
+{
+    ensureInteraction().onKey = std::move(handler);
+}
+
+void Container::setHoverBackground(Color color) noexcept
+{
+    ensureInteraction().hoverBackground = color;
+    markDirty(DirtyFlag::Paint);
+}
+
+void Container::setPressedBackground(Color color) noexcept
+{
+    ensureInteraction().pressedBackground = color;
+    markDirty(DirtyFlag::Paint);
+}
+
+void Container::setAccessibleRole(AccessibilityRole role) noexcept
+{
+    ensureInteraction().accessibleRole = role;
+}
+
+void Container::setAccessibleLabel(std::string label)
+{
+    ensureInteraction().accessibleLabel = std::move(label);
+}
+
+namespace {
+bool setInteractionState(InteractionArea& area, ControlVisualState flag,
+                         bool value) noexcept
+{
+    const ControlVisualStates mask = toMask(flag);
+    const bool current = (area.states & mask) != 0;
+    if (current == value) return false;
+    if (value) area.states |= mask;
+    else area.states &= ~mask;
+    return true;
+}
+} // namespace
+
+EventResult Container::onPointerEvent(const PointerEvent& event,
+                                      EventContext& context)
+{
+    // Container is a router-aware node: without an interaction it defers to
+    // the framework contract (Node forwards Target/Bubble to the legacy bool
+    // overload). With an interaction, a click callback may synchronously
+    // rebuild the tree — so once the callback has been dispatched we must ask
+    // the router to stop bubbling before it visits ancestors that have just
+    // been freed. Fluent Button gets away with a plain bool because layout
+    // ancestors ignore the same event; a Container-with-InteractionArea is
+    // observed by many more nodes and would otherwise hit the latent UAF.
+    if (interaction_ == nullptr) {
+        return Node::onPointerEvent(event, context);
+    }
+    if (context.phase() == EventPhase::Capture) return EventResult::Ignored;
+
+    auto& area = *interaction_;
+    switch (event.action) {
+    case PointerAction::Enter:
+        if (setInteractionState(area, ControlVisualState::Hovered, true)) {
+            markDirty(DirtyFlag::Paint);
+            if (area.onHoverChange) area.onHoverChange(true);
+        }
+        return EventResult::Handled;
+    case PointerAction::Leave:
+        if (setInteractionState(area, ControlVisualState::Hovered, false)) {
+            markDirty(DirtyFlag::Paint);
+            if (area.onHoverChange) area.onHoverChange(false);
+        }
+        setInteractionState(area, ControlVisualState::Pressed, false);
+        return EventResult::Handled;
+    case PointerAction::Move:
+        if (area.onPointerMove && area.onPointerMove(event)) {
+            return EventResult::StopPropagation;
+        }
+        if (setInteractionState(area, ControlVisualState::Hovered,
+                                bounds().contains(event.position))) {
+            markDirty(DirtyFlag::Paint);
+            if (area.onHoverChange) {
+                area.onHoverChange((area.states &
+                                    toMask(ControlVisualState::Hovered)) != 0);
+            }
+        }
+        return EventResult::Ignored;
+    case PointerAction::Down:
+        if (event.button == MouseButton::Left) {
+            if (setInteractionState(area, ControlVisualState::Pressed, true)) {
+                markDirty(DirtyFlag::Paint);
+            }
+            if (area.onPointerDown && area.onPointerDown(event)) {
+                return EventResult::StopPropagation;
+            }
+            return EventResult::Handled;
+        }
+        if (area.onPointerDown && area.onPointerDown(event)) {
+            return EventResult::StopPropagation;
+        }
+        return EventResult::Ignored;
+    case PointerAction::Up:
+        if (event.button == MouseButton::Left) {
+            const bool wasPressed =
+                (area.states & toMask(ControlVisualState::Pressed)) != 0;
+            setInteractionState(area, ControlVisualState::Pressed, false);
+            markDirty(DirtyFlag::Paint);
+            const bool insideBounds = bounds().contains(event.position);
+            auto onClick = area.onClick;
+            auto rawUp = area.onPointerUp;
+            if (wasPressed && insideBounds && onClick) {
+                // Copy the callback out first: it may rebuild the tree and
+                // free `this` and `area`. StopPropagation halts the router
+                // before it walks any now-freed ancestor.
+                onClick();
+                return EventResult::StopPropagation;
+            }
+            if (rawUp && rawUp(event)) return EventResult::StopPropagation;
+            return EventResult::Handled;
+        }
+        if (area.onPointerUp && area.onPointerUp(event)) {
+            return EventResult::StopPropagation;
+        }
+        return EventResult::Ignored;
+    case PointerAction::Cancel:
+        setInteractionState(area, ControlVisualState::Pressed, false);
+        markDirty(DirtyFlag::Paint);
+        return EventResult::Handled;
+    case PointerAction::Scroll:
+        break;
+    }
+    return EventResult::Ignored;
+}
+
+bool Container::onPointerEvent(const PointerEvent& event)
+{
+    // Legacy bool overload retained for test hosts and any code that calls
+    // Container::onPointerEvent(event) directly. The interactive router uses
+    // the EventContext overload above, which is where the propagation control
+    // that avoids the tree-rebuild UAF lives. Behavior here matches the
+    // EventContext path for anything a bool caller can express.
+    if (interaction_ == nullptr) {
+        return ContainerNode::onPointerEvent(event);
+    }
+    auto& area = *interaction_;
+    bool handled = false;
+
+    switch (event.action) {
+    case PointerAction::Enter:
+        if (setInteractionState(area, ControlVisualState::Hovered, true)) {
+            markDirty(DirtyFlag::Paint);
+            if (area.onHoverChange) area.onHoverChange(true);
+        }
+        handled = true;
+        break;
+    case PointerAction::Leave:
+        if (setInteractionState(area, ControlVisualState::Hovered, false)) {
+            markDirty(DirtyFlag::Paint);
+            if (area.onHoverChange) area.onHoverChange(false);
+        }
+        setInteractionState(area, ControlVisualState::Pressed, false);
+        handled = true;
+        break;
+    case PointerAction::Move:
+        if (area.onPointerMove && area.onPointerMove(event)) handled = true;
+        if (setInteractionState(area, ControlVisualState::Hovered,
+                                bounds().contains(event.position))) {
+            markDirty(DirtyFlag::Paint);
+            if (area.onHoverChange) {
+                area.onHoverChange((area.states &
+                                    toMask(ControlVisualState::Hovered)) != 0);
+            }
+        }
+        break;
+    case PointerAction::Down:
+        if (event.button == MouseButton::Left) {
+            if (setInteractionState(area, ControlVisualState::Pressed, true)) {
+                markDirty(DirtyFlag::Paint);
+            }
+            handled = true;
+        }
+        if (area.onPointerDown && area.onPointerDown(event)) handled = true;
+        break;
+    case PointerAction::Up:
+        if (event.button == MouseButton::Left) {
+            const bool wasPressed =
+                (area.states & toMask(ControlVisualState::Pressed)) != 0;
+            setInteractionState(area, ControlVisualState::Pressed, false);
+            markDirty(DirtyFlag::Paint);
+            const bool insideBounds = bounds().contains(event.position);
+            auto onClick = area.onClick;
+            auto rawUp = area.onPointerUp;
+            if (wasPressed && insideBounds && onClick) {
+                onClick();
+                return true;
+            }
+            if (rawUp && rawUp(event)) return true;
+            return true;
+        }
+        if (area.onPointerUp && area.onPointerUp(event)) handled = true;
+        break;
+    case PointerAction::Cancel:
+        setInteractionState(area, ControlVisualState::Pressed, false);
+        markDirty(DirtyFlag::Paint);
+        handled = true;
+        break;
+    case PointerAction::Scroll:
+        break;
+    }
+
+    if (handled) return true;
+    return ContainerNode::onPointerEvent(event);
+}
+
+bool Container::onKeyEvent(const KeyEvent& event)
+{
+    if (interaction_ == nullptr) {
+        return Node::onKeyEvent(event);
+    }
+    auto& area = *interaction_;
+    if (area.onKey && area.onKey(event)) return true;
+    if (event.action == KeyAction::Down && area.onClick) {
+        // Space (32) and Enter (13) activate the interaction area, mirroring
+        // the Fluent Button keyboard contract so a11y stays uniform.
+        if (event.keyCode == 13 || event.keyCode == 32) {
+            // Copy the handler out before invoking it: an onClick that swaps
+            // the route will destroy `this` and free `area`, so we cannot
+            // touch either after the callback has run.
+            auto onClick = area.onClick;
+            onClick();
+            return true;
+        }
+    }
+    return Node::onKeyEvent(event);
+}
+
+AccessibilityActionCapabilities Container::accessibilityActions() const noexcept
+{
+    AccessibilityActionCapabilities actions;
+    if (interaction_ != nullptr && interaction_->onClick) {
+        actions.invoke = true;
+    }
+    return actions;
+}
+
+AccessibilityActionStatus Container::performAccessibilityAction(
+    AccessibilityActionKind kind, std::string_view value)
+{
+    (void)value;
+    if (interaction_ == nullptr) return AccessibilityActionStatus::NotSupported;
+    if (kind != AccessibilityActionKind::Invoke) {
+        return AccessibilityActionStatus::NotSupported;
+    }
+    if (!interaction_->onClick) return AccessibilityActionStatus::NotSupported;
+    // Copy the handler before running it — a11y Invoke can (and, for the nav
+    // rail, does) tear down the tree that owns this Container.
+    auto onClick = interaction_->onClick;
+    onClick();
+    return AccessibilityActionStatus::Succeeded;
 }
 
 Row& Row::child(std::unique_ptr<Node> child)

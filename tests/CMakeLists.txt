@@ -30,6 +30,23 @@ add_test(
     COMMAND WhatsUILayoutTests
 )
 
+add_executable(WhatsUIContainerInteractionTests
+    container_interaction_tests.cpp
+)
+
+target_link_libraries(WhatsUIContainerInteractionTests
+    PRIVATE
+        WhatsUI::WhatsUI
+        WhatsCanvas::Software
+)
+
+target_compile_features(WhatsUIContainerInteractionTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_container_interaction_tests
+    COMMAND WhatsUIContainerInteractionTests
+)
+
 add_executable(WhatsUIStateTests
     state_tests.cpp
 )
