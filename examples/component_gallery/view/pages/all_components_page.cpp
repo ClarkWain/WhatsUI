@@ -6,8 +6,11 @@
 
 #include "view/components/component_card.h"
 #include "view/components/page_header.h"
+#include "view/components/responsive_choice_group.h"
 #include "wui/theme.h"
 #include "wui/ui.h"
+
+using namespace wui::ui;
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -30,10 +33,11 @@ wui::IconName iconFor(ComponentIcon icon)
 
 std::unique_ptr<wui::Node> buildDescriptorPreview(const ComponentDescriptor& descriptor)
 {
-    using namespace wui::ui;
+    
     if (descriptor.id == "textarea") {
         return TextArea("Write a short note...").rows(2).intoNode();
     }
+
     if (descriptor.id == "table") {
         return Table({{"name", "Name", 92.0f}, {"status", "Status", 92.0f}})
             .rows({{"one", {"Button", "Stable"}}, {"two", {"Avatar", "Stable"}}})
@@ -41,23 +45,27 @@ std::unique_ptr<wui::Node> buildDescriptorPreview(const ComponentDescriptor& des
             .accessibleLabel("Component status preview")
             .intoNode();
     }
+
     if (descriptor.id == "avatar") {
         return Row().gap(8.0f).align(wui::Alignment::Center).children(
             Avatar("Ada Lovelace", wui::AvatarSize::Size40).initials("AL"),
             Text("Ada Lovelace").size(12.0f)).intoNode();
     }
+
     if (descriptor.id == "progress-bar") {
         return Column().gap(8.0f).align(wui::Alignment::Stretch).children(
             Text("Uploading · 68%").size(11.0f),
             ProgressBar(0.0f, 100.0f, 68.0f).accessibleLabel("Upload progress"))
             .intoNode();
     }
+
     return Row()
         .gap(10.0f)
         .align(wui::Alignment::Center)
         .children(
             Icon(iconFor(descriptor.icon)).size(wui::IconSize::Size20),
-            Text(descriptor.name).size(12.0f).weight(600))
+            Text(descriptor.name).size(12.0f).weight(600)
+        )
         .intoNode();
 }
 
@@ -79,7 +87,6 @@ std::unique_ptr<wui::Node> buildComponent(
 
 std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
 {
-    using namespace wui::ui;
     constexpr std::array<ComponentCategory, 10> categories{{
         ComponentCategory::All,
         ComponentCategory::Controls,
@@ -93,34 +100,11 @@ std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
         ComponentCategory::Overlays,
     }};
 
-    auto primaryCategoryRow = std::make_unique<wui::Row>();
-    auto secondaryCategoryRow = std::make_unique<wui::Row>();
-    auto categoryButtons = std::make_shared<
-        std::vector<std::pair<ComponentCategory, wui::ToggleButton*>>>();
-    for (auto* row : {primaryCategoryRow.get(), secondaryCategoryRow.get()}) {
-        row->setGap(6.0f);
-        row->setAlign(wui::Alignment::Center);
-    }
-    for (std::size_t index = 0; index < categories.size(); ++index) {
-        const auto category = categories[index];
-        const bool selected = viewModel.selectedCategory().get() == category;
-        auto button = std::make_unique<wui::ToggleButton>(
-            std::string(componentCategoryName(category)), selected);
-        button->setAppearance(wui::ButtonAppearance::Subtle);
-        auto* raw = button.get();
-        categoryButtons->push_back({category, raw});
-        button->onChange([&viewModel, category, categoryButtons, raw](bool checked) {
-            if (!checked) {
-                raw->setChecked(true);
-                return;
-            }
-            viewModel.selectCategory(category);
-            for (const auto& [value, item] : *categoryButtons) {
-                item->setChecked(value == category);
-            }
-        });
-        auto& row = index < 5 ? primaryCategoryRow : secondaryCategoryRow;
-        row->appendChild(std::move(button));
+    std::vector<view::components::ResponsiveChoiceOption> options;
+    options.reserve(categories.size());
+    for (const auto category : categories) {
+        options.push_back({std::string(componentCategoryName(category)),
+                           std::string(componentCategoryName(category))});
     }
 
     return Column()
@@ -128,22 +112,31 @@ std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
         .align(wui::Alignment::Stretch)
         .children(
             SearchField("Search components")
-                .query(viewModel.searchQuery().get())
-                .onChange([&viewModel](const std::string& value) {
-                    viewModel.setSearchQuery(value);
-                }),
-            Column()
-                .gap(6.0f)
-                .align(wui::Alignment::Stretch)
-                .children(
-                    std::move(primaryCategoryRow),
-                    std::move(secondaryCategoryRow)))
+            .query(viewModel.searchQuery().get())
+            .onChange([&viewModel](const std::string& value) {
+                viewModel.setSearchQuery(value);
+            }),
+            std::make_unique<view::components::ResponsiveChoiceGroup>(
+                std::move(options),
+                [&viewModel] {
+                    return std::string(componentCategoryName(viewModel.selectedCategory().get()));
+                },
+                [&viewModel, categories](const std::string& value) {
+                    for (const auto category : categories) {
+                        if (value == componentCategoryName(category)) {
+                            viewModel.selectCategory(category);
+                            return;
+                        }
+                    }
+                },
+                "Component category",
+                5)
+        )
         .intoNode();
 }
 
 std::unique_ptr<wui::Node> buildResults(GalleryViewModel& viewModel, OpenComponentHandler onOpen)
 {
-    using namespace wui::ui;
     return Column()
         .gap(12.0f)
         .align(wui::Alignment::Stretch)
@@ -151,6 +144,7 @@ std::unique_ptr<wui::Node> buildResults(GalleryViewModel& viewModel, OpenCompone
             Text().bind(viewModel.resultCount(), [](std::size_t count) {
                 return std::to_string(count) + (count == 1 ? " component" : " components");
             }).size(12.0f).color(wui::theme().colors.textMuted),
+            
             KeyedForEach<ComponentDescriptor>(
                 viewModel.visibleComponents(),
                 [](const ComponentDescriptor& descriptor) { return descriptor.id; },
@@ -158,7 +152,8 @@ std::unique_ptr<wui::Node> buildResults(GalleryViewModel& viewModel, OpenCompone
                     return buildComponent(descriptor, onOpen);
                 })
                 .gap(12.0f)
-                .align(wui::Alignment::Stretch))
+                .align(wui::Alignment::Stretch)
+        )
         .intoNode();
 }
 
@@ -168,17 +163,18 @@ std::unique_ptr<wui::Node> buildAllComponentsPage(
     GalleryViewModel& viewModel,
     OpenComponentHandler onOpenComponent)
 {
-    using namespace wui::ui;
     return ScrollView()
         .children(
             Column()
-                .gap(20.0f)
-                .padding({32.0f, 32.0f, 40.0f, 32.0f})
-                .align(wui::Alignment::Stretch)
-                .children(
-                    view::components::buildPageHeader({"CATALOG", "All components", "Search and filter the complete Fluent component set.", {}}),
-                    buildFilters(viewModel),
-                    buildResults(viewModel, std::move(onOpenComponent))))
+            .gap(20.0f)
+            .padding({32.0f, 32.0f, 40.0f, 32.0f})
+            .align(wui::Alignment::Stretch)
+            .children(
+                view::components::buildPageHeader({"CATALOG", "All components", "Search and filter the complete Fluent component set.", {}}),
+                buildFilters(viewModel),
+                buildResults(viewModel, std::move(onOpenComponent))
+            )
+        )
         .intoNode();
 }
 

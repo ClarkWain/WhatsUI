@@ -7,6 +7,7 @@
 
 #include "view/components/page_header.h"
 #include "view/components/preview_surface.h"
+#include "view/components/responsive_choice_group.h"
 #include "wui/theme.h"
 #include "wui/ui.h"
 
@@ -73,109 +74,103 @@ std::unique_ptr<wui::Node> buildLivePreview(wui::Button*& previewOut)
         std::move(button));
 }
 
-template <typename Enum>
-std::unique_ptr<wui::Node> buildChoiceRow(
-    const std::vector<std::pair<const char*, Enum>>& choices,
-    Enum selected,
-    std::function<void(Enum)> onSelect)
+std::string appearanceChoiceValue(ButtonAppearanceSample value)
 {
-    using namespace wui::ui;
-    auto row = std::make_unique<wui::Row>();
-    auto buttons = std::make_shared<std::vector<std::pair<Enum, wui::ToggleButton*>>>();
-    row->setGap(6.0f);
-    row->setAlign(wui::Alignment::Center);
-    for (const auto& [label, value] : choices) {
-        auto button = std::make_unique<wui::ToggleButton>(label, value == selected);
-        button->setAppearance(wui::ButtonAppearance::Subtle);
-        auto* raw = button.get();
-        buttons->push_back({value, raw});
-        button->onChange([onSelect, value, buttons, raw](bool checked) {
-            if (!checked) {
-                raw->setChecked(true);
-                return;
-            }
-            onSelect(value);
-            for (const auto& [candidate, item] : *buttons) {
-                item->setChecked(candidate == value);
-            }
-        });
-        row->appendChild(std::move(button));
+    switch (value) {
+    case ButtonAppearanceSample::Primary: return "primary";
+    case ButtonAppearanceSample::Secondary: return "secondary";
+    case ButtonAppearanceSample::Subtle: return "subtle";
+    case ButtonAppearanceSample::Transparent: return "transparent";
+    case ButtonAppearanceSample::Outline: return "outline";
     }
-    return row;
+    return "primary";
+}
+
+std::string sizeChoiceValue(ButtonSizeSample value)
+{
+    switch (value) {
+    case ButtonSizeSample::Small: return "small";
+    case ButtonSizeSample::Medium: return "medium";
+    case ButtonSizeSample::Large: return "large";
+    }
+    return "medium";
+}
+
+std::unique_ptr<wui::Node> buildAppearanceChoice(ButtonDetailViewModel& viewModel)
+{
+    return std::make_unique<view::components::ResponsiveChoiceGroup>(
+        std::vector<view::components::ResponsiveChoiceOption>{
+            {"primary", "Primary"}, {"secondary", "Secondary"},
+            {"subtle", "Subtle"}, {"outline", "Outline"}},
+        [&viewModel] { return appearanceChoiceValue(viewModel.appearance().get()); },
+        [&viewModel](const std::string& value) {
+            if (value == "primary") viewModel.selectAppearance(ButtonAppearanceSample::Primary);
+            else if (value == "secondary") viewModel.selectAppearance(ButtonAppearanceSample::Secondary);
+            else if (value == "subtle") viewModel.selectAppearance(ButtonAppearanceSample::Subtle);
+            else if (value == "outline") viewModel.selectAppearance(ButtonAppearanceSample::Outline);
+        },
+        "Button appearance");
+}
+
+std::unique_ptr<wui::Node> buildSizeChoice(ButtonDetailViewModel& viewModel)
+{
+    return std::make_unique<view::components::ResponsiveChoiceGroup>(
+        std::vector<view::components::ResponsiveChoiceOption>{
+            {"small", "Small"}, {"medium", "Medium"}, {"large", "Large"}},
+        [&viewModel] { return sizeChoiceValue(viewModel.size().get()); },
+        [&viewModel](const std::string& value) {
+            if (value == "small") viewModel.selectSize(ButtonSizeSample::Small);
+            else if (value == "medium") viewModel.selectSize(ButtonSizeSample::Medium);
+            else if (value == "large") viewModel.selectSize(ButtonSizeSample::Large);
+        },
+        "Button size");
 }
 
 std::unique_ptr<wui::Node> buildProperties(ButtonDetailViewModel& viewModel)
 {
     using namespace wui::ui;
-    const std::vector<std::pair<const char*, ButtonAppearanceSample>> appearances{
-        {"Primary", ButtonAppearanceSample::Primary},
-        {"Secondary", ButtonAppearanceSample::Secondary},
-        {"Subtle", ButtonAppearanceSample::Subtle},
-        {"Outline", ButtonAppearanceSample::Outline},
-    };
-    const std::vector<std::pair<const char*, ButtonSizeSample>> sizes{
-        {"Small", ButtonSizeSample::Small},
-        {"Medium", ButtonSizeSample::Medium},
-        {"Large", ButtonSizeSample::Large},
-    };
     return Card()
         .appearance(wui::CardAppearance::Outline)
         .children(
             Column()
-                .gap(14.0f)
-                .align(wui::Alignment::Stretch)
-                .children(
-                    Text("Properties").size(16.0f).weight(600),
-                    Text("Appearance").size(12.0f).color(wui::theme().colors.textMuted),
-                    buildChoiceRow<ButtonAppearanceSample>(
-                        appearances,
-                        viewModel.appearance().get(),
-                        [&viewModel](ButtonAppearanceSample value) { viewModel.selectAppearance(value); }),
-                    Text("Size").size(12.0f).color(wui::theme().colors.textMuted),
-                    buildChoiceRow<ButtonSizeSample>(
-                        sizes,
-                        viewModel.size().get(),
-                        [&viewModel](ButtonSizeSample value) { viewModel.selectSize(value); }),
-                    Switch("Show leading icon", viewModel.iconVisible().get())
-                        .onChange([&viewModel](bool value) { viewModel.setIconVisible(value); }),
-                    Switch("Enabled", viewModel.enabled().get())
-                        .onChange([&viewModel](bool value) { viewModel.setEnabled(value); })))
+            .gap(14.0f)
+            .align(wui::Alignment::Stretch)
+            .children(
+                Text("Properties").size(16.0f).weight(600),
+                Text("Appearance").size(12.0f).color(wui::theme().colors.textMuted),
+                buildAppearanceChoice(viewModel),
+                Text("Size").size(12.0f).color(wui::theme().colors.textMuted),
+                buildSizeChoice(viewModel),
+                Switch("Show leading icon", viewModel.iconVisible().get())
+                    .onChange([&viewModel](bool value) { viewModel.setIconVisible(value); }),
+                Switch("Enabled", viewModel.enabled().get())
+                    .onChange([&viewModel](bool value) { viewModel.setEnabled(value); })
+            )
+        )
         .intoNode();
-}
-
-std::unique_ptr<wui::Node> buildStateButton(
-    std::string label,
-    std::initializer_list<wui::ControlVisualState> states,
-    bool enabled = true)
-{
-    auto button = std::make_unique<wui::Button>(std::move(label));
-    button->setAppearance(wui::ButtonAppearance::Primary);
-    button->setEnabled(enabled);
-    for (const auto state : states) {
-        button->setVisualState(state, true);
-    }
-    return button;
 }
 
 std::unique_ptr<wui::Node> buildStates()
 {
     using namespace wui::ui;
+    auto selected = std::make_shared<std::string>("rest");
     return Card()
         .appearance(wui::CardAppearance::Outline)
         .children(
             Column()
-                .gap(14.0f)
-                .align(wui::Alignment::Stretch)
-                .children(
-                    Text("States").size(16.0f).weight(600),
-                    Row()
-                        .gap(8.0f)
-                        .children(
-                            buildStateButton("Rest", {}),
-                            buildStateButton("Hovered", {wui::ControlVisualState::Hovered}),
-                            buildStateButton("Pressed", {wui::ControlVisualState::Pressed}),
-                            buildStateButton("Focused", {wui::ControlVisualState::Focused, wui::ControlVisualState::FocusVisible}),
-                            buildStateButton("Disabled", {}, false))))
+            .gap(14.0f)
+            .align(wui::Alignment::Stretch)
+            .children(
+                Text("States").size(16.0f).weight(600),
+                std::make_unique<view::components::ResponsiveChoiceGroup>(
+                    std::vector<view::components::ResponsiveChoiceOption>{
+                        {"rest", "Rest"}, {"hovered", "Hovered"}, {"pressed", "Pressed"},
+                        {"focused", "Focused"}, {"disabled", "Disabled"}},
+                    [selected] { return *selected; },
+                    [selected](const std::string& value) { *selected = value; },
+                    "Button visual state")
+            )
+        )
         .intoNode();
 }
 
@@ -187,17 +182,19 @@ std::unique_ptr<wui::Node> buildTokens()
         .appearance(wui::CardAppearance::Outline)
         .children(
             Column()
-                .gap(10.0f)
-                .align(wui::Alignment::Stretch)
-                .children(
-                    Text("Tokens").size(16.0f).weight(600),
-                    Row().children(Text("Control height").size(12.0f), Spacer().flex(1.0f), Text(std::to_string(static_cast<int>(current.controls.height)) + " px").size(12.0f)),
-                    Divider(),
-                    Row().children(Text("Horizontal padding").size(12.0f), Spacer().flex(1.0f), Text(std::to_string(static_cast<int>(current.controls.horizontalPadding)) + " px").size(12.0f)),
-                    Divider(),
-                    Row().children(Text("Corner radius").size(12.0f), Spacer().flex(1.0f), Text(std::to_string(static_cast<int>(current.radius.md)) + " px").size(12.0f)),
-                    Divider(),
-                    Row().children(Text("Focus width").size(12.0f), Spacer().flex(1.0f), Text(std::to_string(static_cast<int>(current.controls.focusWidth)) + " px").size(12.0f))))
+            .gap(10.0f)
+            .align(wui::Alignment::Stretch)
+            .children(
+                Text("Tokens").size(16.0f).weight(600),
+                Row().children(Text("Control height").size(12.0f), Spacer().flex(1.0f), Text(std::to_string(static_cast<int>(current.controls.height)) + " px").size(12.0f)),
+                Divider(),
+                Row().children(Text("Horizontal padding").size(12.0f), Spacer().flex(1.0f), Text(std::to_string(static_cast<int>(current.controls.horizontalPadding)) + " px").size(12.0f)),
+                Divider(),
+                Row().children(Text("Corner radius").size(12.0f), Spacer().flex(1.0f), Text(std::to_string(static_cast<int>(current.radius.md)) + " px").size(12.0f)),
+                Divider(),
+                Row().children(Text("Focus width").size(12.0f), Spacer().flex(1.0f), Text(std::to_string(static_cast<int>(current.controls.focusWidth)) + " px").size(12.0f))
+            )
+        )
         .intoNode();
 }
 
@@ -212,16 +209,19 @@ std::unique_ptr<wui::Node> buildButtonDetailPage(
     auto root = ScrollView()
         .children(
             Column()
-                .gap(20.0f)
-                .padding({32.0f, 32.0f, 40.0f, 32.0f})
-                .align(wui::Alignment::Stretch)
-                .children(
-                    view::components::buildPageHeader({"COMPONENT DETAIL", "Button", "Trigger an immediate action with a Fluent button.", {{"Back", wui::IconName::ChevronLeft, wui::ButtonAppearance::Subtle, std::move(onBack)}}}),
-                    buildLivePreview(preview),
-                    buildProperties(viewModel),
-                    buildStates(),
-                    buildTokens()))
+            .gap(20.0f)
+            .padding({32.0f, 32.0f, 40.0f, 32.0f})
+            .align(wui::Alignment::Stretch)
+            .children(
+                view::components::buildPageHeader({"COMPONENT DETAIL", "Button", "Trigger an immediate action with a Fluent button.", {{"Back", wui::IconName::ChevronLeft, wui::ButtonAppearance::Subtle, std::move(onBack)}}}),
+                buildLivePreview(preview),
+                buildProperties(viewModel),
+                buildStates(),
+                buildTokens()
+            )
+        )
         .intoNode();
+        
     bindPreview(*root, *preview, viewModel);
     return root;
 }
