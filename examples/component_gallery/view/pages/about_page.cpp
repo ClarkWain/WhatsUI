@@ -100,9 +100,9 @@ std::unique_ptr<wui::Node> buildResources(const OpenLinkHandler& openLink)
                 Text("Resources").size(16.0f).weight(600),
                 Text("Link activation is delegated to the host application so platform policy stays outside the View.")
                     .size(11.0f).wrap().color(wui::theme().colors.textMuted),
-                link("Project README", "https://github.com/Team-Bass/WhatsUI"),
-                link("Architecture guide", "https://github.com/Team-Bass/WhatsUI/blob/main/WHATSUI_ARCHITECTURE.md"),
-                link("License", "https://github.com/Team-Bass/WhatsUI/blob/main/LICENSE")
+                link("Project README", "https://github.com/ClarkWain/WhatsUI"),
+                link("Architecture guide", "https://github.com/ClarkWain/WhatsUI/blob/main/WHATSUI_ARCHITECTURE.md"),
+                link("License", "https://github.com/ClarkWain/WhatsUI/blob/main/LICENSE")
             )
         )
         .intoNode();
