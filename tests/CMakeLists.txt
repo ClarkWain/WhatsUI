@@ -39,6 +39,11 @@ target_link_libraries(WhatsUIContainerInteractionTests
         WhatsUI::WhatsUI
 )
 
+# node.obj/layout.obj pull in Canvas-backed PaintContext when WhatsCanvas is on.
+if(WHATSUI_WITH_WHATSCANVAS)
+    target_link_libraries(WhatsUIContainerInteractionTests PRIVATE WhatsCanvas::Software)
+endif()
+
 target_compile_features(WhatsUIContainerInteractionTests PRIVATE cxx_std_17)
 
 add_test(
