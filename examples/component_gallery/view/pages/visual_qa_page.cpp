@@ -130,7 +130,7 @@ std::unique_ptr<wui::Node> buildActiveDpi(VisualQaViewModel& viewModel)
                 Text().bind(viewModel.actualScaleFactor(), scaleLabel)
                     .size(13.0f)
                     .color(wui::theme().colors.textMuted),
-                Text("Profile buttons select a review target; they do not pretend to change the native window DPR.")
+                Text("Marks the review target only; the native window DPR is unchanged.")
                     .size(11.0f)
                     .wrap()
                     .color(wui::theme().colors.textMuted),
