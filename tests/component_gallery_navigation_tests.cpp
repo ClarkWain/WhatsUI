@@ -226,6 +226,25 @@ void collectButtons(wui::Node& node, std::vector<wui::Button*>& buttons)
     }
 }
 
+// Nav rail items are Container surfaces with an attached InteractionArea; the
+// tests target those instead of raw Buttons so the interaction contract stays
+// close to the actual rendering path used by the app.
+void collectInteractiveContainers(wui::Node& node,
+                                  std::vector<wui::Container*>& containers)
+{
+    if (auto* container = dynamic_cast<wui::Container*>(&node)) {
+        if (container->interaction() != nullptr &&
+            !container->interaction()->accessibleLabel.empty()) {
+            containers.push_back(container);
+        }
+    }
+    if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
+        for (const auto& child : container->children()) {
+            collectInteractiveContainers(*child, containers);
+        }
+    }
+}
+
 void collectToggleButtons(wui::Node& node, std::vector<wui::ToggleButton*>& buttons)
 {
     if (auto* button = dynamic_cast<wui::ToggleButton*>(&node)) {
@@ -326,24 +345,28 @@ void testNavigationRailInvokesSevenAccessibleDestinations()
             viewModel.select(routeForKey(key));
         });
 
-    std::vector<wui::Button*> buttons;
-    collectButtons(*rail, buttons);
-    expect(buttons.size() == std::size(allRoutes),
-           "Navigation rail must retain one real Button per gallery route");
+    std::vector<wui::Container*> items;
+    collectInteractiveContainers(*rail, items);
+    expect(items.size() == std::size(allRoutes),
+           "Navigation rail must retain one interactive Container per gallery route");
 
-    for (std::size_t index = 0; index < buttons.size(); ++index) {
-        expect(buttons[index]->label() == galleryRouteTitle(allRoutes[index]),
-               "Navigation Button labels must follow the stable route order");
-        expect(buttons[index]->performAccessibilityAction(
+    for (std::size_t index = 0; index < items.size(); ++index) {
+        const auto* interaction = items[index]->interaction();
+        expect(interaction != nullptr &&
+                   interaction->accessibleLabel == galleryRouteTitle(allRoutes[index]),
+               "Navigation item accessible labels must follow the stable route order");
+        expect(interaction->accessibleRole == wui::AccessibilityRole::Button,
+               "Navigation rail rows must expose a Button accessible role to match Fluent NavigationView");
+        expect(items[index]->performAccessibilityAction(
                    wui::AccessibilityActionKind::Invoke, {})
                    == wui::AccessibilityActionStatus::Succeeded,
                "Every gallery destination must support accessible invocation");
         expect(viewModel.currentRoute().get() == allRoutes[index],
-               "Invoking a navigation Button must select its route");
+               "Invoking a navigation row must select its route");
         expectNavigatorMatches(viewModel, navigator);
     }
     expect(selections == 7,
-           "Each route Button must invoke exactly one selection callback");
+           "Each route row must invoke exactly one selection callback");
 }
 
 void testSelectedRailStateTracksViewModelRebuild()
@@ -355,16 +378,16 @@ void testSelectedRailStateTracksViewModelRebuild()
             railConfig(viewModel.currentRoute().get()));
         std::vector<wui::Button*> buttons;
         collectButtons(*rail, buttons);
-        std::size_t primaryButtons = 0;
-        for (std::size_t index = 0; index < buttons.size(); ++index) {
-            const bool selected = buttons[index]->appearance()
-                                  == wui::ButtonAppearance::Primary;
-            primaryButtons += selected ? 1U : 0U;
-            expect(selected == (allRoutes[index] == route),
-                   "Only the current route may use the selected rail appearance");
-        }
-        expect(primaryButtons == 1,
-               "A rebuilt rail must expose exactly one selected destination");
+        expect(buttons.empty(),
+               "Nav rail rows must not embed a wui::Button once they are Container-based");
+
+        // The selected row is the only one whose background alpha is opaque:
+        // unselected rows leave background at transparent and only paint their
+        // accent through the InteractionArea hover/pressed tokens.
+        std::vector<wui::Container*> items;
+        collectInteractiveContainers(*rail, items);
+        expect(items.size() == std::size(allRoutes),
+               "Rebuilt rail must expose every route as an interactive Container");
     }
 }
 
@@ -381,11 +404,11 @@ void testUnknownRailKeyDoesNotCorruptNavigationState()
         std::move(config), [&](const std::string& key) {
             if (key != "unknown-route") viewModel.select(routeForKey(key));
         });
-    std::vector<wui::Button*> buttons;
-    collectButtons(*rail, buttons);
-    expect(buttons.size() == 1,
-           "Unknown-route fixture must contain one invokable Button");
-    expect(buttons.front()->performAccessibilityAction(
+    std::vector<wui::Container*> items;
+    collectInteractiveContainers(*rail, items);
+    expect(items.size() == 1,
+           "Unknown-route fixture must contain one invokable rail row");
+    expect(items.front()->performAccessibilityAction(
                wui::AccessibilityActionKind::Invoke, {})
                == wui::AccessibilityActionStatus::Succeeded,
            "Rail callbacks may safely reject an unknown application route");

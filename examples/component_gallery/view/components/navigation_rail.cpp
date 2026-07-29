@@ -1,5 +1,6 @@
 #include "navigation_rail.h"
 
+#include <cstdint>
 #include <utility>
 
 #include "wui/theme.h"
@@ -19,40 +20,84 @@ std::unique_ptr<wui::Node> buildBrand(const NavigationRailConfig& config)
         .align(wui::Alignment::Center)
         .children(
             Box()
-                .width(36.0f)
-                .height(36.0f)
-                .radius(8.0f)
-                .background(colors.accent)
-                .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
-                .children(Icon(wui::IconName::TaskList)
-                    .size(wui::IconSize::Size20)
-                    .style(wui::IconStyle::Filled)
-                    .color(colors.onAccent)),
+            .width(36.0f)
+            .height(36.0f)
+            .radius(8.0f)
+            .background(colors.accent)
+            .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
+            .children(Icon(wui::IconName::TaskList)
+                .size(wui::IconSize::Size20)
+                .style(wui::IconStyle::Filled)
+                .color(colors.onAccent)
+            ),
             Column()
-                .gap(1.0f)
-                .children(
-                    Text(config.productName).size(15.0f).weight(600).color(colors.text),
-                    Text(config.productCaption).size(11.0f).color(colors.textMuted)))
+            .gap(1.0f)
+            .children(
+                Text(config.productName).size(15.0f).weight(600).color(colors.text),
+                Text(config.productCaption).size(11.0f).color(colors.textMuted)
+            )
+        )
         .intoNode();
 }
 
-std::unique_ptr<wui::Node> buildRailButton(
+// Sidebar rows are Box surfaces with an InteractionArea attached: Column
+// stretches them to the rail's full width, .onClick handles keyboard/mouse
+// activation and a11y invoke, and hoverBackground/pressedBackground drive the
+// full-width hover strip that Fluent NavigationView shows on real Windows.
+std::unique_ptr<wui::Node> buildRailItem(
     NavigationRailItem item,
     bool selected,
     const NavigationRailSelectHandler& onSelect)
 {
     using namespace wui::ui;
+    const auto& colors = wui::theme().colors;
 
-    auto button = Button(std::move(item.label))
-        .appearance(selected ? wui::ButtonAppearance::Primary : wui::ButtonAppearance::Subtle)
-        .icon(item.icon)
-        .iconPosition(wui::ButtonIconPosition::Before);
+    const auto withAlpha = [](wui::Color color, std::uint8_t alpha) noexcept {
+        color.a = alpha;
+        return color;
+    };
+
+    const wui::Color hoverFill = selected ? withAlpha(colors.accent, 220)
+                                          : withAlpha(colors.text, 20);
+    const wui::Color pressedFill = selected ? withAlpha(colors.accent, 200)
+                                            : withAlpha(colors.text, 32);
+    const wui::Color textColor = selected ? colors.onAccent : colors.text;
+    const wui::Color background = selected ? colors.accent
+                                           : wui::Color{0, 0, 0, 0};
+
+    auto box = Box()
+        .height(40.0f)
+        .radius(6.0f)
+        .background(background)
+        .hoverBackground(hoverFill)
+        .pressedBackground(pressedFill)
+        // InsetsF order is {left, top, right, bottom}. 12 DIP on each side
+        // gives icons the same leading gutter Fluent NavigationView ships
+        // with; vertical space is handled by the fixed 40 DIP row height.
+        .padding(wui::InsetsF{12.0f, 0.0f, 12.0f, 0.0f})
+        .contentAlign(wui::Alignment::Start, wui::Alignment::Center)
+        .accessibleRole(wui::AccessibilityRole::Button)
+        .accessibleLabel(item.label)
+        .children(
+            Row()
+                .gap(12.0f)
+                .align(wui::Alignment::Center)
+                .children(
+                    Icon(item.icon)
+                        .size(wui::IconSize::Size20)
+                        .style(selected ? wui::IconStyle::Filled
+                                        : wui::IconStyle::Regular)
+                        .color(textColor),
+                    Text(item.label)
+                        .size(14.0f)
+                        .weight(selected ? 600 : 500)
+                        .color(textColor)));
 
     if (onSelect) {
         const std::string id = std::move(item.id);
-        button = std::move(button).onClick([onSelect, id] { onSelect(id); });
+        box = std::move(box).onClick([onSelect, id] { onSelect(id); });
     }
-    return std::move(button).intoNode();
+    return std::move(box).intoNode();
 }
 
 std::unique_ptr<wui::Node> buildItems(
@@ -64,7 +109,7 @@ std::unique_ptr<wui::Node> buildItems(
     items->setAlign(wui::Alignment::Stretch);
 
     for (const auto& item : config.items) {
-        items->appendChild(buildRailButton(item, item.id == config.selectedId, onSelect));
+        items->appendChild(buildRailItem(item, item.id == config.selectedId, onSelect));
     }
     return items;
 }
