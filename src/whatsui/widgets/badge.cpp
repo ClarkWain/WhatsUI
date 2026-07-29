@@ -5,6 +5,7 @@
 #include <limits>
 #include <utility>
 
+#include "wui/text_metrics.h"
 #include "wui/theme.h"
 
 namespace wui {
@@ -38,11 +39,28 @@ Color semanticColor(const Theme& current, BadgeColor color) noexcept
 }
 
 Color tint(Color color) noexcept { return Color{color.r, color.g, color.b, 28}; }
+// Real text width from the active TextMeasurer whenever one is installed
+// (interactive apps + capture tools do this). The 0.56 estimate stays as the
+// fallback so headless unit tests without a measurer still get a stable
+// intrinsic width. Using the same source in measure() and paint() is what
+// keeps the left and right padding visually identical — the previous 0.56
+// estimate diverged from real DirectWrite/HarfBuzz metrics and left the text
+// biased toward one side of the pill.
+float badgeTextWidth(const std::string& text, float fontSize,
+                     std::uint16_t weight) noexcept
+{
+    if (text.empty()) return 0.0f;
+    if (auto* measurer = textMeasurer()) {
+        const auto extents = measurer->measureText(text, fontSize, weight);
+        return extents.width;
+    }
+    return std::max(0.0f, static_cast<float>(text.size()) * fontSize * 0.56f);
+}
+
 float estimateTextWidth(const std::string& text, float size) noexcept
 {
-    // Text layout is a rendering concern; this estimate gives badges a stable
-    // intrinsic size even for headless composition. Paint uses actual metrics
-    // for vertical placement, as all other Fluent controls do.
+    // Retained only as the fallback path for badgeTextWidth() when no
+    // TextMeasurer is installed. Prefer badgeTextWidth() elsewhere.
     return std::max(0.0f, static_cast<float>(text.size()) * size * 0.56f);
 }
 
@@ -153,7 +171,10 @@ void Badge::setShape(BadgeShape value) noexcept { if (shape_ != value) { shape_ 
 SizeF Badge::measure(const Constraints& constraints) const
 {
     const auto m = metrics(size_);
-    return constraints.clamp({std::max(m.height, estimateTextWidth(text_, m.fontSize) + 2.0f * m.padX), m.height});
+    const auto& current = theme();
+    const float textW = badgeTextWidth(text_, m.fontSize,
+                                       current.typography.weightSemibold);
+    return constraints.clamp({std::max(m.height, textW + 2.0f * m.padX), m.height});
 }
 void Badge::paint(PaintContext& context)
 {
@@ -162,8 +183,12 @@ void Badge::paint(PaintContext& context)
     const RectF rect = bounds(); const float radius = badgeRadius(shape_, rect.height);
     if (background.a) context.fillRoundRect(rect, radius, background);
     if (border.a) context.strokeRoundRect({rect.x + 0.5f, rect.y + 0.5f, std::max(0.0f, rect.width - 1.0f), std::max(0.0f, rect.height - 1.0f)}, radius, current.stroke.thin, border);
-    if (!text_.empty()) context.drawText(text_, rect.x + std::max(0.0f, (rect.width - estimateTextWidth(text_, m.fontSize)) * 0.5f),
-        context.centeredTextBottom(text_, rect, m.fontSize, current.typography.weightSemibold), m.fontSize, foreground, current.typography.weightSemibold);
+    if (!text_.empty()) {
+        const float textW = badgeTextWidth(text_, m.fontSize,
+                                           current.typography.weightSemibold);
+        context.drawText(text_, rect.x + std::max(0.0f, (rect.width - textW) * 0.5f),
+            context.centeredTextBottom(text_, rect, m.fontSize, current.typography.weightSemibold), m.fontSize, foreground, current.typography.weightSemibold);
+    }
     clearDirty(DirtyFlag::Paint);
 }
 
@@ -189,14 +214,19 @@ SizeF CounterBadge::measure(const Constraints& constraints) const
 {
     const auto m = metrics(size_); const std::string value = text();
     if (value.empty()) return constraints.clamp({0.0f, 0.0f});
-    return constraints.clamp({std::max(m.height, estimateTextWidth(value, m.fontSize) + 2.0f * m.padX), m.height});
+    const auto& current = theme();
+    const float textW = badgeTextWidth(value, m.fontSize,
+                                       current.typography.weightSemibold);
+    return constraints.clamp({std::max(m.height, textW + 2.0f * m.padX), m.height});
 }
 void CounterBadge::paint(PaintContext& context)
 {
     const std::string value = text(); if (value.empty()) { clearDirty(DirtyFlag::Paint); return; }
     const Theme& current = theme(); const auto m = metrics(size_); const RectF rect = bounds();
     context.fillRoundRect(rect, current.radius.circular, current.colors.danger);
-    context.drawText(value, rect.x + std::max(0.0f, (rect.width - estimateTextWidth(value, m.fontSize)) * 0.5f),
+    const float textW = badgeTextWidth(value, m.fontSize,
+                                       current.typography.weightSemibold);
+    context.drawText(value, rect.x + std::max(0.0f, (rect.width - textW) * 0.5f),
         context.centeredTextBottom(value, rect, m.fontSize, current.typography.weightSemibold), m.fontSize, current.colors.onBrand, current.typography.weightSemibold);
     clearDirty(DirtyFlag::Paint);
 }
