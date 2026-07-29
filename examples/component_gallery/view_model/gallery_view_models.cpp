@@ -12,5 +12,6 @@ NavigationViewModel& GalleryViewModels::navigation() noexcept { return navigatio
 GalleryViewModel& GalleryViewModels::gallery() noexcept { return gallery_; }
 VisualQaViewModel& GalleryViewModels::visualQa() noexcept { return visualQa_; }
 ButtonDetailViewModel& GalleryViewModels::buttonDetail() noexcept { return buttonDetail_; }
+ThemeStudioViewModel& GalleryViewModels::themeStudio() noexcept { return themeStudio_; }
 
 } // namespace whatsui::gallery

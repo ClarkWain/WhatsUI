@@ -42,13 +42,15 @@ std::unique_ptr<wui::Node> buildPageContent(GalleryRoute route,
     case GalleryRoute::Controls:
         return buildControlsPage([&router] { router.navigate(GalleryRoute::ButtonDetail); });
     case GalleryRoute::AddOns:
-        return buildAddonsPage(router.window(), [&router, &viewModels](wui::Theme theme,
-                                                                       bool dark) {
-            viewModels.visualQa().selectTheme(
-                dark ? ThemePreview::Dark : ThemePreview::Light);
-            wui::setTheme(theme);
-            router.refresh();
-        });
+        return buildAddonsPage(
+            router.window(),
+            viewModels.themeStudio(),
+            [&router, &viewModels](wui::Theme theme, bool dark) {
+                viewModels.visualQa().selectTheme(
+                    dark ? ThemePreview::Dark : ThemePreview::Light);
+                wui::setTheme(theme);
+                router.refresh();
+            });
     case GalleryRoute::VisualQa:
         return buildVisualQaPage(
             viewModels.visualQa(), router.window(), [&router](ThemePreview theme) {

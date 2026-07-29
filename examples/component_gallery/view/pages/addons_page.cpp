@@ -167,8 +167,33 @@ std::unique_ptr<wui::Node> buildInspectorPreview()
         .intoNode();
 }
 
-std::unique_ptr<wui::Node> buildThemeStudio(ApplyGalleryThemeHandler applyTheme)
+// Reactive-style preset button: the caller decides whether the button is the
+// currently active option (Primary appearance) or a candidate (Subtle). One
+// click delegates to the shared apply lambda which mutates the ThemeStudio
+// view model, rebuilds the composed theme, and triggers a router.refresh().
+template <class Handler>
+[[nodiscard]] std::unique_ptr<wui::Node> presetButton(std::string label,
+                                                     bool active,
+                                                     Handler onClick)
 {
+    return Button(std::move(label))
+        .appearance(active ? wui::ButtonAppearance::Primary
+                           : wui::ButtonAppearance::Subtle)
+        .onClick(std::move(onClick))
+        .intoNode();
+}
+
+std::unique_ptr<wui::Node> buildThemeStudio(ThemeStudioViewModel& themeStudio,
+                                            ApplyGalleryThemeHandler applyTheme)
+{
+    // Every preset click mutates the view model on one axis and asks the
+    // gallery to reapply the composed theme. The lambda outlives the current
+    // page tree because it captures references that live on GalleryApplication.
+    auto apply = [&themeStudio, applyTheme] {
+        if (!applyTheme) return;
+        applyTheme(themeStudio.buildTheme(), themeStudio.isDark());
+    };
+
     return Card()
         .appearance(wui::CardAppearance::Outline)
         .children(
@@ -188,42 +213,74 @@ std::unique_ptr<wui::Node> buildThemeStudio(ApplyGalleryThemeHandler applyTheme)
                     return heading;
                 }(),
 
-                Text("This sample changes only light/dark, accent, and radius tokens. It does not import, export, or persist themes.")
+                Text("Presets compose along three axes — mode, accent, and radius. Each button toggles its axis without resetting the others.")
                     .size(12.0f)
                     .lineHeight(18.0f)
                     .wrap()
                     .color(wui::theme().colors.textMuted),
 
+                Text("Mode").size(11.0f).weight(600).color(wui::theme().colors.textMuted),
                 view::components::buildResponsiveFlow(8.0f,
-                    Button("Light").onClick([applyTheme] {
-                        if (applyTheme) applyTheme(wui::Theme{}, false);
-                    }),
-                    Button("Dark").onClick([applyTheme] {
-                        if (applyTheme) applyTheme(wui::fluentDarkTheme(), true);
-                    })
+                    presetButton("Light", themeStudio.mode() == ThemeStudioMode::Light,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setMode(ThemeStudioMode::Light);
+                                     apply();
+                                 }),
+                    presetButton("Dark", themeStudio.mode() == ThemeStudioMode::Dark,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setMode(ThemeStudioMode::Dark);
+                                     apply();
+                                 })
                 ),
 
+                Text("Accent").size(11.0f).weight(600).color(wui::theme().colors.textMuted),
                 view::components::buildResponsiveFlow(8.0f,
-                    Button("Blue preset").appearance(wui::ButtonAppearance::Subtle)
-                        .onClick([applyTheme] {
-                            if (applyTheme) applyTheme(wui::Theme{}, false);
-                        }),
-                    Button("Violet preset").appearance(wui::ButtonAppearance::Subtle)
-                        .onClick([applyTheme] {
-                            if (applyTheme) applyTheme(violetDemoPreset(), false);
-                        })
+                    presetButton("Blue", themeStudio.accent() == ThemeStudioAccent::Blue,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setAccent(ThemeStudioAccent::Blue);
+                                     apply();
+                                 }),
+                    presetButton("Violet", themeStudio.accent() == ThemeStudioAccent::Violet,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setAccent(ThemeStudioAccent::Violet);
+                                     apply();
+                                 }),
+                    presetButton("Teal", themeStudio.accent() == ThemeStudioAccent::Teal,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setAccent(ThemeStudioAccent::Teal);
+                                     apply();
+                                 }),
+                    presetButton("Rose", themeStudio.accent() == ThemeStudioAccent::Rose,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setAccent(ThemeStudioAccent::Rose);
+                                     apply();
+                                 }),
+                    presetButton("Green", themeStudio.accent() == ThemeStudioAccent::Green,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setAccent(ThemeStudioAccent::Green);
+                                     apply();
+                                 }),
+                    presetButton("Orange", themeStudio.accent() == ThemeStudioAccent::Orange,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setAccent(ThemeStudioAccent::Orange);
+                                     apply();
+                                 })
                 ),
 
+                Text("Radius").size(11.0f).weight(600).color(wui::theme().colors.textMuted),
                 view::components::buildResponsiveFlow(8.0f,
-                    Button("Default radius preset").appearance(wui::ButtonAppearance::Subtle)
-                        .onClick([applyTheme] {
-                            if (applyTheme) applyTheme(wui::Theme{}, false);
-                        }),
-                    Button("Soft radius preset").appearance(wui::ButtonAppearance::Subtle)
-                        .onClick([applyTheme] {
-                            if (applyTheme) applyTheme(softRadiusDemoPreset(), false);
-                        }
-                    )
+                    presetButton("Default radius preset",
+                                 themeStudio.radius() == ThemeStudioRadius::Default,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setRadius(ThemeStudioRadius::Default);
+                                     apply();
+                                 }),
+                    presetButton("Soft radius preset",
+                                 themeStudio.radius() == ThemeStudioRadius::Soft,
+                                 [&themeStudio, apply] {
+                                     themeStudio.setRadius(ThemeStudioRadius::Soft);
+                                     apply();
+                                 })
                 )
             )
         )
@@ -234,6 +291,7 @@ std::unique_ptr<wui::Node> buildThemeStudio(ApplyGalleryThemeHandler applyTheme)
 
 std::unique_ptr<wui::Node> buildAddonsPage(
     wui::UiWindow& window,
+    ThemeStudioViewModel& themeStudio,
     ApplyGalleryThemeHandler applyTheme)
 {
     view::components::ComponentCardConfig commands{
@@ -265,7 +323,7 @@ std::unique_ptr<wui::Node> buildAddonsPage(
                         std::move(inspector), buildInspectorPreview()));
                     return cards;
                 }(std::move(commands), std::move(inspector)),
-                buildThemeStudio(std::move(applyTheme))
+                buildThemeStudio(themeStudio, std::move(applyTheme))
             )
         )
         .intoNode();

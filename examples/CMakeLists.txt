@@ -75,6 +75,7 @@ set(WHATSUI_COMPONENT_GALLERY_SOURCES
     component_gallery/view_model/gallery_view_model.cpp
     component_gallery/view_model/gallery_view_models.cpp
     component_gallery/view_model/navigation_view_model.cpp
+    component_gallery/view_model/theme_studio_view_model.cpp
     component_gallery/view_model/visual_qa_view_model.cpp
     component_gallery/view/app_shell_view.cpp
     component_gallery/view/gallery_page_factory.cpp
