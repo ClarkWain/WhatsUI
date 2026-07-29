@@ -37,7 +37,6 @@ add_executable(WhatsUIContainerInteractionTests
 target_link_libraries(WhatsUIContainerInteractionTests
     PRIVATE
         WhatsUI::WhatsUI
-        WhatsCanvas::Software
 )
 
 target_compile_features(WhatsUIContainerInteractionTests PRIVATE cxx_std_17)
