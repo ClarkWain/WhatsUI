@@ -4,6 +4,7 @@
 #include <cmath>
 #include <utility>
 
+#include "wui/internal/viewport_model.h"
 #include "wui/theme.h"
 
 namespace wui {
@@ -17,46 +18,83 @@ constexpr float kDefaultWidth = 160.0f;
     return event.button == MouseButton::Left;
 }
 
-[[nodiscard]] bool intersects(const RectF& left, const RectF& right) noexcept
-{
-    return left.x < right.x + right.width && left.x + left.width > right.x &&
-        left.y < right.y + right.height && left.y + left.height > right.y;
-}
-
 } // namespace
+
+struct ListView::State {
+    internal::ViewportModel viewport;
+};
 
 ListView::ListView(std::vector<Item> items, int selectedIndex)
     : items_(std::move(items))
     , selectedIndex_(normalizedSelection(selectedIndex))
+    , state_(std::make_unique<State>())
 {
+    syncViewport();
 }
+
+ListView::~ListView() = default;
 
 const std::vector<ListView::Item>& ListView::items() const noexcept
 {
     return items_;
 }
 
+std::size_t ListView::itemCount() const noexcept
+{
+    return usesItemProvider_ ? providerItemCount_ : items_.size();
+}
+
 void ListView::setItems(std::vector<Item> items)
 {
+    usesItemProvider_ = false;
+    itemProvider_ = nullptr;
+    selectableProvider_ = nullptr;
+    providerItemCount_ = 0;
     items_ = std::move(items);
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
+    syncViewport();
+    setSelectedIndex(selectedIndex());
+    markDirty(DirtyFlag::Layout);
+}
+
+void ListView::setItemProvider(std::size_t count, ItemProvider provider, SelectableProvider selectable)
+{
+    usesItemProvider_ = static_cast<bool>(provider);
+    itemProvider_ = std::move(provider);
+    selectableProvider_ = std::move(selectable);
+    providerItemCount_ = usesItemProvider_ ? count : 0;
+    if (usesItemProvider_) items_.clear();
+    hoveredIndex_ = -1;
+    pressedIndex_ = -1;
+    syncViewport();
     setSelectedIndex(selectedIndex());
     markDirty(DirtyFlag::Layout);
 }
 
 void ListView::appendItem(Item item)
 {
+    if (usesItemProvider_) {
+        setItems({std::move(item)});
+        return;
+    }
     items_.push_back(std::move(item));
+    syncViewport();
     markDirty(DirtyFlag::Layout);
 }
 
 void ListView::clearItems()
 {
-    if (items_.empty()) return;
+    if (!usesItemProvider_ && items_.empty()) return;
+    usesItemProvider_ = false;
+    itemProvider_ = nullptr;
+    selectableProvider_ = nullptr;
+    providerItemCount_ = 0;
     items_.clear();
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
+    syncViewport();
+    state_->viewport.setScrollOffset(0.0f);
     setSelectedIndex(-1);
     markDirty(DirtyFlag::Layout);
 }
@@ -80,17 +118,19 @@ void ListView::setSelectedIndex(int index)
         binding_->set(next);
     } else if (selectedIndex_ != next) {
         selectedIndex_ = next;
+        if (next >= 0) state_->viewport.scrollToIndex(static_cast<std::size_t>(next));
         markDirty(DirtyFlag::Paint);
     }
 }
 
-ListView& ListView::bind(State<int>& state)
+ListView& ListView::bind(wui::State<int>& state)
 {
     binding_.emplace(state);
     hasBinding_ = true;
     selectedIndex_ = normalizedSelection(state.get());
     const auto id = state.subscribe([this](int value) {
         selectedIndex_ = normalizedSelection(value);
+        if (selectedIndex_ >= 0) state_->viewport.scrollToIndex(static_cast<std::size_t>(selectedIndex_));
         markDirty(DirtyFlag::Paint);
     });
     addTeardown([&state, id] { state.unsubscribe(id); });
@@ -117,17 +157,50 @@ void ListView::setRowHeight(float value) noexcept
     const float next = std::isfinite(value) ? std::max(24.0f, value) : 36.0f;
     if (rowHeight_ != next) {
         rowHeight_ = next;
+        syncViewport();
         markDirty(DirtyFlag::Layout);
     }
 }
 
+float ListView::scrollOffset() const noexcept
+{
+    return state_->viewport.scrollOffset();
+}
+
+void ListView::setScrollOffset(float value) noexcept
+{
+    syncViewport();
+    const float previous = state_->viewport.scrollOffset();
+    state_->viewport.setScrollOffset(value);
+    if (state_->viewport.scrollOffset() != previous) markDirty(DirtyFlag::Paint);
+}
+
+float ListView::maximumScrollOffset() const noexcept
+{
+    return state_->viewport.maxScrollOffset();
+}
+
+ListView::Range ListView::visibleRange() const noexcept
+{
+    const auto range = state_->viewport.visibleRange();
+    return {range.first, range.last};
+}
+
 SizeF ListView::measure(const Constraints& constraints) const
 {
-    return constraints.clamp({preferredWidth(), rowHeight_ * static_cast<float>(items_.size())});
+    return constraints.clamp({preferredWidth(), rowHeight_ * static_cast<float>(itemCount())});
+}
+
+void ListView::layout(const RectF& bounds)
+{
+    Node::layout(bounds);
+    syncViewport();
+    clearLayoutDirtyRecursively();
 }
 
 void ListView::paint(PaintContext& context)
 {
+    syncViewport();
     const Theme& current = theme();
     const bool enabled = isEnabled();
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
@@ -160,10 +233,15 @@ void ListView::paint(PaintContext& context)
     const int checkpoint = context.save();
     context.clipRect(content);
     const int selected = selectedIndex();
-    for (std::size_t index = 0; index < items_.size(); ++index) {
-        const RectF row{content.x, content.y + static_cast<float>(index) * rowHeight_, content.width, rowHeight_};
-        if (!intersects(row, content)) continue;
-        const bool itemEnabled = enabled && items_[index].enabled;
+    const Range visible = visibleRange();
+    for (std::size_t index = visible.first; index < visible.last; ++index) {
+        const Item item = itemAt(index);
+        const RectF row{content.x, content.y + static_cast<float>(index) * rowHeight_ - state_->viewport.scrollOffset(), content.width, rowHeight_};
+        const bool rowSelectable =
+            usesItemProvider_ && selectableProvider_
+                ? providerItemSelectable(index)
+                : item.enabled;
+        const bool itemEnabled = enabled && rowSelectable;
         const bool rowSelected = static_cast<int>(index) == selected;
         const bool rowPressed = static_cast<int>(index) == pressedIndex_;
         const bool rowHovered = static_cast<int>(index) == hoveredIndex_;
@@ -176,9 +254,9 @@ void ListView::paint(PaintContext& context)
             itemEnabled ? current.colors.neutralForeground1
                         : current.colors.neutralForegroundDisabled;
         context.drawText(
-            items_[index].label, row.x + kHorizontalPadding,
+            item.label, row.x + kHorizontalPadding,
             context.centeredTextBottom(
-                items_[index].label, row,
+                item.label, row,
                 current.typography.body1.size,
                 current.typography.body1.weight,
                 current.typography.body1.family),
@@ -224,10 +302,28 @@ bool ListView::onPointerEvent(const PointerEvent& event)
         setVisualState(ControlVisualState::Pressed, false);
         markDirty(DirtyFlag::Paint);
         return true;
-    case PointerAction::Scroll:
-        return false;
+    case PointerAction::Scroll: {
+        const float previous = state_->viewport.scrollOffset();
+        setScrollOffset(previous - event.scrollDelta.y);
+        return state_->viewport.scrollOffset() != previous;
+    }
     }
     return false;
+}
+
+EventResult ListView::onPointerEvent(const PointerEvent& event, EventContext& context)
+{
+    if (context.phase() == EventPhase::Capture || event.action != PointerAction::Scroll) {
+        return ControlNode::onPointerEvent(event, context);
+    }
+    if (!isEnabled()) return EventResult::Ignored;
+
+    const float previous = state_->viewport.scrollOffset();
+    setScrollOffset(previous - event.scrollDelta.y);
+    const float applied = state_->viewport.scrollOffset() - previous;
+    context.setRemainingScrollDelta(
+        {event.scrollDelta.x, event.scrollDelta.y + applied});
+    return applied != 0.0f ? EventResult::Handled : EventResult::Ignored;
 }
 
 bool ListView::onKeyEvent(const KeyEvent& event)
@@ -237,7 +333,7 @@ bool ListView::onKeyEvent(const KeyEvent& event)
     int next = -1;
     switch (event.keyCode) {
     case 38: // Up
-        next = nextEnabled(current < 0 ? static_cast<int>(items_.size()) : current - 1, -1);
+        next = nextEnabled(current < 0 ? static_cast<int>(itemCount()) : current - 1, -1);
         break;
     case 40: // Down
         next = nextEnabled(current < 0 ? -1 : current + 1, 1);
@@ -246,7 +342,7 @@ bool ListView::onKeyEvent(const KeyEvent& event)
         next = nextEnabled(-1, 1);
         break;
     case 35: // End
-        next = nextEnabled(static_cast<int>(items_.size()), -1);
+        next = nextEnabled(static_cast<int>(itemCount()), -1);
         break;
     default:
         return false;
@@ -257,7 +353,9 @@ bool ListView::onKeyEvent(const KeyEvent& event)
 
 bool ListView::isSelectable(int index) const noexcept
 {
-    return index >= 0 && static_cast<std::size_t>(index) < items_.size() && items_[static_cast<std::size_t>(index)].enabled;
+    if (index < 0 || static_cast<std::size_t>(index) >= itemCount()) return false;
+    const auto itemIndex = static_cast<std::size_t>(index);
+    return usesItemProvider_ ? providerItemSelectable(itemIndex) : items_[itemIndex].enabled;
 }
 
 int ListView::normalizedSelection(int index) const noexcept
@@ -268,16 +366,16 @@ int ListView::normalizedSelection(int index) const noexcept
 int ListView::rowAt(PointF point) const noexcept
 {
     if (!bounds().contains(point) || rowHeight_ <= 0.0f) return -1;
-    const float contentY = point.y - bounds().y - 1.0f;
+    const float contentY = point.y - bounds().y - 1.0f + state_->viewport.scrollOffset();
     if (contentY < 0.0f) return -1;
     const int index = static_cast<int>(contentY / rowHeight_);
-    return index >= 0 && static_cast<std::size_t>(index) < items_.size() ? index : -1;
+    return index >= 0 && static_cast<std::size_t>(index) < itemCount() ? index : -1;
 }
 
 int ListView::nextEnabled(int from, int direction) const noexcept
 {
     if (direction == 0) return -1;
-    for (int index = from + direction; index >= 0 && static_cast<std::size_t>(index) < items_.size(); index += direction) {
+    for (int index = from + direction; index >= 0 && static_cast<std::size_t>(index) < itemCount(); index += direction) {
         if (isSelectable(index)) return index;
     }
     return -1;
@@ -285,6 +383,7 @@ int ListView::nextEnabled(int from, int direction) const noexcept
 
 float ListView::preferredWidth() const noexcept
 {
+    if (usesItemProvider_) return kDefaultWidth;
     const float characterWidth = theme().typography.body1.size * 0.56f;
     float width = kDefaultWidth;
     for (const Item& item : items_) {
@@ -293,10 +392,36 @@ float ListView::preferredWidth() const noexcept
     return width;
 }
 
+ListView::Item ListView::itemAt(std::size_t index) const
+{
+    if (usesItemProvider_ && itemProvider_ && index < providerItemCount_) return itemProvider_(index);
+    return index < items_.size() ? items_[index] : Item{};
+}
+
+bool ListView::providerItemSelectable(std::size_t index) const noexcept
+{
+    try {
+        return selectableProvider_ ? selectableProvider_(index) : itemAt(index).enabled;
+    } catch (...) {
+        // Selection queries are used by noexcept public diagnostics and input
+        // routing. A faulty provider must not terminate the UI process or
+        // accidentally make a row interactive.
+        return false;
+    }
+}
+
+void ListView::syncViewport() noexcept
+{
+    state_->viewport.setItemCount(itemCount());
+    state_->viewport.setItemExtent(rowHeight_);
+    state_->viewport.setViewportExtent(std::max(0.0f, bounds().height - theme().stroke.thin * 2.0f));
+}
+
 void ListView::select(int index)
 {
     if (!isSelectable(index) || index == selectedIndex()) return;
     setSelectedIndex(index);
+    state_->viewport.scrollToIndex(static_cast<std::size_t>(index));
     if (onSelectionChanged_) onSelectionChanged_(index);
 }
 

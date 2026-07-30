@@ -32,12 +32,13 @@ whatsui::gallery::GalleryRoute parseRoute(const std::string& value)
     if (value == "overview") return GalleryRoute::Overview;
     if (value == "all-components") return GalleryRoute::AllComponents;
     if (value == "controls") return GalleryRoute::Controls;
+    if (value == "long-text") return GalleryRoute::LongText;
     if (value == "add-ons") return GalleryRoute::AddOns;
     if (value == "visual-qa") return GalleryRoute::VisualQa;
     if (value == "about") return GalleryRoute::About;
     if (value == "button-detail") return GalleryRoute::ButtonDetail;
     throw std::invalid_argument(
-        "--route expects overview|all-components|controls|add-ons|visual-qa|about|button-detail");
+        "--route expects overview|all-components|controls|long-text|add-ons|visual-qa|about|button-detail");
 }
 
 CaptureOptions parseOptions(int argc, char** argv)

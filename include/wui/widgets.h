@@ -124,6 +124,11 @@ public:
     void setMaxLines(std::size_t lines) noexcept;
     [[nodiscard]] TextOverflow overflow() const noexcept;
     void setOverflow(TextOverflow overflow) noexcept;
+    // Block text can use the finite layout width directly instead of
+    // resolving an expensive intrinsic width. This is particularly useful
+    // for large documents hosted by a vertical ScrollView.
+    void setFillAvailableWidth(bool fill) noexcept;
+    [[nodiscard]] bool fillsAvailableWidth() const noexcept;
 
     // Resolves explicit breaks, wrapping and optional truncation in logical
     // coordinates. It is useful to custom renderers that need to mirror Text's
@@ -138,6 +143,13 @@ public:
     void paint(PaintContext& context) override;
 
 private:
+    struct ExplicitLine {
+        std::size_t start{0};
+        std::size_t length{0};
+    };
+
+    [[nodiscard]] const std::vector<ExplicitLine>& explicitLines() const;
+    void invalidateLineCache() noexcept;
     [[nodiscard]] std::vector<std::string> layoutLines(float availableWidth) const;
     [[nodiscard]] float textWidth(const std::string& value) const;
     [[nodiscard]] float effectiveLineHeight() const noexcept;
@@ -156,8 +168,11 @@ private:
     TextWrap wrap_{TextWrap::NoWrap};
     TextOverflow overflow_{TextOverflow::Clip};
     std::size_t maxLines_{0};
+    bool fillAvailableWidth_{false};
     Color color_{};
     bool hasColor_{false};
+    mutable bool explicitLineCacheValid_{false};
+    mutable std::vector<ExplicitLine> explicitLineCache_;
 };
 
 enum class ImageFit {
@@ -481,6 +496,7 @@ public:
     void layout(const RectF& bounds) override;
     void paint(PaintContext& context) override;
     [[nodiscard]] Node* hitTest(PointF point) override;
+    [[nodiscard]] PointF mapPointToContent(PointF point) const noexcept override;
     EventResult onPointerEvent(const PointerEvent& event, EventContext& context) override;
     bool onPointerEvent(const PointerEvent& event) override;
 

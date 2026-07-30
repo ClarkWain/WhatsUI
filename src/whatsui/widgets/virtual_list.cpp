@@ -6,6 +6,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include "wui/internal/keyed_recycler.h"
+#include "wui/internal/viewport_model.h"
 #include "wui/theme.h"
 
 namespace wui {
@@ -21,17 +23,25 @@ constexpr float kDefaultViewportRows = 8.0f;
 
 } // namespace
 
+struct VirtualList::State {
+    internal::ViewportModel viewport;
+    internal::KeyedRecycler recycler;
+};
+
 VirtualList::VirtualList()
-    : keyProvider_([](Index index) { return std::to_string(index); })
+    : state_(std::make_unique<State>())
 {
+    state_->viewport.setItemExtent(36.0f);
+    state_->viewport.setOverscanItems(2);
 }
+
+VirtualList::~VirtualList() = default;
 
 void VirtualList::setItemCount(Index count)
 {
-    if (itemCount_ == count) return;
-    itemCount_ = count;
+    if (state_->viewport.itemCount() == count) return;
+    state_->viewport.setItemCount(count);
     selectedIndex_ = normalizedSelection(selectedIndex_);
-    scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
     reconcile();
     layoutMountedChildren();
     markDirty(DirtyFlag::Layout);
@@ -39,24 +49,22 @@ void VirtualList::setItemCount(Index count)
 
 VirtualList::Index VirtualList::itemCount() const noexcept
 {
-    return itemCount_;
+    return state_->viewport.itemCount();
 }
 
 void VirtualList::setKeyProvider(KeyProvider provider)
 {
-    keyProvider_ = provider ? std::move(provider) : KeyProvider([](Index index) { return std::to_string(index); });
+    state_->recycler.setKeyProvider(std::move(provider));
     refresh();
 }
 
 void VirtualList::setItemBuilder(ItemBuilder builder)
 {
-    itemBuilder_ = std::move(builder);
+    state_->recycler.setBuilder(std::move(builder));
     // A new builder represents a new row rendering contract. Existing row
     // objects may no longer be valid for it, so release mounted/pool entries
     // before materialising the viewport again.
-    mounted_.clear();
-    clearChildren();
-    pool_.clear();
+    state_->recycler.clear(*this);
     reconcile();
     layoutMountedChildren();
     markDirty(DirtyFlag::Layout);
@@ -71,15 +79,14 @@ void VirtualList::refresh()
 
 float VirtualList::rowExtent() const noexcept
 {
-    return rowExtent_;
+    return state_->viewport.itemExtent();
 }
 
 void VirtualList::setRowExtent(float extent) noexcept
 {
     const float next = std::isfinite(extent) ? std::max(1.0f, extent) : 36.0f;
-    if (rowExtent_ == next) return;
-    rowExtent_ = next;
-    scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
+    if (state_->viewport.itemExtent() == next) return;
+    state_->viewport.setItemExtent(next);
     reconcile();
     layoutMountedChildren();
     markDirty(DirtyFlag::Layout);
@@ -87,15 +94,14 @@ void VirtualList::setRowExtent(float extent) noexcept
 
 float VirtualList::scrollOffset() const noexcept
 {
-    return scrollOffset_;
+    return state_->viewport.scrollOffset();
 }
 
 void VirtualList::setScrollOffset(float offset) noexcept
 {
-    if (!std::isfinite(offset)) offset = 0.0f;
-    const float next = std::clamp(offset, 0.0f, maxScrollOffset());
-    if (scrollOffset_ == next) return;
-    scrollOffset_ = next;
+    const float previous = state_->viewport.scrollOffset();
+    state_->viewport.setScrollOffset(offset);
+    if (state_->viewport.scrollOffset() == previous) return;
     reconcile();
     layoutMountedChildren();
     markDirty(DirtyFlag::Paint);
@@ -103,34 +109,45 @@ void VirtualList::setScrollOffset(float offset) noexcept
 
 float VirtualList::maxScrollOffset() const noexcept
 {
-    return std::max(0.0f, static_cast<float>(itemCount_) * rowExtent_ - bounds().height);
+    return state_->viewport.maxScrollOffset();
 }
 
 void VirtualList::scrollToIndex(Index index)
 {
-    if (index >= itemCount_) return;
-    const float top = static_cast<float>(index) * rowExtent_;
-    const float bottom = top + rowExtent_;
-    if (top < scrollOffset_) setScrollOffset(top);
-    else if (bottom > scrollOffset_ + bounds().height) setScrollOffset(bottom - bounds().height);
+    const float previous = state_->viewport.scrollOffset();
+    state_->viewport.scrollToIndex(index);
+    if (state_->viewport.scrollOffset() == previous) return;
+    reconcile();
+    layoutMountedChildren();
+    markDirty(DirtyFlag::Paint);
 }
 
 VirtualList::Range VirtualList::visibleRange() const noexcept
 {
-    if (itemCount_ == 0 || bounds().height <= 0.0f || rowExtent_ <= 0.0f) return {};
-    const auto first = static_cast<Index>(std::min<float>(itemCount_, std::floor(scrollOffset_ / rowExtent_)));
-    const auto last = static_cast<Index>(std::min<float>(itemCount_, std::ceil((scrollOffset_ + bounds().height) / rowExtent_)));
-    return {first, std::max(first, last)};
+    const auto range = state_->viewport.visibleRange();
+    return {range.first, range.last};
 }
 
 VirtualList::Index VirtualList::mountedCount() const noexcept
 {
-    return mounted_.size();
+    return state_->recycler.mountedCount();
 }
 
 VirtualList::Index VirtualList::pooledCount() const noexcept
 {
-    return pool_.size();
+    return state_->recycler.pooledCount();
+}
+
+std::unique_ptr<Node> VirtualList::removeChild(std::size_t index)
+{
+    auto child = ControlNode::removeChild(index);
+    state_->recycler.forget(child.get());
+    return child;
+}
+
+void VirtualList::clearChildren()
+{
+    state_->recycler.clear(*this);
 }
 
 int VirtualList::selectedIndex() const noexcept
@@ -155,14 +172,14 @@ VirtualList& VirtualList::onSelectionChanged(SelectionHandler handler)
 
 SizeF VirtualList::measure(const Constraints& constraints) const
 {
-    const float preferredHeight = std::min(static_cast<float>(itemCount_) * rowExtent_, rowExtent_ * kDefaultViewportRows);
+    const float preferredHeight = std::min(static_cast<float>(state_->viewport.itemCount()) * state_->viewport.itemExtent(), state_->viewport.itemExtent() * kDefaultViewportRows);
     return constraints.clamp({kDefaultWidth, preferredHeight});
 }
 
 void VirtualList::layout(const RectF& bounds)
 {
     setBounds(bounds);
-    scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
+    state_->viewport.setViewportExtent(bounds.height);
     reconcile();
     layoutMountedChildren();
     clearDirty(DirtyFlag::Layout);
@@ -235,7 +252,7 @@ bool VirtualList::onPointerEvent(const PointerEvent& event)
         setVisualState(ControlVisualState::Pressed, false);
         return true;
     case PointerAction::Scroll:
-        setScrollOffset(scrollOffset_ - event.scrollDelta.y);
+        setScrollOffset(state_->viewport.scrollOffset() - event.scrollDelta.y);
         return true;
     case PointerAction::Move:
     case PointerAction::Enter:
@@ -247,20 +264,20 @@ bool VirtualList::onPointerEvent(const PointerEvent& event)
 
 bool VirtualList::onKeyEvent(const KeyEvent& event)
 {
-    if (!isEnabled() || event.action != KeyAction::Down || itemCount_ == 0) return false;
+    if (!isEnabled() || event.action != KeyAction::Down || state_->viewport.itemCount() == 0) return false;
     int next = selectedIndex_;
     switch (event.keyCode) {
     case 38: // Up
-        next = selectedIndex_ < 0 ? static_cast<int>(itemCount_ - 1) : std::max(0, selectedIndex_ - 1);
+        next = selectedIndex_ < 0 ? static_cast<int>(state_->viewport.itemCount() - 1) : std::max(0, selectedIndex_ - 1);
         break;
     case 40: // Down
-        next = selectedIndex_ < 0 ? 0 : std::min(static_cast<int>(itemCount_ - 1), selectedIndex_ + 1);
+        next = selectedIndex_ < 0 ? 0 : std::min(static_cast<int>(state_->viewport.itemCount() - 1), selectedIndex_ + 1);
         break;
     case 36: // Home
         next = 0;
         break;
     case 35: // End
-        next = static_cast<int>(itemCount_ - 1);
+        next = static_cast<int>(state_->viewport.itemCount() - 1);
         break;
     default:
         return false;
@@ -271,148 +288,42 @@ bool VirtualList::onKeyEvent(const KeyEvent& event)
 
 VirtualList::Range VirtualList::mountedRange() const noexcept
 {
-    const Range visible = visibleRange();
-    if (visible.empty()) return visible;
-    const Index first = visible.first > overscanRows_ ? visible.first - overscanRows_ : 0;
-    const Index last = std::min(itemCount_, visible.last + overscanRows_);
-    return {first, last};
-}
-
-VirtualList::Key VirtualList::keyFor(Index index) const
-{
-    return keyProvider_ ? keyProvider_(index) : std::to_string(index);
+    const auto range = state_->viewport.overscanRange();
+    return {range.first, range.last};
 }
 
 int VirtualList::rowAt(PointF point) const noexcept
 {
-    if (!bounds().contains(point) || rowExtent_ <= 0.0f) return -1;
-    const float contentY = point.y - bounds().y + scrollOffset_;
+    if (!bounds().contains(point) || state_->viewport.itemExtent() <= 0.0f) return -1;
+    const float contentY = point.y - bounds().y + state_->viewport.scrollOffset();
     if (contentY < 0.0f) return -1;
-    const Index index = static_cast<Index>(contentY / rowExtent_);
-    return index < itemCount_ && index <= static_cast<Index>(std::numeric_limits<int>::max()) ? static_cast<int>(index) : -1;
+    const Index index = static_cast<Index>(contentY / state_->viewport.itemExtent());
+    return index < state_->viewport.itemCount() && index <= static_cast<Index>(std::numeric_limits<int>::max()) ? static_cast<int>(index) : -1;
 }
 
 int VirtualList::normalizedSelection(int index) const noexcept
 {
-    return index >= 0 && static_cast<Index>(index) < itemCount_ ? index : -1;
+    return index >= 0 && static_cast<Index>(index) < state_->viewport.itemCount() ? index : -1;
 }
 
 void VirtualList::reconcile()
 {
-    // Reconciliation removes children, and removal may synchronously invoke a
-    // user detach callback. A callback is allowed to refresh its model, but
-    // must not restart this traversal while its mounted indices are live.
-    if (reconciling_) {
-        reconcilePending_ = true;
-        return;
-    }
-
-    reconciling_ = true;
-    do {
-        reconcilePending_ = false;
-        reconcileOnce();
-    } while (reconcilePending_);
-    reconciling_ = false;
-}
-
-void VirtualList::reconcileOnce()
-{
-    const Range desiredRange = mountedRange();
-    std::vector<std::pair<Index, Key>> desired;
-    desired.reserve(desiredRange.size());
-    std::unordered_set<Key> desiredKeys;
-    for (Index index = desiredRange.first; index < desiredRange.last; ++index) {
-        Key key = keyFor(index);
-        // A duplicate model key would make reuse ambiguous. Keep both rows
-        // deterministic by making the second key index-qualified instead of
-        // accidentally moving an unrelated mounted node.
-        if (!desiredKeys.insert(key).second) key += "#" + std::to_string(index);
-        desired.emplace_back(index, std::move(key));
-    }
-
-    for (std::size_t index = mounted_.size(); index > 0; --index) {
-        if (desiredKeys.find(mounted_[index - 1].key) == desiredKeys.end()) unmount(index - 1);
-    }
-
-    for (const auto& [index, key] : desired) {
-        const auto existing = std::find_if(mounted_.begin(), mounted_.end(), [&key](const Mounted& mounted) {
-            return mounted.key == key;
-        });
-        if (existing != mounted_.end()) {
-            existing->index = index;
-            continue;
-        }
-        std::unique_ptr<Node> node = takePooled(key);
-        if (!node && itemBuilder_) node = itemBuilder_(index, key);
-        if (!node) continue;
-        Node* raw = node.get();
-        appendChild(std::move(node));
-        mounted_.push_back({index, key, raw});
-    }
-    trimPool();
+    const Range range = mountedRange();
+    state_->recycler.reconcile(*this, {range.first, range.last});
 }
 
 void VirtualList::layoutMountedChildren()
 {
-    for (Mounted& mounted : mounted_) {
+    for (const auto& mounted : state_->recycler.mounted()) {
         mounted.node->layout({bounds().x + 1.0f,
-                              bounds().y + static_cast<float>(mounted.index) * rowExtent_ - scrollOffset_,
-                              std::max(0.0f, bounds().width - 2.0f), rowExtent_});
+                              bounds().y + static_cast<float>(mounted.index) * state_->viewport.itemExtent() - state_->viewport.scrollOffset(),
+                              std::max(0.0f, bounds().width - 2.0f), state_->viewport.itemExtent()});
     }
-}
-
-void VirtualList::unmount(std::size_t mountedIndex)
-{
-    if (mountedIndex >= mounted_.size()) return;
-    Mounted mounted = std::move(mounted_[mountedIndex]);
-    // Remove bookkeeping before detaching the child. Detach callbacks are
-    // user code and may inspect or reconcile the list; they must never see a
-    // mounted record whose raw node is already being removed.
-    mounted_.erase(mounted_.begin() + static_cast<std::ptrdiff_t>(mountedIndex));
-
-    std::size_t childPosition = children().size();
-    for (std::size_t index = 0; index < children().size(); ++index) {
-        if (children()[index].get() == mounted.node) {
-            childPosition = index;
-            break;
-        }
-    }
-    if (childPosition == children().size()) return;
-
-    std::unique_ptr<Node> node = removeChild(childPosition);
-    addToPool(std::move(mounted.key), std::move(node));
-}
-
-std::unique_ptr<Node> VirtualList::takePooled(const Key& key)
-{
-    const auto item = std::find_if(pool_.begin(), pool_.end(), [&key](const Pooled& pooled) { return pooled.key == key; });
-    if (item == pool_.end()) return nullptr;
-    std::unique_ptr<Node> node = std::move(item->node);
-    pool_.erase(item);
-    return node;
-}
-
-void VirtualList::addToPool(Key key, std::unique_ptr<Node> node)
-{
-    if (!node) return;
-    // Construct the destination in the vector first. This avoids retaining a
-    // reference/iterator into either owned vector while a unique_ptr changes
-    // owners, and keeps ASan's container annotations precise during recycle.
-    pool_.emplace_back();
-    pool_.back().key = std::move(key);
-    pool_.back().node = std::move(node);
-}
-
-void VirtualList::trimPool()
-{
-    const Index viewportRows = visibleRange().size();
-    const Index limit = std::max<Index>(8, (viewportRows + overscanRows_ * 2) * 2);
-    if (pool_.size() > limit) pool_.erase(pool_.begin(), pool_.begin() + static_cast<std::ptrdiff_t>(pool_.size() - limit));
 }
 
 void VirtualList::select(int index)
 {
-    if (index < 0 || static_cast<Index>(index) >= itemCount_ || index == selectedIndex_) return;
+    if (index < 0 || static_cast<Index>(index) >= state_->viewport.itemCount() || index == selectedIndex_) return;
     selectedIndex_ = index;
     scrollToIndex(static_cast<Index>(index));
     if (onSelectionChanged_) onSelectionChanged_(static_cast<Index>(index));

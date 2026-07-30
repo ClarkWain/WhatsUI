@@ -8,6 +8,7 @@
 #include <functional>
 #include <chrono>
 #include <optional>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -49,8 +50,9 @@ class ListBox : public ControlNode {
 public:
     using SelectionHandler = std::function<void(int, const Option&)>;
 
-    ListBox() = default;
+    ListBox();
     explicit ListBox(std::vector<Option> options);
+    ~ListBox() override;
 
     ListBox& addOption(Option option);
     ListBox& setOptions(std::vector<Option> options);
@@ -90,6 +92,8 @@ public:
         AccessibilityActionKind kind, std::string_view value) override;
 
 private:
+    struct State;
+
     [[nodiscard]] bool selectable(int index) const noexcept;
     [[nodiscard]] int nextSelectable(int from, int delta) const noexcept;
     [[nodiscard]] int optionAt(PointF point) const noexcept;
@@ -97,6 +101,7 @@ private:
     [[nodiscard]] float preferredWidth() const noexcept;
     [[nodiscard]] bool isSelected(int index) const noexcept;
     [[nodiscard]] RectF optionBounds(int index) const noexcept;
+    void syncViewport() noexcept;
     void scrollActiveIntoView() noexcept;
     void updateTypeAhead(char character);
     void choose(int index, bool toggle = false);
@@ -106,7 +111,7 @@ private:
     int activeIndex_{-1};
     int hoveredIndex_{-1};
     int pressedIndex_{-1};
-    float scrollOffset_{0.0f};
+    std::unique_ptr<State> state_;
     std::size_t maxVisibleOptions_{8};
     ListBoxSelectionMode selectionMode_{ListBoxSelectionMode::Single};
     SelectionHandler onSelectionChanged_;

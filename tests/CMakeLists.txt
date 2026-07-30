@@ -315,6 +315,22 @@ add_test(
     COMMAND WhatsUIScrollViewTests
 )
 
+add_executable(WhatsUIViewportModelTests
+    viewport_model_tests.cpp
+)
+
+target_link_libraries(WhatsUIViewportModelTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIViewportModelTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_viewport_model_tests
+    COMMAND WhatsUIViewportModelTests
+)
+
 add_test(
     NAME whatsui_text_area_completion_tests
     COMMAND WhatsUITextAreaCompletionTests
@@ -449,8 +465,10 @@ add_executable(WhatsUIComponentGalleryNavigationTests
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/components/compact_navigation.cpp
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/components/navigation_rail.cpp
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/components/page_header.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/components/preview_surface.cpp
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/components/responsive_gallery_shell.cpp
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/pages/all_components_page.cpp
+    ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view/pages/long_text_page.cpp
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view_model/gallery_view_model.cpp
     ${WHATSUI_COMPONENT_GALLERY_SOURCE_DIR}/view_model/navigation_view_model.cpp
 )
@@ -477,6 +495,7 @@ if(TARGET WhatsUIComponentGalleryApp)
             overview
             all-components
             controls
+            long-text
             add-ons
             visual-qa
             about
@@ -502,6 +521,7 @@ if(TARGET WhatsUIComponentGalleryApp)
     foreach(whatsui_gallery_route IN ITEMS
             all-components
             controls
+            long-text
             button-detail)
         string(REPLACE "-" "_" whatsui_gallery_test_suffix
             "${whatsui_gallery_route}")

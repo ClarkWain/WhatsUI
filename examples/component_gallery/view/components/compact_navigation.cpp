@@ -12,7 +12,8 @@ namespace {
 GalleryRoute routeForId(const std::string& id) noexcept
 {
     for (const auto route : {GalleryRoute::Overview, GalleryRoute::AllComponents,
-                             GalleryRoute::Controls, GalleryRoute::AddOns,
+                             GalleryRoute::Controls, GalleryRoute::LongText,
+                             GalleryRoute::AddOns,
                              GalleryRoute::VisualQa, GalleryRoute::About}) {
         if (id == galleryRouteKey(route)) return route;
     }

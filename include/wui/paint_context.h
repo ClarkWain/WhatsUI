@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -199,6 +200,18 @@ public:
     [[nodiscard]] PaintOperationStats paintStats() const noexcept
     {
         return paintStats_;
+    }
+
+    // Returns the active rectangular clip in the caller's current logical
+    // coordinate system. Viewport-aware leaves use this to avoid preparing
+    // and submitting work which the renderer would discard later.
+    [[nodiscard]] std::optional<RectF> currentClipBounds() const noexcept
+    {
+        const LogicalPaintState& state = logicalPaintStates_.back();
+        if (!state.hasClip) return std::nullopt;
+        return RectF{state.clip.x - state.translation.x,
+                     state.clip.y - state.translation.y,
+                     state.clip.width, state.clip.height};
     }
 
     void fillRect(const RectF& rect, Color color)
@@ -544,6 +557,7 @@ public:
     {
         const int checkpoint = saveCount_;
         ++saveCount_;
+        logicalPaintStates_.push_back(logicalPaintStates_.back());
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ != nullptr) canvas_->save();
 #endif
@@ -556,6 +570,7 @@ public:
             return;
         }
         --saveCount_;
+        logicalPaintStates_.pop_back();
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ != nullptr) canvas_->restore();
 #endif
@@ -578,6 +593,7 @@ public:
     {
         ++paintStats_.commandCount;
         ++paintStats_.clipRectCalls;
+        intersectLogicalClip(rect);
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ != nullptr) {
             const auto started = std::chrono::steady_clock::now();
@@ -597,6 +613,7 @@ public:
     {
         ++paintStats_.commandCount;
         ++paintStats_.clipRectCalls;
+        intersectLogicalClip(rect);
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ != nullptr) {
             const auto started = std::chrono::steady_clock::now();
@@ -615,6 +632,8 @@ public:
 
     void translate(float dx, float dy) noexcept
     {
+        logicalPaintStates_.back().translation.x += dx;
+        logicalPaintStates_.back().translation.y += dy;
 #ifdef WHATSUI_HAS_WHATSCANVAS
         if (canvas_ != nullptr) canvas_->translate(dx * canvasCoordinateScale_, dy * canvasCoordinateScale_);
 #else
@@ -624,6 +643,33 @@ public:
     }
 
 private:
+    struct LogicalPaintState {
+        PointF translation{};
+        RectF clip{};
+        bool hasClip{false};
+    };
+
+    void intersectLogicalClip(const RectF& rect) noexcept
+    {
+        LogicalPaintState& state = logicalPaintStates_.back();
+        const float left = rect.x + state.translation.x;
+        const float top = rect.y + state.translation.y;
+        const float right = left + std::max(0.0f, rect.width);
+        const float bottom = top + std::max(0.0f, rect.height);
+        if (!state.hasClip) {
+            state.clip = {left, top, right - left, bottom - top};
+            state.hasClip = true;
+            return;
+        }
+        const float clippedLeft = std::max(left, state.clip.x);
+        const float clippedTop = std::max(top, state.clip.y);
+        const float clippedRight = std::min(right, state.clip.x + state.clip.width);
+        const float clippedBottom = std::min(bottom, state.clip.y + state.clip.height);
+        state.clip = {clippedLeft, clippedTop,
+                      std::max(0.0f, clippedRight - clippedLeft),
+                      std::max(0.0f, clippedBottom - clippedTop)};
+    }
+
     static double elapsedMilliseconds(std::chrono::steady_clock::time_point started) noexcept
     {
         return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
@@ -633,6 +679,7 @@ private:
     float canvasCoordinateScale_{1.0f};
     bool canvasUsesDevicePixelRatio_{false};
     int saveCount_{1};
+    std::vector<LogicalPaintState> logicalPaintStates_{LogicalPaintState{}};
     PaintOperationStats paintStats_{};
 
 #ifdef WHATSUI_HAS_WHATSCANVAS

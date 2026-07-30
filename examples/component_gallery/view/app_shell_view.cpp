@@ -20,10 +20,11 @@ struct Destination {
     wui::IconName icon;
 };
 
-constexpr std::array<Destination, 6> kDestinations{{
+constexpr std::array<Destination, 7> kDestinations{{
     {GalleryRoute::Overview, "Overview", wui::IconName::TaskList},
     {GalleryRoute::AllComponents, "All components", wui::IconName::Square},
     {GalleryRoute::Controls, "Controls", wui::IconName::CheckmarkCircle},
+    {GalleryRoute::LongText, "Long text", wui::IconName::TaskList},
     {GalleryRoute::AddOns, "Add-ons", wui::IconName::MoreHorizontal},
     {GalleryRoute::VisualQa, "Visual QA", wui::IconName::Checkmark},
     {GalleryRoute::About, "About", wui::IconName::Info},

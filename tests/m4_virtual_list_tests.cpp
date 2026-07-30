@@ -1,4 +1,5 @@
 #include <memory>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -41,6 +42,45 @@ protected:
 private:
     wui::VirtualList* owner_{nullptr};
     int* detached_{nullptr};
+};
+
+class ReentrantCountChangeRow final : public ProbeRow {
+public:
+    ReentrantCountChangeRow(std::string key, wui::VirtualList* owner, bool* changed)
+        : ProbeRow(std::move(key)), owner_(owner), changed_(changed) {}
+
+protected:
+    void onDetach() noexcept override
+    {
+        if (*changed_) return;
+        *changed_ = true;
+        owner_->setItemCount(10);
+        owner_->setScrollOffset(0.0f);
+    }
+
+private:
+    wui::VirtualList* owner_{nullptr};
+    bool* changed_{nullptr};
+};
+
+class ReentrantBuilderResetRow final : public ProbeRow {
+public:
+    ReentrantBuilderResetRow(std::string key, wui::VirtualList* owner, bool* reset)
+        : ProbeRow(std::move(key)), owner_(owner), reset_(reset) {}
+
+protected:
+    void onDetach() noexcept override
+    {
+        if (*reset_) return;
+        *reset_ = true;
+        owner_->setItemBuilder([](wui::VirtualList::Index, const std::string& key) {
+            return std::make_unique<ProbeRow>("reset-" + key);
+        });
+    }
+
+private:
+    wui::VirtualList* owner_{nullptr};
+    bool* reset_{nullptr};
 };
 
 void configureList(wui::VirtualList& list, std::vector<std::string>& keys)
@@ -166,14 +206,90 @@ void testDetachRefreshIsDeferredUntilUnmountPassCompletes()
     expect(detached > 0, "Reentry regression must actually detach rows from an attached tree");
 }
 
+void testDetachCountChangeUsesLatestRange()
+{
+    std::vector<std::string> keys;
+    for (int index = 0; index < 80; ++index) keys.push_back("count-" + std::to_string(index));
+    bool changed = false;
+    auto list = std::make_unique<wui::VirtualList>();
+    auto* raw = list.get();
+    raw->setKeyProvider([&keys](wui::VirtualList::Index index) { return keys[index]; });
+    raw->setItemBuilder([raw, &changed](wui::VirtualList::Index, const std::string& key) {
+        return std::make_unique<ReentrantCountChangeRow>(key, raw, &changed);
+    });
+    raw->setItemCount(keys.size());
+
+    wui::UiRoot root;
+    root.setContent(std::move(list));
+    root.layout({0.0f, 0.0f, 240.0f, 180.0f});
+    raw->setScrollOffset(36.0f * 40.0f);
+    expect(changed && raw->itemCount() == 10 && raw->visibleRange().last <= 10,
+           "Detach-triggered count changes must reconcile against the latest bounded range");
+    expect(raw->mountedCount() <= 9, "Count-change reentry must keep mounted rows bounded");
+}
+
+void testDetachBuilderResetIsDeferredUntilRemoveCompletes()
+{
+    std::vector<std::string> keys;
+    for (int index = 0; index < 80; ++index) keys.push_back("builder-" + std::to_string(index));
+    bool reset = false;
+    auto list = std::make_unique<wui::VirtualList>();
+    auto* raw = list.get();
+    raw->setKeyProvider([&keys](wui::VirtualList::Index index) { return keys[index]; });
+    raw->setItemBuilder([raw, &reset](wui::VirtualList::Index, const std::string& key) {
+        return std::make_unique<ReentrantBuilderResetRow>(key, raw, &reset);
+    });
+
+    raw->setItemCount(keys.size());
+    wui::UiRoot root;
+    root.setContent(std::move(list));
+    root.layout({0.0f, 0.0f, 240.0f, 180.0f});
+    raw->setScrollOffset(36.0f * 20.0f);
+    expect(reset && raw->mountedCount() <= 9,
+           "Detach-triggered builder reset must defer owner clear until removal completes");
+}
+
+    void testPublicChildMutationDoesNotLeaveRecyclerStalePointers()
+    {
+        std::vector<std::string> keys;
+        for (int index = 0; index < 100; ++index) keys.push_back("public-" + std::to_string(index));
+        wui::VirtualList list;
+        configureList(list, keys);
+        const auto mountedBeforeRemove = list.mountedCount();
+        expect(mountedBeforeRemove > 0, "Public mutation regression needs mounted rows");
+        auto removed = list.removeChild(0);
+        expect(removed != nullptr && list.mountedCount() + 1 == mountedBeforeRemove,
+            "VirtualList public removeChild must forget the removed recycler row");
+        list.refresh();
+        list.layout({0.0f, 0.0f, 240.0f, 180.0f});
+        expect(list.mountedCount() <= 9 && list.children().size() == list.mountedCount(),
+            "VirtualList must reconcile after public removeChild without stale mounted pointers");
+
+        list.clearChildren();
+        expect(list.mountedCount() == 0 && list.children().empty(),
+            "VirtualList public clearChildren must clear recycler state and owned children together");
+        list.refresh();
+        list.layout({0.0f, 0.0f, 240.0f, 180.0f});
+        expect(list.mountedCount() <= 9 && list.children().size() == list.mountedCount(),
+            "VirtualList must reconcile after public clearChildren without stale mounted pointers");
+    }
+
 } // namespace
 
 int main()
 {
-    testLargeLogicalModelKeepsMountedRowsBounded();
-    testStableKeysPreserveMountedIdentityAfterInsertion();
-    testPointerAndKeyboardSelectionScrollIntoView();
-    testRecyclePoolSurvivesHighChurnAndDestruction();
-    testDetachRefreshIsDeferredUntilUnmountPassCompletes();
-    return 0;
+    try {
+        testLargeLogicalModelKeepsMountedRowsBounded();
+        testStableKeysPreserveMountedIdentityAfterInsertion();
+        testPointerAndKeyboardSelectionScrollIntoView();
+        testRecyclePoolSurvivesHighChurnAndDestruction();
+        testDetachRefreshIsDeferredUntilUnmountPassCompletes();
+        testDetachCountChangeUsesLatestRange();
+        testDetachBuilderResetIsDeferredUntilRemoveCompletes();
+        testPublicChildMutationDoesNotLeaveRecyclerStalePointers();
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << "VirtualList test failure: " << error.what() << '\n';
+        return 1;
+    }
 }

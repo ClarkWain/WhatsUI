@@ -100,6 +100,10 @@ public:
     virtual void layout(const RectF& bounds);
     virtual void paint(PaintContext& context) = 0;
     [[nodiscard]] virtual Node* hitTest(PointF point);
+    // Converts a point from this node's viewport coordinates into the
+    // coordinate system used by its children. Most nodes are identity
+    // transforms; viewport nodes override this for routed pointer events.
+    [[nodiscard]] virtual PointF mapPointToContent(PointF point) const noexcept;
     // Compatibility adapter: established widgets may continue overriding the
     // bool overload while new nodes can inspect the routing phase and make
     // explicit focus/capture/propagation requests.

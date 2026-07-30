@@ -73,8 +73,8 @@ void testPassiveTableWindowing()
     expect(table.headerHeight() == 32.0f && table.rowHeight() == 44.0f,
            "Medium Table must use a 32-DIP header and Figma 9249:10060 44-DIP cell content");
     table.layout({0, 0, 440, 116});
-    expect(table.accessibleLabel() == "Release table" && table.firstVisibleRow() == 0 && table.lastVisibleRowExclusive() == 3,
-           "Table must retain a stable passive data model and one-row paint buffer");
+        expect(table.accessibleLabel() == "Release table" && table.firstVisibleRow() == 0 && table.lastVisibleRowExclusive() == 2,
+            "Table must retain a stable passive data model and a true visible row window");
     expect(table.maximumScrollOffset() > 0.0f, "Table must calculate a deterministic viewport offset for oversized static data");
     table.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Scroll, wui::MouseButton::None, {30, 80}, 0, {0, -100}});
     expect(table.scrollOffset() > 0.0f && table.firstVisibleRow() > 0,
@@ -89,7 +89,7 @@ void testPassiveTableWindowing()
 void testGridSortSelectionAndKeyboard()
 {
     wui::DataGrid grid; grid.setColumns(columns()).setRows(rows()).maxVisibleRows(2);
-    grid.layout({0, 0, 440, 116});
+    grid.layout({0, 0, 440, 120});
     int selectionChanged = 0;
     grid.onSelectionChanged([&](const std::vector<std::size_t>&) { ++selectionChanged; });
     grid.sortBy(0);
@@ -148,6 +148,63 @@ void testVirtualAccessibilityWindow()
     expect(sortedHeader && selectedRow && focusedCell,
            "DataGrid virtual semantics must carry sortable headers, stable selected-row state and one focused cell");
 }
+
+    void testProviderBackedGridRequestsOnlyVisibleRows()
+    {
+        wui::DataGrid grid;
+        int requests = 0;
+        int sortCalls = 0;
+        grid.setColumns(columns()).setRowProvider(100000, [&requests](std::size_t row) {
+         ++requests;
+         return wui::TableRow{"row-" + std::to_string(row), {"Name " + std::to_string(row), "Open", "Owner"}};
+        }, [](std::size_t row) { return row != 99999; });
+        grid.maxVisibleRows(2);
+        grid.onSort([&](std::size_t, wui::TableSortDirection) { ++sortCalls; });
+        grid.layout({0, 0, 440, 116});
+
+        requests = 0;
+        const auto entries = grid.accessibilityEntries();
+        expect(!entries.empty() && requests <= 2,
+            "Provider-backed DataGrid accessibility should request only the visible row window");
+
+        requests = 0;
+        grid.setScrollOffset(44.0f * 50000.0f);
+        const auto scrolledEntries = grid.accessibilityEntries();
+        expect(!scrolledEntries.empty() && grid.firstVisibleRow() == 50000 && requests <= 2,
+            "Provider-backed DataGrid large scroll should keep row requests bounded");
+
+        requests = 0;
+        expect(grid.performAccessibilityAction(wui::AccessibilityActionKind::SetValue, "99999") == wui::AccessibilityActionStatus::Succeeded &&
+                   grid.selectedRows().empty() && requests == 0,
+               "Provider-backed DataGrid SetValue should use enabled metadata without requesting row payloads");
+
+        grid.sortBy(0);
+        expect(sortCalls == 1 && grid.sortColumn() && *grid.sortColumn() == 0,
+            "Provider-backed DataGrid sorting should delegate to onSort instead of sorting local rows");
+    }
+
+    void testProviderBackedGridUsesPhysicalViewportHeight()
+    {
+        wui::DataGrid grid;
+        int requests = 0;
+        grid.setColumns(columns()).setRowProvider(100000, [&requests](std::size_t row) {
+            ++requests;
+            return wui::TableRow{"row-" + std::to_string(row), {"Name " + std::to_string(row), "Open", "Owner"}};
+        });
+        grid.maxVisibleRows(8);
+
+        grid.layout({0, 0, 440, 32});
+        requests = 0;
+        const auto headerOnly = grid.accessibilityEntries();
+        expect(!headerOnly.empty() && grid.firstVisibleRow() == grid.lastVisibleRowExclusive() && requests == 0,
+               "Provider-backed DataGrid must not request rows when the physical body viewport is empty");
+
+        grid.layout({0, 0, 440, 76});
+        requests = 0;
+        const auto oneRow = grid.accessibilityEntries();
+        expect(!oneRow.empty() && grid.firstVisibleRow() == 0 && grid.lastVisibleRowExclusive() == 1 && requests <= 1,
+               "Provider-backed DataGrid should request only physically visible rows, independent of maxVisibleRows");
+    }
 
 void testCentralSnapshotAndVirtualActionRouting()
 {
@@ -215,6 +272,6 @@ void testCentralSnapshotAndVirtualActionRouting()
 }
 int main()
 {
-    try { testPassiveTableWindowing(); testGridSortSelectionAndKeyboard(); testDisabledRowsAndHeaderPointerSort(); testVirtualAccessibilityWindow(); testCentralSnapshotAndVirtualActionRouting(); std::cout << "Fluent table/data-grid tests passed\n"; return 0; }
+    try { testPassiveTableWindowing(); testGridSortSelectionAndKeyboard(); testDisabledRowsAndHeaderPointerSort(); testVirtualAccessibilityWindow(); testProviderBackedGridRequestsOnlyVisibleRows(); testProviderBackedGridUsesPhysicalViewportHeight(); testCentralSnapshotAndVirtualActionRouting(); std::cout << "Fluent table/data-grid tests passed\n"; return 0; }
     catch (const std::exception& error) { std::cerr << "Fluent table/data-grid test failure: " << error.what() << '\n'; return 1; }
 }

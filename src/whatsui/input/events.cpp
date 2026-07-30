@@ -336,9 +336,19 @@ bool InputRouter::dispatchPointerTo(Node* target, const PointerEvent& event)
     }
     std::reverse(path.begin(), path.end());
 
+    const auto positionFor = [&](Node* current) {
+        PointF position = event.position;
+        for (Node* ancestor : path) {
+            if (ancestor == current) break;
+            position = ancestor->mapPointToContent(position);
+        }
+        return position;
+    };
+
     bool handled = false;
     bool explicitCaptureRequest = false;
     const auto dispatchPhase = [&](Node* current, EventPhase phase) {
+        routedEvent.position = positionFor(current);
         EventContext context(phase, deliveryTarget, current, &routedEvent);
         const EventResult result = current->onPointerEvent(routedEvent, context);
         switch (result) {

@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "wui/icons.h"
+#include "wui/internal/viewport_model.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
 
@@ -25,6 +26,14 @@ float textWidth(const std::string& value, const TextStyleToken& style) noexcept
 }
 } // namespace
 
+struct Tree::State {
+    internal::ViewportModel viewport;
+    mutable std::vector<TreeItem*> visibleItems;
+    mutable bool visibleItemsDirty{true};
+    std::vector<TreeItem*> laidOutItems;
+    std::string focusedId;
+};
+
 TreeItem::TreeItem(std::string id, std::string label) : id_(std::move(id)), label_(std::move(label)) {}
 const std::string& TreeItem::id() const noexcept { return id_; }
 TreeItem& TreeItem::id(std::string value) { setId(std::move(value)); return *this; }
@@ -35,7 +44,22 @@ void TreeItem::setLabel(std::string value) { if (label_ != value) { label_ = std
 TreeItem& TreeItem::addItem(std::string id, std::string label)
 {
     auto child = std::make_unique<TreeItem>(std::move(id), std::move(label));
-    auto* raw = child.get(); appendChild(std::move(child)); markDirty(DirtyFlag::Layout); return *raw;
+    auto* raw = child.get(); appendChild(std::move(child));
+    if (auto* tree = ownerTree()) tree->invalidateVisibleItems();
+    markDirty(DirtyFlag::Layout); return *raw;
+}
+std::unique_ptr<Node> TreeItem::removeChild(std::size_t index)
+{
+    auto child = ControlNode::removeChild(index);
+    if (auto* tree = ownerTree()) tree->invalidateVisibleItems();
+    markDirty(DirtyFlag::Layout);
+    return child;
+}
+void TreeItem::clearChildren()
+{
+    ControlNode::clearChildren();
+    if (auto* tree = ownerTree()) tree->invalidateVisibleItems();
+    markDirty(DirtyFlag::Layout);
 }
 bool TreeItem::hasChildren() const noexcept { return !children().empty(); }
 bool TreeItem::isExpanded() const noexcept { return expanded_; }
@@ -135,9 +159,17 @@ AccessibilityActionStatus TreeItem::performAccessibilityAction(AccessibilityActi
     return AccessibilityActionStatus::NotSupported;
 }
 
+Tree::Tree()
+    : state_(std::make_unique<State>())
+{
+}
+
+Tree::~Tree() = default;
+
 TreeItem& Tree::addItem(std::string id, std::string label)
 {
     auto item = std::make_unique<TreeItem>(std::move(id), std::move(label)); auto* raw = item.get(); appendChild(std::move(item));
+    invalidateVisibleItems();
     // A newly constructed Tree is not automatically keyboard-focused. The
     // host focus manager (or the first Tree key command) establishes roving
     // focus; otherwise passive tree presentations would show a stray ring.
@@ -152,14 +184,34 @@ float Tree::rowHeight() const noexcept { return rowHeight_; }
 Tree& Tree::maxVisibleItems(std::size_t value) noexcept { setMaxVisibleItems(value); return *this; }
 void Tree::setMaxVisibleItems(std::size_t value) noexcept { maxVisibleItems_ = std::max<std::size_t>(1, value); markDirty(DirtyFlag::Layout); }
 std::size_t Tree::maxVisibleItems() const noexcept { return maxVisibleItems_; }
-float Tree::scrollOffset() const noexcept { return scrollOffset_; }
-void Tree::setScrollOffset(float value) noexcept { const float next = std::clamp(std::isfinite(value) ? value : 0.0f, 0.0f, maximumScrollOffset()); if (scrollOffset_ != next) { scrollOffset_ = next; markDirty(DirtyFlag::Paint); } }
-float Tree::maximumScrollOffset() const noexcept { const float viewport = std::max(0.0f, bounds().height); return std::max(0.0f, static_cast<float>(visibleItems().size()) * rowHeight_ - viewport); }
+float Tree::scrollOffset() const noexcept { return state_->viewport.scrollOffset(); }
+void Tree::setScrollOffset(float value) noexcept { const float previous = state_->viewport.scrollOffset(); state_->viewport.setScrollOffset(value); if (state_->viewport.scrollOffset() != previous) { markDirty(DirtyFlag::Layout); } }
+float Tree::maximumScrollOffset() const noexcept { return state_->viewport.maxScrollOffset(); }
+Tree::Range Tree::visibleRange() const noexcept { const auto range = state_->viewport.visibleRange(); return {range.first, range.last}; }
 TreeItem* Tree::selectedItem() const noexcept { return findItem(selectedId_); }
 const std::string& Tree::selectedId() const noexcept { return selectedId_; }
 bool Tree::select(std::string_view id) { if (auto* item = findItem(id)) return selectItem(*item, false); return false; }
 Tree& Tree::onSelectionChanged(SelectionHandler handler) { onSelectionChanged_ = std::move(handler); return *this; }
 Tree& Tree::onExpandedChange(ExpandHandler handler) { onExpandedChange_ = std::move(handler); return *this; }
+
+std::unique_ptr<Node> Tree::removeChild(std::size_t index)
+{
+    auto child = ContainerNode::removeChild(index);
+    invalidateVisibleItems();
+    state_->laidOutItems.clear();
+    state_->focusedId.clear();
+    return child;
+}
+
+void Tree::clearChildren()
+{
+    ContainerNode::clearChildren();
+    invalidateVisibleItems();
+    state_->laidOutItems.clear();
+    selectedId_.clear();
+    state_->focusedId.clear();
+}
+
 void Tree::appendVisible(TreeItem& item, std::vector<TreeItem*>& items) const
 {
     items.push_back(&item);
@@ -167,26 +219,43 @@ void Tree::appendVisible(TreeItem& item, std::vector<TreeItem*>& items) const
 }
 std::vector<TreeItem*> Tree::visibleItems() const
 {
-    std::vector<TreeItem*> result;
-    for (const auto& child : children()) if (auto* item = dynamic_cast<TreeItem*>(child.get())) appendVisible(*item, result);
-    return result;
+    return visibleItemsCache();
+}
+
+const std::vector<TreeItem*>& Tree::visibleItemsCache() const
+{
+    if (state_->visibleItemsDirty) {
+        state_->visibleItems.clear();
+        for (const auto& child : children()) if (auto* item = dynamic_cast<TreeItem*>(child.get())) appendVisible(*item, state_->visibleItems);
+        state_->visibleItemsDirty = false;
+    }
+    return state_->visibleItems;
+}
+
+void Tree::invalidateVisibleItems() noexcept
+{
+    state_->visibleItemsDirty = true;
+    markDirty(DirtyFlag::Layout);
 }
 SizeF Tree::measure(const Constraints& constraints) const
 {
-    float width = 0; for (TreeItem* item : visibleItems()) width = std::max(width, item->measureWithConstraints(constraints).width);
-    const float height = std::min(static_cast<float>(maxVisibleItems_) * rowHeight_, static_cast<float>(visibleItems().size()) * rowHeight_);
+    const auto& items = visibleItemsCache();
+    float width = 0; for (TreeItem* item : items) width = std::max(width, item->measureWithConstraints(constraints).width);
+    const float height = std::min(static_cast<float>(maxVisibleItems_) * rowHeight_, static_cast<float>(items.size()) * rowHeight_);
     return constraints.clamp({width, height});
 }
 void Tree::layout(const RectF& rect)
 {
-    Node::layout(rect); const auto items = visibleItems();
-    std::function<void(TreeItem&)> clearRows = [&](TreeItem& item) {
-        item.layout({0, 0, 0, 0});
-        for (const auto& child : item.children()) if (auto* nested = dynamic_cast<TreeItem*>(child.get())) clearRows(*nested);
-    };
-    for (const auto& root : children()) if (auto* item = dynamic_cast<TreeItem*>(root.get())) clearRows(*item);
-    for (std::size_t i = 0; i < items.size(); ++i) items[i]->layout({rect.x, rect.y + static_cast<float>(i) * rowHeight_ - scrollOffset_, rect.width, rowHeight_});
-    setScrollOffset(scrollOffset_); clearLayoutDirtyRecursively();
+    Node::layout(rect); const auto& items = visibleItemsCache();
+    syncViewport(items.size());
+    for (TreeItem* item : state_->laidOutItems) item->layout({0, 0, 0, 0});
+    state_->laidOutItems.clear();
+    const auto range = state_->viewport.visibleRange();
+    for (std::size_t i = range.first; i < range.last; ++i) {
+        items[i]->layout({rect.x, rect.y + static_cast<float>(i) * rowHeight_ - state_->viewport.scrollOffset(), rect.width, rowHeight_});
+        state_->laidOutItems.push_back(items[i]);
+    }
+    clearLayoutDirtyRecursively();
 }
 void Tree::paint(PaintContext& context)
 {
@@ -194,7 +263,10 @@ void Tree::paint(PaintContext& context)
     // never paint outside their own bounds, so this is a safe windowing path
     // even on backends that do not expose a save/restore clip stack.
     const RectF viewport = bounds();
-    for (TreeItem* item : visibleItems()) {
+    const auto& items = visibleItemsCache();
+    const auto range = state_->viewport.visibleRange();
+    for (std::size_t index = range.first; index < range.last; ++index) {
+        TreeItem* item = items[index];
         const RectF row = item->bounds();
         if (row.y + row.height > viewport.y && row.y < viewport.y + viewport.height) item->paint(context);
     }
@@ -203,12 +275,14 @@ void Tree::paint(PaintContext& context)
 Node* Tree::hitTest(PointF point)
 {
     if (!bounds().contains(point)) return nullptr;
-    for (TreeItem* item : visibleItems()) if (item->bounds().contains(point)) return item;
+    const auto& items = visibleItemsCache();
+    const auto range = state_->viewport.visibleRange();
+    for (std::size_t index = range.first; index < range.last; ++index) if (items[index]->bounds().contains(point)) return items[index];
     return this;
 }
 bool Tree::onPointerEvent(const PointerEvent& event)
 {
-    if (event.action == PointerAction::Scroll && bounds().contains(event.position)) { setScrollOffset(scrollOffset_ - event.scrollDelta.y); return true; }
+    if (event.action == PointerAction::Scroll && bounds().contains(event.position)) { setScrollOffset(state_->viewport.scrollOffset() - event.scrollDelta.y); layout(bounds()); return true; }
     if (auto* hit = dynamic_cast<TreeItem*>(hitTest(event.position))) return hit->onPointerEvent(event);
     return false;
 }
@@ -221,20 +295,31 @@ TreeItem* Tree::findItem(std::string_view id) const noexcept
 }
 TreeItem* Tree::nextEnabled(TreeItem* from, int delta) const noexcept
 {
-    const auto items = visibleItems(); if (items.empty()) return nullptr;
+    const auto& items = visibleItemsCache(); if (items.empty()) return nullptr;
     auto position = std::find(items.begin(), items.end(), from); std::size_t start = position == items.end() ? 0 : static_cast<std::size_t>(position - items.begin());
     for (std::size_t step = 1; step <= items.size(); ++step) { const auto i = (start + items.size() + (delta < 0 ? items.size() - step % items.size() : step % items.size())) % items.size(); if (items[i]->isEnabled()) return items[i]; }
     return from;
 }
 void Tree::focus(TreeItem* item) noexcept
 {
-    for (TreeItem* current : visibleItems()) current->setVisualState(ControlVisualState::Focused, current == item);
-    focused_ = item;
+    if (TreeItem* previous = findItem(state_->focusedId)) previous->setVisualState(ControlVisualState::Focused, false);
+    if (item) item->setVisualState(ControlVisualState::Focused, true);
+    state_->focusedId = item ? item->id() : std::string{};
 }
 bool Tree::setExpanded(TreeItem& item, bool value)
 {
     if (!item.isEnabled() || !item.hasChildren() || item.expanded_ == value) return false;
-    item.expanded_ = value; item.markDirty(DirtyFlag::Layout); if (onExpandedChange_) onExpandedChange_(item, value); markDirty(DirtyFlag::Layout); return true;
+    TreeItem* focusedBefore = findItem(state_->focusedId);
+    bool focusedDescendant = false;
+    for (Node* current = focusedBefore; current != nullptr && current != &item; current = current->parent()) {
+        if (current->parent() == &item) {
+            focusedDescendant = true;
+            break;
+        }
+    }
+    item.expanded_ = value; item.markDirty(DirtyFlag::Layout); invalidateVisibleItems();
+    if (!value && focusedDescendant) focus(&item);
+    if (onExpandedChange_) onExpandedChange_(item, value); markDirty(DirtyFlag::Layout); return true;
 }
 bool Tree::selectItem(TreeItem& item, bool requestFocus)
 {
@@ -245,26 +330,35 @@ bool Tree::selectItem(TreeItem& item, bool requestFocus)
 }
 void Tree::scrollIntoView(TreeItem& item) noexcept
 {
-    const auto items = visibleItems(); const auto position = std::find(items.begin(), items.end(), &item); if (position == items.end()) return;
-    const float top = static_cast<float>(position - items.begin()) * rowHeight_, bottom = top + rowHeight_, viewport = bounds().height;
-    if (top < scrollOffset_) setScrollOffset(top); else if (bottom > scrollOffset_ + viewport) setScrollOffset(bottom - viewport);
+    const auto& items = visibleItemsCache(); const auto position = std::find(items.begin(), items.end(), &item); if (position == items.end()) return;
+    const float previous = state_->viewport.scrollOffset();
+    state_->viewport.scrollToIndex(static_cast<std::size_t>(position - items.begin()));
+    if (state_->viewport.scrollOffset() != previous) markDirty(DirtyFlag::Layout);
+}
+void Tree::syncViewport(std::size_t visibleCount) noexcept
+{
+    state_->viewport.setItemCount(visibleCount);
+    state_->viewport.setItemExtent(rowHeight_);
+    state_->viewport.setViewportExtent(std::max(0.0f, bounds().height));
 }
 bool Tree::onKeyEvent(const KeyEvent& event)
 {
     if (event.action != KeyAction::Down) return false;
-    if (!focused_) focus(nextEnabled(nullptr, 1)); if (!focused_) return false;
-    if (event.keyCode == kUp || event.keyCode == kDown) { if (auto* item = nextEnabled(focused_, event.keyCode == kUp ? -1 : 1)) { focus(item); scrollIntoView(*item); return true; } }
+    TreeItem* focused = findItem(state_->focusedId);
+    if (!focused) { focus(nextEnabled(nullptr, 1)); focused = findItem(state_->focusedId); }
+    if (!focused) return false;
+    if (event.keyCode == kUp || event.keyCode == kDown) { if (auto* item = nextEnabled(focused, event.keyCode == kUp ? -1 : 1)) { focus(item); scrollIntoView(*item); return true; } }
     if (event.keyCode == kHome || event.keyCode == kEnd) {
-        const auto items = visibleItems();
+        const auto& items = visibleItemsCache();
         if (event.keyCode == kHome) {
             for (TreeItem* item : items) if (item->isEnabled()) { focus(item); scrollIntoView(*item); return true; }
         } else {
             for (auto it = items.rbegin(); it != items.rend(); ++it) if ((*it)->isEnabled()) { focus(*it); scrollIntoView(**it); return true; }
         }
     }
-    if (event.keyCode == kRight) { if (focused_->hasChildren() && !focused_->isExpanded()) return setExpanded(*focused_, true); if (focused_->hasChildren()) for (const auto& child : focused_->children()) if (auto* item = dynamic_cast<TreeItem*>(child.get()); item && item->isEnabled()) { focus(item); return true; } }
-    if (event.keyCode == kLeft) { if (focused_->hasChildren() && focused_->isExpanded()) return setExpanded(*focused_, false); if (auto* parent = dynamic_cast<TreeItem*>(focused_->parent())) { focus(parent); return true; } }
-    if (event.keyCode == kEnter || event.keyCode == kSpace) return selectItem(*focused_);
+    if (event.keyCode == kRight) { if (focused->hasChildren() && !focused->isExpanded()) return setExpanded(*focused, true); if (focused->hasChildren()) for (const auto& child : focused->children()) if (auto* item = dynamic_cast<TreeItem*>(child.get()); item && item->isEnabled()) { focus(item); return true; } }
+    if (event.keyCode == kLeft) { if (focused->hasChildren() && focused->isExpanded()) return setExpanded(*focused, false); if (auto* parent = dynamic_cast<TreeItem*>(focused->parent())) { focus(parent); return true; } }
+    if (event.keyCode == kEnter || event.keyCode == kSpace) return selectItem(*focused);
     return false;
 }
 
