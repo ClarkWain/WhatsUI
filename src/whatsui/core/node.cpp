@@ -79,10 +79,10 @@ std::unique_ptr<Node> Node::removeChild(std::size_t index)
     }
 
     auto child = std::move(children_[index]);
+    children_.erase(children_.begin() + static_cast<std::ptrdiff_t>(index));
     child->detachRecursively();
     child->parent_ = nullptr;
     child->setInvalidationHandler({});
-    children_.erase(children_.begin() + static_cast<std::ptrdiff_t>(index));
     markDirty(DirtyFlag::Layout);
     return child;
 }
@@ -92,14 +92,15 @@ void Node::clearChildren()
     if (children_.empty()) {
         return;
     }
-    for (auto& child : children_) {
+    auto children = std::move(children_);
+    children_.clear();
+    for (auto& child : children) {
         if (child) {
             child->detachRecursively();
             child->parent_ = nullptr;
             child->setInvalidationHandler({});
         }
     }
-    children_.clear();
     markDirty(DirtyFlag::Layout);
 }
 
@@ -185,6 +186,11 @@ void Node::clearLayoutDirtyRecursively() noexcept
 Node* Node::hitTest(PointF point)
 {
     return bounds_.contains(point) ? this : nullptr;
+}
+
+PointF Node::mapPointToContent(PointF point) const noexcept
+{
+    return point;
 }
 
 EventResult Node::onPointerEvent(const PointerEvent& event, EventContext& context)

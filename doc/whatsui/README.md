@@ -20,6 +20,9 @@
 12. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
 13. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
 14. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
+15. `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`（集合控件 viewport、回收与懒加载架构）
+16. `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`（集合虚拟化分步实现、测试与最终基线）
+17. `COLLECTION_VIRTUALIZATION_BASELINE.md`（集合虚拟化最终验证结果与测试基线）
 
 ## 文档职责
 
@@ -37,6 +40,9 @@
 - `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`：记录 ClearType 双重 Alpha 衰减、Windows 150% DPR 误判、字重丢失及其端到端修复和视觉证据。
 - `FLUENT_TEXT_BASELINE_POSTMORTEM.md`：记录 `lineHeight / 2` 被误当 baseline 偏移、Todo 局部 4-DIP 下沉、修复公式、截图和四档 DPI 数据。
 - `FLUENT_VISUAL_QUALITY_GATES.md`：定义文字、图标、圆角、描边、状态、裁切和 100/125/150/200% DPI 的一物理像素级视觉验收。
+- `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`：定义集合控件共享 viewport math、节点回收、数据懒加载与分阶段迁移方案。
+- `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`：拆解集合虚拟化实施步骤、每步验证命令、最终验证门禁与基线记录字段。
+- `COLLECTION_VIRTUALIZATION_BASELINE.md`：记录集合虚拟化实现后的 Debug/Release/Visual/ASan 验证结果、基线期望与已知后续项。
 
 ## 后续扩展建议
 

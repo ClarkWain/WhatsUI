@@ -91,11 +91,16 @@ void ScrollView::paint(PaintContext& context)
 Node* ScrollView::hitTest(PointF point)
 {
     if (!bounds().contains(point)) return nullptr;
-    const PointF documentPoint{point.x + scrollOffset_.x, point.y + scrollOffset_.y};
+    const PointF documentPoint = mapPointToContent(point);
     for (auto it = children().rbegin(); it != children().rend(); ++it) {
         if (Node* hit = (*it)->hitTest(documentPoint)) return hit;
     }
     return this;
+}
+
+PointF ScrollView::mapPointToContent(PointF point) const noexcept
+{
+    return {point.x + scrollOffset_.x, point.y + scrollOffset_.y};
 }
 
 EventResult ScrollView::onPointerEvent(const PointerEvent& event, EventContext& context)

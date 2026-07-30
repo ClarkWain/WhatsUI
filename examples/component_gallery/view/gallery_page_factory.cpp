@@ -11,6 +11,7 @@
 #include "view/pages/all_components_page.h"
 #include "view/pages/button_detail_page.h"
 #include "view/pages/controls_page.h"
+#include "view/pages/long_text_page.h"
 #include "view/pages/overview_page.h"
 #include "view/pages/visual_qa_page.h"
 #include "view_model/gallery_view_models.h"
@@ -41,6 +42,8 @@ std::unique_ptr<wui::Node> buildPageContent(GalleryRoute route,
             });
     case GalleryRoute::Controls:
         return buildControlsPage([&router] { router.navigate(GalleryRoute::ButtonDetail); });
+    case GalleryRoute::LongText:
+        return buildLongTextPage();
     case GalleryRoute::AddOns:
         return buildAddonsPage(
             router.window(),

@@ -8,6 +8,7 @@
 
 #include "wui/runtime.h"
 #include "wui/icons.h"
+#include "wui/internal/viewport_model.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
 
@@ -96,15 +97,30 @@ void drawChevron(PaintContext& context, float cx, float cy, Color color, bool up
 
 } // namespace
 
+struct ListBox::State {
+    internal::ViewportModel viewport;
+};
+
+ListBox::ListBox()
+    : state_(std::make_unique<State>())
+{
+    syncViewport();
+}
+
 ListBox::ListBox(std::vector<Option> options)
     : options_(std::move(options))
+    , state_(std::make_unique<State>())
 {
+    syncViewport();
     activeIndex_ = nextSelectable(-1, 1);
 }
+
+ListBox::~ListBox() = default;
 
 ListBox& ListBox::addOption(Option option)
 {
     options_.push_back(std::move(option));
+    syncViewport();
     if (activeIndex_ < 0) activeIndex_ = nextSelectable(-1, 1);
     markDirty(DirtyFlag::Layout);
     return *this;
@@ -116,7 +132,7 @@ ListBox& ListBox::setOptions(std::vector<Option> options)
     selected_.erase(std::remove_if(selected_.begin(), selected_.end(), [this](int i) { return !selectable(i); }), selected_.end());
     activeIndex_ = selectable(activeIndex_) ? activeIndex_ : nextSelectable(-1, 1);
     hoveredIndex_ = pressedIndex_ = -1;
-    setScrollOffset(scrollOffset_);
+    syncViewport();
     markDirty(DirtyFlag::Layout);
     return *this;
 }
@@ -124,7 +140,8 @@ ListBox& ListBox::setOptions(std::vector<Option> options)
 ListBox& ListBox::clearOptions()
 {
     options_.clear(); selected_.clear(); activeIndex_ = hoveredIndex_ = pressedIndex_ = -1;
-    scrollOffset_ = 0.0f;
+    syncViewport();
+    state_->viewport.setScrollOffset(0.0f);
     markDirty(DirtyFlag::Layout);
     return *this;
 }
@@ -167,19 +184,19 @@ ListBox& ListBox::accessibleLabel(std::string value) { setAccessibleLabel(std::m
 void ListBox::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Paint); }
 const std::string& ListBox::accessibleLabel() const noexcept { return accessibleLabel_; }
 ListBox& ListBox::maxVisibleOptions(std::size_t value) noexcept { setMaxVisibleOptions(value); return *this; }
-void ListBox::setMaxVisibleOptions(std::size_t value) noexcept { maxVisibleOptions_ = std::max<std::size_t>(1, value); markDirty(DirtyFlag::Layout); }
+void ListBox::setMaxVisibleOptions(std::size_t value) noexcept { maxVisibleOptions_ = std::max<std::size_t>(1, value); syncViewport(); markDirty(DirtyFlag::Layout); }
 std::size_t ListBox::maxVisibleOptions() const noexcept { return maxVisibleOptions_; }
-float ListBox::scrollOffset() const noexcept { return scrollOffset_; }
+float ListBox::scrollOffset() const noexcept { return state_->viewport.scrollOffset(); }
 void ListBox::setScrollOffset(float value) noexcept
 {
-    const float finite = std::isfinite(value) ? value : 0.0f;
-    const float next = std::clamp(finite, 0.0f, maximumScrollOffset());
-    if (scrollOffset_ != next) { scrollOffset_ = next; markDirty(DirtyFlag::Paint); }
+    syncViewport();
+    const float previous = state_->viewport.scrollOffset();
+    state_->viewport.setScrollOffset(value);
+    if (state_->viewport.scrollOffset() != previous) markDirty(DirtyFlag::Paint);
 }
 float ListBox::maximumScrollOffset() const noexcept
 {
-    const float viewport = std::max(0.0f, bounds().height - kListPadding * 2.0f - theme().stroke.thin * 2.0f);
-    return std::max(0.0f, rowHeight() * static_cast<float>(options_.size()) - viewport);
+    return state_->viewport.maxScrollOffset();
 }
 
 std::vector<ListBoxOptionAccessibility> ListBox::accessibilityOptions() const
@@ -229,6 +246,7 @@ SizeF ListBox::measure(const Constraints& constraints) const
 void ListBox::layout(const RectF& bounds)
 {
     Node::layout(bounds);
+    syncViewport();
     // A selected value must be discoverable the instant a popup opens.  The
     // viewport dimensions are only known after layout, so doing this here
     // avoids Dropdown/TimePicker lists opening at 00:00 while their committed
@@ -252,8 +270,8 @@ void ListBox::paint(PaintContext& context)
                                 current.colors.surfaceRaised,
                                 current.colors.neutralStroke1);
     const int checkpoint = context.save(); context.clipRect(content);
-    const int first = std::max(0, static_cast<int>(std::floor(scrollOffset_ / rowHeight())));
-    for (std::size_t i = static_cast<std::size_t>(first); i < options_.size(); ++i) {
+    const auto visible = state_->viewport.visibleRange();
+    for (std::size_t i = visible.first; i < options_.size(); ++i) {
         const RectF row =
             context.snapRectEdges(optionBounds(static_cast<int>(i)));
         if (row.y >= content.y + content.height) break;
@@ -342,7 +360,7 @@ bool ListBox::onPointerEvent(const PointerEvent& event)
         markDirty(DirtyFlag::Paint); return true;
     case PointerAction::Cancel: pressedIndex_ = -1; setVisualState(ControlVisualState::Pressed, false); markDirty(DirtyFlag::Paint); return true;
     case PointerAction::Scroll:
-        setScrollOffset(scrollOffset_ - event.scrollDelta.y);
+        setScrollOffset(state_->viewport.scrollOffset() - event.scrollDelta.y);
         return true;
     default: return false;
     }
@@ -414,7 +432,7 @@ int ListBox::nextSelectable(int from, int delta) const noexcept
 int ListBox::optionAt(PointF point) const noexcept
 {
     if (!bounds().contains(point)) return -1;
-    const int i = static_cast<int>((point.y - bounds().y - theme().stroke.thin - kListPadding + scrollOffset_) / rowHeight());
+    const int i = static_cast<int>((point.y - bounds().y - theme().stroke.thin - kListPadding + state_->viewport.scrollOffset()) / rowHeight());
     return selectable(i) ? i : -1;
 }
 bool ListBox::isSelected(int index) const noexcept { return std::find(selected_.begin(), selected_.end(), index) != selected_.end(); }
@@ -422,17 +440,21 @@ RectF ListBox::optionBounds(int index) const noexcept
 {
     const float inset = theme().stroke.thin;
     return {bounds().x + inset + kListPadding,
-            bounds().y + inset + kListPadding + rowHeight() * static_cast<float>(index) - scrollOffset_,
+            bounds().y + inset + kListPadding + rowHeight() * static_cast<float>(index) - state_->viewport.scrollOffset(),
             std::max(0.0f, bounds().width - inset * 2.0f - kListPadding * 2.0f), rowHeight()};
+}
+void ListBox::syncViewport() noexcept
+{
+    state_->viewport.setItemCount(options_.size());
+    state_->viewport.setItemExtent(rowHeight());
+    state_->viewport.setViewportExtent(std::max(0.0f, bounds().height - kListPadding * 2.0f - theme().stroke.thin * 2.0f));
 }
 void ListBox::scrollActiveIntoView() noexcept
 {
     if (!selectable(activeIndex_)) return;
-    const float viewportTop = bounds().y + theme().stroke.thin + kListPadding;
-    const float viewportBottom = bounds().y + bounds().height - theme().stroke.thin - kListPadding;
-    const RectF row = optionBounds(activeIndex_);
-    if (row.y < viewportTop) setScrollOffset(scrollOffset_ - (viewportTop - row.y));
-    else if (row.y + row.height > viewportBottom) setScrollOffset(scrollOffset_ + (row.y + row.height - viewportBottom));
+    const float previous = state_->viewport.scrollOffset();
+    state_->viewport.scrollToIndex(static_cast<std::size_t>(activeIndex_));
+    if (state_->viewport.scrollOffset() != previous) markDirty(DirtyFlag::Paint);
 }
 void ListBox::updateTypeAhead(char character)
 {

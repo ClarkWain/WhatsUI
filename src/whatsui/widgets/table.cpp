@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include "wui/icons.h"
+#include "wui/internal/viewport_model.h"
 #include "wui/runtime.h"
 #include "wui/text_metrics.h"
 #include "wui/theme.h"
@@ -47,24 +48,44 @@ void paintCellFocus(PaintContext& context, RectF cell, const Theme& current)
 }
 } // namespace
 
-Table::Table(std::vector<TableColumn> columns) : columns_(std::move(columns)) {}
+struct Table::State {
+    internal::ViewportModel viewport;
+};
+
+Table::Table()
+    : state_(std::make_unique<State>())
+{
+    syncViewport();
+}
+
+Table::Table(std::vector<TableColumn> columns)
+    : columns_(std::move(columns))
+    , state_(std::make_unique<State>())
+{
+    syncViewport();
+}
+
+Table::~Table() = default;
+
 Table& Table::setColumns(std::vector<TableColumn> value) { columns_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
 Table& Table::addColumn(TableColumn value) { columns_.push_back(std::move(value)); markDirty(DirtyFlag::Layout); return *this; }
 const std::vector<TableColumn>& Table::columns() const noexcept { return columns_; }
-Table& Table::setRows(std::vector<TableRow> value) { rows_ = std::move(value); setScrollOffset(scrollOffset_); markDirty(DirtyFlag::Layout); return *this; }
-Table& Table::addRow(TableRow value) { rows_.push_back(std::move(value)); markDirty(DirtyFlag::Layout); return *this; }
-Table& Table::clearRows() { rows_.clear(); scrollOffset_ = 0; markDirty(DirtyFlag::Layout); return *this; }
+Table& Table::setRows(std::vector<TableRow> value) { usesRowProvider_ = false; rowProvider_ = nullptr; rowEnabledProvider_ = nullptr; providerRowCount_ = 0; rows_ = std::move(value); syncViewport(); markDirty(DirtyFlag::Layout); return *this; }
+Table& Table::setRowProvider(std::size_t count, RowProvider provider, RowEnabledProvider enabled) { usesRowProvider_ = static_cast<bool>(provider); rowProvider_ = std::move(provider); rowEnabledProvider_ = std::move(enabled); providerRowCount_ = usesRowProvider_ ? count : 0; rows_.clear(); syncViewport(); markDirty(DirtyFlag::Layout); return *this; }
+Table& Table::addRow(TableRow value) { if (usesRowProvider_) { usesRowProvider_ = false; rowProvider_ = nullptr; rowEnabledProvider_ = nullptr; providerRowCount_ = 0; rows_.clear(); } rows_.push_back(std::move(value)); syncViewport(); markDirty(DirtyFlag::Layout); return *this; }
+Table& Table::clearRows() { usesRowProvider_ = false; rowProvider_ = nullptr; rowEnabledProvider_ = nullptr; providerRowCount_ = 0; rows_.clear(); syncViewport(); state_->viewport.setScrollOffset(0.0f); markDirty(DirtyFlag::Layout); return *this; }
 const std::vector<TableRow>& Table::rows() const noexcept { return rows_; }
+std::size_t Table::rowCount() const noexcept { return usesRowProvider_ ? providerRowCount_ : rows_.size(); }
 Table& Table::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
 void Table::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
 const std::string& Table::accessibleLabel() const noexcept { return accessibleLabel_; }
-Table& Table::maxVisibleRows(std::size_t value) noexcept { maxVisibleRows_ = std::max<std::size_t>(1, value); setScrollOffset(scrollOffset_); markDirty(DirtyFlag::Layout); return *this; }
+Table& Table::maxVisibleRows(std::size_t value) noexcept { maxVisibleRows_ = std::max<std::size_t>(1, value); syncViewport(); markDirty(DirtyFlag::Layout); return *this; }
 std::size_t Table::maxVisibleRows() const noexcept { return maxVisibleRows_; }
-float Table::scrollOffset() const noexcept { return scrollOffset_; }
-void Table::setScrollOffset(float value) noexcept { scrollOffset_ = std::clamp(value, 0.0f, maximumScrollOffset()); markDirty(DirtyFlag::Paint); }
-float Table::maximumScrollOffset() const noexcept { return std::max(0.0f, static_cast<float>(rows_.size() > maxVisibleRows_ ? rows_.size() - maxVisibleRows_ : 0) * rowHeight()); }
-std::size_t Table::firstVisibleRow() const noexcept { return std::min(rows_.size(), static_cast<std::size_t>(std::floor(scrollOffset_ / rowHeight()))); }
-std::size_t Table::lastVisibleRowExclusive() const noexcept { return std::min(rows_.size(), firstVisibleRow() + maxVisibleRows_ + 1); }
+float Table::scrollOffset() const noexcept { return state_->viewport.scrollOffset(); }
+void Table::setScrollOffset(float value) noexcept { syncViewport(); state_->viewport.setScrollOffset(value); markDirty(DirtyFlag::Paint); }
+float Table::maximumScrollOffset() const noexcept { return state_->viewport.maxScrollOffset(); }
+std::size_t Table::firstVisibleRow() const noexcept { return state_->viewport.visibleRange().first; }
+std::size_t Table::lastVisibleRowExclusive() const noexcept { return std::min(rowCount(), state_->viewport.visibleRange().last); }
 
 std::vector<TableAccessibilityEntry> Table::accessibilityEntries() const
 {
@@ -106,9 +127,11 @@ std::vector<TableAccessibilityEntry> Table::accessibilityEntries() const
         const float top = std::max(untrimmed.y, viewport.y);
         const float bottom = std::min(untrimmed.y + untrimmed.height, viewport.y + viewport.height);
         if (bottom <= top) continue;
+        const TableRow data = rowData(row);
         const RectF visibleRow{bounds().x, top, bounds().width, bottom - top};
-        const std::string rowId = rows_[row].id.empty() ? std::to_string(row) : rows_[row].id;
+        const std::string rowId = data.id.empty() ? std::to_string(row) : data.id;
         const bool selected = isRowSelected(row);
+        const bool enabled = rowEnabled(row);
         bool rowFocused = false;
         for (std::size_t column = 0; column < columns_.size(); ++column) {
             if (isCellFocused(row, column)) { rowFocused = true; break; }
@@ -121,7 +144,7 @@ std::vector<TableAccessibilityEntry> Table::accessibilityEntries() const
         rowEntry.properties.automationId = rowEntry.stableId;
         rowEntry.properties.role = AccessibilityRole::ListItem;
         rowEntry.properties.label = rowId;
-        rowEntry.properties.enabled = isEnabled() && rows_[row].enabled;
+        rowEntry.properties.enabled = isEnabled() && enabled;
         rowEntry.properties.checked = grid ? std::optional<bool>(selected) : std::nullopt;
         rowEntry.properties.focused = gridFocused && rowFocused;
         rowEntry.properties.bounds = visibleRow;
@@ -137,9 +160,9 @@ std::vector<TableAccessibilityEntry> Table::accessibilityEntries() const
             cell.stableId = tableId + ".row." + rowId + ".cell." + columnId;
             cell.properties.automationId = cell.stableId;
             cell.properties.role = AccessibilityRole::Text;
-            cell.properties.label = column < rows_[row].cells.size() ? rows_[row].cells[column] : std::string{};
+            cell.properties.label = column < data.cells.size() ? data.cells[column] : std::string{};
             cell.properties.description = columns_[column].label;
-            cell.properties.enabled = isEnabled() && rows_[row].enabled;
+            cell.properties.enabled = isEnabled() && enabled;
             cell.properties.focused = gridFocused && isCellFocused(row, column);
             cell.properties.bounds = RectF{x, top, widths[column], bottom - top};
             result.push_back(std::move(cell));
@@ -180,13 +203,13 @@ SizeF Table::measure(const Constraints& constraints) const
 {
     const float natural = std::max(160.0f, std::accumulate(columns_.begin(), columns_.end(), 0.0f,
         [](float width, const TableColumn& column) { return width + std::max(column.minWidth, column.width); }));
-    const float height = headerHeight() + rowHeight() * static_cast<float>(std::min(rows_.size(), maxVisibleRows_));
+    const float height = headerHeight() + rowHeight() * static_cast<float>(std::min(rowCount(), maxVisibleRows_));
     return constraints.clamp({natural, height});
 }
-void Table::layout(const RectF& rect) { Node::layout(rect); setScrollOffset(scrollOffset_); clearLayoutDirtyRecursively(); }
+void Table::layout(const RectF& rect) { Node::layout(rect); syncViewport(); clearLayoutDirtyRecursively(); }
 RectF Table::rowBounds(std::size_t row) const noexcept
 {
-    return {bounds().x, bounds().y + headerHeight() + static_cast<float>(row) * rowHeight() - scrollOffset_, bounds().width, rowHeight()};
+    return {bounds().x, bounds().y + headerHeight() + static_cast<float>(row) * rowHeight() - state_->viewport.scrollOffset(), bounds().width, rowHeight()};
 }
 int Table::columnAt(PointF point) const noexcept
 {
@@ -199,17 +222,32 @@ int Table::columnAt(PointF point) const noexcept
 int Table::rowAt(PointF point) const noexcept
 {
     if (point.y < bounds().y + headerHeight() || point.y >= bounds().y + bounds().height) return -1;
-    const int row = static_cast<int>(std::floor((point.y - bounds().y - headerHeight() + scrollOffset_) / rowHeight()));
-    return row >= 0 && static_cast<std::size_t>(row) < rows_.size() ? row : -1;
+    const int row = static_cast<int>(std::floor((point.y - bounds().y - headerHeight() + state_->viewport.scrollOffset()) / rowHeight()));
+    return row >= 0 && static_cast<std::size_t>(row) < rowCount() ? row : -1;
+}
+TableRow Table::rowData(std::size_t row) const
+{
+    if (usesRowProvider_ && rowProvider_ && row < providerRowCount_) return rowProvider_(row);
+    return row < rows_.size() ? rows_[row] : TableRow{};
+}
+bool Table::rowEnabled(std::size_t row) const noexcept
+{
+    if (row >= rowCount()) return false;
+    if (usesRowProvider_) return !rowEnabledProvider_ || rowEnabledProvider_(row);
+    return row < rows_.size() && rows_[row].enabled;
 }
 void Table::scrollRowIntoView(std::size_t row) noexcept
 {
-    if (row >= rows_.size()) return;
-    const float top = static_cast<float>(row) * rowHeight();
-    const float bottom = top + rowHeight();
-    const float extent = static_cast<float>(maxVisibleRows_) * rowHeight();
-    if (top < scrollOffset_) setScrollOffset(top);
-    else if (bottom > scrollOffset_ + extent) setScrollOffset(bottom - extent);
+    if (row >= rowCount()) return;
+    const float previous = state_->viewport.scrollOffset();
+    state_->viewport.scrollToIndex(row);
+    if (state_->viewport.scrollOffset() != previous) markDirty(DirtyFlag::Paint);
+}
+void Table::syncViewport() noexcept
+{
+    state_->viewport.setItemCount(rowCount());
+    state_->viewport.setItemExtent(rowHeight());
+    state_->viewport.setViewportExtent(std::max(0.0f, bounds().height - headerHeight()));
 }
 bool Table::isRowSelected(std::size_t) const noexcept { return false; }
 bool Table::isCellFocused(std::size_t, std::size_t) const noexcept { return false; }
@@ -262,17 +300,19 @@ void Table::paint(PaintContext& context)
                      current.colors.neutralStroke1);
     const int clip = context.save(); context.clipRect({rect.x, rect.y + header.height, rect.width, std::max(0.0f, rect.height - header.height)});
     for (std::size_t r = firstVisibleRow(); r < lastVisibleRowExclusive(); ++r) {
+        const bool enabled = rowEnabled(r);
         const RectF row = context.snapRectEdges(rowBounds(r)); if (row.y >= rect.y + rect.height) break;
+        const TableRow data = rowData(r);
         paintRowDecoration(context, r, row);
         float cellX = rect.x;
         for (std::size_t c = 0; c < columns_.size(); ++c) {
-            const float w = widths[c]; const std::string text = c < rows_[r].cells.size() ? rows_[r].cells[c] : std::string{};
+            const float w = widths[c]; const std::string text = c < data.cells.size() ? data.cells[c] : std::string{};
             const auto& style = current.typography.body1;
             float tx = cellX + current.spacing.horizontal.s;
             const float cellWidth = textWidth(text, style);
             if (columns_[c].alignment == TableColumnAlignment::Center) tx = cellX + std::max(0.0f, (w - cellWidth) * .5f);
             else if (columns_[c].alignment == TableColumnAlignment::End) tx = cellX + std::max(0.0f, w - cellWidth - current.spacing.horizontal.l);
-            const Color fg = rows_[r].enabled ? current.colors.neutralForeground1 : current.colors.neutralForegroundDisabled;
+            const Color fg = enabled ? current.colors.neutralForeground1 : current.colors.neutralForegroundDisabled;
             const int cellClip = context.save();
             context.clipRect({cellX + 1.0f, row.y, std::max(0.0f, w - 2.0f), row.height});
             context.drawText(text, tx, context.centeredTextBottom(text, {cellX, row.y, w, row.height}, style.size, style.weight), style.size, fg, style.weight, style.family);
@@ -293,7 +333,7 @@ void Table::paint(PaintContext& context)
 bool Table::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled() || !bounds().contains(event.position)) return false;
-    if (event.action == PointerAction::Scroll) { setScrollOffset(scrollOffset_ - event.scrollDelta.y); return true; }
+    if (event.action == PointerAction::Scroll) { setScrollOffset(state_->viewport.scrollOffset() - event.scrollDelta.y); return true; }
     return false;
 }
 
@@ -307,10 +347,10 @@ std::optional<std::size_t> DataGrid::sortColumn() const noexcept { return sortCo
 TableSortDirection DataGrid::sortDirection() const noexcept { return sortDirection_; }
 void DataGrid::normalizeState()
 {
-    selectedRows_.erase(std::remove_if(selectedRows_.begin(), selectedRows_.end(), [this](std::size_t index) { return index >= rows_.size() || !rows_[index].enabled; }), selectedRows_.end());
+    selectedRows_.erase(std::remove_if(selectedRows_.begin(), selectedRows_.end(), [this](std::size_t index) { return !rowEnabled(index); }), selectedRows_.end());
     std::sort(selectedRows_.begin(), selectedRows_.end()); selectedRows_.erase(std::unique(selectedRows_.begin(), selectedRows_.end()), selectedRows_.end());
     if (selectionMode_ == DataGridSelectionMode::Single && selectedRows_.size() > 1) selectedRows_.resize(1);
-    if (focusedRow_ >= rows_.size()) focusedRow_ = rows_.empty() ? 0 : rows_.size() - 1;
+    if (focusedRow_ >= rowCount()) focusedRow_ = rowCount() == 0 ? 0 : rowCount() - 1;
     if (focusedColumn_ >= columns_.size()) focusedColumn_ = columns_.empty() ? 0 : columns_.size() - 1;
 }
 void DataGrid::sortBy(std::size_t column)
@@ -319,7 +359,7 @@ void DataGrid::sortBy(std::size_t column)
     if (sortColumn_ != column) { sortColumn_ = column; sortDirection_ = TableSortDirection::Ascending; }
     else sortDirection_ = sortDirection_ == TableSortDirection::Ascending ? TableSortDirection::Descending : TableSortDirection::Ascending;
     if (onSort_) onSort_(column, sortDirection_);
-    else {
+    else if (!usesRowProvider_) {
         std::vector<std::string> selectedIds; for (const auto index : selectedRows_) if (index < rows_.size()) selectedIds.push_back(rows_[index].id);
         const auto direction = sortDirection_;
         std::stable_sort(rows_.begin(), rows_.end(), [column, direction](const TableRow& left, const TableRow& right) {
@@ -335,7 +375,7 @@ std::size_t DataGrid::focusedRow() const noexcept { return focusedRow_; }
 std::size_t DataGrid::focusedColumn() const noexcept { return focusedColumn_; }
 void DataGrid::selectRow(std::size_t row, bool toggle)
 {
-    if (selectionMode_ == DataGridSelectionMode::None || row >= rows_.size() || !rows_[row].enabled) return;
+    if (selectionMode_ == DataGridSelectionMode::None || !rowEnabled(row)) return;
     if (selectionMode_ == DataGridSelectionMode::Single) selectedRows_ = {row};
     else {
         const auto it = std::find(selectedRows_.begin(), selectedRows_.end(), row);
@@ -345,8 +385,8 @@ void DataGrid::selectRow(std::size_t row, bool toggle)
 }
 bool DataGrid::moveFocus(int rowDelta, int columnDelta)
 {
-    if (rows_.empty() || columns_.empty()) return false;
-    focusedRow_ = static_cast<std::size_t>(std::clamp(static_cast<int>(focusedRow_) + rowDelta, 0, static_cast<int>(rows_.size()) - 1));
+    if (rowCount() == 0 || columns_.empty()) return false;
+    focusedRow_ = static_cast<std::size_t>(std::clamp(static_cast<int>(focusedRow_) + rowDelta, 0, static_cast<int>(rowCount()) - 1));
     focusedColumn_ = static_cast<std::size_t>(std::clamp(static_cast<int>(focusedColumn_) + columnDelta, 0, static_cast<int>(columns_.size()) - 1));
     scrollRowIntoView(focusedRow_); setVisualState(ControlVisualState::Focused, true); markDirty(DirtyFlag::Paint); return true;
 }
@@ -366,8 +406,8 @@ bool DataGrid::onKeyEvent(const KeyEvent& event)
     switch (event.keyCode) {
     case kUp: return moveFocus(-1, 0); case kDown: return moveFocus(1, 0); case kLeft: return moveFocus(0, -1); case kRight: return moveFocus(0, 1);
     case kHome: if (event.modifiers & KeyModifierControl) focusedRow_ = 0; else focusedColumn_ = 0; scrollRowIntoView(focusedRow_); markDirty(DirtyFlag::Paint); return true;
-    case kEnd: if (event.modifiers & KeyModifierControl) focusedRow_ = rows_.empty() ? 0 : rows_.size() - 1; else focusedColumn_ = columns_.empty() ? 0 : columns_.size() - 1; scrollRowIntoView(focusedRow_); markDirty(DirtyFlag::Paint); return true;
-    case kEnter: case kSpace: if (!rows_.empty()) { selectRow(focusedRow_, selectionMode_ == DataGridSelectionMode::Multiple && event.keyCode == kSpace); return true; } return false;
+    case kEnd: if (event.modifiers & KeyModifierControl) focusedRow_ = rowCount() == 0 ? 0 : rowCount() - 1; else focusedColumn_ = columns_.empty() ? 0 : columns_.size() - 1; scrollRowIntoView(focusedRow_); markDirty(DirtyFlag::Paint); return true;
+    case kEnter: case kSpace: if (rowCount() != 0) { selectRow(focusedRow_, selectionMode_ == DataGridSelectionMode::Multiple && event.keyCode == kSpace); return true; } return false;
     default: return false;
     }
 }
@@ -376,7 +416,7 @@ AccessibilityActionStatus DataGrid::performAccessibilityAction(AccessibilityActi
 {
     if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
     if (kind != AccessibilityActionKind::SetValue) return AccessibilityActionStatus::NotSupported;
-    try { const std::size_t row = static_cast<std::size_t>(std::stoul(std::string(value))); if (row >= rows_.size()) return AccessibilityActionStatus::InvalidValue; focusedRow_ = row; selectRow(row, false); return AccessibilityActionStatus::Succeeded; }
+    try { const std::size_t row = static_cast<std::size_t>(std::stoul(std::string(value))); if (row >= rowCount()) return AccessibilityActionStatus::InvalidValue; focusedRow_ = row; selectRow(row, false); return AccessibilityActionStatus::Succeeded; }
     catch (...) { return AccessibilityActionStatus::InvalidValue; }
 }
 bool DataGrid::isRowSelected(std::size_t row) const noexcept { return std::find(selectedRows_.begin(), selectedRows_.end(), row) != selectedRows_.end(); }

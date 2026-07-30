@@ -32,6 +32,7 @@ public:
     };
 
     VirtualList();
+    ~VirtualList() override;
 
     void setItemCount(Index count);
     [[nodiscard]] Index itemCount() const noexcept;
@@ -62,45 +63,23 @@ public:
     [[nodiscard]] Node* hitTest(PointF point) override;
     bool onPointerEvent(const PointerEvent& event) override;
     bool onKeyEvent(const KeyEvent& event) override;
+    [[nodiscard]] std::unique_ptr<Node> removeChild(std::size_t index);
+    void clearChildren();
 
 private:
-    struct Mounted {
-        Index index{0};
-        Key key;
-        Node* node{nullptr};
-    };
-
-    struct Pooled {
-        Key key;
-        std::unique_ptr<Node> node;
-    };
+    struct State;
 
     [[nodiscard]] Range mountedRange() const noexcept;
-    [[nodiscard]] Key keyFor(Index index) const;
     [[nodiscard]] int rowAt(PointF point) const noexcept;
     [[nodiscard]] int normalizedSelection(int index) const noexcept;
     void reconcile();
-    void reconcileOnce();
     void layoutMountedChildren();
-    void unmount(std::size_t mountedIndex);
-    [[nodiscard]] std::unique_ptr<Node> takePooled(const Key& key);
-    void addToPool(Key key, std::unique_ptr<Node> node);
-    void trimPool();
     void select(int index);
 
-    Index itemCount_{0};
-    float rowExtent_{36.0f};
-    float scrollOffset_{0.0f};
-    Index overscanRows_{2};
+    std::unique_ptr<State> state_;
     int selectedIndex_{-1};
     int pressedIndex_{-1};
-    KeyProvider keyProvider_;
-    ItemBuilder itemBuilder_;
     SelectionHandler onSelectionChanged_;
-    std::vector<Mounted> mounted_;
-    std::vector<Pooled> pool_;
-    bool reconciling_{false};
-    bool reconcilePending_{false};
 };
 
 } // namespace wui

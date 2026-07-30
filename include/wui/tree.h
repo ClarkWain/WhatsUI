@@ -42,6 +42,8 @@ public:
     [[nodiscard]] Node* hitTest(PointF point) override;
     bool onPointerEvent(const PointerEvent& event) override;
     bool onKeyEvent(const KeyEvent& event) override;
+    [[nodiscard]] std::unique_ptr<Node> removeChild(std::size_t index);
+    void clearChildren();
     [[nodiscard]] AccessibilityActionCapabilities accessibilityActions() const noexcept override;
     AccessibilityActionStatus performAccessibilityAction(AccessibilityActionKind kind,
                                                           std::string_view value) override;
@@ -61,8 +63,19 @@ private:
 
 class Tree : public ContainerNode {
 public:
+    struct Range {
+        std::size_t first{0};
+        std::size_t last{0};
+
+        [[nodiscard]] std::size_t size() const noexcept { return last - first; }
+        [[nodiscard]] bool empty() const noexcept { return first == last; }
+    };
+
     using SelectionHandler = std::function<void(TreeItem&)>;
     using ExpandHandler = std::function<void(TreeItem&, bool)>;
+
+    Tree();
+    ~Tree() override;
 
     TreeItem& addItem(std::string id, std::string label);
     Tree& accessibleLabel(std::string value);
@@ -77,12 +90,15 @@ public:
     [[nodiscard]] float scrollOffset() const noexcept;
     void setScrollOffset(float value) noexcept;
     [[nodiscard]] float maximumScrollOffset() const noexcept;
+    [[nodiscard]] Range visibleRange() const noexcept;
 
     [[nodiscard]] TreeItem* selectedItem() const noexcept;
     [[nodiscard]] const std::string& selectedId() const noexcept;
     bool select(std::string_view id);
     Tree& onSelectionChanged(SelectionHandler handler);
     Tree& onExpandedChange(ExpandHandler handler);
+    [[nodiscard]] std::unique_ptr<Node> removeChild(std::size_t index);
+    void clearChildren();
 
     [[nodiscard]] std::vector<TreeItem*> visibleItems() const;
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -93,21 +109,25 @@ public:
     bool onKeyEvent(const KeyEvent& event) override;
 
 private:
+    struct State;
+
     friend class TreeItem;
     void appendVisible(TreeItem& item, std::vector<TreeItem*>& items) const;
+    [[nodiscard]] const std::vector<TreeItem*>& visibleItemsCache() const;
+    void invalidateVisibleItems() noexcept;
     [[nodiscard]] TreeItem* findItem(std::string_view id) const noexcept;
     [[nodiscard]] TreeItem* nextEnabled(TreeItem* from, int delta) const noexcept;
     void focus(TreeItem* item) noexcept;
     bool setExpanded(TreeItem& item, bool value);
     bool selectItem(TreeItem& item, bool requestFocus = true);
     void scrollIntoView(TreeItem& item) noexcept;
+    void syncViewport(std::size_t visibleCount) noexcept;
 
     std::string accessibleLabel_{"Tree"};
     std::string selectedId_;
     float rowHeight_{32.0f};
     std::size_t maxVisibleItems_{10};
-    float scrollOffset_{0.0f};
-    TreeItem* focused_{nullptr};
+    std::unique_ptr<State> state_;
     SelectionHandler onSelectionChanged_;
     ExpandHandler onExpandedChange_;
 };

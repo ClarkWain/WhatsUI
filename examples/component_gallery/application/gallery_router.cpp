@@ -10,7 +10,8 @@ namespace {
 GalleryRoute routeForKey(std::string_view key) noexcept
 {
     for (const auto route : {GalleryRoute::Overview, GalleryRoute::AllComponents,
-                             GalleryRoute::Controls, GalleryRoute::AddOns,
+                             GalleryRoute::Controls, GalleryRoute::LongText,
+                             GalleryRoute::AddOns,
                              GalleryRoute::VisualQa, GalleryRoute::About,
                              GalleryRoute::ButtonDetail}) {
         if (galleryRouteKey(route) == key) return route;

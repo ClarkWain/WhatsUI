@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <memory>
@@ -13,6 +14,7 @@
 #include "view/components/navigation_rail.h"
 #include "view/components/page_header.h"
 #include "view/pages/all_components_page.h"
+#include "view/pages/long_text_page.h"
 #include "view_model/gallery_view_model.h"
 #include "view_model/navigation_view_model.h"
 #include "wui/accessibility.h"
@@ -188,6 +190,7 @@ constexpr GalleryRoute allRoutes[] = {
     GalleryRoute::Overview,
     GalleryRoute::AllComponents,
     GalleryRoute::Controls,
+    GalleryRoute::LongText,
     GalleryRoute::AddOns,
     GalleryRoute::VisualQa,
     GalleryRoute::About,
@@ -269,6 +272,46 @@ void collectRadios(wui::Node& node, std::vector<wui::Radio*>& radios)
     }
 }
 
+void collectCards(wui::Node& node, std::vector<wui::Card*>& cards)
+{
+    if (auto* card = dynamic_cast<wui::Card*>(&node)) {
+        cards.push_back(card);
+    }
+    if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
+        for (const auto& child : container->children()) {
+            collectCards(*child, cards);
+        }
+    }
+}
+
+template <class NodeType>
+NodeType* findNodeByAccessibilityId(wui::Node& node, std::string_view id)
+{
+    if (node.accessibilityId() == id) return dynamic_cast<NodeType*>(&node);
+    if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
+        for (const auto& child : container->children()) {
+            if (auto* result = findNodeByAccessibilityId<NodeType>(*child, id)) {
+                return result;
+            }
+        }
+    }
+    return nullptr;
+}
+
+wui::Button* findButtonByLabel(wui::Node& node, std::string_view label)
+{
+    if (auto* button = dynamic_cast<wui::Button*>(&node);
+        button != nullptr && button->label() == label) {
+        return button;
+    }
+    if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
+        for (const auto& child : container->children()) {
+            if (auto* result = findButtonByLabel(*child, label)) return result;
+        }
+    }
+    return nullptr;
+}
+
 const wui::AccessibilitySnapshotEntry* findAccessibleEntry(
     const wui::AccessibilitySnapshot& snapshot,
     wui::AccessibilityRole role,
@@ -332,7 +375,7 @@ void testAllRouteSelectionsStaySynchronizedWithNavigator()
     }
 }
 
-void testNavigationRailInvokesSevenAccessibleDestinations()
+void testNavigationRailInvokesEightAccessibleDestinations()
 {
     NavigationViewModel viewModel;
     wui::Navigator navigator;
@@ -365,7 +408,7 @@ void testNavigationRailInvokesSevenAccessibleDestinations()
                "Invoking a navigation row must select its route");
         expectNavigatorMatches(viewModel, navigator);
     }
-    expect(selections == 7,
+    expect(selections == 8,
            "Each route row must invoke exactly one selection callback");
 }
 
@@ -505,6 +548,12 @@ void testCategorySelectionAdaptsBetweenDesktopAndCompactAccessibility()
     // The desktop catalog keeps dense ToggleButtons, preserving the existing
     // quick filter affordance at usable page widths.
     page->layout({0.0f, 0.0f, 800.0f, 640.0f});
+    std::vector<wui::Card*> cards;
+    collectCards(*page, cards);
+    if (viewModel.visibleComponents().get().size() > 8) {
+        expect(cards.size() <= 20,
+             "All Components results must mount only the visible component cards instead of the full catalog");
+        }
     std::vector<wui::ToggleButton*> toggles;
     collectToggleButtons(*page, toggles);
     expect(toggles.size() == 10,
@@ -545,6 +594,11 @@ void testCategorySelectionAdaptsBetweenDesktopAndCompactAccessibility()
     expect(viewModel.selectedCategory().get() == ComponentCategory::Controls
                && controls->isChecked() && !all->isChecked(),
            "Selecting a category must update ViewModel and mutually exclusive Toggle state");
+        cards.clear();
+        page->layout({0.0f, 0.0f, 800.0f, 640.0f});
+        collectCards(*page, cards);
+        expect(cards.size() <= viewModel.visibleComponents().get().size(),
+            "Virtualized All Components results must update mounted cards when category filters change");
 
     expect(controls->performAccessibilityAction(
                wui::AccessibilityActionKind::Toggle, {})
@@ -591,6 +645,127 @@ void testCategorySelectionAdaptsBetweenDesktopAndCompactAccessibility()
            "Compact radio selection must remain mutually exclusive and update the ViewModel");
 }
 
+void testLongTextPageUsesOneTenThousandLineTextDocument()
+{
+    auto page = whatsui::gallery::view::pages::buildLongTextPage();
+    page->layout({0.0f, 0.0f, 800.0f, 700.0f});
+
+    auto* const document = findNodeByAccessibilityId<wui::Text>(
+        *page, "gallery.long-text.document");
+    auto* const viewport = findNodeByAccessibilityId<wui::ScrollView>(
+        *page, "gallery.long-text.viewport");
+    expect(document != nullptr && viewport != nullptr,
+           "Long Text page must use one Text document inside one ScrollView");
+    expect(static_cast<std::size_t>(std::count(
+               document->value().begin(), document->value().end(), '\n')) + 1
+               == 10000,
+           "Long Text document must contain exactly 10,000 explicit lines");
+    expect(document->value().find("中文") != std::string::npos
+               && document->value().find("العربية") != std::string::npos
+               && document->value().find("हिन्दी") != std::string::npos,
+           "Long Text document must retain multilingual UTF-8 content in the same Text node");
+    expect(viewport->maxScrollOffset() > 200000.0f,
+           "Ten-thousand-line Text document must expose its full scrollable extent");
+
+    wui::PaintContext paint;
+    page->paint(paint);
+    expect(paint.paintStats().textDrawCalls < 100,
+           "Long Text Gallery page must keep paint submissions bounded by its viewport");
+
+    auto* const pageViewport = dynamic_cast<wui::ScrollView*>(page.get());
+    auto* const lineOne = findButtonByLabel(*page, "Line 1");
+    auto* const lineFiveThousand = findButtonByLabel(*page, "Line 5,000");
+    expect(pageViewport != nullptr && lineOne != nullptr && lineFiveThousand != nullptr,
+           "Long Text page must expose its outer viewport and jump controls");
+    const float outerOffset = std::min(80.0f, pageViewport->maxScrollOffset());
+    expect(outerOffset > 0.0f,
+           "Long Text pointer regression requires a scrolled outer page viewport");
+    pageViewport->setScrollOffset(outerOffset);
+
+    wui::InputRouter input;
+    input.setRoot(page.get());
+    const auto click = [&](wui::Button& button) {
+        const auto bounds = button.bounds();
+        const wui::PointF point{
+            bounds.x + bounds.width * 0.5f,
+            bounds.y + bounds.height * 0.5f - outerOffset};
+        expect(input.dispatchPointer(
+                   {0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                    wui::MouseButton::Left, point})
+                   && input.dispatchPointer(
+                       {0, wui::PointerType::Mouse, wui::PointerAction::Up,
+                        wui::MouseButton::Left, point}),
+               "Jump control must remain pointer-invokable through a scrolled parent viewport");
+    };
+
+    viewport->setScrollOffset(viewport->maxScrollOffset());
+    click(*lineOne);
+    expect(viewport->scrollOffset() == 0.0f,
+           "Line 1 must jump from the document end after the outer page has scrolled");
+    viewport->setScrollOffset(viewport->maxScrollOffset());
+    click(*lineFiveThousand);
+    expect(viewport->scrollOffset() == 24.0f * 4999.0f,
+           "Line 5,000 must jump from the document end after the outer page has scrolled");
+}
+
+    void testProductionRouterClickBuildsAndDestroysAllComponentsPage()
+    {
+        auto platform = std::make_unique<FakeWindow>(wui::SizeF{800.0f, 640.0f});
+        wui::UiWindow window(std::move(platform));
+        ComponentCatalog catalog;
+        GalleryViewModel gallery(catalog);
+        NavigationViewModel navigation;
+        GalleryRouter router(
+         window,
+            navigation,
+            [&gallery, &window](GalleryRoute route, GalleryRouter& activeRouter) {
+                std::unique_ptr<wui::Node> content;
+                if (route == GalleryRoute::AllComponents) {
+                    content = whatsui::gallery::view::pages::buildAllComponentsPage(gallery, {});
+                } else {
+                    content = std::make_unique<RoutePage>(route);
+                }
+                return whatsui::gallery::view::buildAppShell(
+                    window, route, std::move(content),
+                    [&activeRouter](GalleryRoute target) { activeRouter.navigate(target); });
+         });
+
+        router.start(GalleryRoute::Overview);
+        window.update();
+        window.layout();
+
+        auto snapshot = window.accessibilitySnapshot();
+        const auto* const allComponents = findAccessibleEntry(
+         snapshot, wui::AccessibilityRole::Button, "All components");
+        expect(allComponents != nullptr && allComponents->properties.actions.invoke,
+            "Production shell must expose an invokable All Components route");
+            expect(allComponents->properties.bounds.has_value(),
+                "Production shell All Components route must expose physical bounds for pointer regression");
+            const auto bounds = *allComponents->properties.bounds;
+            const wui::PointF click{bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f};
+            expect(window.dispatchPointer({0, wui::PointerType::Mouse, wui::PointerAction::Down,
+                            wui::MouseButton::Left, click}) &&
+                 window.dispatchPointer({0, wui::PointerType::Mouse, wui::PointerAction::Up,
+                                wui::MouseButton::Left, click}),
+                "Pointer-clicking All Components through the production shell must not destroy the active dispatch path");
+
+        window.update();
+        window.layout();
+        expect(navigation.currentRoute().get() == GalleryRoute::AllComponents,
+            "Production router must switch to the All Components route after the route click");
+        std::vector<wui::Card*> cards;
+        collectCards(*window.root(), cards);
+        expect(!cards.empty() && cards.size() <= 20,
+            "Production All Components page must build a virtualized, bounded result list");
+
+        router.navigate(GalleryRoute::About);
+        window.update();
+        window.layout();
+        expect(navigation.currentRoute().get() == GalleryRoute::About,
+            "Navigating away must destroy the virtualized All Components page without a teardown crash");
+        router.shutdown();
+    }
+
 void testResponsiveShellKeepsNarrowContentUsableAndNavigationReachable()
 {
     auto platform = std::make_unique<FakeWindow>(wui::SizeF{680.0f, 520.0f});
@@ -624,9 +799,10 @@ void testResponsiveShellKeepsNarrowContentUsableAndNavigationReachable()
     window.update();
     window.layout();
     snapshot = window.accessibilitySnapshot();
-    constexpr std::array<std::string_view, 6> compactDestinationIds{
+    constexpr std::array<std::string_view, 7> compactDestinationIds{
         "gallery.navigation.overview", "gallery.navigation.all-components",
-        "gallery.navigation.controls", "gallery.navigation.add-ons",
+        "gallery.navigation.controls", "gallery.navigation.long-text",
+        "gallery.navigation.add-ons",
         "gallery.navigation.visual-qa", "gallery.navigation.about"};
     for (const auto id : compactDestinationIds) {
         const auto* const destination = findAccessibleEntryById(snapshot, id);
@@ -667,13 +843,21 @@ void testResponsiveShellRetainsDesktopRailAtAndAboveBreakpoint()
     expect(findAccessibleEntryById(snapshot, "gallery.navigation.open") == nullptr,
            "Desktop Gallery navigation must not render the compact Drawer trigger");
     for (const GalleryRoute route : {GalleryRoute::Overview, GalleryRoute::AllComponents,
-                                     GalleryRoute::Controls, GalleryRoute::AddOns,
+                                     GalleryRoute::Controls, GalleryRoute::LongText,
+                                     GalleryRoute::AddOns,
                                      GalleryRoute::VisualQa, GalleryRoute::About}) {
         const auto* const destination = findAccessibleEntry(
             snapshot, wui::AccessibilityRole::Button, galleryRouteTitle(route));
         expect(destination != nullptr && destination->properties.actions.invoke,
                "Desktop Gallery rail must retain every directly invokable route");
     }
+    const auto* const allComponents = findAccessibleEntry(
+        snapshot, wui::AccessibilityRole::Button, "All components");
+    expect(allComponents != nullptr
+               && window.performAccessibilityAction(invokeRequest(*allComponents))
+                      == wui::AccessibilityActionStatus::Succeeded
+               && selectedRoute == GalleryRoute::AllComponents,
+           "Desktop rail All Components click must invoke the All Components route callback");
     const auto* const about = findAccessibleEntry(
         snapshot, wui::AccessibilityRole::Button, "About");
     expect(about != nullptr
@@ -735,12 +919,14 @@ int main()
     disableSystemFailureDialogs();
     try {
         testAllRouteSelectionsStaySynchronizedWithNavigator();
-        testNavigationRailInvokesSevenAccessibleDestinations();
+        testNavigationRailInvokesEightAccessibleDestinations();
         testSelectedRailStateTracksViewModelRebuild();
         testUnknownRailKeyDoesNotCorruptNavigationState();
         testProductionRouterOwnsNavigationStateAndHistory();
         testPageHeadingProjectsAccessibleSemantics();
         testCategorySelectionAdaptsBetweenDesktopAndCompactAccessibility();
+        testLongTextPageUsesOneTenThousandLineTextDocument();
+        testProductionRouterClickBuildsAndDestroysAllComponentsPage();
         testResponsiveShellKeepsNarrowContentUsableAndNavigationReachable();
         testResponsiveShellRetainsDesktopRailAtAndAboveBreakpoint();
         testResponsiveShellSwitchesModesWhenOneWindowCrossesBreakpoint();

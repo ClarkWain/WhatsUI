@@ -73,12 +73,72 @@ void testScrollAndAccessibilityActions()
     expect(!files->isExpanded() && files->performAccessibilityAction(wui::AccessibilityActionKind::Expand, {}) == wui::AccessibilityActionStatus::Succeeded,
            "TreeItem accessibility Expand must be deterministic");
 }
+
+void testLargeTreeLayoutsOnlyViewportRows()
+{
+    wui::Tree tree;
+    for (int index = 0; index < 1000; ++index) tree.addItem("item-" + std::to_string(index), "Item " + std::to_string(index));
+    tree.layout({0, 0, 320, 64});
+    auto range = tree.visibleRange();
+    expect(range.first == 0 && range.size() == 2,
+           "Large Tree should expose a bounded viewport range");
+    std::size_t laidOut = 0;
+    for (auto* item : tree.visibleItems()) if (item->bounds().height > 0.0f) ++laidOut;
+    expect(laidOut == 2, "Large Tree layout should assign real bounds only to viewport rows");
+
+    tree.setScrollOffset(32.0f * 500.0f);
+    tree.layout({0, 0, 320, 64});
+    range = tree.visibleRange();
+    laidOut = 0;
+    for (auto* item : tree.visibleItems()) if (item->bounds().height > 0.0f) ++laidOut;
+    expect(range.first == 500 && laidOut == 2,
+           "Large Tree scroll should keep row layout bounded to the viewport");
+}
+
+    void testRemovingFocusedTreeItemDoesNotLeaveStalePointer()
+    {
+        wui::Tree tree;
+        tree.addItem("first", "First");
+        tree.addItem("second", "Second");
+        tree.layout({0, 0, 320, 64});
+        expect(tree.onKeyEvent({0, wui::KeyAction::Down, 40}),
+            "Tree should establish roving focus on first key navigation");
+        tree.removeChild(0).reset();
+        tree.layout({0, 0, 320, 64});
+        expect(tree.onKeyEvent({0, wui::KeyAction::Down, 40}),
+            "Tree keyboard navigation must recover after the focused item is removed");
+    }
+
+        void testCollapsingFocusedDescendantMovesFocusToAncestor()
+        {
+            wui::Tree tree;
+            populateTree(tree);
+            auto* files = tree.visibleItems().front();
+            auto* leaf = tree.visibleItems()[3];
+            expect(leaf->performAccessibilityAction(wui::AccessibilityActionKind::SetFocus, {}) == wui::AccessibilityActionStatus::Succeeded,
+                "TreeItem SetFocus should establish roving focus on a descendant");
+            files->setExpanded(false);
+            expect(tree.onKeyEvent({0, wui::KeyAction::Down, 32}) && tree.selectedId() == "files",
+                "Collapsing an ancestor must move roving focus from hidden descendants back to the collapsed ancestor");
+        }
+
+        void testTreeItemChildMutationInvalidatesVisibleProjection()
+        {
+            wui::Tree tree;
+            auto& branch = tree.addItem("branch", "Branch");
+            branch.addItem("child", "Child");
+            tree.layout({0, 0, 320, 64});
+            expect(tree.visibleItems().size() == 2, "Tree should expose nested children before mutation");
+            branch.clearChildren();
+            expect(tree.visibleItems().size() == 1,
+                "TreeItem clearChildren must invalidate the owning Tree visible projection");
+        }
 } // namespace
 
 int main()
 {
     try {
-        testStableIdentityAndDisclosure(); testKeyboardAndDisabledSelection(); testScrollAndAccessibilityActions();
+        testStableIdentityAndDisclosure(); testKeyboardAndDisabledSelection(); testScrollAndAccessibilityActions(); testLargeTreeLayoutsOnlyViewportRows(); testRemovingFocusedTreeItemDoesNotLeaveStalePointer(); testCollapsingFocusedDescendantMovesFocusToAncestor(); testTreeItemChildMutationInvalidatesVisibleProjection();
         std::cout << "Fluent Tree tests passed\n"; return 0;
     } catch (const std::exception& error) { std::cerr << "Fluent Tree test failure: " << error.what() << '\n'; return 1; }
 }

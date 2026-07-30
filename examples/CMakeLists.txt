@@ -92,6 +92,7 @@ set(WHATSUI_COMPONENT_GALLERY_SOURCES
     component_gallery/view/pages/all_components_page.cpp
     component_gallery/view/pages/button_detail_page.cpp
     component_gallery/view/pages/controls_page.cpp
+    component_gallery/view/pages/long_text_page.cpp
     component_gallery/view/pages/overview_page.cpp
     component_gallery/view/pages/visual_qa_page.cpp
 )

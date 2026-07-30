@@ -147,6 +147,12 @@ public:
         return std::move(self());
     }
 
+    Text&& fillWidth(bool fill = true) &&
+    {
+        node_->setFillAvailableWidth(fill);
+        return std::move(self());
+    }
+
     Text&& style(const wui::TextStyleToken& value) &&
     {
         node_->setTextStyle(value);
@@ -836,6 +842,7 @@ class Table : public BuilderBase<Table, wui::Table> {
 public:
     explicit Table(std::vector<wui::TableColumn> columns = {}) : BuilderBase(std::move(columns)) {}
     Table&& rows(std::vector<wui::TableRow> value) && { node_->setRows(std::move(value)); return std::move(self()); }
+    Table&& rowProvider(std::size_t count, wui::Table::RowProvider provider, wui::Table::RowEnabledProvider enabled = {}) && { node_->setRowProvider(count, std::move(provider), std::move(enabled)); return std::move(self()); }
     Table&& maxVisibleRows(std::size_t value) && { node_->maxVisibleRows(value); return std::move(self()); }
     Table&& accessibleLabel(std::string value) && { node_->setAccessibleLabel(std::move(value)); return std::move(self()); }
 };
@@ -845,6 +852,7 @@ public:
     DataGrid() : BuilderBase() {}
     DataGrid&& columns(std::vector<wui::TableColumn> value) && { node_->setColumns(std::move(value)); return std::move(self()); }
     DataGrid&& rows(std::vector<wui::TableRow> value) && { node_->setRows(std::move(value)); return std::move(self()); }
+    DataGrid&& rowProvider(std::size_t count, wui::Table::RowProvider provider, wui::Table::RowEnabledProvider enabled = {}) && { node_->setRowProvider(count, std::move(provider), std::move(enabled)); return std::move(self()); }
     DataGrid&& selectionMode(wui::DataGridSelectionMode value) && { node_->selectionMode(value); return std::move(self()); }
     DataGrid&& selectedRows(std::vector<std::size_t> value) && { node_->selectedRows(std::move(value)); return std::move(self()); }
     DataGrid&& accessibleLabel(std::string value) && { node_->setAccessibleLabel(std::move(value)); return std::move(self()); }
@@ -1028,6 +1036,7 @@ class ListView : public BuilderBase<ListView, wui::ListView> {
 public:
     explicit ListView(std::vector<wui::ListView::Item> items = {}, int selectedIndex = -1)
         : BuilderBase(std::move(items), selectedIndex) {}
+    ListView&& itemProvider(std::size_t count, wui::ListView::ItemProvider provider, wui::ListView::SelectableProvider selectable = {}) && { node_->setItemProvider(count, std::move(provider), std::move(selectable)); return std::move(self()); }
     ListView&& selectedIndex(int value) && { node_->setSelectedIndex(value); return std::move(self()); }
     ListView&& bind(wui::State<int>& state) && { node_->bind(state); return std::move(self()); }
     ListView&& onSelectionChanged(std::function<void(int)> handler) && { node_->onSelectionChanged(std::move(handler)); return std::move(self()); }

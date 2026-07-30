@@ -1,4 +1,5 @@
 #include <memory>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -263,6 +264,49 @@ void testDetachingHoveredNodeClearsRouterBeforeDestruction()
            "A detached hover target must not receive a synthetic Leave on the next event");
 }
 
+void testDetachCallbackMayClearSameParentDuringRemove()
+{
+    auto content = std::make_unique<wui::Container>();
+    auto removed = std::make_unique<wui::Container>();
+    auto survivor = std::make_unique<wui::Container>();
+    auto* contentRaw = content.get();
+    auto* removedRaw = removed.get();
+    int survivorDetaches = 0;
+    removedRaw->addDetachCallback([contentRaw] { contentRaw->clearChildren(); });
+    survivor->addDetachCallback([&survivorDetaches] { ++survivorDetaches; });
+    content->appendChild(std::move(removed));
+    content->appendChild(std::move(survivor));
+
+    wui::UiRoot root;
+    root.setContent(std::move(content));
+    auto retained = contentRaw->removeChild(0);
+    expect(retained.get() == removedRaw && !removedRaw->isAttached(),
+           "removeChild must retain the requested child when its detach callback clears the same parent");
+    expect(survivorDetaches == 1 && contentRaw->children().empty(),
+           "A reentrant clearChildren during removeChild must detach and remove remaining siblings safely");
+}
+
+void testDetachCallbackMayClearSameParentDuringClear()
+{
+    auto content = std::make_unique<wui::Container>();
+    auto first = std::make_unique<wui::Container>();
+    auto second = std::make_unique<wui::Container>();
+    auto* contentRaw = content.get();
+    int firstDetaches = 0;
+    int secondDetaches = 0;
+    first->addDetachCallback([contentRaw] { contentRaw->clearChildren(); });
+    first->addDetachCallback([&firstDetaches] { ++firstDetaches; });
+    second->addDetachCallback([&secondDetaches] { ++secondDetaches; });
+    content->appendChild(std::move(first));
+    content->appendChild(std::move(second));
+
+    wui::UiRoot root;
+    root.setContent(std::move(content));
+    contentRaw->clearChildren();
+    expect(firstDetaches == 1 && secondDetaches == 1 && contentRaw->children().empty(),
+           "clearChildren must tolerate a detach callback that clears the same parent again");
+}
+
 } // namespace
 
 int main()
@@ -273,10 +317,13 @@ int main()
         testDetachingFocusedNodeClearsFocusBeforeDestruction();
         testFocusDetachCallbackDoesNotOutliveFocusManager();
         testDetachingHoveredNodeClearsRouterBeforeDestruction();
+        testDetachCallbackMayClearSameParentDuringRemove();
+        testDetachCallbackMayClearSameParentDuringClear();
     } catch (const std::exception& error) {
         // Test executables must fail normally on Windows instead of surfacing
         // an uncaught exception as an application-crash dialog.
-        return (void)error, 1;
+        std::cerr << "Lifecycle test failure: " << error.what() << '\n';
+        return 1;
     }
     return 0;
 }

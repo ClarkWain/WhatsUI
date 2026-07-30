@@ -6,6 +6,7 @@
 // row selection, roving keyboard focus and a windowed viewport).
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -54,16 +55,22 @@ struct TableAccessibilityEntry {
 // replace, sort, or window external data without rebuilding Node ownership.
 class Table : public ControlNode {
 public:
-    Table() = default;
+    using RowProvider = std::function<TableRow(std::size_t)>;
+    using RowEnabledProvider = std::function<bool(std::size_t)>;
+
+    Table();
     explicit Table(std::vector<TableColumn> columns);
+    ~Table() override;
 
     Table& setColumns(std::vector<TableColumn> value);
     Table& addColumn(TableColumn value);
     [[nodiscard]] const std::vector<TableColumn>& columns() const noexcept;
     Table& setRows(std::vector<TableRow> value);
+    Table& setRowProvider(std::size_t count, RowProvider provider, RowEnabledProvider enabled = {});
     Table& addRow(TableRow value);
     Table& clearRows();
     [[nodiscard]] const std::vector<TableRow>& rows() const noexcept;
+    [[nodiscard]] std::size_t rowCount() const noexcept;
     Table& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
@@ -85,13 +92,18 @@ public:
     bool onPointerEvent(const PointerEvent& event) override;
 
 protected:
+    struct State;
+
     [[nodiscard]] float headerHeight() const noexcept;
     [[nodiscard]] float rowHeight() const noexcept;
     [[nodiscard]] std::vector<float> columnWidths() const;
     [[nodiscard]] int columnAt(PointF point) const noexcept;
     [[nodiscard]] int rowAt(PointF point) const noexcept;
+    [[nodiscard]] TableRow rowData(std::size_t row) const;
+    [[nodiscard]] bool rowEnabled(std::size_t row) const noexcept;
     [[nodiscard]] RectF rowBounds(std::size_t row) const noexcept;
     void scrollRowIntoView(std::size_t row) noexcept;
+    void syncViewport() noexcept;
     virtual bool isRowSelected(std::size_t row) const noexcept;
     virtual bool isCellFocused(std::size_t row, std::size_t column) const noexcept;
     virtual TableSortDirection columnSortDirection(std::size_t column) const noexcept;
@@ -99,9 +111,13 @@ protected:
 
     std::vector<TableColumn> columns_;
     std::vector<TableRow> rows_;
+    RowProvider rowProvider_;
+    RowEnabledProvider rowEnabledProvider_;
+    bool usesRowProvider_{false};
+    std::size_t providerRowCount_{0};
     std::string accessibleLabel_{"Table"};
     std::size_t maxVisibleRows_{8};
-    float scrollOffset_{0.0f};
+    std::unique_ptr<State> state_;
 };
 
 // Interactive table semantics. Sorting is deterministic by cell text unless

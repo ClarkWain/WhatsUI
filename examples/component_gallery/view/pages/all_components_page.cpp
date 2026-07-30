@@ -1,12 +1,15 @@
 #include "all_components_page.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <string>
 #include <utility>
 
 #include "view/components/component_card.h"
 #include "view/components/page_header.h"
 #include "view/components/responsive_choice_group.h"
+#include "wui/events.h"
 #include "wui/theme.h"
 #include "wui/ui.h"
 
@@ -33,7 +36,6 @@ wui::IconName iconFor(ComponentIcon icon)
 
 std::unique_ptr<wui::Node> buildDescriptorPreview(const ComponentDescriptor& descriptor)
 {
-    
     if (descriptor.id == "textarea") {
         return TextArea("Write a short note...").rows(2).intoNode();
     }
@@ -85,6 +87,133 @@ std::unique_ptr<wui::Node> buildComponent(
         std::move(config), buildDescriptorPreview(descriptor));
 }
 
+class ComponentResultsList final : public wui::ContainerNode {
+public:
+    ComponentResultsList(GalleryViewModel& viewModel, OpenComponentHandler onOpen)
+        : viewModel_(viewModel)
+        , onOpen_(std::move(onOpen))
+    {
+        auto* components = &viewModel_.visibleComponents();
+        const auto subscription = components->subscribe([this](const std::vector<ComponentDescriptor>& value) {
+            (void)value;
+            scrollOffset_ = 0.0f;
+            firstMounted_ = invalidIndex();
+            markDirty(wui::DirtyFlag::Layout);
+        });
+        addTeardown([components, subscription] { components->unsubscribe(subscription); });
+    }
+
+    [[nodiscard]] wui::SizeF measure(const wui::Constraints& constraints) const override
+    {
+        const float visibleRows = std::min<float>(kMaxVisibleRows, static_cast<float>(itemCount()));
+        return constraints.clamp({320.0f, visibleRows * kRowExtent});
+    }
+
+    void layout(const wui::RectF& bounds) override
+    {
+        setBounds(bounds);
+        clampScroll();
+        reconcile();
+        const auto& components = viewModel_.visibleComponents().get();
+        const std::size_t count = children().size();
+        for (std::size_t slot = 0; slot < count; ++slot) {
+            const std::size_t index = firstMounted_ + slot;
+            if (index >= components.size()) break;
+            children()[slot]->layout({bounds.x,
+                                      bounds.y + static_cast<float>(index) * kRowExtent - scrollOffset_,
+                                      bounds.width,
+                                      kRowExtent - kRowGap});
+        }
+        clearLayoutDirtyRecursively();
+    }
+
+    void paint(wui::PaintContext& context) override
+    {
+        wui::ContainerNode::paint(context);
+        clearDirty(wui::DirtyFlag::Paint);
+    }
+
+    [[nodiscard]] wui::Node* hitTest(wui::PointF point) override
+    {
+        if (!bounds().contains(point)) return nullptr;
+        for (auto it = children().rbegin(); it != children().rend(); ++it) {
+            if (wui::Node* hit = (*it)->hitTest(point)) return hit;
+        }
+        return this;
+    }
+
+    bool onPointerEvent(const wui::PointerEvent& event) override
+    {
+        if (event.action != wui::PointerAction::Scroll || !bounds().contains(event.position)) return false;
+        scrollOffset_ -= event.scrollDelta.y;
+        clampScroll();
+        markDirty(wui::DirtyFlag::Layout);
+        return true;
+    }
+
+    [[nodiscard]] std::size_t itemCount() const noexcept
+    {
+        return viewModel_.visibleComponents().get().size();
+    }
+
+    [[nodiscard]] std::size_t mountedCount() const noexcept
+    {
+        return children().size();
+    }
+
+private:
+    static constexpr float kRowExtent = 236.0f;
+    static constexpr float kRowGap = 12.0f;
+    static constexpr float kMaxVisibleRows = 8.0f;
+
+    [[nodiscard]] static constexpr std::size_t invalidIndex() noexcept
+    {
+        return static_cast<std::size_t>(-1);
+    }
+
+    [[nodiscard]] float maxScrollOffset() const noexcept
+    {
+        return std::max(0.0f, static_cast<float>(itemCount()) * kRowExtent - bounds().height);
+    }
+
+    void clampScroll() noexcept
+    {
+        if (!std::isfinite(scrollOffset_)) scrollOffset_ = 0.0f;
+        scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
+    }
+
+    [[nodiscard]] std::size_t firstVisibleIndex() const noexcept
+    {
+        if (itemCount() == 0 || kRowExtent <= 0.0f) return 0;
+        return std::min(itemCount(), static_cast<std::size_t>(scrollOffset_ / kRowExtent));
+    }
+
+    [[nodiscard]] std::size_t desiredMountedCount(std::size_t first) const noexcept
+    {
+        if (first >= itemCount()) return 0;
+        const auto visible = static_cast<std::size_t>(std::ceil(bounds().height / kRowExtent)) + 1;
+        return std::min<std::size_t>(itemCount() - first, std::max<std::size_t>(1, visible));
+    }
+
+    void reconcile()
+    {
+        const std::size_t first = firstVisibleIndex();
+        const std::size_t count = desiredMountedCount(first);
+        if (firstMounted_ == first && children().size() == count) return;
+        clearChildren();
+        firstMounted_ = first;
+        const auto& components = viewModel_.visibleComponents().get();
+        for (std::size_t offset = 0; offset < count; ++offset) {
+            appendChild(buildComponent(components[first + offset], onOpen_));
+        }
+    }
+
+    GalleryViewModel& viewModel_;
+    OpenComponentHandler onOpen_;
+    float scrollOffset_{0.0f};
+    std::size_t firstMounted_{invalidIndex()};
+};
+
 std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
 {
     constexpr std::array<ComponentCategory, 10> categories{{
@@ -111,11 +240,6 @@ std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
         .gap(10.0f)
         .align(wui::Alignment::Stretch)
         .children(
-            SearchField("Search components")
-            .query(viewModel.searchQuery().get())
-            .onChange([&viewModel](const std::string& value) {
-                viewModel.setSearchQuery(value);
-            }),
             std::make_unique<view::components::ResponsiveChoiceGroup>(
                 std::move(options),
                 [&viewModel] {
@@ -144,15 +268,7 @@ std::unique_ptr<wui::Node> buildResults(GalleryViewModel& viewModel, OpenCompone
             Text().bind(viewModel.resultCount(), [](std::size_t count) {
                 return std::to_string(count) + (count == 1 ? " component" : " components");
             }).size(12.0f).color(wui::theme().colors.textMuted),
-            
-            KeyedForEach<ComponentDescriptor>(
-                viewModel.visibleComponents(),
-                [](const ComponentDescriptor& descriptor) { return descriptor.id; },
-                [onOpen = std::move(onOpen)](const ComponentDescriptor& descriptor) {
-                    return buildComponent(descriptor, onOpen);
-                })
-                .gap(12.0f)
-                .align(wui::Alignment::Stretch)
+            std::make_unique<ComponentResultsList>(viewModel, std::move(onOpen))
         )
         .intoNode();
 }
@@ -170,7 +286,7 @@ std::unique_ptr<wui::Node> buildAllComponentsPage(
             .padding({32.0f, 32.0f, 40.0f, 32.0f})
             .align(wui::Alignment::Stretch)
             .children(
-                view::components::buildPageHeader({"CATALOG", "All components", "Search and filter the complete Fluent component set.", {}}),
+                view::components::buildPageHeader({"CATALOG", "All components", "Filter the complete Fluent component set by category.", {}}),
                 buildFilters(viewModel),
                 buildResults(viewModel, std::move(onOpenComponent))
             )
