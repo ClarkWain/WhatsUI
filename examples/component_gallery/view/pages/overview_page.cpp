@@ -187,7 +187,7 @@ std::unique_ptr<wui::Node> buildOverviewPage(
     NavigateHandler navigate)
 {
     return ScrollView()
-        .children(
+        .content(
             Column()
             .gap(24.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})

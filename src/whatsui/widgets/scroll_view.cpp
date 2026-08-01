@@ -2,14 +2,37 @@
 
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 
 namespace wui {
 
-ScrollViewNode& ScrollViewNode::child(std::unique_ptr<Node> child)
+ScrollViewNode& ScrollViewNode::content(std::unique_ptr<Node> content)
 {
+    if (!content) {
+        throw std::invalid_argument(
+            "ScrollViewNode content must not be null");
+    }
     clearChildren();
-    appendChild(std::move(child));
+    appendChild(std::move(content));
     return *this;
+}
+
+Node* ScrollViewNode::content() const noexcept
+{
+    return children().empty() ? nullptr : children().front().get();
+}
+
+void ScrollViewNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)child;
+    (void)index;
+    if (resultingCount > 1) {
+        throw std::logic_error(
+            "ScrollViewNode accepts at most one content child");
+    }
 }
 
 ScrollViewNode& ScrollViewNode::setAxis(ScrollAxis axis) noexcept

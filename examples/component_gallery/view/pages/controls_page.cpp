@@ -118,7 +118,7 @@ std::unique_ptr<wui::Node> buildSliderSection()
 std::unique_ptr<wui::Node> buildControlsPage(std::function<void()> onOpenButtonDetail)
 {
     return ScrollView()
-        .children(
+        .content(
             Column()
             .gap(20.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})

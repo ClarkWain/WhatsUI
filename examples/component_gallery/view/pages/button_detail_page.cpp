@@ -207,7 +207,7 @@ std::unique_ptr<wui::Node> buildButtonDetailPage(
     using namespace wui;
     wui::ButtonNode* preview = nullptr;
     auto root = ScrollView()
-        .children(
+        .content(
             Column()
             .gap(20.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})

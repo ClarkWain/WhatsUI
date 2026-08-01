@@ -230,7 +230,7 @@ std::unique_ptr<wui::Node> buildTaskListPage(
                     ScrollView()
                         .axis(wui::ScrollAxis::Vertical)
                         .flex(1.0f)
-                        .children(
+                        .content(
                             std::move(document)
                         )
                 )

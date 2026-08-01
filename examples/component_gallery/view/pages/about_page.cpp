@@ -114,7 +114,7 @@ std::unique_ptr<wui::Node> buildAboutPage(OpenLinkHandler openLink)
 {
     using namespace wui;
     return ScrollView()
-        .children(
+        .content(
             Column()
             .gap(20.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})

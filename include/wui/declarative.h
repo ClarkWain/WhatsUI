@@ -228,6 +228,34 @@ private:
     }
 };
 
+template <class Self, class NodeT>
+class SingleContentBuilderBase : public BuilderBase<Self, NodeT> {
+public:
+    using BuilderBase<Self, NodeT>::BuilderBase;
+
+    template <class Content>
+    Self& content(Content&& value) &
+    {
+        setContent(std::forward<Content>(value));
+        return this->self();
+    }
+
+    template <class Content>
+    Self&& content(Content&& value) &&
+    {
+        setContent(std::forward<Content>(value));
+        return std::move(this->self());
+    }
+
+private:
+    template <class Content>
+    void setContent(Content&& value)
+    {
+        (void)this->node_.get();
+        this->node_->content(asNode(std::forward<Content>(value)));
+    }
+};
+
 class Text : public BuilderBase<Text, wui::TextNode> {
 public:
     explicit Text(std::string value = {})
@@ -2245,9 +2273,9 @@ public:
     }
 };
 
-class ScrollView : public ContainerBuilderBase<ScrollView, wui::ScrollViewNode> {
+class ScrollView : public SingleContentBuilderBase<ScrollView, wui::ScrollViewNode> {
 public:
-    ScrollView() : ContainerBuilderBase() {}
+    ScrollView() : SingleContentBuilderBase() {}
 
     ScrollView& axis(wui::ScrollAxis axis) &
     {

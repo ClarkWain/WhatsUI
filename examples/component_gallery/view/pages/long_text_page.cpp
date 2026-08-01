@@ -113,7 +113,7 @@ std::unique_ptr<wui::Node> buildTextViewport()
     scroller->setAxis(wui::ScrollAxis::Vertical);
     scroller->setAccessibilityId("gallery.long-text.viewport");
     auto* const textViewport = scroller.get();
-    scroller->child(std::move(document));
+    scroller->content(std::move(document));
 
     auto actions = std::make_unique<view::components::ResponsiveFlow>();
     actions->gap(8.0f);
@@ -159,7 +159,7 @@ std::unique_ptr<wui::Node> buildTextViewport()
 std::unique_ptr<wui::Node> buildLongTextPage()
 {
     return ScrollView()
-        .children(
+        .content(
             Column()
             .gap(20.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})

@@ -479,7 +479,8 @@ enum class ScrollAxis {
 // remainder in EventContext for ancestor ScrollViews during bubbling.
 class ScrollViewNode : public ContainerNode {
 public:
-    ScrollViewNode& child(std::unique_ptr<Node> child);
+    ScrollViewNode& content(std::unique_ptr<Node> content);
+    [[nodiscard]] Node* content() const noexcept;
     ScrollViewNode& setAxis(ScrollAxis axis) noexcept;
     [[nodiscard]] ScrollAxis axis() const noexcept;
     void setScrollOffset(float offset) noexcept;
@@ -501,6 +502,10 @@ public:
     bool onPointerEvent(const PointerEvent& event) override;
 
 private:
+    void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const override;
     void clampOffset() noexcept;
     SizeF contentSize_{};
     PointF scrollOffset_{};

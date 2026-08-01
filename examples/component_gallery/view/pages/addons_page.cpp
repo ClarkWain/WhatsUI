@@ -306,7 +306,7 @@ std::unique_ptr<wui::Node> buildAddonsPage(
         [&window] { (void)window.showDialog(buildInspectorDialog(window)); }};
 
     return ScrollView()
-        .children(
+        .content(
             Column()
             .gap(20.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})

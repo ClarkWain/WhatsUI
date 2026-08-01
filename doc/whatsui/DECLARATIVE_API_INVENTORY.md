@@ -10,7 +10,8 @@
 - 通用 modifier：`flex()`、`accessibilityId()`；两者都提供 `&` 与 `&&` 重载。
 - 观察入口：`empty()`、仅左值可用的 `node()`。
 - 所有权出口：仅右值可用的 `build() &&`；具名 Builder 必须写 `std::move(builder).build()`。
-- 容器 Builder 才有 `children()`；重复调用按顺序追加，空节点被拒绝，失败批次不会部分修改父节点。
+- `AnyChildren` Builder 才有 `children()`；重复调用按顺序追加，空节点被拒绝，失败批次不会部分修改父节点。
+- `SingleContent` Builder 使用 `content()`，重复调用替换原内容，运行时节点也验证最多一个 child。
 - `Dialog::build()` 返回 `std::unique_ptr<DialogNode>`，其它 Builder 返回 `NodePtr`。
 - `ButtonVariant`、`variant()`、`setVariant()` 已删除，只保留 `ButtonAppearance`。
 
@@ -27,7 +28,7 @@
 | `Box` | `BoxNode` | children |
 | `Row` | `RowNode` | children |
 | `Column` | `ColumnNode` | children |
-| `ScrollView` | `ScrollViewNode` | children |
+| `ScrollView` | `ScrollViewNode` | `content()` 单内容 |
 
 ### 表单与基础控件
 
@@ -109,6 +110,6 @@
 
 ## 自动门禁
 
-`declarative_api_contract_tests.cpp` 编译期覆盖全部 66 个映射及其 `children()` capability，并验证左值/右值 modifier、`build()`、`node()` 和 move-only 约束。运行期覆盖 empty Builder、二次 build、move/self-move、原始 `unique_ptr<DerivedNode>`、重复 children 和批量失败的父节点强保证。
+`declarative_api_contract_tests.cpp` 编译期覆盖全部 66 个映射及其 `children()`/`content()` capability，并验证左值/右值 modifier、`build()`、`node()` 和 move-only 约束。运行期覆盖 empty Builder、二次 build、move/self-move、原始 `unique_ptr<DerivedNode>`、重复 children、单内容替换和批量失败的父节点强保证。
 
 仍待后续阶段加入自动门禁的内容：逐 modifier 清单比对、`automationId`/`accessibleLabel`/`debugName` 身份拆分，以及声明式领域头拆分后的 external-consumer 独立 include 测试。

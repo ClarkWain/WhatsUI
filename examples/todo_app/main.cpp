@@ -548,7 +548,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                 // title/composer visually coherent at desktop sizes while
                 // making every task row reachable at the 640x560 acceptance
                 // viewport and on compact portrait windows.
-                ScrollView().axis(wui::ScrollAxis::Vertical).children(Column()
+                ScrollView().axis(wui::ScrollAxis::Vertical).content(Column()
         .padding(wui::InsetsF{28.0f, 24.0f, 24.0f, 24.0f})
         .gap(16.0f)
         .align(wui::Alignment::Stretch)

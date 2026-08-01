@@ -89,7 +89,7 @@ std::unique_ptr<wui::Node> buildSettingsUi(SettingsModel& model,
             Spacer().flex(1.0f),
             Text("WINDOWS FLUENT").size(10.0f).lineHeight(14.0f).color(muted)));
 
-    auto page = ScrollView().flex(1.0f).children(
+    auto page = ScrollView().flex(1.0f).content(
         Column().gap(20.0f).padding({32.0f, 28.0f, 32.0f, 28.0f}).align(wui::Alignment::Stretch).children(
             Row().align(wui::Alignment::Center).gap(12.0f).children(
                 Column().gap(3.0f).flex(1.0f).children(

@@ -19,6 +19,17 @@ struct HasChildren<T,
 };
 
 template <typename T, typename = void>
+struct HasContent : std::false_type {
+};
+
+template <typename T>
+struct HasContent<
+    T,
+    std::void_t<decltype(std::declval<T&&>().content(wui::Text()))>>
+    : std::true_type {
+};
+
+template <typename T, typename = void>
 struct HasRvalueBuild : std::false_type {
 };
 
@@ -89,6 +100,12 @@ static_assert(!CanBuildAfterLvalueModifier<wui::Button>::value);
                                  wui::RuntimeNode>);                           \
     static_assert(HasChildren<wui::Builder>::value)
 
+#define WUI_ASSERT_SINGLE_CONTENT_BUILDER(Builder, RuntimeNode)               \
+    static_assert(std::is_same_v<typename wui::Builder::node_type,            \
+                                 wui::RuntimeNode>);                           \
+    static_assert(!HasChildren<wui::Builder>::value);                         \
+    static_assert(HasContent<wui::Builder>::value)
+
 WUI_ASSERT_LEAF_BUILDER(Text, TextNode);
 WUI_ASSERT_LEAF_BUILDER(Icon, IconNode);
 WUI_ASSERT_LEAF_BUILDER(Image, ImageNode);
@@ -150,7 +167,7 @@ WUI_ASSERT_LEAF_BUILDER(SplitButton, SplitButtonNode);
 WUI_ASSERT_LEAF_BUILDER(SearchField, SearchFieldNode);
 WUI_ASSERT_CONTAINER_BUILDER(Row, RowNode);
 WUI_ASSERT_CONTAINER_BUILDER(Column, ColumnNode);
-WUI_ASSERT_CONTAINER_BUILDER(ScrollView, ScrollViewNode);
+WUI_ASSERT_SINGLE_CONTENT_BUILDER(ScrollView, ScrollViewNode);
 WUI_ASSERT_LEAF_BUILDER(Dialog, DialogNode);
 WUI_ASSERT_LEAF_BUILDER(If, IfNode);
 WUI_ASSERT_LEAF_BUILDER(ForEach<int>, ForEachNode);
@@ -158,6 +175,7 @@ WUI_ASSERT_LEAF_BUILDER(KeyedForEach<int>, ForEachNode);
 
 #undef WUI_ASSERT_CONTAINER_BUILDER
 #undef WUI_ASSERT_LEAF_BUILDER
+#undef WUI_ASSERT_SINGLE_CONTENT_BUILDER
 
 void expect(bool condition, const std::string& message)
 {
@@ -278,6 +296,22 @@ void testMoveAndRawNodeConsumption()
     expect(rejectedNullNode, "asNode() should reject null unique_ptr values");
 }
 
+void testSingleContentBuilderReplacesContent()
+{
+    using namespace wui;
+
+    ScrollView scrollView;
+    scrollView.content(Text("First"));
+    scrollView.content(Text("Second"));
+
+    expect(scrollView.node()->children().size() == 1,
+           "SingleContent Builder should retain exactly one content node");
+    const auto* content = dynamic_cast<const TextNode*>(
+        scrollView.node()->content());
+    expect(content != nullptr && content->value() == "Second",
+           "A repeated content() call should replace the previous content");
+}
+
 } // namespace
 
 int main()
@@ -288,6 +322,7 @@ int main()
         testEmptyBuilderRejectsModifiers();
         testChildrenAreTransactionalAndRepeatable();
         testMoveAndRawNodeConsumption();
+        testSingleContentBuilderReplacesContent();
     } catch (const std::exception& error) {
         std::cerr << "declarative_api_contract_tests failed: "
                   << error.what() << '\n';

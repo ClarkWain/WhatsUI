@@ -55,7 +55,7 @@ wui::PointerEvent scroll(float y, float delta)
 void testViewportLayoutAndClamping()
 {
     wui::ScrollViewNode view;
-    view.child(std::make_unique<Probe>(wui::SizeF{80.0f, 300.0f}));
+    view.content(std::make_unique<Probe>(wui::SizeF{80.0f, 300.0f}));
     view.layout({0.0f, 0.0f, 100.0f, 100.0f});
     expect(view.contentSize().height == 300.0f, "ScrollView should retain unconstrained content height");
     expect(view.maxScrollOffset() == 200.0f, "ScrollView should expose document overflow");
@@ -65,10 +65,61 @@ void testViewportLayoutAndClamping()
     expect(view.scrollOffset() == 0.0f, "ScrollView should clamp offset at document start");
 }
 
+void testViewportRejectsMoreThanOneRuntimeChild()
+{
+    wui::ScrollViewNode view;
+    view.appendChild(std::make_unique<Probe>(wui::SizeF{80.0f, 100.0f}));
+
+    bool rejected = false;
+    try {
+        view.appendChild(
+            std::make_unique<Probe>(wui::SizeF{80.0f, 200.0f}));
+    } catch (const std::logic_error&) {
+        rejected = true;
+    }
+
+    expect(rejected,
+           "ScrollView runtime invariant should reject a second child");
+    expect(view.children().size() == 1,
+           "Rejecting a second ScrollView child must preserve existing content");
+}
+
+void testViewportRejectsInvalidContentTransactionally()
+{
+    wui::ScrollViewNode view;
+    view.content(std::make_unique<Probe>(wui::SizeF{80.0f, 100.0f}));
+    wui::Node* const original = view.content();
+
+    bool rejectedNull = false;
+    try {
+        view.content(nullptr);
+    } catch (const std::invalid_argument&) {
+        rejectedNull = true;
+    }
+    expect(rejectedNull && view.content() == original,
+           "Invalid replacement content must preserve the current ScrollView content");
+
+    wui::ScrollViewNode emptyView;
+    std::vector<wui::NodePtr> batch;
+    batch.push_back(
+        std::make_unique<Probe>(wui::SizeF{80.0f, 100.0f}));
+    batch.push_back(
+        std::make_unique<Probe>(wui::SizeF{80.0f, 200.0f}));
+
+    bool rejectedBatch = false;
+    try {
+        emptyView.appendChildren(std::move(batch));
+    } catch (const std::logic_error&) {
+        rejectedBatch = true;
+    }
+    expect(rejectedBatch && emptyView.children().empty(),
+           "A multi-child batch must not partially mutate ScrollView");
+}
+
 void testWheelBubblesFromContent()
 {
     auto view = std::make_unique<wui::ScrollViewNode>();
-    view->child(std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f}));
+    view->content(std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f}));
     view->layout({0.0f, 0.0f, 100.0f, 100.0f});
     wui::ScrollViewNode* raw = view.get();
     wui::InputRouter router;
@@ -87,7 +138,7 @@ void testHitTestingUsesDocumentCoordinates()
     auto child = std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f});
     wui::Node* rawChild = child.get();
     content->child(std::move(child));
-    view.child(std::move(content));
+    view.content(std::move(content));
     view.layout({0.0f, 0.0f, 100.0f, 100.0f});
     view.setScrollOffset(80.0f);
     expect(view.hitTest({10.0f, 10.0f}) == rawChild, "Viewport hit testing should translate to document coordinates");
@@ -102,7 +153,7 @@ void testHorizontalViewportLayoutWheelAndHitTesting()
     auto child = std::make_unique<Probe>(wui::SizeF{300.0f, 80.0f});
     wui::Node* rawChild = child.get();
     content->child(std::move(child));
-    view->child(std::move(content));
+    view->content(std::move(content));
     view->layout({0.0f, 0.0f, 100.0f, 100.0f});
 
     expect(view->contentSize().width == 300.0f, "Horizontal ScrollView should retain unconstrained content width");
@@ -144,7 +195,7 @@ void testLongTextPaintsOnlyViewportLines()
     text->setFillAvailableWidth(true);
 
     wui::ScrollViewNode view;
-    view.child(std::move(text));
+    view.content(std::move(text));
     view.layout({0.0f, 0.0f, 320.0f, 100.0f});
     expect(measurer.calls == 0,
            "Fill-width long Text layout must not shape every line to resolve intrinsic width");
@@ -174,12 +225,12 @@ void testNestedViewportHandsOffOnlyRemainingWheelDelta()
     auto innerHost = std::make_unique<wui::BoxNode>();
     innerHost->setHeight(100.0f);
     auto inner = std::make_unique<wui::ScrollViewNode>();
-    inner->child(std::make_unique<Probe>(wui::SizeF{100.0f, 200.0f}));
+    inner->content(std::make_unique<Probe>(wui::SizeF{100.0f, 200.0f}));
     wui::ScrollViewNode* rawInner = inner.get();
     innerHost->child(std::move(inner));
     column->child(std::move(innerHost));
     column->child(std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f}));
-    outer->child(std::move(column));
+    outer->content(std::move(column));
     wui::ScrollViewNode* rawOuter = outer.get();
     outer->layout({0.0f, 0.0f, 100.0f, 100.0f});
 
@@ -216,7 +267,7 @@ void testNestedListViewHandsOffOnlyRemainingWheelDelta()
     listHost->child(std::move(list));
     column->child(std::move(listHost));
     column->child(std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f}));
-    outer->child(std::move(column));
+    outer->content(std::move(column));
     wui::ScrollViewNode* rawOuter = outer.get();
     outer->layout({0.0f, 0.0f, 100.0f, 100.0f});
 
@@ -245,6 +296,8 @@ void testNestedListViewHandsOffOnlyRemainingWheelDelta()
 int main()
 {
     testViewportLayoutAndClamping();
+    testViewportRejectsMoreThanOneRuntimeChild();
+    testViewportRejectsInvalidContentTransactionally();
     testWheelBubblesFromContent();
     testHitTestingUsesDocumentCoordinates();
     testHorizontalViewportLayoutWheelAndHitTesting();

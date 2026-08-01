@@ -179,6 +179,14 @@ public:
 protected:
     Node() = default;
 
+    // Runtime node invariants are enforced at the ownership boundary as well
+    // as by declarative Builders. Semantic containers override this hook to
+    // constrain child type, position, or cardinality before the tree mutates.
+    virtual void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const;
+
     // Override these only for node-local resources.  Use the callback API for
     // bindings created by builders, where the subscription lifetime is owned
     // by the builder rather than the widget subclass.

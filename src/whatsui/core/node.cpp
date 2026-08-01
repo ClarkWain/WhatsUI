@@ -45,10 +45,14 @@ void Node::appendChild(NodePtr child)
 void Node::appendChildren(std::vector<NodePtr> children)
 {
     WUI_ASSERT_UI_THREAD();
-    for (const auto& child : children) {
+    const std::size_t resultingCount = children_.size() + children.size();
+    for (std::size_t index = 0; index < children.size(); ++index) {
+        const auto& child = children[index];
         if (!child) {
             throw std::invalid_argument("child must not be null");
         }
+        validateChildInsertion(
+            *child, children_.size() + index, resultingCount);
     }
 
     // Reserve before mutating parent/child relationships. Invalid input and
@@ -77,6 +81,7 @@ void Node::insertChild(std::size_t index, NodePtr child)
     if (index > children_.size()) {
         throw std::out_of_range("child insertion index out of range");
     }
+    validateChildInsertion(*child, index, children_.size() + 1);
     child->parent_ = this;
     child->setInvalidationHandler(invalidationHandler_);
     Node* const rawChild = child.get();
@@ -139,6 +144,16 @@ void Node::clearChildren()
 void Node::addTeardown(std::function<void()> callback)
 {
     teardown_.push_back(std::move(callback));
+}
+
+void Node::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)child;
+    (void)index;
+    (void)resultingCount;
 }
 
 void Node::addAttachCallback(std::function<void()> callback)
