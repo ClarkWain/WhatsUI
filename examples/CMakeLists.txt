@@ -25,6 +25,39 @@ target_link_libraries(WhatsUITodoApp
 
 target_compile_features(WhatsUITodoApp PRIVATE cxx_std_17)
 
+set(WHATSUI_FOCUS_TOMATO_SOURCES
+    focus_tomato/application/focus_data_service.cpp
+    focus_tomato/domain/clock_drift.cpp
+    focus_tomato/domain/focus_data.cpp
+    focus_tomato/domain/focus_data_validator.cpp
+    focus_tomato/domain/focus_statistics.cpp
+    focus_tomato/infrastructure/file_focus_repository.cpp
+    focus_tomato/presentation/focus_assets.cpp
+    focus_tomato/presentation/focus_router.cpp
+    focus_tomato/presentation/focus_view_model.cpp
+    focus_tomato/presentation/components/common_components.cpp
+    focus_tomato/presentation/dialogs/new_task_dialog.cpp
+    focus_tomato/presentation/pages/completion_page.cpp
+    focus_tomato/presentation/pages/focus_timer_page.cpp
+    focus_tomato/presentation/pages/session_setup_page.cpp
+    focus_tomato/presentation/pages/short_break_page.cpp
+    focus_tomato/presentation/pages/task_list_page.cpp
+)
+
+add_library(WhatsUIFocusTomatoCore STATIC ${WHATSUI_FOCUS_TOMATO_SOURCES})
+target_link_libraries(WhatsUIFocusTomatoCore PUBLIC WhatsUI::WhatsUI)
+target_include_directories(WhatsUIFocusTomatoCore
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/focus_tomato
+    PRIVATE ${CMAKE_SOURCE_DIR}/third_party/WhatsCanvas/third_party/stb)
+target_compile_definitions(WhatsUIFocusTomatoCore
+    PUBLIC FOCUS_TOMATO_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets/focus_tomato")
+target_compile_features(WhatsUIFocusTomatoCore PUBLIC cxx_std_17)
+
+add_executable(WhatsUIFocusTomatoCapture focus_tomato/capture_main.cpp)
+target_link_libraries(WhatsUIFocusTomatoCapture
+    PRIVATE WhatsUIFocusTomatoCore WhatsCanvas::Software)
+target_compile_features(WhatsUIFocusTomatoCapture PRIVATE cxx_std_17)
+
 # The Settings reference is deliberately built from the same source for the
 # deterministic Software capture and the interactive GLFW host.
 add_executable(WhatsUISettingsApp
@@ -116,6 +149,11 @@ target_compile_features(WhatsUIComponentGalleryApp PRIVATE cxx_std_17)
 
 # --- Interactive window example (GLFW + OpenGL) ---
 if(TARGET WhatsUI::Glfw)
+    add_executable(WhatsUIFocusTomatoApp focus_tomato/main.cpp)
+    target_link_libraries(WhatsUIFocusTomatoApp
+        PRIVATE WhatsUIFocusTomatoCore WhatsUI::Glfw)
+    target_compile_features(WhatsUIFocusTomatoApp PRIVATE cxx_std_17)
+
     add_executable(WhatsUIComponentGalleryGlfw component_gallery/main.cpp)
     target_link_libraries(WhatsUIComponentGalleryGlfw
         PRIVATE WhatsUIComponentGalleryCore WhatsUI::Glfw)

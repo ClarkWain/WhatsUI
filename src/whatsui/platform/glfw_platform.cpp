@@ -18,6 +18,7 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -826,7 +827,8 @@ public:
             const bool needsFrame = std::any_of(
                 windows_.begin(), windows_.end(),
                 [](const GlfwPlatformWindow* window) { return window->needsRedraw(); })
-                || Ticker::instance().hasActive();
+                || Ticker::instance().hasActive()
+                || externalWakeRequested_.exchange(false);
             if (frameCallback_ && (needsFrame || closedWindowRemoved)) {
                 frameCallback_();
             } else {
@@ -842,6 +844,12 @@ public:
     {
         exitCode_ = exitCode;
         shouldQuit_ = true;
+    }
+
+    void wake() override
+    {
+        externalWakeRequested_.store(true);
+        glfwPostEmptyEvent();
     }
 
     // Raw platform-window pointers must be discarded before UiApp destroys
@@ -1037,6 +1045,7 @@ private:
     bool shouldQuit_{false};
     int exitCode_{0};
     std::function<void()> frameCallback_;
+    std::atomic_bool externalWakeRequested_{false};
 };
 
 // --- Factory function ---
@@ -1080,6 +1089,22 @@ public:
 
 private:
     GlfwPlatformHost* host_;
+};
+
+class DispatcherWakeScope final {
+public:
+    explicit DispatcherWakeScope(UiDispatcher& dispatcher) noexcept
+        : dispatcher_(&dispatcher)
+    {
+    }
+
+    ~DispatcherWakeScope() { dispatcher_->setWakeCallback({}); }
+
+    DispatcherWakeScope(const DispatcherWakeScope&) = delete;
+    DispatcherWakeScope& operator=(const DispatcherWakeScope&) = delete;
+
+private:
+    UiDispatcher* dispatcher_;
 };
 
 GlfwPlatformWindow& requireGlfwWindow(UiWindow& window)
@@ -1167,6 +1192,7 @@ void installGlfwDriver(UiApp& app, GlfwPlatformHost& host)
     host.setFrameCallback(
         [&app, &host, wiredWindows = std::move(wiredWindows),
          lastFrame = std::chrono::steady_clock::now()]() mutable {
+            (void)app.dispatcher().drain();
             const auto now = std::chrono::steady_clock::now();
             const float deltaSeconds = std::clamp(
                 std::chrono::duration<float>(now - lastFrame).count(), 0.0f, 0.1f);
@@ -1193,6 +1219,9 @@ int runGlfwUiApp(UiApp& app)
     if (host == nullptr) {
         throw std::invalid_argument("runGlfwUiApp requires a GLFW-backed UiApp");
     }
+    app.dispatcher().bindToCurrentThread();
+    app.dispatcher().setWakeCallback([host] { host->wake(); });
+    DispatcherWakeScope dispatcherWakeScope(app.dispatcher());
     installGlfwDriver(app, *host);
     FrameCallbackScope callbackScope(*host);
     return host->run();

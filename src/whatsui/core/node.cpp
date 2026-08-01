@@ -1,4 +1,5 @@
 #include "wui/node.h"
+#include "wui/thread_check.h"
 
 #include <stdexcept>
 
@@ -37,11 +38,13 @@ SizeF Node::measureWithConstraints(const Constraints& constraints) const
 
 void Node::appendChild(std::unique_ptr<Node> child)
 {
+    WUI_ASSERT_UI_THREAD();
     insertChild(children_.size(), std::move(child));
 }
 
 void Node::insertChild(std::size_t index, std::unique_ptr<Node> child)
 {
+    WUI_ASSERT_UI_THREAD();
     if (!child) {
         throw std::invalid_argument("child must not be null");
     }
@@ -60,6 +63,7 @@ void Node::insertChild(std::size_t index, std::unique_ptr<Node> child)
 
 void Node::moveChild(std::size_t from, std::size_t to)
 {
+    WUI_ASSERT_UI_THREAD();
     if (from >= children_.size() || to >= children_.size()) {
         throw std::out_of_range("child move index out of range");
     }
@@ -74,6 +78,7 @@ void Node::moveChild(std::size_t from, std::size_t to)
 
 std::unique_ptr<Node> Node::removeChild(std::size_t index)
 {
+    WUI_ASSERT_UI_THREAD();
     if (index >= children_.size()) {
         throw std::out_of_range("child index out of range");
     }
@@ -89,6 +94,7 @@ std::unique_ptr<Node> Node::removeChild(std::size_t index)
 
 void Node::clearChildren()
 {
+    WUI_ASSERT_UI_THREAD();
     if (children_.empty()) {
         return;
     }
@@ -244,6 +250,7 @@ AccessibilityActionStatus Node::performAccessibilityAction(
 
 void Node::markDirty(DirtyFlag flag) noexcept
 {
+    WUI_ASSERT_UI_THREAD();
     dirtyFlags_ |= toMask(flag);
     // Geometry is part of the rendered output.  Keeping layout and paint
     // invalidation coupled here prevents a relaid-out subtree from appearing

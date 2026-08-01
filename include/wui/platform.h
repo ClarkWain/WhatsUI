@@ -127,6 +127,9 @@ public:
     [[nodiscard]] virtual std::unique_ptr<PlatformWindow> createWindow(std::string title, SizeF logicalSize) = 0;
     [[nodiscard]] virtual int run() = 0;
     virtual void quit(int exitCode = 0) = 0;
+    // Thread-safe wake-up hook used when a worker posts UI work. Backends
+    // without a blocking event loop can keep the default no-op.
+    virtual void wake() {}
 };
 
 } // namespace wui

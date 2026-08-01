@@ -4,6 +4,7 @@
 #include "wui/selection.h"
 #include "wui/table.h"
 #include "wui/text_input.h"
+#include "wui/thread_check.h"
 #include "wui/widgets.h"
 
 #include <algorithm>
@@ -195,19 +196,30 @@ const OverlayHost& UiWindow::overlayHost() const noexcept
 
 OverlayId UiWindow::showDialog(std::unique_ptr<Dialog> dialog)
 {
+    WUI_ASSERT_UI_THREAD();
     if (!dialog) {
         throw std::invalid_argument("dialog must not be null");
     }
     Node* const previousFocus = focusManager_.focused();
+    Node* const previousRoot = activeDialog() != nullptr
+        ? static_cast<Node*>(activeDialog())
+        : activeModalDrawer() != nullptr
+            ? static_cast<Node*>(activeModalDrawer())
+            : uiRoot_.content();
     Dialog* const raw = dialog.get();
-    const auto id = overlayHost_.show(std::move(dialog));
-    dialogs_.push_back({id, previousFocus});
-    raw->setWindowDismissHandler([this, id] { requestDialogDismissal(id); });
-    // A modal must never leave a page control focused: keyboard and IME input
-    // are isolated until the dialog has been closed.
+
+    // UiWindow owns dialog focus restoration. Clear focus before handing the
+    // modal to OverlayHost so that its generic overlay entry does not retain a
+    // second raw pointer to the same page control. The page may be replaced
+    // while dismissal is deferred until the current input callback returns.
     deactivateTextInputSession();
     focusManager_.clear();
     inputRouter_.clearHover();
+    const auto id = overlayHost_.show(std::move(dialog));
+    dialogs_.push_back({id, previousFocus, previousRoot});
+    raw->setWindowDismissHandler([this, id] { requestDialogDismissal(id); });
+    // A modal must never leave a page control focused: keyboard and IME input
+    // are isolated until the dialog has been closed.
     // Keyboard routing has to follow the modal as well as pointer routing.
     // Keeping the page as InputRouter's root made Tab/Enter activate controls
     // behind a dialog even though the backdrop correctly blocked the pointer.
@@ -217,6 +229,7 @@ OverlayId UiWindow::showDialog(std::unique_ptr<Dialog> dialog)
 
 std::unique_ptr<Dialog> UiWindow::dismissDialog(OverlayId id)
 {
+    WUI_ASSERT_UI_THREAD();
     if (eventDispatchDepth_ != 0) {
         requestDialogDismissal(id);
         return nullptr;
@@ -237,6 +250,7 @@ std::unique_ptr<Dialog> UiWindow::dismissDialogImmediately(OverlayId id)
         return nullptr;
     }
     Node* restoreFocus = it->restoreFocus;
+    Node* const restoreRoot = it->restoreRoot;
     dialogs_.erase(it);
     auto overlay = overlayHost_.dismiss(id);
     auto* rawDialog = dynamic_cast<Dialog*>(overlay.get());
@@ -248,6 +262,14 @@ std::unique_ptr<Dialog> UiWindow::dismissDialogImmediately(OverlayId id)
         // A nested dialog hands keyboard routing back to the dialog beneath it;
         // otherwise restore the active page tree before restoring prior focus.
         inputRouter_.setRoot(activeDialog() != nullptr ? static_cast<Node*>(activeDialog()) : uiRoot_.content());
+        Node* const currentRoot = activeDialog() != nullptr
+            ? static_cast<Node*>(activeDialog())
+            : activeModalDrawer() != nullptr
+                ? static_cast<Node*>(activeModalDrawer())
+                : uiRoot_.content();
+        if (currentRoot != restoreRoot) {
+            restoreFocus = nullptr;
+        }
         focusManager_.setFocused(restoreFocus);
         syncTextInputSession();
         return dialog;
@@ -310,6 +332,7 @@ void UiWindow::flushDeferredDialogDismissals() noexcept
 
 std::unique_ptr<Dialog> UiWindow::dismissTopDialog()
 {
+    WUI_ASSERT_UI_THREAD();
     return dialogs_.empty() ? nullptr : dismissDialog(dialogs_.back().id);
 }
 
@@ -320,6 +343,7 @@ bool UiWindow::hasDialog() const noexcept
 
 void UiWindow::setRoot(std::unique_ptr<Node> root)
 {
+    WUI_ASSERT_UI_THREAD();
     navigator_.clear();
     deactivateTextInputSession();
     focusManager_.clear();
@@ -532,6 +556,7 @@ AccessibilityActionStatus UiWindow::performAccessibilityAction(
 
 void UiWindow::update()
 {
+    WUI_ASSERT_UI_THREAD();
     ++frameStats_.frameNumber;
     frameStats_.layoutMilliseconds = 0.0;
     frameStats_.prepareMilliseconds = 0.0;
@@ -544,6 +569,7 @@ void UiWindow::update()
 
 void UiWindow::layout()
 {
+    WUI_ASSERT_UI_THREAD();
     const auto metrics = platformWindow_->metrics();
     const RectF bounds{0.0f, 0.0f, metrics.logicalSize.width, metrics.logicalSize.height};
     const RectF previousBounds = uiRoot_.bounds();
@@ -571,6 +597,7 @@ void UiWindow::layout()
 
 void UiWindow::paint(PaintContext& context)
 {
+    WUI_ASSERT_UI_THREAD();
     context.resetPaintStats();
     frameStats_.paintMilliseconds = measureMilliseconds([&] {
         uiRoot_.paint(context);
@@ -610,6 +637,7 @@ void UiWindow::captureCompletedRendererStats(PaintContext& context)
 
 void UiWindow::prepare(PaintContext& context)
 {
+    WUI_ASSERT_UI_THREAD();
     frameStats_.prepareMilliseconds = measureMilliseconds([&] {
         uiRoot_.prepare(context);
         overlayHost_.prepare(context);
@@ -634,6 +662,7 @@ Node* UiWindow::hitTest(PointF point) const
 
 bool UiWindow::dispatchPointer(const PointerEvent& event)
 {
+    WUI_ASSERT_UI_THREAD();
     bool handled = false;
     {
         EventDispatchScope dispatchScope(*this);
@@ -645,6 +674,7 @@ bool UiWindow::dispatchPointer(const PointerEvent& event)
 
 bool UiWindow::dispatchKey(const KeyEvent& event)
 {
+    WUI_ASSERT_UI_THREAD();
     bool handled = false;
     {
         EventDispatchScope dispatchScope(*this);
@@ -695,6 +725,7 @@ bool UiWindow::dispatchKey(const KeyEvent& event)
 
 bool UiWindow::dispatchTextInput(const TextInputEvent& event)
 {
+    WUI_ASSERT_UI_THREAD();
     bool handled = false;
     {
         EventDispatchScope dispatchScope(*this);
@@ -706,6 +737,7 @@ bool UiWindow::dispatchTextInput(const TextInputEvent& event)
 
 bool UiWindow::dispatchComposition(const CompositionInputEvent& event)
 {
+    WUI_ASSERT_UI_THREAD();
     bool handled = false;
     {
         EventDispatchScope dispatchScope(*this);
@@ -812,9 +844,17 @@ void UiWindow::deactivateTextInputSession() noexcept
     }
 }
 
-UiApp::UiApp(std::unique_ptr<PlatformHost> host) noexcept
+UiApp::UiApp()
+{
+    registerUiThread();
+    dispatcher_.bindToCurrentThread();
+}
+
+UiApp::UiApp(std::unique_ptr<PlatformHost> host)
     : host_(std::move(host))
 {
+    registerUiThread();
+    dispatcher_.bindToCurrentThread();
 }
 
 PlatformHost* UiApp::host() const noexcept
@@ -822,8 +862,24 @@ PlatformHost* UiApp::host() const noexcept
     return host_.get();
 }
 
+UiDispatcher& UiApp::dispatcher() noexcept
+{
+    return dispatcher_;
+}
+
+const UiDispatcher& UiApp::dispatcher() const noexcept
+{
+    return dispatcher_;
+}
+
+UiContext UiApp::uiContext() const noexcept
+{
+    return dispatcher_.context();
+}
+
 UiWindow& UiApp::attachWindow(std::unique_ptr<PlatformWindow> platformWindow)
 {
+    WUI_ASSERT_UI_THREAD();
     auto window = std::make_unique<UiWindow>(std::move(platformWindow));
     windows_.push_back(std::move(window));
     return *windows_.back();
@@ -831,6 +887,7 @@ UiWindow& UiApp::attachWindow(std::unique_ptr<PlatformWindow> platformWindow)
 
 UiWindow& UiApp::openWindow(std::string title, SizeF logicalSize)
 {
+    WUI_ASSERT_UI_THREAD();
     if (!host_) {
         throw std::runtime_error("UiApp::openWindow requires a PlatformHost");
     }
@@ -849,6 +906,7 @@ UiWindow* UiApp::findWindow(WindowId id) noexcept
 
 std::size_t UiApp::removeClosedWindows() noexcept
 {
+    WUI_ASSERT_UI_THREAD();
     const auto previousSize = windows_.size();
     windows_.erase(
         std::remove_if(windows_.begin(), windows_.end(),

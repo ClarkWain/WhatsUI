@@ -32,6 +32,7 @@
 #include "wui/theme.h"
 #include "wui/theme_extensions.h"
 #include "wui/thread_check.h"
+#include "wui/ui_context.h"
 #include "wui/types.h"
 #include "wui/ui.h"
 #include "wui/ui_inspector.h"

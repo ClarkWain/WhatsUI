@@ -1,5 +1,7 @@
 #include "wui/thread_check.h"
 
+#include <mutex>
+
 namespace wui {
 
 namespace {
@@ -16,16 +18,26 @@ bool& uiThreadRegisteredFlag() noexcept
     return registered;
 }
 
+std::mutex& uiThreadMutex() noexcept
+{
+    static std::mutex mutex;
+    return mutex;
+}
+
 } // namespace
 
 void registerUiThread() noexcept
 {
-    uiThreadIdStorage() = std::this_thread::get_id();
-    uiThreadRegisteredFlag() = true;
+    std::lock_guard<std::mutex> lock(uiThreadMutex());
+    if (!uiThreadRegisteredFlag()) {
+        uiThreadIdStorage() = std::this_thread::get_id();
+        uiThreadRegisteredFlag() = true;
+    }
 }
 
 bool isOnUiThread() noexcept
 {
+    std::lock_guard<std::mutex> lock(uiThreadMutex());
     if (!uiThreadRegisteredFlag()) {
         return true; // No thread registered - skip assertion
     }

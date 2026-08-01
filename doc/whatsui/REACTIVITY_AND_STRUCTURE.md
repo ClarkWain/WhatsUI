@@ -6,13 +6,21 @@
 
 ## 1. 响应式绑定
 
-- `State<T>` 变化 → 通知订阅者。控件通过 `Node::addTeardown(...)` 注册"销毁时回调"，在节点析构时**自动 unsubscribe**，因此**即使 State 比节点活得久也安全**。
+- `State<T>` 是共享响应式句柄；复制句柄仍指向同一个 StateCore。状态变化会通知订阅者，节点绑定会保留 Core 并在析构时自动退订。
 - `Text().bind(state, format)`：初次渲染 `format(state.get())`，之后每次 `state` 变化都 `setValue(format(...))` 并标脏。另有 `Text().bind(stateString)` 便捷重载（`State<std::string>`）。
-- 生命周期约定：绑定持有 `State&`；请保证 **State 的生命周期覆盖被绑定的节点**（典型：State 属于页面/应用对象，节点属于其子树）。节点先亡是安全的（teardown 会退订）；State 先亡属于未定义用法。
+- 生命周期约定：State、Binding、StateSubscription 和节点可以按任意顺序销毁；异步队列只持有弱 Core，不访问已销毁对象。
 
 ```cpp
 wui::State<int> count{0};
 auto label = Text().bind(count, [](const int& c) { return "Count: " + std::to_string(c); });
+```
+
+需要从后台线程发布时，在创建 State 时绑定一次 Context：
+
+```cpp
+wui::State<int> count{app.uiContext(), 0};
+count.set(1);   // UI 线程同步提交
+count.post(2);  // 任意线程异步提交；待处理值会合并
 ```
 
 ## 2. 结构控件（If / ForEach）

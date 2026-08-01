@@ -190,6 +190,41 @@ public:
 
     // Reactive: re-render the text whenever the observable source (State or
     // Computed) changes.
+    template <class T, class Format>
+    Text&& bind(wui::State<T>& source, Format format) &&
+    {
+        wui::Text* raw = node_.get();
+        wui::State<T> retained = source;
+        struct Subscription {
+            std::size_t id{0};
+            bool active{false};
+        };
+        auto subscription = std::make_shared<Subscription>();
+        auto connect = [raw, retained, format, subscription] {
+            raw->setValue(format(retained.get()));
+            if (subscription->active) {
+                return;
+            }
+            subscription->id = retained.subscribe(
+                [raw, format](const T& value) {
+                    raw->setValue(format(value));
+                });
+            subscription->active = true;
+        };
+        auto disconnect = [retained, subscription] {
+            if (!subscription->active) {
+                return;
+            }
+            retained.unsubscribe(subscription->id);
+            subscription->active = false;
+        };
+        connect();
+        raw->addAttachCallback(connect);
+        raw->addDetachCallback(disconnect);
+        raw->addTeardown(disconnect);
+        return std::move(self());
+    }
+
     template <class Observable, class Format>
     Text&& bind(Observable& source, Format format) &&
     {
@@ -1194,7 +1229,7 @@ class If : public BuilderBase<If, wui::IfNode> {
 public:
     explicit If(wui::State<bool>& state)
         : BuilderBase()
-        , state_(&state)
+        , state_(state)
     {
     }
 
@@ -1206,21 +1241,21 @@ public:
         raw->setFactory([factory = std::move(factory)]() mutable -> std::unique_ptr<wui::Node> {
             return asNode(factory());
         });
-        raw->setVisible(state_->get());
-        wui::State<bool>* state = state_;
+        raw->setVisible(state_.get());
+        wui::State<bool> state = state_;
         struct Subscription { std::size_t id{0}; bool active{false}; };
         auto alive = std::make_shared<bool>(true);
         auto subscription = std::make_shared<Subscription>();
         auto connect = [raw, state, alive, subscription] {
-            raw->setVisible(state->get());
+            raw->setVisible(state.get());
             if (subscription->active) {
                 return;
             }
-            subscription->id = state->subscribe([raw, state, weakAlive = std::weak_ptr<bool>(alive)](const bool&) {
+            subscription->id = state.subscribe([raw, state, weakAlive = std::weak_ptr<bool>(alive)](const bool&) {
                 wui::scheduleStructuralUpdate(raw, [raw, state, weakAlive] {
                     const auto guard = weakAlive.lock();
                     if (guard && *guard) {
-                        raw->setVisible(state->get());
+                        raw->setVisible(state.get());
                     }
                 });
             });
@@ -1228,7 +1263,7 @@ public:
         };
         auto disconnect = [state, subscription] {
             if (subscription->active) {
-                state->unsubscribe(subscription->id);
+                state.unsubscribe(subscription->id);
                 subscription->active = false;
             }
         };
@@ -1240,7 +1275,7 @@ public:
     }
 
 private:
-    wui::State<bool>* state_{nullptr};
+    wui::State<bool> state_;
 };
 
 // Structural control: (re)generate a list of children from `items`.
@@ -1254,14 +1289,14 @@ public:
         : BuilderBase<ForEach<T>, wui::ForEachNode>()
     {
         wui::ForEachNode* raw = this->node_.get();
-        auto rebuild = [raw, &items, itemBuilder]() {
+        wui::State<std::vector<T>> state = items;
+        auto rebuild = [raw, state, itemBuilder]() {
             raw->clearChildren();
-            for (const auto& item : items.get()) {
+            for (const auto& item : state.get()) {
                 raw->appendChild(asNode(itemBuilder(item)));
             }
         };
         rebuild();
-        wui::State<std::vector<T>>* state = &items;
         struct Subscription { std::size_t id{0}; bool active{false}; };
         auto alive = std::make_shared<bool>(true);
         auto subscription = std::make_shared<Subscription>();
@@ -1270,7 +1305,7 @@ public:
             if (subscription->active) {
                 return;
             }
-            subscription->id = state->subscribe([raw, rebuild, weakAlive = std::weak_ptr<bool>(alive)](const std::vector<T>&) {
+            subscription->id = state.subscribe([raw, rebuild, weakAlive = std::weak_ptr<bool>(alive)](const std::vector<T>&) {
                 wui::scheduleStructuralUpdate(raw, [rebuild, weakAlive] {
                     const auto guard = weakAlive.lock();
                     if (guard && *guard) {
@@ -1282,7 +1317,7 @@ public:
         };
         auto disconnect = [state, subscription] {
             if (subscription->active) {
-                state->unsubscribe(subscription->id);
+                state.unsubscribe(subscription->id);
                 subscription->active = false;
             }
         };
@@ -1342,8 +1377,13 @@ public:
             T value;
         };
         struct Reconciler {
+            explicit Reconciler(wui::State<std::vector<T>> source)
+                : state(std::move(source))
+            {
+            }
+
             wui::ForEachNode* raw{nullptr};
-            wui::State<std::vector<T>>* state{nullptr};
+            wui::State<std::vector<T>> state;
             KeyFactory keyFor;
             NodeFactory build;
             std::vector<Entry> entries;
@@ -1367,8 +1407,8 @@ public:
             void reconcileOnce()
             {
                 std::vector<Entry> desired;
-                desired.reserve(state->get().size());
-                for (const T& item : state->get()) {
+                desired.reserve(state.get().size());
+                for (const T& item : state.get()) {
                     std::string key = keyFor(item);
                     if (key.empty()) key = std::to_string(desired.size());
                     const auto duplicate = std::find_if(desired.begin(), desired.end(), [&key](const Entry& entry) {
@@ -1416,9 +1456,8 @@ public:
             }
         };
 
-        auto reconciler = std::make_shared<Reconciler>();
+        auto reconciler = std::make_shared<Reconciler>(items);
         reconciler->raw = this->node_.get();
-        reconciler->state = &items;
         reconciler->keyFor = KeyFactory(std::move(keyProvider));
         reconciler->build = [itemBuilder = std::move(itemBuilder)](const T& item) mutable {
             return asNode(itemBuilder(item));
@@ -1431,7 +1470,7 @@ public:
         auto connect = [reconciler, alive, subscription] {
             reconciler->reconcile();
             if (subscription->active) return;
-            subscription->id = reconciler->state->subscribe([reconciler, weakAlive = std::weak_ptr<bool>(alive)](const std::vector<T>&) {
+            subscription->id = reconciler->state.subscribe([reconciler, weakAlive = std::weak_ptr<bool>(alive)](const std::vector<T>&) {
                 wui::scheduleStructuralUpdate(reconciler->raw, [reconciler, weakAlive] {
                     const auto guard = weakAlive.lock();
                     if (guard && *guard) reconciler->reconcile();
@@ -1441,7 +1480,7 @@ public:
         };
         auto disconnect = [reconciler, subscription] {
             if (!subscription->active) return;
-            reconciler->state->unsubscribe(subscription->id);
+            reconciler->state.unsubscribe(subscription->id);
             subscription->active = false;
         };
         connect();

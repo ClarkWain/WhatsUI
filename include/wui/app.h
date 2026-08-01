@@ -9,6 +9,7 @@
 #include "wui/accessibility.h"
 #include "wui/platform.h"
 #include "wui/runtime.h"
+#include "wui/ui_dispatcher.h"
 
 namespace wui {
 
@@ -108,7 +109,11 @@ private:
     Navigator navigator_;
     OverlayHost overlayHost_;
     TextInput* activeTextInput_{nullptr};
-    struct DialogEntry { OverlayId id; Node* restoreFocus; };
+    struct DialogEntry {
+        OverlayId id;
+        Node* restoreFocus;
+        Node* restoreRoot;
+    };
     std::vector<DialogEntry> dialogs_;
     std::size_t eventDispatchDepth_{0};
     std::vector<OverlayId> deferredDialogDismissals_;
@@ -117,10 +122,13 @@ private:
 
 class UiApp {
 public:
-    UiApp() = default;
-    explicit UiApp(std::unique_ptr<PlatformHost> host) noexcept;
+    UiApp();
+    explicit UiApp(std::unique_ptr<PlatformHost> host);
 
     [[nodiscard]] PlatformHost* host() const noexcept;
+    [[nodiscard]] UiDispatcher& dispatcher() noexcept;
+    [[nodiscard]] const UiDispatcher& dispatcher() const noexcept;
+    [[nodiscard]] UiContext uiContext() const noexcept;
 
     UiWindow& attachWindow(std::unique_ptr<PlatformWindow> platformWindow);
     UiWindow& openWindow(std::string title, SizeF logicalSize);
@@ -134,6 +142,7 @@ public:
 
 private:
     std::unique_ptr<PlatformHost> host_;
+    UiDispatcher dispatcher_;
     std::vector<std::unique_ptr<UiWindow>> windows_;
 };
 

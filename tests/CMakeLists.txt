@@ -67,6 +67,22 @@ add_test(
     COMMAND WhatsUIStateTests
 )
 
+add_executable(WhatsUIUiDispatcherTests
+    ui_dispatcher_tests.cpp
+)
+
+target_link_libraries(WhatsUIUiDispatcherTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+target_compile_features(WhatsUIUiDispatcherTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_ui_dispatcher_tests
+    COMMAND WhatsUIUiDispatcherTests
+)
+
 add_executable(WhatsUITextUnitsTests
     text_units_tests.cpp
 )
@@ -1240,6 +1256,138 @@ add_test(
     NAME whatsui_todo_controller_tests
     COMMAND WhatsUITodoControllerTests
 )
+
+add_executable(WhatsUIFocusTomatoDataValidationTests
+    focus_tomato_data_validation_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data_validator.cpp
+)
+
+target_include_directories(WhatsUIFocusTomatoDataValidationTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain
+)
+
+target_compile_features(WhatsUIFocusTomatoDataValidationTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_focus_tomato_data_validation_tests
+    COMMAND WhatsUIFocusTomatoDataValidationTests
+)
+
+add_executable(WhatsUIFocusTomatoDataServiceTests
+    focus_tomato_data_service_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data_validator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/application/focus_data_service.cpp
+)
+
+target_include_directories(WhatsUIFocusTomatoDataServiceTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/application
+)
+
+target_compile_features(WhatsUIFocusTomatoDataServiceTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_focus_tomato_data_service_tests
+    COMMAND WhatsUIFocusTomatoDataServiceTests
+)
+
+add_executable(WhatsUIFocusTomatoFileRepositoryTests
+    focus_tomato_file_repository_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data_validator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/infrastructure/file_focus_repository.cpp
+)
+
+target_include_directories(WhatsUIFocusTomatoFileRepositoryTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/application
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/infrastructure
+)
+
+target_compile_features(WhatsUIFocusTomatoFileRepositoryTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_focus_tomato_file_repository_tests
+    COMMAND WhatsUIFocusTomatoFileRepositoryTests
+)
+
+add_executable(WhatsUIFocusTomatoStatisticsTests
+    focus_tomato_statistics_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_statistics.cpp
+)
+
+target_include_directories(WhatsUIFocusTomatoStatisticsTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain
+)
+
+target_compile_features(WhatsUIFocusTomatoStatisticsTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_focus_tomato_statistics_tests
+    COMMAND WhatsUIFocusTomatoStatisticsTests
+)
+
+add_executable(WhatsUIFocusTomatoClockDriftTests
+    focus_tomato_clock_drift_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/clock_drift.cpp
+)
+
+target_include_directories(WhatsUIFocusTomatoClockDriftTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain
+)
+
+target_compile_features(WhatsUIFocusTomatoClockDriftTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_focus_tomato_clock_drift_tests
+    COMMAND WhatsUIFocusTomatoClockDriftTests
+)
+
+if(TARGET WhatsUIFocusTomatoCore)
+    add_executable(WhatsUIFocusTomatoProductFlowTests
+        focus_tomato_product_flow_tests.cpp
+    )
+
+    target_link_libraries(WhatsUIFocusTomatoProductFlowTests
+        PRIVATE WhatsUIFocusTomatoCore)
+    target_compile_features(
+        WhatsUIFocusTomatoProductFlowTests PRIVATE cxx_std_17)
+
+    add_test(
+        NAME whatsui_focus_tomato_product_flow_tests
+        COMMAND WhatsUIFocusTomatoProductFlowTests
+    )
+
+    add_executable(WhatsUIFocusTomatoNewTaskDialogTests
+        focus_tomato_new_task_dialog_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/component_gallery/capture/headless_platform.cpp
+    )
+    target_include_directories(WhatsUIFocusTomatoNewTaskDialogTests
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../examples/component_gallery
+    )
+    target_link_libraries(WhatsUIFocusTomatoNewTaskDialogTests
+        PRIVATE WhatsUIFocusTomatoCore)
+    if(TARGET WhatsCanvas::Software)
+        target_link_libraries(WhatsUIFocusTomatoNewTaskDialogTests
+            PRIVATE WhatsCanvas::Software)
+    endif()
+    target_compile_features(
+        WhatsUIFocusTomatoNewTaskDialogTests PRIVATE cxx_std_17)
+
+    add_test(
+        NAME whatsui_focus_tomato_new_task_dialog_tests
+        COMMAND WhatsUIFocusTomatoNewTaskDialogTests
+    )
+endif()
 
 add_executable(WhatsUITodoInteractionTests
     todo_interaction_tests.cpp

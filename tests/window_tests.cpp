@@ -658,6 +658,62 @@ void testDeferredNestedDialogDismissalsAreAlwaysTopDown()
            "Top-down nested dismissal must restore the original page focus");
 }
 
+void testDialogDismissalDropsFocusWhenUnderlyingPageWasReplaced()
+{
+    wui::UiApp app(std::make_unique<FakeHost>());
+    auto& window = app.openWindow(
+        "dialog replacement focus defense", {320.0f, 180.0f});
+
+    auto page = std::make_unique<wui::Button>("Original page action");
+    auto* pageAction = page.get();
+    window.setRoot(std::move(page));
+    window.layout();
+    const auto& pageBounds = pageAction->bounds();
+    const wui::PointF pageCenter{
+        pageBounds.x + pageBounds.width * 0.5f,
+        pageBounds.y + pageBounds.height * 0.5f,
+    };
+    wui::PointerEvent pageDown{
+        window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+        wui::MouseButton::Left, pageCenter, 0};
+    auto pageUp = pageDown;
+    pageUp.action = wui::PointerAction::Up;
+    expect(window.dispatchPointer(pageDown) && window.dispatchPointer(pageUp),
+           "The original page action should own focus before the dialog opens");
+
+    bool callbackRan = false;
+    bool dismissalWasDeferred = false;
+    auto dialog = std::make_unique<wui::Dialog>();
+    auto replace = std::make_unique<wui::Button>("Save and replace page");
+    auto* replaceRaw = replace.get();
+    replace->onClick([&] {
+        callbackRan = true;
+        dismissalWasDeferred = window.dismissTopDialog() == nullptr;
+        window.setRoot(std::make_unique<wui::Text>("Replacement page"));
+    });
+    dialog->content(std::move(replace));
+    (void)window.showDialog(std::move(dialog));
+    window.layout();
+
+    const auto& replaceBounds = replaceRaw->bounds();
+    const wui::PointF replaceCenter{
+        replaceBounds.x + replaceBounds.width * 0.5f,
+        replaceBounds.y + replaceBounds.height * 0.5f,
+    };
+    wui::PointerEvent replaceDown{
+        window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+        wui::MouseButton::Left, replaceCenter, 0};
+    auto replaceUp = replaceDown;
+    replaceUp.action = wui::PointerAction::Up;
+    expect(window.dispatchPointer(replaceDown)
+               && window.dispatchPointer(replaceUp),
+           "Replacing the underlying page during a dialog callback must not crash");
+    expect(callbackRan && dismissalWasDeferred && !window.hasDialog(),
+           "The deferred dialog should still finish dismissal after page replacement");
+    expect(window.focusManager().focused() == nullptr,
+           "A replaced page must invalidate the dialog's saved focus target");
+}
+
 void testDeclarativeDialogBuilderProducesConcreteModal()
 {
     auto dialog = wui::ui::Dialog().maxWidth(300.0f).dismissOnBackdrop().content(
@@ -683,6 +739,14 @@ void testAppReleasesClosedWindows()
     expect(app.removeClosedWindows() == 0, "Collecting an already-clean app should be a no-op");
 }
 
+void testAppContextIsReadyDuringInitialComposition()
+{
+    wui::UiApp app;
+    const auto context = app.uiContext();
+    expect(context.isAlive() && context.isCurrentThread(),
+           "UiApp must expose a bound context before initial UI composition");
+}
+
 } // namespace
 
 int main()
@@ -700,8 +764,10 @@ int main()
         testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus();
         testDialogConfirmationDismissalIsDeferredUntilPointerDispatchCompletes();
         testDeferredNestedDialogDismissalsAreAlwaysTopDown();
+        testDialogDismissalDropsFocusWhenUnderlyingPageWasReplaced();
         testDeclarativeDialogBuilderProducesConcreteModal();
         testAppReleasesClosedWindows();
+        testAppContextIsReadyDuringInitialComposition();
         return 0;
     } catch (const std::exception& error) {
         std::fputs(error.what(), stderr);
