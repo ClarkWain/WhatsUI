@@ -29,6 +29,18 @@ struct HasContent<
     : std::true_type {
 };
 
+template <typename Parent, typename Child, typename = void>
+struct AcceptsChild : std::false_type {
+};
+
+template <typename Parent, typename Child>
+struct AcceptsChild<
+    Parent,
+    Child,
+    std::void_t<decltype(std::declval<Parent&&>().children(
+        std::declval<Child&&>()))>> : std::true_type {
+};
+
 template <typename T, typename = void>
 struct HasRvalueBuild : std::false_type {
 };
@@ -126,6 +138,8 @@ WUI_ASSERT_LEAF_BUILDER(ToggleButton, ToggleButtonNode);
 WUI_ASSERT_LEAF_BUILDER(CompoundButton, CompoundButtonNode);
 WUI_ASSERT_LEAF_BUILDER(Radio, RadioNode);
 WUI_ASSERT_CONTAINER_BUILDER(RadioGroup, RadioGroupNode);
+static_assert(AcceptsChild<wui::RadioGroup, wui::Radio>::value);
+static_assert(!AcceptsChild<wui::RadioGroup, wui::Text>::value);
 WUI_ASSERT_LEAF_BUILDER(Switch, SwitchNode);
 WUI_ASSERT_LEAF_BUILDER(Slider, SliderNode);
 WUI_ASSERT_LEAF_BUILDER(ProgressBar, ProgressBarNode);
@@ -137,6 +151,8 @@ WUI_ASSERT_LEAF_BUILDER(CounterBadge, CounterBadgeNode);
 WUI_ASSERT_LEAF_BUILDER(PresenceBadge, PresenceBadgeNode);
 WUI_ASSERT_LEAF_BUILDER(Avatar, AvatarNode);
 WUI_ASSERT_CONTAINER_BUILDER(AvatarGroup, AvatarGroupNode);
+static_assert(AcceptsChild<wui::AvatarGroup, wui::Avatar>::value);
+static_assert(!AcceptsChild<wui::AvatarGroup, wui::Button>::value);
 WUI_ASSERT_LEAF_BUILDER(Persona, PersonaNode);
 WUI_ASSERT_LEAF_BUILDER(Calendar, CalendarNode);
 WUI_ASSERT_LEAF_BUILDER(DatePicker, DatePickerNode);
@@ -146,15 +162,17 @@ WUI_ASSERT_LEAF_BUILDER(DataGrid, DataGridNode);
 WUI_ASSERT_LEAF_BUILDER(Tree, TreeNode);
 WUI_ASSERT_LEAF_BUILDER(AccordionItem, AccordionItemNode);
 WUI_ASSERT_CONTAINER_BUILDER(Accordion, AccordionNode);
+static_assert(AcceptsChild<wui::Accordion, wui::AccordionItem>::value);
+static_assert(!AcceptsChild<wui::Accordion, wui::Text>::value);
 WUI_ASSERT_LEAF_BUILDER(Drawer, DrawerNode);
 WUI_ASSERT_LEAF_BUILDER(Popover, PopoverNode);
 WUI_ASSERT_LEAF_BUILDER(PopoverButton, PopoverButtonNode);
 WUI_ASSERT_LEAF_BUILDER(TeachingPopover, TeachingPopoverNode);
-WUI_ASSERT_CONTAINER_BUILDER(Toolbar, ToolbarNode);
-WUI_ASSERT_CONTAINER_BUILDER(TabList, TabListNode);
+WUI_ASSERT_LEAF_BUILDER(Toolbar, ToolbarNode);
+WUI_ASSERT_LEAF_BUILDER(TabList, TabListNode);
 WUI_ASSERT_CONTAINER_BUILDER(TabPanel, TabPanelNode);
 WUI_ASSERT_LEAF_BUILDER(Link, LinkNode);
-WUI_ASSERT_CONTAINER_BUILDER(Breadcrumb, BreadcrumbNode);
+WUI_ASSERT_LEAF_BUILDER(Breadcrumb, BreadcrumbNode);
 WUI_ASSERT_LEAF_BUILDER(ListBox, ListBoxNode);
 WUI_ASSERT_LEAF_BUILDER(Combobox, ComboboxNode);
 WUI_ASSERT_LEAF_BUILDER(Dropdown, DropdownNode);
@@ -312,6 +330,42 @@ void testSingleContentBuilderReplacesContent()
            "A repeated content() call should replace the previous content");
 }
 
+template <class ParentNode, class ValidChildNode, class InvalidChildNode>
+void expectTypedRuntimeContainerRejectsInvalidChild(const char* message)
+{
+    ParentNode parent;
+    parent.appendChild(std::make_unique<ValidChildNode>());
+    bool rejected = false;
+    try {
+        parent.appendChild(std::make_unique<InvalidChildNode>());
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    expect(rejected && parent.children().size() == 1, message);
+}
+
+void testSemanticContainersEnforceRuntimeChildTypes()
+{
+    expectTypedRuntimeContainerRejectsInvalidChild<
+        wui::RadioGroupNode, wui::RadioNode, wui::TextNode>(
+        "RadioGroupNode should accept only RadioNode children");
+    expectTypedRuntimeContainerRejectsInvalidChild<
+        wui::AccordionNode, wui::AccordionItemNode, wui::TextNode>(
+        "AccordionNode should accept only AccordionItemNode children");
+    expectTypedRuntimeContainerRejectsInvalidChild<
+        wui::AvatarGroupNode, wui::AvatarNode, wui::TextNode>(
+        "AvatarGroupNode should accept only AvatarNode children");
+    expectTypedRuntimeContainerRejectsInvalidChild<
+        wui::ToolbarNode, wui::ToolbarItemNode, wui::TextNode>(
+        "ToolbarNode should accept only ToolbarItemNode children");
+    expectTypedRuntimeContainerRejectsInvalidChild<
+        wui::TabListNode, wui::TabNode, wui::TextNode>(
+        "TabListNode should accept only TabNode children");
+    expectTypedRuntimeContainerRejectsInvalidChild<
+        wui::BreadcrumbNode, wui::BreadcrumbItemNode, wui::TextNode>(
+        "BreadcrumbNode should accept only BreadcrumbItemNode children");
+}
+
 } // namespace
 
 int main()
@@ -323,6 +377,7 @@ int main()
         testChildrenAreTransactionalAndRepeatable();
         testMoveAndRawNodeConsumption();
         testSingleContentBuilderReplacesContent();
+        testSemanticContainersEnforceRuntimeChildTypes();
     } catch (const std::exception& error) {
         std::cerr << "declarative_api_contract_tests failed: "
                   << error.what() << '\n';

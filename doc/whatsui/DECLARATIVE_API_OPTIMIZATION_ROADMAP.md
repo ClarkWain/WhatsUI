@@ -141,4 +141,6 @@ Self&& value(Value value) &&
 
 已完成第一切片：`ScrollView` 从 `AnyChildren` 迁移到 `SingleContent`，并建立了可复用的 `SingleContentBuilderBase`、Node child invariant hook、空内容/多内容事务验证以及 Debug/Release 契约测试。
 
-下一切片：把 `RadioGroup`、`Accordion`、`AvatarGroup` 迁移到 `TypedChildren<T>`，把 `TabList`、`Toolbar`、`Breadcrumb` 收紧为 `ItemFactory`。
+已完成第二切片：`RadioGroup`、`Accordion`、`AvatarGroup` 使用 `TypedChildren<T>`，错误 Builder 子类型在编译期不可用；`TabList`、`Toolbar`、`Breadcrumb` 只保留语义 item factory。六个运行时容器同时验证直接 child 类型，避免绕过 Builder 形成无效 retained tree。
+
+下一切片：统一 `UiContext` owner token、Release 树修改线程验证和结构化诊断通道。

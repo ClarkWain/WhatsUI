@@ -69,6 +69,12 @@ public:
     bool onPointerEvent(const PointerEvent& event) override;
     bool onKeyEvent(const KeyEvent& event) override;
 
+protected:
+    void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const override;
+
 private:
     bool moveFocus(int delta);
     [[nodiscard]] RectF overflowBounds() const noexcept;
@@ -136,6 +142,12 @@ public:
     void layout(const RectF& bounds) override;
     void paint(PaintContext& context) override;
     bool onKeyEvent(const KeyEvent& event) override;
+
+protected:
+    void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const override;
 
 private:
     friend class TabNode;
@@ -257,6 +269,12 @@ public:
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
     void paint(PaintContext& context) override;
+
+protected:
+    void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const override;
 
 private:
     [[nodiscard]] std::vector<std::size_t> visibleIndices() const;

@@ -86,6 +86,12 @@ public:
     void layout(const RectF& bounds) override;
     bool onKeyEvent(const KeyEvent& event) override;
 
+protected:
+    void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const override;
+
 private:
     friend class AccordionItemNode;
     bool setItemExpanded(AccordionItemNode& item, bool value, bool notify = true);

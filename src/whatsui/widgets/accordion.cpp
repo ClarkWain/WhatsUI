@@ -285,6 +285,19 @@ AccordionItemNode& AccordionNode::addItem(std::string header, std::string body)
     if (children().size() == 1) focusedIndex_ = 0;
     return *raw;
 }
+
+void AccordionNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const AccordionItemNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "AccordionNode accepts only AccordionItemNode children");
+    }
+}
 AccordionNode& AccordionNode::expandMode(AccordionExpandMode value) noexcept { setExpandMode(value); return *this; }
 void AccordionNode::setExpandMode(AccordionExpandMode value) noexcept
 {

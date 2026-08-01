@@ -502,6 +502,19 @@ void RadioGroupNode::paint(PaintContext& context)
     ContainerNode::paint(context);
     clearDirty(DirtyFlag::Paint);
 }
+
+void RadioGroupNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const RadioNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "RadioGroupNode accepts only RadioNode children");
+    }
+}
 void RadioGroupNode::selectRadio(RadioNode& radio)
 {
     if (!isEnabled() || !radio.isEnabled()) return;

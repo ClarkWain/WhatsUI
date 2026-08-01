@@ -48,7 +48,7 @@
 | `ToggleButton` | `ToggleButtonNode` | leaf |
 | `Checkbox` | `CheckboxNode` | leaf |
 | `Radio` | `RadioNode` | leaf |
-| `RadioGroup` | `RadioGroupNode` | children |
+| `RadioGroup` | `RadioGroupNode` | `children(Radio...)` typed children |
 | `Switch` | `SwitchNode` | leaf |
 | `Slider` | `SliderNode` | leaf |
 
@@ -68,7 +68,7 @@
 | `CounterBadge` | `CounterBadgeNode` | leaf |
 | `PresenceBadge` | `PresenceBadgeNode` | leaf |
 | `Avatar` | `AvatarNode` | leaf |
-| `AvatarGroup` | `AvatarGroupNode` | children |
+| `AvatarGroup` | `AvatarGroupNode` | `children(Avatar...)` typed children |
 | `Persona` | `PersonaNode` | leaf |
 
 ### 数据、日期与集合
@@ -93,16 +93,16 @@
 | Builder | Node | 能力 |
 | --- | --- | --- |
 | `AccordionItem` | `AccordionItemNode` | `content()` 专用组合 |
-| `Accordion` | `AccordionNode` | children |
+| `Accordion` | `AccordionNode` | `children(AccordionItem...)` typed children |
 | `Drawer` | `DrawerNode` | `content()` 专用组合 |
 | `Popover` | `PopoverNode` | leaf |
 | `PopoverButton` | `PopoverButtonNode` | leaf |
 | `TeachingPopover` | `TeachingPopoverNode` | leaf |
-| `Toolbar` | `ToolbarNode` | children |
-| `TabList` | `TabListNode` | children |
+| `Toolbar` | `ToolbarNode` | `item()` factory only |
+| `TabList` | `TabListNode` | `tab()` factory only |
 | `TabPanel` | `TabPanelNode` | children |
 | `Link` | `LinkNode` | leaf |
-| `Breadcrumb` | `BreadcrumbNode` | children |
+| `Breadcrumb` | `BreadcrumbNode` | `item()` factory only |
 | `Dialog` | `DialogNode` | `content()` 专用组合 |
 | `If` | `IfNode` | `then()` 结构工厂 |
 | `ForEach<T>` | `ForEachNode` | 非 keyed 结构集合 |

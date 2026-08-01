@@ -336,4 +336,17 @@ void AvatarGroupNode::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
+void AvatarGroupNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const AvatarNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "AvatarGroupNode accepts only AvatarNode children");
+    }
+}
+
 } // namespace wui

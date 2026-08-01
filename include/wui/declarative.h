@@ -196,6 +196,38 @@ NodePtr asNode(Builder&& builder)
     return NodePtr(std::move(builder).build());
 }
 
+namespace detail {
+
+template <class Value, class = void>
+struct NodeLikeType {
+    using type = void;
+};
+
+template <class Value>
+struct NodeLikeType<
+    Value,
+    std::void_t<typename std::decay_t<Value>::node_type>> {
+    using type = typename std::decay_t<Value>::node_type;
+};
+
+template <class NodeT>
+struct NodeLikeType<std::unique_ptr<NodeT>, void> {
+    using type = NodeT;
+};
+
+template <class AllowedNodeT, class Value>
+inline constexpr bool isTypedNodeLike =
+    std::is_base_of_v<AllowedNodeT, typename NodeLikeType<std::decay_t<Value>>::type>
+    || std::is_same_v<Node, typename NodeLikeType<std::decay_t<Value>>::type>;
+
+template <class AllowedNodeT, class... Values>
+struct AreTypedNodeLike
+    : std::conjunction<
+          std::bool_constant<isTypedNodeLike<AllowedNodeT, Values>>...> {
+};
+
+} // namespace detail
+
 template <class Self, class NodeT>
 class ContainerBuilderBase : public BuilderBase<Self, NodeT> {
 public:
@@ -253,6 +285,45 @@ private:
     {
         (void)this->node_.get();
         this->node_->content(asNode(std::forward<Content>(value)));
+    }
+};
+
+template <class Self, class NodeT, class AllowedNodeT>
+class TypedChildrenBuilderBase : public BuilderBase<Self, NodeT> {
+public:
+    using BuilderBase<Self, NodeT>::BuilderBase;
+
+    template <
+        class... Children,
+        std::enable_if_t<
+            detail::AreTypedNodeLike<AllowedNodeT, Children...>::value,
+            int> = 0>
+    Self& children(Children&&... items) &
+    {
+        appendChildren(std::forward<Children>(items)...);
+        return this->self();
+    }
+
+    template <
+        class... Children,
+        std::enable_if_t<
+            detail::AreTypedNodeLike<AllowedNodeT, Children...>::value,
+            int> = 0>
+    Self&& children(Children&&... items) &&
+    {
+        appendChildren(std::forward<Children>(items)...);
+        return std::move(this->self());
+    }
+
+private:
+    template <class... Children>
+    void appendChildren(Children&&... items)
+    {
+        (void)this->node_.get();
+        std::vector<NodePtr> nodes;
+        nodes.reserve(sizeof...(Children));
+        (nodes.push_back(asNode(std::forward<Children>(items))), ...);
+        this->node_->appendChildren(std::move(nodes));
     }
 };
 
@@ -1341,9 +1412,9 @@ public:
     Radio&& onChange(std::function<void(bool)> handler) && { node_->onChange(std::move(handler)); return std::move(self()); }
 };
 
-class RadioGroup : public ContainerBuilderBase<RadioGroup, wui::RadioGroupNode> {
+class RadioGroup : public TypedChildrenBuilderBase<RadioGroup, wui::RadioGroupNode, wui::RadioNode> {
 public:
-    RadioGroup() : ContainerBuilderBase() {}
+    RadioGroup() : TypedChildrenBuilderBase() {}
     RadioGroup& option(std::string value, std::string label, bool enabled = true) &
     {
         node_->addOption(std::move(value), std::move(label), enabled);
@@ -1617,9 +1688,9 @@ public:
     Avatar&& accessibleLabel(std::string value) && { node_->setAccessibleLabel(std::move(value)); return std::move(self()); }
 };
 
-class AvatarGroup : public ContainerBuilderBase<AvatarGroup, wui::AvatarGroupNode> {
+class AvatarGroup : public TypedChildrenBuilderBase<AvatarGroup, wui::AvatarGroupNode, wui::AvatarNode> {
 public:
-    AvatarGroup() : ContainerBuilderBase() {}
+    AvatarGroup() : TypedChildrenBuilderBase() {}
     AvatarGroup& avatar(std::string name, wui::AvatarSize size = wui::AvatarSize::Size32) &
     { node_->addAvatar(std::move(name), size); return self(); }
 
@@ -1798,9 +1869,9 @@ public:
     AccordionItem&& content(Content&& value) && { node_->setContent(asNode(std::forward<Content>(value))); return std::move(self()); }
 };
 
-class Accordion : public ContainerBuilderBase<Accordion, wui::AccordionNode> {
+class Accordion : public TypedChildrenBuilderBase<Accordion, wui::AccordionNode, wui::AccordionItemNode> {
 public:
-    Accordion() : ContainerBuilderBase() {}
+    Accordion() : TypedChildrenBuilderBase() {}
     Accordion&& item(std::string header, std::string body = {}) { node_->addItem(std::move(header), std::move(body)); return std::move(self()); }
     Accordion& expandMode(wui::AccordionExpandMode value) & { node_->setExpandMode(value); return self(); }
 
@@ -1871,9 +1942,9 @@ public:
     TeachingPopover&& step(std::string value) && { node_->stepText(std::move(value)); return std::move(self()); }
 };
 
-class Toolbar : public ContainerBuilderBase<Toolbar, wui::ToolbarNode> {
+class Toolbar : public BuilderBase<Toolbar, wui::ToolbarNode> {
 public:
-    Toolbar() : ContainerBuilderBase() {}
+    Toolbar() : BuilderBase() {}
     Toolbar& item(std::string label, wui::ToolbarItemAppearance appearance = wui::ToolbarItemAppearance::Subtle) &
     { node_->addItem(std::move(label), appearance); return self(); }
 
@@ -1890,9 +1961,9 @@ public:
     Toolbar&& accessibleLabel(std::string value) && { node_->setAccessibleLabel(std::move(value)); return std::move(self()); }
 };
 
-class TabList : public ContainerBuilderBase<TabList, wui::TabListNode> {
+class TabList : public BuilderBase<TabList, wui::TabListNode> {
 public:
-    TabList() : ContainerBuilderBase() {}
+    TabList() : BuilderBase() {}
     TabList& tab(std::string value, std::string label, bool enabled = true) &
     { node_->addTab(std::move(value), std::move(label), enabled); return self(); }
 
@@ -1938,9 +2009,9 @@ public:
     Link&& onClick(std::function<void()> handler) && { node_->onInvoke(std::move(handler)); return std::move(self()); }
 };
 
-class Breadcrumb : public ContainerBuilderBase<Breadcrumb, wui::BreadcrumbNode> {
+class Breadcrumb : public BuilderBase<Breadcrumb, wui::BreadcrumbNode> {
 public:
-    Breadcrumb() : ContainerBuilderBase() {}
+    Breadcrumb() : BuilderBase() {}
     Breadcrumb& item(std::string label, bool current = false) &
     { node_->addItem(std::move(label), current); return self(); }
 

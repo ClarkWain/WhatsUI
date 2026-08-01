@@ -111,6 +111,12 @@ public:
     void layout(const RectF& bounds) override;
     void paint(PaintContext& context) override;
 
+protected:
+    void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const override;
+
 private:
     friend class RadioNode;
     void selectRadio(RadioNode& radio);

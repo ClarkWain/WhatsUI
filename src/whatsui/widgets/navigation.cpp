@@ -138,6 +138,19 @@ ToolbarItemNode& ToolbarNode::addItem(std::string label, ToolbarItemAppearance a
 {
     auto item = std::make_unique<ToolbarItemNode>(std::move(label)); item->setAppearance(appearance); auto* raw = item.get(); appendChild(std::move(item)); return *raw;
 }
+
+void ToolbarNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const ToolbarItemNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "ToolbarNode accepts only ToolbarItemNode children");
+    }
+}
 ToolbarNode& ToolbarNode::orientation(ToolbarOrientation value) noexcept { setOrientation(value); return *this; }
 void ToolbarNode::setOrientation(ToolbarOrientation value) noexcept { if (orientation_ != value) { orientation_ = value; markDirty(DirtyFlag::Layout); } }
 ToolbarOrientation ToolbarNode::orientation() const noexcept { return orientation_; }
@@ -377,6 +390,19 @@ TabNode& TabListNode::addTab(std::string value, std::string label, bool enabled)
     if (value_.empty() && enabled) selectTab(*raw, false);
     return *raw;
 }
+
+void TabListNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const TabNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "TabListNode accepts only TabNode children");
+    }
+}
 const std::string& TabListNode::value() const noexcept { return value_; }
 TabListNode& TabListNode::value(std::string value) { setValue(std::move(value)); return *this; }
 void TabListNode::setValue(std::string value)
@@ -612,6 +638,19 @@ bool BreadcrumbItemNode::onPointerEvent(const PointerEvent&e){if(current_||!isEn
 bool BreadcrumbItemNode::onKeyEvent(const KeyEvent&e){if(current_||!isEnabled()||e.action!=KeyAction::Down)return false;if(e.keyCode==kEnter||e.keyCode==kSpace){invoke();return true;}return false;}AccessibilityActionCapabilities BreadcrumbItemNode::accessibilityActions()const noexcept{AccessibilityActionCapabilities a;a.invoke=!current_;return a;}AccessibilityActionStatus BreadcrumbItemNode::performAccessibilityAction(AccessibilityActionKind k,std::string_view){if(k!=AccessibilityActionKind::Invoke||current_)return AccessibilityActionStatus::NotSupported;if(!isEnabled())return AccessibilityActionStatus::ElementNotEnabled;invoke();return AccessibilityActionStatus::Succeeded;}void BreadcrumbItemNode::invoke(){if(!current_&&isEnabled()&&onInvoke_)onInvoke_();}
 
 BreadcrumbItemNode& BreadcrumbNode::addItem(std::string label,bool current){auto item=std::make_unique<BreadcrumbItemNode>(std::move(label),current);auto*raw=item.get();appendChild(std::move(item));return *raw;}BreadcrumbNode& BreadcrumbNode::maxVisible(std::size_t value)noexcept{setMaxVisible(value);return *this;}void BreadcrumbNode::setMaxVisible(std::size_t value)noexcept{value=std::max<std::size_t>(2,value);if(maxVisible_!=value){maxVisible_=value;markDirty(DirtyFlag::Layout);}}std::size_t BreadcrumbNode::maxVisible()const noexcept{return maxVisible_;}BreadcrumbNode& BreadcrumbNode::accessibleLabel(std::string value){setAccessibleLabel(std::move(value));return *this;}void BreadcrumbNode::setAccessibleLabel(std::string value){accessibleLabel_=std::move(value);markDirty(DirtyFlag::Style);}const std::string&BreadcrumbNode::accessibleLabel()const noexcept{return accessibleLabel_;}
+
+void BreadcrumbNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const BreadcrumbItemNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "BreadcrumbNode accepts only BreadcrumbItemNode children");
+    }
+}
 std::vector<std::size_t> BreadcrumbNode::visibleIndices()const{std::vector<std::size_t> result;const auto count=children().size();if(count<=maxVisible_){for(std::size_t i=0;i<count;++i)result.push_back(i);return result;}result.push_back(0);const std::size_t tail=std::max<std::size_t>(1,maxVisible_-1);for(std::size_t i=count-tail;i<count;++i)result.push_back(i);return result;}
 std::vector<std::string> BreadcrumbNode::hiddenItems()const{std::vector<std::string> hidden;const auto visible=visibleIndices();for(std::size_t i=0;i<children().size();++i)if(std::find(visible.begin(),visible.end(),i)==visible.end())if(auto*item=dynamic_cast<BreadcrumbItemNode*>(children()[i].get()))hidden.push_back(item->label());return hidden;}
 SizeF BreadcrumbNode::measure(const Constraints& constraints) const
