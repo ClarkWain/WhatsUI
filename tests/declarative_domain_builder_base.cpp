@@ -22,6 +22,6 @@ public:
 
 bool declarativeBuilderBaseCompilesIndependently()
 {
-    auto node = Custom().debugName("External.Custom").build();
-    return node != nullptr;
+    wui::View view = Custom().debugName("External.Custom");
+    return !view.empty();
 }

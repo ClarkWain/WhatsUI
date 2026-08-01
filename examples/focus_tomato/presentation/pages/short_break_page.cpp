@@ -10,7 +10,7 @@
 namespace whatsui::focus_tomato::presentation {
 namespace {
 
-std::unique_ptr<wui::Node> buildBreakContext(
+wui::Box buildBreakContext(
     const FocusViewModel& viewModel, float width)
 {
     using namespace wui;
@@ -50,11 +50,10 @@ std::unique_ptr<wui::Node> buildBreakContext(
                                 .color(style::surface)
                         )
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildBreakStage(
+wui::Box buildBreakStage(
     FocusViewModel& viewModel,
     const FocusAssets& assets,
     float width)
@@ -93,11 +92,10 @@ std::unique_ptr<wui::Node> buildBreakStage(
                         .style(style::text(11.0f, 400, 16.0f))
                         .color(style::textSecondary)
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildBreakControls(
+wui::Box buildBreakControls(
     float width,
     bool running,
     ShortBreakPageActions actions)
@@ -134,11 +132,10 @@ std::unique_ptr<wui::Node> buildBreakControls(
                         "提前结束休息",
                         std::move(actions.skip))
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildBreakFooter(
+wui::Box buildBreakFooter(
     const FocusViewModel& viewModel, float width)
 {
     using namespace wui;
@@ -161,13 +158,12 @@ std::unique_ptr<wui::Node> buildBreakFooter(
                         .style(style::text(10.0f, 400, 15.0f))
                         .color(style::textMuted)
                 )
-        )
-        .build();
+        );
 }
 
 } // namespace
 
-std::unique_ptr<wui::Node> buildShortBreakPage(
+wui::Box buildShortBreakPage(
     FocusViewModel& viewModel,
     const FocusAssets& assets,
     float pageWidth,
@@ -185,8 +181,7 @@ std::unique_ptr<wui::Node> buildShortBreakPage(
             buildBreakControls(
                 contentWidth, viewModel.isRunning(), std::move(actions)),
             buildBreakFooter(viewModel, contentWidth)
-        )
-        .build();
+        );
 
     return Box()
         .background(style::canvas)
@@ -208,8 +203,7 @@ std::unique_ptr<wui::Node> buildShortBreakPage(
                             std::move(content)
                         )
                 )
-        )
-        .build();
+        );
 }
 
 } // namespace whatsui::focus_tomato::presentation

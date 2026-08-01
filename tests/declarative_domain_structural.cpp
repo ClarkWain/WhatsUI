@@ -3,11 +3,10 @@
 bool declarativeStructuralCompilesIndependently()
 {
     wui::State<std::vector<int>> items{{1}};
-    return wui::ForEach<int>(
-               items,
-               [](const int&) {
-                   return std::make_unique<wui::BoxNode>();
-               })
-               .build()
-        != nullptr;
+    wui::View view = wui::ForEach<int>(
+        items,
+        [](const int&) {
+            return std::make_unique<wui::BoxNode>();
+        });
+    return !view.empty();
 }

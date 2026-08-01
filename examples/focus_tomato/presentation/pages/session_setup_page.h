@@ -1,11 +1,10 @@
 #pragma once
 
 #include <functional>
-#include <memory>
 
 #include "../focus_assets.h"
 #include "../focus_view_model.h"
-#include "wui/node.h"
+#include "wui/declarative/layout.h"
 
 namespace whatsui::focus_tomato::presentation {
 
@@ -14,7 +13,7 @@ struct SessionSetupPageActions {
     std::function<void()> back;
 };
 
-[[nodiscard]] std::unique_ptr<wui::Node> buildSessionSetupPage(
+[[nodiscard]] wui::Box buildSessionSetupPage(
     FocusViewModel& viewModel,
     const FocusAssets& assets,
     float pageWidth,

@@ -5,6 +5,7 @@
 
 #include "focus_assets.h"
 #include "focus_view_model.h"
+#include "wui/view.h"
 
 namespace wui {
 class Node;
@@ -46,7 +47,7 @@ public:
     [[nodiscard]] FocusRoute currentRoute() const noexcept;
 
 private:
-    [[nodiscard]] std::unique_ptr<wui::Node> buildCurrentPage();
+    [[nodiscard]] wui::View buildCurrentPage();
     void install(FocusRoute route);
     void requestNewTask();
 

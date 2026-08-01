@@ -2,5 +2,6 @@
 
 bool declarativeFeedbackCompilesIndependently()
 {
-    return wui::Card().build() != nullptr;
+    wui::View view = wui::Card();
+    return !view.empty();
 }

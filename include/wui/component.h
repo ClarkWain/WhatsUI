@@ -5,6 +5,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "wui/view.h"
+
 namespace wui {
 
 // Own this token beside a page/component. Guarded callbacks become no-ops

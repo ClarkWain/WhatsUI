@@ -10,8 +10,8 @@
 
 - 页面代码使用 `wui::Button`、`wui::Text`、`wui::Column`。
 - retained tree 使用 `wui::ButtonNode`、`wui::TextNode`、`wui::ColumnNode`。
-- Builder 只能经 `build() &&` 消费，返回 `std::unique_ptr<NodeT>`；
-  `asNode()` 只在组合边界擦除为 `NodePtr`。
+- 页面作者直接组合 Builder 或实现 `body()`，不理解 `build()`、`asNode()`、`NodePtr`。
+- `ViewLike` 由框架边界统一物化；move-only `View` 只在异构路由和跨模块工厂擦除类型。
 - State 使用 `get()`、`set()`、`post()`；后台线程只能通过 `post()` 或
   `UiContext::post()` 影响已挂接 UI。
 - `automationId`、`accessibleLabel`、`debugName` 和 `NodeKey` 各自承担唯一语义。
@@ -26,8 +26,9 @@
 | P1 | 领域头拆分 | `declarative.h` 成为聚合入口；builder、text、layout、input、feedback、navigation、collections、structural 可独立 include | clean domain-header consumer target |
 | P1 | modifier 单实现 | 公开 modifier 保留 `&`/`&&` 对；复杂 `bind()`、`then()`、single content 共用内部实现 | API contract 与 modifier inventory |
 | P1 | keyed reconciliation | 强类型 `NodeKey`、空/重复 key 验证、hash 索引、非法快照回滚、可选 Props updater | structural smoke tests |
-| P1 | Component 边界 | 普通函数 + Props + Callbacks 为默认模式；`CallbackLifetime` 让已销毁 owner 的回调安全失效 | lifecycle callback test |
-| P2 | 具体 build 类型 | 所有 Builder 的 `build()` 返回 `unique_ptr<NodeT>`，删除 Dialog 特例 | compile-time contract |
+| P1 | Component 边界 | `body()` 或返回具体 Builder 的函数配合 Props + Callbacks；`CallbackLifetime` 让已销毁 owner 的回调安全失效 | lifecycle callback test |
+| P1 | 无 build 作者体验 | `body()` 组件和 `ViewLike` 可直接进入 children/content/slot、结构工厂、Root/Window、Navigator、Overlay/Dialog；公开 `asNode()` 删除 | contract、domain-header、window、Focus Tomato tests |
+| P2 | 低层 build 类型 | 控件实现/节点测试仍可用具体 `unique_ptr<NodeT>`；应用作者路径不暴露物化 | compile-time contract |
 | P2 | 身份拆分 | 删除旧 `accessibilityId`；重复 automation ID、非法 key、缺失 accessible name 进入统一诊断 | contract、UIA、lifecycle tests |
 | P2 | 扩展与诊断 | 公开最小 Builder 基类/能力 mixin；错误 child、左值消费、空节点产生短诊断 | external custom-builder consumer |
 
@@ -73,3 +74,7 @@ Software/OpenGL 相关视觉门禁和人工截图比较。新增 Builder 或 cap
 最终验收（2026-08-01）：Release 全量 CTest 208/208 通过。Focus Tomato 的任务列表、
 会话设置、专注计时、完成提醒和短休息截图已逐页比较；计时页保持紧凑宽度，主操作使用
 大尺寸图标按钮，次操作降级显示，未发现裁切、重叠或无效留白。
+
+后续作者体验验收（2026-08-01）：Focus Tomato presentation 已移除全部 `.build()` 与
+`asNode()`；静态辅助组件返回具体 `Box/Row/Column`，仅 Router 保留一个动态 `View`
+边界。迁移后的五张产品截图人工复核无布局、层级或裁切变化。

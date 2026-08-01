@@ -1,12 +1,11 @@
 #pragma once
 
 #include <functional>
-#include <memory>
 #include <string>
 
 #include "../focus_assets.h"
 #include "../focus_view_model.h"
-#include "wui/node.h"
+#include "wui/declarative/layout.h"
 
 namespace whatsui::focus_tomato::presentation {
 
@@ -15,7 +14,7 @@ struct TaskListPageActions {
     std::function<void()> createTask;
 };
 
-[[nodiscard]] std::unique_ptr<wui::Node> buildTaskListPage(
+[[nodiscard]] wui::Box buildTaskListPage(
     FocusViewModel& viewModel,
     const FocusAssets& assets,
     float pageWidth,

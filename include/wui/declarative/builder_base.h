@@ -7,14 +7,11 @@
 #include <utility>
 #include <vector>
 
-#include "wui/node.h"
+#include "wui/view.h"
 
 namespace wui {
 
 namespace detail {
-
-struct BuilderMarker {
-};
 
 template <class NodeT>
 class BuilderNodeOwner {
@@ -140,50 +137,16 @@ protected:
     detail::BuilderNodeOwner<NodeT> node_;
 };
 
-template <class NodeT,
-          std::enable_if_t<std::is_base_of_v<Node, NodeT>, int> = 0>
-NodePtr asNode(std::unique_ptr<NodeT>&& node)
-{
-    if (!node) {
-        throw std::invalid_argument("cannot consume a null WhatsUI node");
-    }
-    return NodePtr(std::move(node));
-}
-
-template <class Builder,
-          std::enable_if_t<
-              std::is_base_of_v<detail::BuilderMarker, std::decay_t<Builder>>,
-              int> = 0>
-NodePtr asNode(Builder&& builder)
-{
-    static_assert(!std::is_lvalue_reference_v<Builder>,
-                  "WhatsUI node consumers require an rvalue Builder; use std::move for a named Builder");
-    return NodePtr(std::move(builder).build());
-}
-
 namespace detail {
-
-template <class Value, class = void>
-struct NodeLikeType {
-    using type = void;
-};
-
-template <class Value>
-struct NodeLikeType<
-    Value,
-    std::void_t<typename std::decay_t<Value>::node_type>> {
-    using type = typename std::decay_t<Value>::node_type;
-};
-
-template <class NodeT>
-struct NodeLikeType<std::unique_ptr<NodeT>, void> {
-    using type = NodeT;
-};
 
 template <class AllowedNodeT, class Value>
 inline constexpr bool isTypedNodeLike =
-    std::is_base_of_v<AllowedNodeT, typename NodeLikeType<std::decay_t<Value>>::type>
-    || std::is_same_v<Node, typename NodeLikeType<std::decay_t<Value>>::type>;
+    std::is_base_of_v<
+        AllowedNodeT,
+        typename ViewNodeType<std::decay_t<Value>>::type>
+    || std::is_same_v<
+        Node,
+        typename ViewNodeType<std::decay_t<Value>>::type>;
 
 template <class AllowedNodeT, class... Values>
 struct AreTypedNodeLike
@@ -220,7 +183,8 @@ private:
         (void)this->node_.get();
         std::vector<NodePtr> nodes;
         nodes.reserve(sizeof...(Children));
-        (nodes.push_back(asNode(std::forward<Children>(items))), ...);
+        (nodes.push_back(detail::materialize(
+             std::forward<Children>(items))), ...);
         this->node_->appendChildren(std::move(nodes));
     }
 };
@@ -249,7 +213,8 @@ private:
     void setContent(Content&& value)
     {
         (void)this->node_.get();
-        this->node_->content(asNode(std::forward<Content>(value)));
+        this->node_->content(detail::materialize(
+            std::forward<Content>(value)));
     }
 };
 
@@ -309,7 +274,8 @@ private:
         (void)this->node_.get();
         std::vector<NodePtr> nodes;
         nodes.reserve(sizeof...(Children));
-        (nodes.push_back(asNode(std::forward<Children>(items))), ...);
+        (nodes.push_back(detail::materialize(
+             std::forward<Children>(items))), ...);
         this->node_->appendChildren(std::move(nodes));
     }
 };

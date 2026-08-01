@@ -74,6 +74,18 @@ struct HasAction<
 };
 
 template <typename Parent, typename Child, typename = void>
+struct AcceptsMedia : std::false_type {
+};
+
+template <typename Parent, typename Child>
+struct AcceptsMedia<
+    Parent,
+    Child,
+    std::void_t<decltype(std::declval<Parent&&>().media(
+        std::declval<Child&&>()))>> : std::true_type {
+};
+
+template <typename Parent, typename Child, typename = void>
 struct AcceptsChild : std::false_type {
 };
 
@@ -127,6 +139,32 @@ struct CanBuildAfterLvalueModifier<
                              .build())>> : std::true_type {
 };
 
+struct GreetingComponent {
+    int* bodyCalls{nullptr};
+
+    auto body()
+    {
+        if (bodyCalls != nullptr) {
+            ++*bodyCalls;
+        }
+        return wui::Column()
+            .children(
+                wui::Text("Hello"),
+                wui::Button("Continue"));
+    }
+};
+
+struct RadioComponent {
+    auto body()
+    {
+        return wui::Radio("Choice").selected(true);
+    }
+};
+
+struct InvalidComponent {
+    int body() { return 0; }
+};
+
 static_assert(std::is_base_of_v<wui::Node, wui::ButtonNode>);
 static_assert(!std::is_base_of_v<wui::Node, wui::Button>);
 static_assert(!std::is_copy_constructible_v<wui::Button>);
@@ -151,6 +189,17 @@ static_assert(std::is_same_v<
               decltype(wui::IconButton().accessibleLabel("Icon")),
               wui::IconButton&&>);
 static_assert(!std::is_convertible_v<std::string, wui::NodeKey>);
+static_assert(wui::isViewLikeV<wui::Button>);
+static_assert(wui::isViewLikeV<GreetingComponent>);
+static_assert(wui::isViewLikeV<std::unique_ptr<wui::ButtonNode>>);
+static_assert(!wui::isViewLikeV<int>);
+static_assert(!wui::isViewLikeV<InvalidComponent>);
+static_assert(std::is_constructible_v<wui::View, GreetingComponent>);
+static_assert(std::is_move_constructible_v<wui::View>);
+static_assert(!std::is_copy_constructible_v<wui::View>);
+static_assert(AcceptsChild<wui::Column, GreetingComponent>::value);
+static_assert(AcceptsChild<wui::RadioGroup, RadioComponent>::value);
+static_assert(AcceptsMedia<wui::CardHeader, GreetingComponent>::value);
 static_assert(std::is_same_v<
               decltype(wui::Button("Save").build()),
               std::unique_ptr<wui::ButtonNode>>);
@@ -365,11 +414,14 @@ void testMoveAndRawNodeConsumption()
 
     bool rejectedNullNode = false;
     try {
-        (void)asNode(std::unique_ptr<TextNode>{});
+        View nullView = std::unique_ptr<TextNode>{};
+        Navigator navigator;
+        navigator.setRoot("null", std::move(nullView));
     } catch (const std::invalid_argument&) {
         rejectedNullNode = true;
     }
-    expect(rejectedNullNode, "asNode() should reject null unique_ptr values");
+    expect(rejectedNullNode,
+           "A public ViewLike boundary should reject null unique_ptr values");
 }
 
 void testSingleContentBuilderReplacesContent()
@@ -386,6 +438,78 @@ void testSingleContentBuilderReplacesContent()
         scrollView.node()->content());
     expect(content != nullptr && content->value() == "Second",
            "A repeated content() call should replace the previous content");
+}
+
+void testComponentBodyMaterializesWithoutBuildKnowledge()
+{
+    int bodyCalls = 0;
+    wui::UiRoot root;
+    root.setContent(GreetingComponent{&bodyCalls});
+
+    auto* column = dynamic_cast<wui::ColumnNode*>(root.content());
+    expect(bodyCalls == 1 && column != nullptr
+               && column->children().size() == 2,
+           "UiRoot should materialize a Component body exactly once");
+
+    wui::Column parent;
+    parent.children(GreetingComponent{&bodyCalls});
+    expect(bodyCalls == 2 && parent.node()->children().size() == 1
+               && dynamic_cast<wui::ColumnNode*>(
+                      parent.node()->children().front().get()) != nullptr,
+           "Container children should accept Components without build/asNode");
+}
+
+void testDynamicViewErasesOnlyAtStoredBoundaries()
+{
+    wui::View page = GreetingComponent{};
+    expect(!page.empty(), "A View should retain one deferred description");
+
+    wui::Navigator navigator;
+    navigator.setRoot("component", std::move(page));
+    expect(page.empty()
+               && dynamic_cast<wui::ColumnNode*>(navigator.current()) != nullptr,
+           "Navigator should consume a dynamic View without exposing NodePtr");
+
+    navigator.replace(
+        "factory",
+        [] { return GreetingComponent{}; },
+        wui::PageRetention::DisposeOnHide);
+    expect(dynamic_cast<wui::ColumnNode*>(navigator.current()) != nullptr,
+           "Navigator factories should materialize Component results internally");
+
+    bool rejectedSecondConsumption = false;
+    try {
+        navigator.replace("empty", std::move(page));
+    } catch (const std::logic_error&) {
+        rejectedSecondConsumption = true;
+    }
+    expect(rejectedSecondConsumption,
+           "A consumed dynamic View should reject a second materialization");
+}
+
+void testComponentsReachSlotsAndStructuralFactories()
+{
+    wui::CardHeader header;
+    header.media(GreetingComponent{});
+    expect(header.node()->children().size() == 1
+               && dynamic_cast<wui::ColumnNode*>(
+                      header.node()->children().front().get()) != nullptr,
+           "Named slots should accept Component values");
+
+    wui::State<bool> visible{true};
+    wui::If branch(visible);
+    branch.then([] { return GreetingComponent{}; });
+    expect(branch.node()->children().size() == 1
+               && dynamic_cast<wui::ColumnNode*>(
+                      branch.node()->children().front().get()) != nullptr,
+           "If factories should accept Component results");
+
+    wui::State<std::vector<int>> items{{1, 2}};
+    wui::ForEach<int> rows(
+        items,
+        [](const int&) { return GreetingComponent{}; });
+    expect(rows.node()->children().size() == 2,
+           "ForEach factories should accept Component results");
 }
 
 template <class ParentNode, class ValidChildNode, class InvalidChildNode>
@@ -435,6 +559,9 @@ int main()
         testChildrenAreTransactionalAndRepeatable();
         testMoveAndRawNodeConsumption();
         testSingleContentBuilderReplacesContent();
+        testComponentBodyMaterializesWithoutBuildKnowledge();
+        testDynamicViewErasesOnlyAtStoredBoundaries();
+        testComponentsReachSlotsAndStructuralFactories();
         testSemanticContainersEnforceRuntimeChildTypes();
     } catch (const std::exception& error) {
         std::cerr << "declarative_api_contract_tests failed: "

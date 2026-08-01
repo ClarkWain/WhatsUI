@@ -26,7 +26,7 @@ public:
     {
     }
 
-    // `factory` returns a builder (or unique_ptr<Node>) for the mounted subtree.
+    // `factory` returns any ViewLike value for the mounted subtree.
     template <class Factory>
     If& then(Factory factory) &
     {
@@ -47,7 +47,7 @@ private:
     {
         wui::IfNode* raw = node_.get();
         raw->setFactory([factory = std::move(factory)]() mutable -> std::unique_ptr<wui::Node> {
-            return asNode(factory());
+            return detail::materialize(factory());
         });
         raw->setVisible(state_.get());
         wui::State<bool> state = state_;
@@ -96,7 +96,7 @@ public:
         auto rebuild = [raw, state, itemBuilder]() {
             raw->clearChildren();
             for (const auto& item : state.get()) {
-                raw->appendChild(asNode(itemBuilder(item)));
+                raw->appendChild(detail::materialize(itemBuilder(item)));
             }
         };
         rebuild();
@@ -346,7 +346,7 @@ public:
         reconciler->raw = this->node_.get();
         reconciler->keyFor = KeyFactory(std::move(keyProvider));
         reconciler->build = [itemBuilder = std::move(itemBuilder)](const T& item) mutable {
-            return asNode(itemBuilder(item));
+            return detail::materialize(itemBuilder(item));
         };
         reconciler->update = std::move(itemUpdater);
         reconciler->reconcile();

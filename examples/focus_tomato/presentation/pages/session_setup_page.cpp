@@ -10,7 +10,7 @@
 namespace whatsui::focus_tomato::presentation {
 namespace {
 
-std::unique_ptr<wui::Node> buildSelectedTaskCard(
+wui::Box buildSelectedTaskCard(
     std::string title, std::string progress, float width)
 {
     using namespace wui;
@@ -32,11 +32,10 @@ std::unique_ptr<wui::Node> buildSelectedTaskCard(
                         .style(style::text(12.0f, 400, 17.0f))
                         .color(style::textSecondary)
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildSessionConfiguration(
+wui::Box buildSessionConfiguration(
     std::string configuration, float width)
 {
     using namespace wui;
@@ -50,11 +49,10 @@ std::unique_ptr<wui::Node> buildSessionConfiguration(
             Text(std::move(configuration))
                 .style(style::text(12.0f, 500, 18.0f))
                 .color(style::textSecondary)
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildSetupContent(
+wui::Column buildSetupContent(
     const FocusAssets& assets,
     float contentWidth,
     std::string title,
@@ -80,13 +78,12 @@ std::unique_ptr<wui::Node> buildSetupContent(
             Text("按 Space 开始 · 开始后可自动缩为迷你模式")
                 .style(style::text(11.0f, 400, 16.0f))
                 .color(style::textMuted)
-        )
-        .build();
+        );
 }
 
 } // namespace
 
-std::unique_ptr<wui::Node> buildSessionSetupPage(
+wui::Box buildSessionSetupPage(
     FocusViewModel& viewModel,
     const FocusAssets& assets,
     float pageWidth,
@@ -148,8 +145,7 @@ std::unique_ptr<wui::Node> buildSessionSetupPage(
                                 std::move(actions))
                         )
                 )
-        )
-        .build();
+        );
 }
 
 } // namespace whatsui::focus_tomato::presentation

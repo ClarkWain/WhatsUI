@@ -2,5 +2,6 @@
 
 bool declarativeTextCompilesIndependently()
 {
-    return wui::Text("Text").build() != nullptr;
+    wui::View view = wui::Text("Text");
+    return !view.empty();
 }

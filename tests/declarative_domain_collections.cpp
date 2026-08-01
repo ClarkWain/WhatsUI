@@ -2,5 +2,6 @@
 
 bool declarativeCollectionsCompilesIndependently()
 {
-    return wui::ListBox().build() != nullptr;
+    wui::View view = wui::ListBox();
+    return !view.empty();
 }

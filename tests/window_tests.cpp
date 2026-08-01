@@ -724,6 +724,37 @@ void testDeclarativeDialogBuilderProducesConcreteModal()
     expect(dialog->children().size() == 1, "Dialog builder should transfer its content subtree");
 }
 
+void testWindowMaterializesAuthorViewsAtEveryBoundary()
+{
+    wui::UiApp app(std::make_unique<FakeHost>());
+    auto& window = app.openWindow("author views", {320.0f, 180.0f});
+
+    window.content(
+        wui::Column().children(
+            wui::Text("Page"),
+            wui::Button("Continue")
+        )
+    );
+    expect(dynamic_cast<wui::ColumnNode*>(window.root()) != nullptr,
+           "UiWindow::content should accept a declarative view directly");
+
+    const auto overlayId = window.overlayHost().show(
+        wui::Text("Transient overlay"));
+    expect(window.overlayHost().top() != nullptr
+               && dynamic_cast<wui::TextNode*>(
+                      window.overlayHost().top()->content.get()) != nullptr,
+           "OverlayHost::show should materialize a declarative view");
+    (void)window.overlayHost().dismiss(overlayId);
+
+    const auto dialogId = window.showDialog(
+        wui::Dialog().content(wui::Text("Dialog content")));
+    expect(window.hasDialog()
+               && dynamic_cast<wui::DialogNode*>(
+                      window.overlayHost().top()->content.get()) != nullptr,
+           "UiWindow::showDialog should materialize a Dialog view");
+    (void)window.dismissDialog(dialogId);
+}
+
 void testAppReleasesClosedWindows()
 {
     wui::UiApp app(std::make_unique<FakeHost>());
@@ -766,6 +797,7 @@ int main()
         testDeferredNestedDialogDismissalsAreAlwaysTopDown();
         testDialogDismissalDropsFocusWhenUnderlyingPageWasReplaced();
         testDeclarativeDialogBuilderProducesConcreteModal();
+        testWindowMaterializesAuthorViewsAtEveryBoundary();
         testAppReleasesClosedWindows();
         testAppContextIsReadyDuringInitialComposition();
         return 0;

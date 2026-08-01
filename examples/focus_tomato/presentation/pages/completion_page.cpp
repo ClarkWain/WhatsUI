@@ -33,7 +33,7 @@ std::string completedDuration(const FocusData& data)
     return output.str();
 }
 
-std::unique_ptr<wui::Node> buildCompletionMetrics(
+wui::Row buildCompletionMetrics(
     const FocusData& data, float availableWidth)
 {
     using namespace wui;
@@ -53,11 +53,10 @@ std::unique_ptr<wui::Node> buildCompletionMetrics(
                 "今日完成",
                 std::to_string(statistics.completedFocusSessions),
                 "个")
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildCompletionActions(
+wui::Row buildCompletionActions(
     CompletionPageActions actions)
 {
     using namespace wui;
@@ -68,13 +67,12 @@ std::unique_ptr<wui::Node> buildCompletionActions(
                 "休息一下", std::move(actions.startBreak)),
             buildPrimaryTextButton(
                 "继续专注", std::move(actions.continueFocus))
-        )
-        .build();
+        );
 }
 
 } // namespace
 
-std::unique_ptr<wui::Node> buildCompletionPage(
+wui::Box buildCompletionPage(
     FocusViewModel& viewModel,
     const FocusAssets& assets,
     float pageWidth,
@@ -101,8 +99,7 @@ std::unique_ptr<wui::Node> buildCompletionPage(
                 .color(style::textSecondary),
             buildCompletionMetrics(viewModel.data(), contentWidth),
             buildCompletionActions(std::move(actions))
-        )
-        .build();
+        );
 
     return Box()
         .background(style::canvas)
@@ -124,8 +121,7 @@ std::unique_ptr<wui::Node> buildCompletionPage(
                             std::move(content)
                         )
                 )
-        )
-        .build();
+        );
 }
 
 } // namespace whatsui::focus_tomato::presentation

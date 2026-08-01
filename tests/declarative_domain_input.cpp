@@ -2,5 +2,6 @@
 
 bool declarativeInputCompilesIndependently()
 {
-    return wui::Button("Save").build() != nullptr;
+    wui::View view = wui::Button("Save");
+    return !view.empty();
 }

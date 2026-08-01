@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "wui/frame_stats.h"
@@ -42,6 +44,14 @@ public:
     // Modal dialogs are overlays with input isolation. Escape and an enabled
     // backdrop dismissal route through this API so the prior focus is restored.
     [[nodiscard]] OverlayId showDialog(std::unique_ptr<DialogNode> dialog);
+    template <
+        class Dialog,
+        std::enable_if_t<isViewLikeV<Dialog>, int> = 0>
+    [[nodiscard]] OverlayId showDialog(Dialog&& dialog)
+    {
+        return showDialog(detail::materializeAs<DialogNode>(
+            std::forward<Dialog>(dialog)));
+    }
     // During a UiWindow input dispatch, destruction is deferred until the
     // current handler has returned. In that case this returns nullptr; the
     // modal is removed before dispatchPointer()/dispatchKey() returns.
@@ -50,6 +60,20 @@ public:
     [[nodiscard]] bool hasDialog() const noexcept;
 
     void setRoot(std::unique_ptr<Node> root);
+    template <
+        class Content,
+        std::enable_if_t<isViewLikeV<Content>, int> = 0>
+    void setRoot(Content&& content)
+    {
+        setRoot(detail::materialize(std::forward<Content>(content)));
+    }
+    template <
+        class Content,
+        std::enable_if_t<isViewLikeV<Content>, int> = 0>
+    void content(Content&& content)
+    {
+        setRoot(std::forward<Content>(content));
+    }
     [[nodiscard]] Node* root() const noexcept;
 
     // A frame-safe, platform-neutral projection of the active UI. The

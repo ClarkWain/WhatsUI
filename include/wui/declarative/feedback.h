@@ -48,15 +48,15 @@ class CardHeader : public BuilderBase<CardHeader, wui::CardHeaderNode> {
 public:
     CardHeader(std::string title = {}, std::string description = {}) : BuilderBase(std::move(title), std::move(description)) {}
     template <class Child>
-    CardHeader& media(Child&& value) & { node_->media(asNode(std::forward<Child>(value))); return self(); }
+    CardHeader& media(Child&& value) & { node_->media(detail::materialize(std::forward<Child>(value))); return self(); }
 
     template <class Child>
-    CardHeader&& media(Child&& value) && { node_->media(asNode(std::forward<Child>(value))); return std::move(self()); }
+    CardHeader&& media(Child&& value) && { node_->media(detail::materialize(std::forward<Child>(value))); return std::move(self()); }
     template <class Child>
-    CardHeader& action(Child&& value) & { node_->action(asNode(std::forward<Child>(value))); return self(); }
+    CardHeader& action(Child&& value) & { node_->action(detail::materialize(std::forward<Child>(value))); return self(); }
 
     template <class Child>
-    CardHeader&& action(Child&& value) && { node_->action(asNode(std::forward<Child>(value))); return std::move(self()); }
+    CardHeader&& action(Child&& value) && { node_->action(detail::materialize(std::forward<Child>(value))); return std::move(self()); }
 };
 
 class CardPreview : public ContainerBuilderBase<CardPreview, wui::CardPreviewNode> {
@@ -111,10 +111,10 @@ public:
 
     Field&& enabled(bool value) && { node_->setEnabled(value); return std::move(self()); }
     template <class Child>
-    Field& control(Child&& value) & { node_->setControl(asNode(std::forward<Child>(value))); return self(); }
+    Field& control(Child&& value) & { node_->setControl(detail::materialize(std::forward<Child>(value))); return self(); }
 
     template <class Child>
-    Field&& control(Child&& value) && { node_->setControl(asNode(std::forward<Child>(value))); return std::move(self()); }
+    Field&& control(Child&& value) && { node_->setControl(detail::materialize(std::forward<Child>(value))); return std::move(self()); }
 };
 
 class MessageBar : public BuilderBase<MessageBar, wui::MessageBarNode> {

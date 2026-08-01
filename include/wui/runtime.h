@@ -5,9 +5,11 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
-#include "wui/node.h"
+#include "wui/view.h"
 
 namespace wui {
 
@@ -25,6 +27,13 @@ public:
 
     void setOnInvalidate(std::function<void()> handler);
     void setContent(std::unique_ptr<Node> content);
+    template <
+        class Content,
+        std::enable_if_t<isViewLikeV<Content>, int> = 0>
+    void setContent(Content&& content)
+    {
+        setContent(detail::materialize(std::forward<Content>(content)));
+    }
     void setBorrowedContent(Node* content);
     [[nodiscard]] Node* content() const noexcept;
 
@@ -65,10 +74,97 @@ public:
     void setBeforeChange(BeforeChangeHandler handler);
     void setRoot(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
     void setRoot(std::string key, PageFactory factory, PageRetention retention);
+    template <
+        class Page,
+        std::enable_if_t<isViewLikeV<Page>, int> = 0>
+    void setRoot(
+        std::string key,
+        Page&& page,
+        PageRetention retention = PageRetention::KeepAlive)
+    {
+        setRoot(
+            std::move(key),
+            detail::materialize(std::forward<Page>(page)),
+            retention);
+    }
+    template <
+        class Factory,
+        std::enable_if_t<
+            !isViewLikeV<Factory>
+            && detail::IsViewFactory<Factory>::value,
+            int> = 0>
+    void setRoot(
+        std::string key,
+        Factory&& factory,
+        PageRetention retention)
+    {
+        setRoot(
+            std::move(key),
+            eraseFactory(std::forward<Factory>(factory)),
+            retention);
+    }
     void push(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
     void push(std::string key, PageFactory factory, PageRetention retention);
+    template <
+        class Page,
+        std::enable_if_t<isViewLikeV<Page>, int> = 0>
+    void push(
+        std::string key,
+        Page&& page,
+        PageRetention retention = PageRetention::KeepAlive)
+    {
+        push(
+            std::move(key),
+            detail::materialize(std::forward<Page>(page)),
+            retention);
+    }
+    template <
+        class Factory,
+        std::enable_if_t<
+            !isViewLikeV<Factory>
+            && detail::IsViewFactory<Factory>::value,
+            int> = 0>
+    void push(
+        std::string key,
+        Factory&& factory,
+        PageRetention retention)
+    {
+        push(
+            std::move(key),
+            eraseFactory(std::forward<Factory>(factory)),
+            retention);
+    }
     void replace(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
     void replace(std::string key, PageFactory factory, PageRetention retention);
+    template <
+        class Page,
+        std::enable_if_t<isViewLikeV<Page>, int> = 0>
+    void replace(
+        std::string key,
+        Page&& page,
+        PageRetention retention = PageRetention::KeepAlive)
+    {
+        replace(
+            std::move(key),
+            detail::materialize(std::forward<Page>(page)),
+            retention);
+    }
+    template <
+        class Factory,
+        std::enable_if_t<
+            !isViewLikeV<Factory>
+            && detail::IsViewFactory<Factory>::value,
+            int> = 0>
+    void replace(
+        std::string key,
+        Factory&& factory,
+        PageRetention retention)
+    {
+        replace(
+            std::move(key),
+            eraseFactory(std::forward<Factory>(factory)),
+            retention);
+    }
     [[nodiscard]] std::unique_ptr<Node> pop();
     void popToRoot();
     void clear();
@@ -82,6 +178,17 @@ public:
     [[nodiscard]] const std::vector<PageEntry>& pages() const noexcept;
 
 private:
+    template <class Factory>
+    static PageFactory eraseFactory(Factory&& factory)
+    {
+        static_assert(
+            std::is_copy_constructible_v<std::decay_t<Factory>>,
+            "Navigator factories must be copy-constructible");
+        return [factory = std::forward<Factory>(factory)]() mutable {
+            return detail::materialize(std::invoke(factory));
+        };
+    }
+
     void requireOwnerThread() const;
     void notifyWillChange();
     void hideCurrent();
@@ -121,6 +228,13 @@ public:
     [[nodiscard]] Node* focused() const noexcept;
     void setOnChange(ChangeHandler handler);
     [[nodiscard]] OverlayId show(std::unique_ptr<Node> overlay);
+    template <
+        class Overlay,
+        std::enable_if_t<isViewLikeV<Overlay>, int> = 0>
+    [[nodiscard]] OverlayId show(Overlay&& overlay)
+    {
+        return show(detail::materialize(std::forward<Overlay>(overlay)));
+    }
     [[nodiscard]] std::unique_ptr<Node> dismiss(OverlayId id);
     [[nodiscard]] std::unique_ptr<Node> dismissTop();
     void clear() noexcept;

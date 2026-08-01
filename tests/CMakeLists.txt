@@ -90,6 +90,7 @@ add_test(
 
 add_executable(WhatsUIDeclarativeDomainHeaderTests
     declarative_domain_builder_base.cpp
+    declarative_domain_component.cpp
     declarative_domain_text.cpp
     declarative_domain_layout.cpp
     declarative_domain_input.cpp

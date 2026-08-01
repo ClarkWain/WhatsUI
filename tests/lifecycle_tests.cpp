@@ -125,7 +125,7 @@ void testParentReleaseDetachesEveryAttachedDescendantExactlyOnce()
 void testDetachedReactiveNodeStopsReceivingStateAndSelfRemovalIsSafe()
 {
     wui::State<std::string> value{"before"};
-    auto textNode = wui::asNode(wui::Text{}.bind(value));
+    auto textNode = wui::Text{}.bind(value).build();
     auto* text = static_cast<wui::TextNode*>(textNode.get());
     auto parent = std::make_unique<wui::BoxNode>();
     auto* parentRaw = parent.get();

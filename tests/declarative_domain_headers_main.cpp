@@ -1,6 +1,7 @@
 #include <cstdlib>
 
 bool declarativeBuilderBaseCompilesIndependently();
+bool declarativeComponentCompilesIndependently();
 bool declarativeTextCompilesIndependently();
 bool declarativeLayoutCompilesIndependently();
 bool declarativeInputCompilesIndependently();
@@ -12,6 +13,7 @@ bool declarativeStructuralCompilesIndependently();
 int main()
 {
     const bool passed = declarativeBuilderBaseCompilesIndependently()
+        && declarativeComponentCompilesIndependently()
         && declarativeTextCompilesIndependently()
         && declarativeLayoutCompilesIndependently()
         && declarativeInputCompilesIndependently()

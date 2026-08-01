@@ -2,5 +2,6 @@
 
 bool declarativeLayoutCompilesIndependently()
 {
-    return wui::Column().children(wui::Spacer()).build() != nullptr;
+    wui::View view = wui::Column().children(wui::Spacer());
+    return !view.empty();
 }

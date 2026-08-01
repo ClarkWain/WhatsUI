@@ -40,7 +40,7 @@
 - `ADR-006-declarative-authoring-and-node-boundary.md`：定义声明式 Builder、运行时 `*Node`、单一 `wui` 作者命名空间、Builder 能力分层、所有权入口、组件边界和迁移验收标准。
 - `DECLARATIVE_API_INVENTORY.md`：记录全部 Builder/Node 映射、组合能力、公共所有权契约和当前自动门禁范围。
 - `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`：记录 ADR-006 第一阶段后的风险分级、目标能力模型和后续独立优化切片。
-- `DECLARATIVE_COMPONENT_AUTHORING.md`：说明普通函数组件、Props/Callbacks、响应式数据和 `CallbackLifetime` 的安全边界。
+- `DECLARATIVE_COMPONENT_AUTHORING.md`：说明 `body()`、`ViewLike`、动态 `View`、Props/Callbacks、响应式数据和 `CallbackLifetime` 的安全边界。
 - `DECLARATIVE_MODIFIER_INVENTORY.md`：定义 fluent modifier 的左右值配对、共享实现和组合能力清单。
 - `RETIRED_EXAMPLES.md`：记录不再构建或维护的历史示例；当前 Todo App 已归档。
 - `REACTIVITY_AND_STRUCTURE.md`：说明响应式绑定（`Text().bind`、节点 teardown 生命周期）、结构控件 `If`/`ForEach`、可插拔文本测量与新控件。

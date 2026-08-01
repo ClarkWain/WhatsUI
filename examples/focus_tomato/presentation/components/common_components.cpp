@@ -5,7 +5,7 @@
 
 namespace whatsui::focus_tomato::presentation {
 
-std::unique_ptr<wui::Node> buildFixedImage(
+wui::Box buildFixedImage(
     const wui::ImageSource& source,
     float width,
     float height,
@@ -24,11 +24,10 @@ std::unique_ptr<wui::Node> buildFixedImage(
         .width(width)
         .height(height)
         .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
-        .children(std::move(image))
-        .build();
+        .children(std::move(image));
 }
 
-std::unique_ptr<wui::Node> buildWindowBar(
+wui::Box buildWindowBar(
     float width, std::string title, const FocusAssets& assets)
 {
     using namespace wui;
@@ -52,11 +51,10 @@ std::unique_ptr<wui::Node> buildWindowBar(
                         .style(style::text(13.0f, 400, 18.0f))
                         .color(style::textSecondary)
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildPill(
+wui::Box buildPill(
     std::string label, bool selected, std::function<void()> onClick)
 {
     using namespace wui;
@@ -78,13 +76,12 @@ std::unique_ptr<wui::Node> buildPill(
                                         : style::border)
             .accessibleRole(wui::AccessibilityRole::Button)
             .accessibleLabel(accessibleLabel)
-            .onClick(std::move(onClick))
-            .build();
+            .onClick(std::move(onClick));
     }
-    return std::move(pill).build();
+    return std::move(pill);
 }
 
-std::unique_ptr<wui::Node> buildPrimaryTextButton(
+wui::Box buildPrimaryTextButton(
     std::string label, std::function<void()> onClick)
 {
     using namespace wui;
@@ -103,11 +100,10 @@ std::unique_ptr<wui::Node> buildPrimaryTextButton(
             Text(std::move(label))
                 .style(style::text(13.0f, 500, 20.0f))
                 .color(style::surface)
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildSecondaryTextButton(
+wui::Box buildSecondaryTextButton(
     std::string label, std::function<void()> onClick)
 {
     using namespace wui;
@@ -126,11 +122,10 @@ std::unique_ptr<wui::Node> buildSecondaryTextButton(
             Text(std::move(label))
                 .style(style::text(13.0f, 500, 20.0f))
                 .color(style::textPrimary)
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildMetricCard(
+wui::Box buildMetricCard(
     float width,
     std::string label,
     std::string value,
@@ -158,11 +153,10 @@ std::unique_ptr<wui::Node> buildMetricCard(
                         .style(style::text(11.0f, 400, 16.0f))
                         .color(style::textMuted)
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildIconControl(
+wui::Box buildIconControl(
     const wui::ImageSource& icon,
     float controlSize,
     float iconSize,
@@ -183,11 +177,10 @@ std::unique_ptr<wui::Node> buildIconControl(
         .accessibleRole(wui::AccessibilityRole::Button)
         .accessibleLabel(std::move(accessibleLabel))
         .onClick(std::move(onClick))
-        .children(buildFixedImage(icon, iconSize, iconSize, {}, false, true))
-        .build();
+        .children(buildFixedImage(icon, iconSize, iconSize, {}, false, true));
 }
 
-std::unique_ptr<wui::Node> buildGlyphControl(
+wui::Box buildGlyphControl(
     std::string glyph,
     float controlSize,
     float glyphSize,
@@ -212,8 +205,7 @@ std::unique_ptr<wui::Node> buildGlyphControl(
             Text(std::move(glyph))
                 .style(style::text(glyphSize, 700, glyphSize))
                 .color(primary ? style::surface : style::accent)
-        )
-        .build();
+        );
 }
 
 } // namespace whatsui::focus_tomato::presentation

@@ -3,8 +3,14 @@
 状态：Accepted（已完成，2026-08-01）
 
 仓库维护者已确认并完成本方向。运行时 `*Node` 命名、单一 `wui` 作者命名空间、
-显式 `build()` 所有权出口、modifier 双引用限定、领域头拆分、身份属性拆分、
+内部 `build()` 所有权出口、无 build 的 `ViewLike/body()` 作者路径、modifier 双引用限定、领域头拆分、身份属性拆分、
 per-context UI owner、结构化诊断及 66 项映射/capability 门禁均已落地。
+
+后续修订（2026-08-01）：正文中要求页面作者显式返回 `NodePtr` 或调用 `build()` 的示例
+已由 `ViewLike` 物化协议取代。`build() &&` 仍是 Builder 的低层一次性所有权机制，
+但应用作者只写控件组合、组件 `body()`、`window.content(...)` 和 Navigator/Overlay
+边界。move-only `View` 只在必须存储异构页面时使用。本修订取代下文第 4、5、8 节中
+与应用作者显式物化有关的旧工作流，不改变 retained tree 与 `unique_ptr` 所有权模型。
 
 ## Context
 

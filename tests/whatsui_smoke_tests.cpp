@@ -134,8 +134,8 @@ void testStructuralPaintStateIsolation()
     wui::State<bool> oldBranch{true};
     wui::State<bool> newBranch{false};
     wui::BoxNode root;
-    root.appendChild(asNode(If(oldBranch).then([] { return std::make_unique<LeakyPaintStateNode>(); })));
-    root.appendChild(asNode(If(newBranch).then([] { return std::make_unique<DummyNode>(); })));
+    root.appendChild(If(oldBranch).then([] { return std::make_unique<LeakyPaintStateNode>(); }).build());
+    root.appendChild(If(newBranch).then([] { return std::make_unique<DummyNode>(); }).build());
 
     wui::PaintContext context;
     root.layout({0.0f, 0.0f, 100.0f, 100.0f});

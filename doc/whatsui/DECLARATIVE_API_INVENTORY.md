@@ -10,10 +10,13 @@
 - 通用 modifier：`flex()`、`automationId()`、`debugName()`；均提供 `&` 与 `&&` 重载。
 - 具有可访问名称能力的控件提供 `accessibleLabel()`，不与 automation ID 互相回退。
 - 观察入口：`empty()`、仅左值可用的 `node()`。
-- 所有权出口：仅右值可用的 `build() &&`；具名 Builder 必须写 `std::move(builder).build()`。
+- 应用作者把 Builder 或 `body()` 组件直接交给组合/页面边界，不调用 `build()`。
+- `ViewLike` 包含 Builder、`body()` 组件、低层 `unique_ptr<NodeT>` 和动态 `View`。
+- `build() &&` 仅作为控件实现与节点级测试的低层所有权出口。
 - `AnyChildren` Builder 才有 `children()`；重复调用按顺序追加，空节点被拒绝，失败批次不会部分修改父节点。
 - `SingleContent` Builder 使用 `content()`，重复调用替换原内容，运行时节点也验证最多一个 child。
-- 每个 `build() &&` 返回 `std::unique_ptr<NodeT>`；只有 `asNode()` 组合边界擦除为 `NodePtr`。
+- 组合、窗口、导航、Dialog 和 Overlay 在内部统一物化；公开作者 API 不再提供 `asNode()`。
+- `View` 是 move-only、一次性动态类型擦除，只用于路由、跨模块工厂和异构运行时分支。
 - `ButtonVariant`、`variant()`、`setVariant()` 已删除，只保留 `ButtonAppearance`。
 
 ## Builder / Node 映射
@@ -113,11 +116,13 @@
 
 `declarative_api_contract_tests.cpp` 编译期覆盖全部 66 个映射及其
 `children()`/`content()`/typed children/item factory/slot capability，并验证左值/右值
-modifier、具体类型 `build()`、`node()` 和 move-only 约束。运行期覆盖 empty Builder、
-二次 build、move/self-move、原始 `unique_ptr<DerivedNode>`、重复 children、单内容替换、
-非法槽位插入和批量失败的父节点强保证。
+modifier、`ViewLike`、`body()`、动态 `View`、低层具体类型 `build()`、`node()` 和
+move-only 约束。运行期覆盖组件单次物化、View 二次消费、Navigator factory、
+If/ForEach、具名槽位、empty Builder、原始 `unique_ptr<DerivedNode>`、重复 children、
+单内容替换、非法槽位插入和批量失败的父节点强保证。
 
 `WhatsUIDeclarativeDomainHeaderTests` 以干净消费者分别 include 每个领域头，并包含一个
-仅依赖公开 API 的自定义 Node/Builder。身份拆分、强类型 `NodeKey` 和关键复杂 modifier
+仅依赖公开 API 的自定义 Node/Builder；这些干净消费者通过 `View` 验证，无需调用
+`build()`。身份拆分、强类型 `NodeKey` 和关键复杂 modifier
 的左右值配对也由编译期断言锁定。完整 modifier 规则见
 `DECLARATIVE_MODIFIER_INVENTORY.md`。

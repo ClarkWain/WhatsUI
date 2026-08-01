@@ -90,8 +90,7 @@ void showNewTaskDialog(wui::UiWindow& window,
                                 )
                         )
                 )
-            )
-        .build();
+            );
     (void)window.showDialog(std::move(dialog));
     window.focusManager().setFocused(titleRaw);
 }

@@ -10,6 +10,7 @@
 
 #include "wsc/Canvas.h"
 #include "wui/paint_context.h"
+#include "wui/runtime.h"
 #include "wui/theme.h"
 #include "wui/whatscanvas_text.h"
 
@@ -19,6 +20,8 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 namespace {
 
@@ -80,7 +83,10 @@ FocusData seededData()
     return data;
 }
 
-void capture(std::unique_ptr<wui::Node> root,
+template <
+    class Content,
+    std::enable_if_t<wui::isViewLikeV<Content>, int> = 0>
+void capture(Content&& content,
              int width,
              int height,
              const std::filesystem::path& path)
@@ -95,16 +101,18 @@ void capture(std::unique_ptr<wui::Node> root,
     }
     wui::WhatsCanvasTextMeasurer text(*canvas, scale);
     wui::setTextMeasurer(&text);
-    root->layout({0.0f, 0.0f, static_cast<float>(width),
-                  static_cast<float>(height)});
+    wui::UiRoot root;
+    root.setContent(std::forward<Content>(content));
+    root.layout({0.0f, 0.0f, static_cast<float>(width),
+                 static_cast<float>(height)});
     wui::PaintContext paint(*canvas, scale);
     for (int pass = 0; pass < 2; ++pass) {
         canvas->beginFrame();
         paint.fillRect(
             {0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)},
             style::canvas);
-        root->prepare(paint);
-        root->paint(paint);
+        root.prepare(paint);
+        root.paint(paint);
         canvas->endFrame();
     }
     if (!canvas->savePixelsPPM(path.string())) {

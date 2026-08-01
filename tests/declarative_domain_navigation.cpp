@@ -2,5 +2,6 @@
 
 bool declarativeNavigationCompilesIndependently()
 {
-    return wui::Toolbar().item("Copy").build() != nullptr;
+    wui::View view = wui::Toolbar().item("Copy");
+    return !view.empty();
 }

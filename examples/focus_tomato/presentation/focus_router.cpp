@@ -121,7 +121,7 @@ FocusRoute FocusRouter::currentRoute() const noexcept
     return currentRoute_;
 }
 
-std::unique_ptr<wui::Node> FocusRouter::buildCurrentPage()
+wui::View FocusRouter::buildCurrentPage()
 {
     switch (currentRoute_) {
     case FocusRoute::Tasks:

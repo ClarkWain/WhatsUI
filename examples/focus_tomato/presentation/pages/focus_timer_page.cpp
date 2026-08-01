@@ -23,7 +23,7 @@ const TaskRecord* findSessionTask(
     return task == data.tasks.end() ? nullptr : &*task;
 }
 
-std::unique_ptr<wui::Node> buildTaskContext(
+wui::Box buildTaskContext(
     const FocusSessionRecord& session, const TaskRecord* task, float width)
 {
     using namespace wui;
@@ -68,11 +68,10 @@ std::unique_ptr<wui::Node> buildTaskContext(
                                 .color(style::surface)
                         )
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildTimerStage(
+wui::Box buildTimerStage(
     FocusViewModel& viewModel,
     const FocusAssets& assets,
     float width,
@@ -112,11 +111,10 @@ std::unique_ptr<wui::Node> buildTimerStage(
                         .style(style::text(11.0f, 400, 16.0f))
                         .color(style::textSecondary)
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildTimerControls(
+wui::Box buildTimerControls(
     const FocusAssets& assets,
     float width,
     bool running,
@@ -154,11 +152,10 @@ std::unique_ptr<wui::Node> buildTimerControls(
                         "提前结束",
                         std::move(actions.abort))
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildFocusFooter(
+wui::Box buildFocusFooter(
     int shortBreakMinutes,
     float width,
     std::function<void()> recordInterruption)
@@ -188,11 +185,10 @@ std::unique_ptr<wui::Node> buildFocusFooter(
                         .style(style::text(10.0f, 400, 15.0f))
                         .color(style::textMuted)
                 )
-        )
-        .build();
+        );
 }
 
-std::unique_ptr<wui::Node> buildMissingSessionPage(
+wui::Box buildMissingSessionPage(
     float pageWidth, float pageHeight)
 {
     using namespace wui;
@@ -205,13 +201,12 @@ std::unique_ptr<wui::Node> buildMissingSessionPage(
             Text("没有活动中的专注会话")
                 .style(style::text(18.0f, 700, 26.0f))
                 .color(style::textPrimary)
-        )
-        .build();
+        );
 }
 
 } // namespace
 
-std::unique_ptr<wui::Node> buildFocusTimerPage(
+wui::Box buildFocusTimerPage(
     FocusViewModel& viewModel,
     const FocusAssets& assets,
     float pageWidth,
@@ -249,8 +244,7 @@ std::unique_ptr<wui::Node> buildFocusTimerPage(
                 viewModel.data().settings.shortBreakMinutes,
                 contentWidth,
                 std::move(actions.recordInterruption))
-        )
-        .build();
+        );
 
     return Box()
         .background(style::canvas)
@@ -272,8 +266,7 @@ std::unique_ptr<wui::Node> buildFocusTimerPage(
                             std::move(content)
                         )
                 )
-        )
-        .build();
+        );
 }
 
 } // namespace whatsui::focus_tomato::presentation
