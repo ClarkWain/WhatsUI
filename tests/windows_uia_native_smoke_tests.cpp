@@ -1098,7 +1098,7 @@ void exerciseNativeUiaEvents(wui::UiWindow& window, HWND hwnd)
     window.focusManager().setFocused(window.root()->children()[3].get());
     window.root()->appendChild(
         wui::Text("Native event child")
-            .accessibilityId("native.event.child")
+            .automationId("native.event.child")
             .build());
     window.update();
     window.layout();
@@ -1292,16 +1292,16 @@ void testNativeUiaRoot()
                        .padding(24)
                        .gap(12)
                        .children(wui::Text("Native accessibility boundary"),
-                                 wui::Button("Native action").accessibilityId("native.action").onClick([&actionState] {
+                                 wui::Button("Native action").automationId("native.action").onClick([&actionState] {
                                      ++actionState.invokeCount;
                                      actionState.invokeThread = std::this_thread::get_id();
                                  }),
-                                 wui::Checkbox("Native toggle").required().accessibilityId("native.toggle").onChange(
+                                 wui::Checkbox("Native toggle").required().automationId("native.toggle").onChange(
                                      [&actionState](bool checked) {
                                          actionState.checked = checked;
                                          actionState.toggleThread = std::this_thread::get_id();
                                      }),
-                                 wui::TextField("Native value").accessibilityId("native.value").onChange(
+                                 wui::TextField("Native value").automationId("native.value").onChange(
                                      [&actionState](const std::string& value) {
                                          actionState.value = value;
                                          actionState.valueThread = std::this_thread::get_id();

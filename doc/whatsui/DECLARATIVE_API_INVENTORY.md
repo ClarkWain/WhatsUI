@@ -1,18 +1,19 @@
 # Declarative API Inventory
 
-状态：Phase 1 implemented
+状态：Implemented
 
 本文是 ADR-006 的实现清单。公开声明式类型位于 `wui`，运行时 retained-tree 类型统一使用 `*Node` 后缀。完整聚合入口是 `wui/declarative.h`。
 
 ## 通用契约
 
 - 所有 Builder 都是 move-only，并通过 `node_type` 声明对应运行时类型。
-- 通用 modifier：`flex()`、`accessibilityId()`；两者都提供 `&` 与 `&&` 重载。
+- 通用 modifier：`flex()`、`automationId()`、`debugName()`；均提供 `&` 与 `&&` 重载。
+- 具有可访问名称能力的控件提供 `accessibleLabel()`，不与 automation ID 互相回退。
 - 观察入口：`empty()`、仅左值可用的 `node()`。
 - 所有权出口：仅右值可用的 `build() &&`；具名 Builder 必须写 `std::move(builder).build()`。
 - `AnyChildren` Builder 才有 `children()`；重复调用按顺序追加，空节点被拒绝，失败批次不会部分修改父节点。
 - `SingleContent` Builder 使用 `content()`，重复调用替换原内容，运行时节点也验证最多一个 child。
-- `Dialog::build()` 返回 `std::unique_ptr<DialogNode>`，其它 Builder 返回 `NodePtr`。
+- 每个 `build() &&` 返回 `std::unique_ptr<NodeT>`；只有 `asNode()` 组合边界擦除为 `NodePtr`。
 - `ButtonVariant`、`variant()`、`setVariant()` 已删除，只保留 `ButtonAppearance`。
 
 ## Builder / Node 映射
@@ -57,7 +58,7 @@
 | Builder | Node | 能力 |
 | --- | --- | --- |
 | `Card` | `CardNode` | children |
-| `CardHeader` | `CardHeaderNode` | children |
+| `CardHeader` | `CardHeaderNode` | `media()` / `action()` 具名槽位 |
 | `CardPreview` | `CardPreviewNode` | children |
 | `CardFooter` | `CardFooterNode` | children |
 | `ProgressBar` | `ProgressBarNode` | leaf |
@@ -110,6 +111,13 @@
 
 ## 自动门禁
 
-`declarative_api_contract_tests.cpp` 编译期覆盖全部 66 个映射及其 `children()`/`content()` capability，并验证左值/右值 modifier、`build()`、`node()` 和 move-only 约束。运行期覆盖 empty Builder、二次 build、move/self-move、原始 `unique_ptr<DerivedNode>`、重复 children、单内容替换和批量失败的父节点强保证。
+`declarative_api_contract_tests.cpp` 编译期覆盖全部 66 个映射及其
+`children()`/`content()`/typed children/item factory/slot capability，并验证左值/右值
+modifier、具体类型 `build()`、`node()` 和 move-only 约束。运行期覆盖 empty Builder、
+二次 build、move/self-move、原始 `unique_ptr<DerivedNode>`、重复 children、单内容替换、
+非法槽位插入和批量失败的父节点强保证。
 
-仍待后续阶段加入自动门禁的内容：逐 modifier 清单比对、`automationId`/`accessibleLabel`/`debugName` 身份拆分，以及声明式领域头拆分后的 external-consumer 独立 include 测试。
+`WhatsUIDeclarativeDomainHeaderTests` 以干净消费者分别 include 每个领域头，并包含一个
+仅依赖公开 API 的自定义 Node/Builder。身份拆分、强类型 `NodeKey` 和关键复杂 modifier
+的左右值配对也由编译期断言锁定。完整 modifier 规则见
+`DECLARATIVE_MODIFIER_INVENTORY.md`。

@@ -70,20 +70,73 @@ void emptyTasksAreIgnored()
            "An empty callback must not create phantom UI work");
 }
 
-void dispatcherRejectsBindingFromAnotherThread()
+void independentDispatchersMayOwnDifferentUiThreads()
+{
+    wui::UiDispatcher mainDispatcher;
+    mainDispatcher.bindToCurrentThread();
+    wui::UiDispatcher workerDispatcher;
+    std::atomic<bool> workerOwned{false};
+    std::thread worker([&] {
+        workerDispatcher.bindToCurrentThread();
+        workerOwned = workerDispatcher.context().isCurrentThread()
+            && !mainDispatcher.context().isCurrentThread();
+    });
+    worker.join();
+    expect(workerOwned && mainDispatcher.context().isCurrentThread(),
+           "Each dispatcher must own its own UI thread independently");
+}
+
+void diagnosticsRunOnTheOwningContextAndCannotEscape()
 {
     wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    std::vector<wui::UiDiagnostic> observed;
+    dispatcher.setDiagnosticHandler(
+        [&observed](const wui::UiDiagnostic& diagnostic) {
+            observed.push_back(diagnostic);
+            throw std::runtime_error("diagnostic handlers must be isolated");
+        });
+
+    dispatcher.context().reportDiagnostic({
+        wui::UiDiagnosticCode::InvalidNodeKey,
+        "empty key",
+        "TaskList",
+    });
+    expect(observed.size() == 1
+               && observed.front().code
+                   == wui::UiDiagnosticCode::InvalidNodeKey,
+           "Diagnostics reported on the owner thread must be observable inline");
+}
+
+void wrongThreadChecksPublishDiagnosticsOnTheOwner()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    std::vector<wui::UiDiagnostic> observed;
+    dispatcher.setDiagnosticHandler(
+        [&observed](const wui::UiDiagnostic& diagnostic) {
+            observed.push_back(diagnostic);
+        });
+
     std::atomic<bool> rejected{false};
     std::thread worker([&] {
         try {
-            dispatcher.bindToCurrentThread();
+            dispatcher.context().requireCurrentThread();
         } catch (const std::logic_error&) {
             rejected = true;
         }
     });
     worker.join();
+
     expect(rejected,
-           "A dispatcher must reject ownership by a non-UI thread");
+           "A wrong-thread context check must reject the operation");
+    expect(observed.empty(),
+           "A worker must not invoke diagnostic observers inline");
+    expect(dispatcher.drain() == 1
+               && observed.size() == 1
+               && observed.front().code
+                   == wui::UiDiagnosticCode::WrongThreadMutation,
+           "Wrong-thread diagnostics must be delivered by the owner context");
 }
 
 void contextRemainsSafeAfterDispatcherShutdown()
@@ -117,7 +170,9 @@ int main()
         workerPostRunsOnlyWhenOwnerDrains();
         postsAreOrderedAndReentrantWorkIsDrainedSafely();
         emptyTasksAreIgnored();
-        dispatcherRejectsBindingFromAnotherThread();
+        independentDispatchersMayOwnDifferentUiThreads();
+        diagnosticsRunOnTheOwningContextAndCannotEscape();
+        wrongThreadChecksPublishDiagnosticsOnTheOwner();
         contextRemainsSafeAfterDispatcherShutdown();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {

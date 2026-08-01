@@ -426,14 +426,28 @@ void SplitButtonNode::paint(PaintContext& context)
             ? current.colors.brandBackground.pressed
             : current.colors.brandBackground.hover;
         if (disclosureActive || primaryActive || disclosureHot || primaryHot) {
-            const int checkpoint = context.save();
-            context.clipRoundRect(bounds(), current.radius.medium);
-            context.fillRect(
-                (disclosureActive || disclosureHot)
-                    ? disclosureBounds
-                    : primaryBounds,
-                overlay);
-            context.restoreTo(checkpoint);
+            const bool disclosure = disclosureActive || disclosureHot;
+            const RectF region = disclosure ? disclosureBounds : primaryBounds;
+            const float radius = std::min(
+                current.radius.medium,
+                std::min(region.width, region.height) * 0.5f);
+            // A path clip followed by a rectangular fill is not reliably
+            // ordered by every OpenGL batching backend. Build the one-sided
+            // rounded plate directly: a rounded rect preserves the outer
+            // corners and a same-colour square fill removes only the two
+            // corners that meet the internal separator.
+            context.fillRoundRect(region, radius, overlay);
+            if (disclosure) {
+                context.fillRect(
+                    {region.x, region.y,
+                     std::max(0.0f, region.width - radius), region.height},
+                    overlay);
+            } else {
+                context.fillRect(
+                    {region.x + radius, region.y,
+                     std::max(0.0f, region.width - radius), region.height},
+                    overlay);
+            }
         }
     }
 

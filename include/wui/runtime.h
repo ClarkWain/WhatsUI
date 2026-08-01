@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "wui/node.h"
@@ -19,11 +20,12 @@ enum class PageRetention {
 
 class UiRoot {
 public:
+    explicit UiRoot(UiContext context = {});
     ~UiRoot();
 
     void setOnInvalidate(std::function<void()> handler);
-    void setContent(std::unique_ptr<Node> content) noexcept;
-    void setBorrowedContent(Node* content) noexcept;
+    void setContent(std::unique_ptr<Node> content);
+    void setBorrowedContent(Node* content);
     [[nodiscard]] Node* content() const noexcept;
 
     void layout(const RectF& bounds);
@@ -33,12 +35,15 @@ public:
     [[nodiscard]] const RectF& bounds() const noexcept;
 
 private:
+    void requireOwnerThread() const;
     void wireInvalidationHandler() noexcept;
 
     std::unique_ptr<Node> ownedContent_;
     Node* content_{nullptr};
     RectF bounds_{};
     std::function<void()> onInvalidate_;
+    UiContext context_;
+    std::thread::id ownerThread_;
 };
 
 struct PageEntry {
@@ -53,6 +58,8 @@ public:
     using ChangeHandler = std::function<void(Node*)>;
     using BeforeChangeHandler = std::function<void()>;
     using PageFactory = std::function<std::unique_ptr<Node>()>;
+
+    explicit Navigator(UiContext context = {});
 
     void setOnChange(ChangeHandler handler);
     void setBeforeChange(BeforeChangeHandler handler);
@@ -75,6 +82,7 @@ public:
     [[nodiscard]] const std::vector<PageEntry>& pages() const noexcept;
 
 private:
+    void requireOwnerThread() const;
     void notifyWillChange();
     void hideCurrent();
     void activateCurrent();
@@ -83,6 +91,8 @@ private:
     std::vector<PageEntry> stack_;
     ChangeHandler onChange_;
     BeforeChangeHandler onBeforeChange_;
+    UiContext context_;
+    std::thread::id ownerThread_;
 };
 
 using OverlayId = std::size_t;
@@ -99,6 +109,8 @@ struct OverlayEntry {
 class OverlayHost {
 public:
     using ChangeHandler = std::function<void()>;
+
+    explicit OverlayHost(UiContext context = {});
 
     ~OverlayHost();
 
@@ -123,10 +135,13 @@ public:
     [[nodiscard]] const std::vector<OverlayEntry>& overlays() const noexcept;
 
 private:
+    void requireOwnerThread() const;
     OverlayId nextId_{1};
     std::vector<OverlayEntry> overlays_;
     ChangeHandler onChange_;
     FocusManager* focusManager_{nullptr};
+    UiContext context_;
+    std::thread::id ownerThread_;
 };
 
 } // namespace wui

@@ -54,8 +54,9 @@ private:
     {
         using namespace wui;
         const auto& current = wui::theme();
-        auto actions = verticalActions
-            ? Column()
+        NodePtr actions;
+        if (verticalActions) {
+            actions = Column()
                   .gap(8.0f)
                   .align(wui::Alignment::Stretch)
                   .children(
@@ -72,8 +73,9 @@ private:
                           .onClick([this] {
                               if (navigate_) navigate_(GalleryRoute::VisualQa);
                           }))
-                  .build()
-            : Row()
+                  .build();
+        } else {
+            actions = Row()
                   .gap(8.0f)
                   .children(
                       Button("Browse all components")
@@ -90,6 +92,7 @@ private:
                               if (navigate_) navigate_(GalleryRoute::VisualQa);
                           }))
                   .build();
+        }
 
         return Column()
             .gap(14.0f)

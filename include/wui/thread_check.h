@@ -4,8 +4,7 @@
 //
 // State<T> and other UI-only types should only be accessed from the UI thread.
 // This header provides a lightweight mechanism to register the UI thread and
-// assert at runtime that operations occur on it. The assertion is active in
-// debug builds (NDEBUG not defined) and is a no-op in release builds.
+// validate at runtime that operations occur on a registered UI thread.
 
 #include <cassert>
 #include <thread>
@@ -18,14 +17,10 @@ void registerUiThread() noexcept;
 // Returns true if the current thread is the registered UI thread, or if no
 // UI thread has been registered yet (permissive mode for tests/simple apps).
 [[nodiscard]] bool isOnUiThread() noexcept;
+void requireUiThread();
 
-// Assert macro for UI-thread-only operations.
-// Active only in debug builds. In release builds, compiles to nothing.
-#ifdef NDEBUG
-#define WUI_ASSERT_UI_THREAD() ((void)0)
-#else
-#define WUI_ASSERT_UI_THREAD() \
-    assert(wui::isOnUiThread() && "This operation must be called from the UI thread")
-#endif
+// Kept as a source-compatible internal spelling, but now validates in every
+// build configuration. Context-owned objects use UiContext directly.
+#define WUI_ASSERT_UI_THREAD() wui::requireUiThread()
 
 } // namespace wui

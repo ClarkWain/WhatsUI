@@ -297,6 +297,11 @@ CardHeaderNode& CardHeaderNode::action(std::unique_ptr<Node> action) { setAction
 std::size_t CardHeaderNode::actionIndex() const noexcept { return hasMedia_ ? 1u : 0u; }
 void CardHeaderNode::setMedia(std::unique_ptr<Node> media)
 {
+    acceptingSlotMutation_ = true;
+    struct ResetFlag {
+        bool& value;
+        ~ResetFlag() { value = false; }
+    } reset{acceptingSlotMutation_};
     if (hasMedia_) {
         static_cast<void>(removeChild(0));
         hasMedia_ = false;
@@ -310,6 +315,11 @@ void CardHeaderNode::setMedia(std::unique_ptr<Node> media)
 }
 void CardHeaderNode::setAction(std::unique_ptr<Node> action)
 {
+    acceptingSlotMutation_ = true;
+    struct ResetFlag {
+        bool& value;
+        ~ResetFlag() { value = false; }
+    } reset{acceptingSlotMutation_};
     if (hasAction_) {
         static_cast<void>(removeChild(actionIndex()));
         hasAction_ = false;
@@ -318,6 +328,18 @@ void CardHeaderNode::setAction(std::unique_ptr<Node> action)
         // There are only two slots and their relative order is stable.
         appendChild(std::move(action));
         hasAction_ = true;
+    }
+}
+void CardHeaderNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)child;
+    (void)index;
+    if (!acceptingSlotMutation_ || resultingCount > 2) {
+        throw std::logic_error(
+            "CardHeaderNode children must be configured through media() and action() slots");
     }
 }
 Node* CardHeaderNode::media() const noexcept

@@ -748,7 +748,7 @@ void testKeyedForEachRetainsUnchangedRows()
     int built = 0;
     std::unique_ptr<wui::Node> node = KeyedForEach<Item>(
         items,
-        [](const Item& item) { return std::to_string(item.id); },
+        [](const Item& item) { return NodeKey(std::to_string(item.id)); },
         [&built](const Item& item) {
             ++built;
             return Text(item.label);
@@ -773,6 +773,98 @@ void testKeyedForEachRetainsUnchangedRows()
     expect(list->children()[0].get() == three && list->children()[1].get() == one,
            "Keyed reordering must retain row nodes without reconstruction");
     expect(built == 4, "Reordering stable keys must not rebuild rows");
+}
+
+void testKeyedForEachRejectsInvalidKeysWithoutDestroyingValidTree()
+{
+    using namespace wui;
+
+    struct Item {
+        std::string key;
+        [[nodiscard]] bool operator==(const Item& other) const noexcept
+        {
+            return key == other.key;
+        }
+        [[nodiscard]] bool operator!=(const Item& other) const noexcept
+        {
+            return !(*this == other);
+        }
+    };
+
+    State<std::vector<Item>> invalidInitial{{{"same"}, {"same"}}};
+    bool initialRejected = false;
+    try {
+        (void)KeyedForEach<Item>(
+            invalidInitial,
+            [](const Item& item) { return NodeKey(item.key); },
+            [](const Item& item) { return Text(item.key); });
+    } catch (const std::invalid_argument&) {
+        initialRejected = true;
+    }
+    expect(initialRejected,
+           "Initial duplicate keys must be rejected instead of rewritten");
+
+    UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    std::vector<UiDiagnostic> diagnostics;
+    dispatcher.setDiagnosticHandler(
+        [&diagnostics](const UiDiagnostic& value) {
+            diagnostics.push_back(value);
+        });
+    State<std::vector<Item>> items{{{"one"}, {"two"}}};
+    auto node = KeyedForEach<Item>(
+        items,
+        [](const Item& item) { return NodeKey(item.key); },
+        [](const Item& item) { return Text(item.key); })
+                    .build();
+    auto* list = static_cast<ForEachNode*>(node.get());
+    Node* first = list->children().front().get();
+    UiRoot root(dispatcher.context());
+    root.setContent(std::move(node));
+
+    items.set({{"duplicate"}, {"duplicate"}});
+    flushStructuralUpdates();
+    expect(list->children().size() == 2
+               && list->children().front().get() == first,
+           "An invalid update must preserve the last valid keyed subtree");
+    expect(diagnostics.size() == 1
+               && diagnostics.front().code == UiDiagnosticCode::InvalidNodeKey,
+           "An invalid update must publish a structured diagnostic");
+}
+
+void testKeyedForEachCanUpdatePropsWithoutReplacingNodeIdentity()
+{
+    using namespace wui;
+    struct Item {
+        int id{0};
+        std::string label;
+        [[nodiscard]] bool operator==(const Item& other) const noexcept
+        {
+            return id == other.id && label == other.label;
+        }
+        [[nodiscard]] bool operator!=(const Item& other) const noexcept
+        {
+            return !(*this == other);
+        }
+    };
+
+    State<std::vector<Item>> items{{{1, "before"}}};
+    auto node = KeyedForEach<Item>(
+        items,
+        [](const Item& item) { return NodeKey(std::to_string(item.id)); },
+        [](const Item& item) { return Text(item.label); },
+        [](Node& node, const Item& item) {
+            static_cast<TextNode&>(node).setValue(item.label);
+        })
+                    .build();
+    auto* list = static_cast<ForEachNode*>(node.get());
+    Node* retained = list->children().front().get();
+
+    items.set({{1, "after"}});
+    flushStructuralUpdates();
+    const auto* text = static_cast<const TextNode*>(list->children().front().get());
+    expect(text == retained && text->value() == "after",
+           "A keyed Props updater must preserve the Node while applying new data");
 }
 
 void testListActionCanRemoveItsOwnRow()
@@ -1011,6 +1103,8 @@ int main()
     testDestroyedStructuralNodeSkipsQueuedUpdate();
     testStructuralForEach();
     testKeyedForEachRetainsUnchangedRows();
+    testKeyedForEachRejectsInvalidKeysWithoutDestroyingValidTree();
+    testKeyedForEachCanUpdatePropsWithoutReplacingNodeIdentity();
     testListActionCanRemoveItsOwnRow();
     testPluggableTextMeasurement();
     testPaintContextScaleFactor();

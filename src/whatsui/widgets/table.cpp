@@ -91,7 +91,7 @@ std::vector<TableAccessibilityEntry> TableNode::accessibilityEntries() const
 {
     std::vector<TableAccessibilityEntry> result;
     const auto widths = columnWidths();
-    const std::string tableId = accessibilityId().empty() ? "table" : accessibilityId();
+    const std::string tableId = automationId().empty() ? "table" : automationId();
     const bool grid = dynamic_cast<const DataGridNode*>(this) != nullptr;
     const bool gridFocused = grid && focused(*this);
     result.reserve(columns_.size() + (lastVisibleRowExclusive() - firstVisibleRow()) * (columns_.size() + 1));

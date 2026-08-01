@@ -1,5 +1,8 @@
 # Fluent Todo UI 验收清单（Windows 优先）
 
+> **Retired 2026-08-01:** Todo App 不再维护，本文只保存历史验收证据，
+> 不属于当前发布门禁。
+
 状态：P0 visual and core task-flow automated verification complete. Windows
 IME/DPI manual sign-off and final release-owner gates remain open.
 

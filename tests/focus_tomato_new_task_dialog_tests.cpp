@@ -54,13 +54,13 @@ public:
 };
 
 wui::Node* findByAccessibilityId(
-    wui::Node* node, const std::string& accessibilityId)
+    wui::Node* node, const std::string& automationId)
 {
     if (node == nullptr) return nullptr;
-    if (node->accessibilityId() == accessibilityId) return node;
+    if (node->automationId() == automationId) return node;
     for (const auto& child : node->children()) {
         if (auto* match = findByAccessibilityId(
-                child.get(), accessibilityId)) {
+                child.get(), automationId)) {
             return match;
         }
     }

@@ -11,10 +11,10 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 #include <vector>
 
-#include "wui/thread_check.h"
 #include "wui/ui_context.h"
 
 namespace wui {
@@ -47,16 +47,21 @@ public:
     using SubscriptionId = std::size_t;
     using ObserverSlot = StateObserverSlot<T>;
 
-    StateCore() = default;
+    StateCore()
+        : ownerThread(std::this_thread::get_id())
+    {
+    }
 
     explicit StateCore(T initialValue)
-        : value(std::move(initialValue))
+        : value(std::move(initialValue)),
+          ownerThread(std::this_thread::get_id())
     {
     }
 
     StateCore(UiContext owner, T initialValue)
         : ui(std::move(owner))
         , value(std::move(initialValue))
+        , ownerThread(std::this_thread::get_id())
     {
         if (!ui.isValid()) {
             throw std::invalid_argument(
@@ -70,7 +75,17 @@ public:
             ui.requireCurrentThread();
             return;
         }
-        WUI_ASSERT_UI_THREAD();
+        if (ownerThread != std::this_thread::get_id()) {
+            throw std::logic_error(
+                "Unbound State operation must run on its owning thread");
+        }
+    }
+
+    [[nodiscard]] bool isCurrentThread() const noexcept
+    {
+        return ui.isValid()
+            ? ui.isCurrentThread()
+            : ownerThread == std::this_thread::get_id();
     }
 
     [[nodiscard]] SubscriptionId addObserver(Callback callback)
@@ -186,6 +201,7 @@ public:
 
     UiContext ui;
     T value{};
+    std::thread::id ownerThread;
     SubscriptionId nextObserverId{1};
     std::map<SubscriptionId, std::shared_ptr<ObserverSlot>> observers;
     bool notifying{false};
@@ -395,8 +411,12 @@ public:
             return;
         }
 
-        if (!core->ui.isValid() || core->ui.isCurrentThread()) {
+        if (core->isCurrentThread()) {
             core->removeObserver(id);
+            return;
+        }
+
+        if (!core->ui.isValid()) {
             return;
         }
 
@@ -471,7 +491,8 @@ public:
 
     template <class Compute, class... Sources>
     explicit Computed(Compute compute, Sources&... sources)
-        : compute_(std::move(compute))
+        : compute_(std::move(compute)),
+          ownerThread_(std::this_thread::get_id())
     {
         value_ = compute_();
         const int expand[] = {0, (observe(sources), 0)...};
@@ -490,15 +511,15 @@ public:
     Computed(const Computed&) = delete;
     Computed& operator=(const Computed&) = delete;
 
-    [[nodiscard]] const T& get() const noexcept
+    [[nodiscard]] const T& get() const
     {
-        WUI_ASSERT_UI_THREAD();
+        requireOwnerThread();
         return value_;
     }
 
     [[nodiscard]] SubscriptionId subscribe(Callback callback)
     {
-        WUI_ASSERT_UI_THREAD();
+        requireOwnerThread();
         const auto id = nextId_++;
         observers_.emplace(id, std::move(callback));
         return id;
@@ -506,7 +527,7 @@ public:
 
     void unsubscribe(SubscriptionId id)
     {
-        WUI_ASSERT_UI_THREAD();
+        requireOwnerThread();
         observers_.erase(id);
     }
 
@@ -520,7 +541,7 @@ private:
 
     void recompute()
     {
-        WUI_ASSERT_UI_THREAD();
+        requireOwnerThread();
         T next = compute_();
         if (next == value_) {
             return;
@@ -542,10 +563,19 @@ private:
     }
 
     std::function<T()> compute_;
+    std::thread::id ownerThread_;
     T value_{};
     SubscriptionId nextId_{1};
     std::map<SubscriptionId, Callback> observers_;
     std::vector<std::function<void()>> unsubscribers_;
+
+    void requireOwnerThread() const
+    {
+        if (ownerThread_ != std::this_thread::get_id()) {
+            throw std::logic_error(
+                "Computed operation must run on its owning thread");
+        }
+    }
 };
 
 } // namespace wui

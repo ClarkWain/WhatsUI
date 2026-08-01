@@ -13,6 +13,7 @@
 #include <string_view>
 
 #include "wui/wui.h"
+#include "wui/virtual_list.h"
 
 namespace {
 

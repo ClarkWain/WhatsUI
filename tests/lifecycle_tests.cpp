@@ -1,12 +1,16 @@
+#include <atomic>
 #include <memory>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "wui/runtime.h"
 #include "wui/declarative.h"
 #include "wui/widgets.h"
+#include "wui/ui_dispatcher.h"
+#include "wui/component.h"
 
 namespace {
 
@@ -307,6 +311,119 @@ void testDetachCallbackMayClearSameParentDuringClear()
            "clearChildren must tolerate a detach callback that clears the same parent again");
 }
 
+void testAttachedTreeRejectsWorkerMutationButDetachedTreeAllowsIt()
+{
+    auto detached = std::make_unique<wui::BoxNode>();
+    std::thread builder([&detached] {
+        detached->appendChild(
+            std::make_unique<wui::TextNode>("background"));
+    });
+    builder.join();
+    expect(detached->children().size() == 1,
+           "Detached nodes should support background construction");
+
+    auto* attached = detached.get();
+    wui::UiRoot root;
+    root.setContent(std::move(detached));
+    std::atomic<bool> structuralMutationRejected{false};
+    std::atomic<bool> metadataMutationRejected{false};
+    std::atomic<bool> callbackMutationRejected{false};
+    std::thread worker([&] {
+        try {
+            attached->appendChild(
+                std::make_unique<wui::TextNode>("invalid"));
+        } catch (const std::logic_error&) {
+            structuralMutationRejected = true;
+        }
+        try {
+            attached->setDebugName("invalid");
+        } catch (const std::logic_error&) {
+            metadataMutationRejected = true;
+        }
+        try {
+            attached->addDetachCallback([] {});
+        } catch (const std::logic_error&) {
+            callbackMutationRejected = true;
+        }
+    });
+    worker.join();
+    expect(structuralMutationRejected && metadataMutationRejected
+               && callbackMutationRejected
+               && attached->children().size() == 1,
+           "An attached tree must reject worker-thread structural, metadata, and callback mutation in every build type");
+}
+
+void testLifecycleCallbackExceptionsBecomeDiagnostics()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    std::vector<wui::UiDiagnostic> diagnostics;
+    dispatcher.setDiagnosticHandler(
+        [&diagnostics](const wui::UiDiagnostic& value) {
+            diagnostics.push_back(value);
+        });
+
+    auto node = std::make_unique<wui::BoxNode>();
+    node->addAttachCallback(
+        [] { throw std::runtime_error("attach failed"); });
+    node->addDetachCallback(
+        [] { throw std::runtime_error("detach failed"); });
+    node->addTeardown(
+        [] { throw std::runtime_error("teardown failed"); });
+
+    wui::UiRoot root(dispatcher.context());
+    root.setContent(std::move(node));
+    root.setContent(nullptr);
+    expect(diagnostics.size() == 3,
+           "Attach, detach, and teardown callback failures must all be isolated and diagnosed");
+}
+
+void testDuplicateAutomationIdsAreDiagnosedWithoutChangingTheTree()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    std::vector<wui::UiDiagnostic> diagnostics;
+    dispatcher.setDiagnosticHandler(
+        [&diagnostics](const wui::UiDiagnostic& value) {
+            diagnostics.push_back(value);
+        });
+
+    auto content = std::make_unique<wui::BoxNode>();
+    auto first = std::make_unique<wui::ButtonNode>("First");
+    auto second = std::make_unique<wui::ButtonNode>("Second");
+    first->setAutomationId("duplicate");
+    second->setAutomationId("duplicate");
+    second->setDebugName("SecondButton");
+    content->appendChild(std::move(first));
+    content->appendChild(std::move(second));
+
+    wui::UiRoot root(dispatcher.context());
+    root.setContent(std::move(content));
+    expect(root.content()->children().size() == 2,
+           "Identity diagnostics must not change retained tree ownership");
+    expect(diagnostics.size() == 1
+               && diagnostics.front().code
+                   == wui::UiDiagnosticCode::DuplicateAutomationId
+               && diagnostics.front().debugName == "SecondButton",
+           "Duplicate automation IDs must report the offending debug name");
+}
+
+void testGuardedComponentCallbacksExpireWithTheirOwner()
+{
+    int calls = 0;
+    std::function<void(int)> callback;
+    {
+        wui::CallbackLifetime lifetime;
+        callback = lifetime.guard([&calls](int value) { calls += value; });
+        callback(2);
+        expect(calls == 2,
+               "A guarded callback should run while its component owner is alive");
+    }
+    callback(3);
+    expect(calls == 2,
+           "A guarded callback should become a no-op after owner destruction");
+}
+
 } // namespace
 
 int main()
@@ -319,6 +436,10 @@ int main()
         testDetachingHoveredNodeClearsRouterBeforeDestruction();
         testDetachCallbackMayClearSameParentDuringRemove();
         testDetachCallbackMayClearSameParentDuringClear();
+        testAttachedTreeRejectsWorkerMutationButDetachedTreeAllowsIt();
+        testLifecycleCallbackExceptionsBecomeDiagnostics();
+        testDuplicateAutomationIdsAreDiagnosedWithoutChangingTheTree();
+        testGuardedComponentCallbacksExpireWithTheirOwner();
     } catch (const std::exception& error) {
         // Test executables must fail normally on Windows instead of surfacing
         // an uncaught exception as an application-crash dialog.

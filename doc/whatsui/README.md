@@ -15,17 +15,19 @@
 7. `ADR-006-declarative-authoring-and-node-boundary.md`
 8. `DECLARATIVE_API_INVENTORY.md`
 9. `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`
-10. `REACTIVITY_AND_STRUCTURE.md`
-11. `LAYOUT_MODEL.md`
-12. `TEXT_INPUT_AND_IME.md`
-13. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
-14. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
-15. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
-16. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
-17. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
-18. `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`（集合控件 viewport、回收与懒加载架构）
-19. `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`（集合虚拟化分步实现、测试与最终基线）
-20. `COLLECTION_VIRTUALIZATION_BASELINE.md`（集合虚拟化最终验证结果与测试基线）
+10. `DECLARATIVE_COMPONENT_AUTHORING.md`
+11. `DECLARATIVE_MODIFIER_INVENTORY.md`
+12. `REACTIVITY_AND_STRUCTURE.md`
+13. `LAYOUT_MODEL.md`
+14. `TEXT_INPUT_AND_IME.md`
+15. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
+16. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
+17. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
+18. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
+19. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
+20. `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`（集合控件 viewport、回收与懒加载架构）
+21. `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`（集合虚拟化分步实现、测试与最终基线）
+22. `COLLECTION_VIRTUALIZATION_BASELINE.md`（集合虚拟化最终验证结果与测试基线）
 
 ## 文档职责
 
@@ -38,6 +40,9 @@
 - `ADR-006-declarative-authoring-and-node-boundary.md`：定义声明式 Builder、运行时 `*Node`、单一 `wui` 作者命名空间、Builder 能力分层、所有权入口、组件边界和迁移验收标准。
 - `DECLARATIVE_API_INVENTORY.md`：记录全部 Builder/Node 映射、组合能力、公共所有权契约和当前自动门禁范围。
 - `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`：记录 ADR-006 第一阶段后的风险分级、目标能力模型和后续独立优化切片。
+- `DECLARATIVE_COMPONENT_AUTHORING.md`：说明普通函数组件、Props/Callbacks、响应式数据和 `CallbackLifetime` 的安全边界。
+- `DECLARATIVE_MODIFIER_INVENTORY.md`：定义 fluent modifier 的左右值配对、共享实现和组合能力清单。
+- `RETIRED_EXAMPLES.md`：记录不再构建或维护的历史示例；当前 Todo App 已归档。
 - `REACTIVITY_AND_STRUCTURE.md`：说明响应式绑定（`Text().bind`、节点 teardown 生命周期）、结构控件 `If`/`ForEach`、可插拔文本测量与新控件。
 - `LAYOUT_MODEL.md`：细化约束布局模型、容器语义、逻辑单位与滚动边界。
 - `TEXT_INPUT_AND_IME.md`：细化文本输入、组合输入、光标、选区和平台 IME 会话边界。

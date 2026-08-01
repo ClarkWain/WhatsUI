@@ -18,7 +18,7 @@ void showNewTaskDialog(wui::UiWindow& window,
 
     auto title = std::make_unique<wui::TextFieldNode>("例如：完成产品设计稿");
     auto* titleRaw = title.get();
-    titleRaw->setAccessibilityId("focus.new-task.title");
+    titleRaw->setAutomationId("focus.new-task.title");
     titleRaw->setFlex(1.0f);
 
     auto error = std::make_unique<wui::TextNode>();
@@ -78,13 +78,13 @@ void showNewTaskDialog(wui::UiWindow& window,
                                 .children(
                                     Spacer().flex(1.0f),
                                     Button("取消")
-                                        .accessibilityId("focus.new-task.cancel")
+                                        .automationId("focus.new-task.cancel")
                                         .appearance(wui::ButtonAppearance::Outline)
                                         .onClick([&window] {
                                             (void)window.dismissTopDialog();
                                         }),
                                     Button("保存任务")
-                                        .accessibilityId("focus.new-task.save")
+                                        .automationId("focus.new-task.save")
                                         .appearance(wui::ButtonAppearance::Primary)
                                         .onClick(std::move(submit))
                                 )

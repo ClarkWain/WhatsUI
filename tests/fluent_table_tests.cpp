@@ -119,7 +119,7 @@ void testDisabledRowsAndHeaderPointerSort()
 }
 void testVirtualAccessibilityWindow()
 {
-    wui::TableNode table(columns()); table.setAccessibilityId("release-table");
+    wui::TableNode table(columns()); table.setAutomationId("release-table");
     table.setRows(rows()).maxVisibleRows(1); table.layout({0, 0, 240, 76});
     const auto entries = table.accessibilityEntries();
     std::size_t headers = 0, tableRows = 0, cells = 0;
@@ -134,7 +134,7 @@ void testVirtualAccessibilityWindow()
     expect(headers == columns().size() && tableRows == 1 && cells == columns().size(),
            "Table semantic materialization must include headers plus only the visible row window and its cells");
 
-    wui::DataGridNode grid; grid.setAccessibilityId("work-grid"); grid.setColumns(columns()).setRows(rows()).maxVisibleRows(2);
+    wui::DataGridNode grid; grid.setAutomationId("work-grid"); grid.setColumns(columns()).setRows(rows()).maxVisibleRows(2);
     grid.layout({0, 0, 440, 116}); grid.sortBy(0);
     grid.onKeyEvent({0, wui::KeyAction::Down, 40}); grid.onKeyEvent({0, wui::KeyAction::Down, 32});
     bool sortedHeader = false, selectedRow = false, focusedCell = false;
@@ -215,7 +215,7 @@ void testCentralSnapshotAndVirtualActionRouting()
     auto root = std::make_unique<wui::BoxNode>();
     auto grid = std::make_unique<wui::DataGridNode>();
     wui::DataGridNode* raw = grid.get();
-    grid->setAccessibilityId("work-grid");
+    grid->setAutomationId("work-grid");
     grid->accessibleLabel("Work items");
     grid->setColumns(columns()).setRows(rows()).maxVisibleRows(2);
     root->appendChild(std::move(grid));

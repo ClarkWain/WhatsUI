@@ -7,12 +7,14 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "wui/accessibility.h"
 #include "wui/events.h"
 #include "wui/paint_context.h"
 #include "wui/types.h"
+#include "wui/ui_context.h"
 
 namespace wui {
 
@@ -81,6 +83,11 @@ public:
         return attached_;
     }
 
+    [[nodiscard]] const UiContext& uiContext() const noexcept
+    {
+        return ownerContext_;
+    }
+
     // Register a callback that runs when this node is destroyed. Reactive
     // builders use it to unsubscribe from a State, so a State outliving the
     // node cannot call into freed memory.
@@ -122,15 +129,19 @@ public:
     virtual AccessibilityActionStatus performAccessibilityAction(
         AccessibilityActionKind kind, std::string_view value);
 
-    [[nodiscard]] const std::string& accessibilityId() const noexcept
+    [[nodiscard]] const std::string& automationId() const noexcept
     {
-        return accessibilityId_;
+        return automationId_;
     }
 
-    void setAccessibilityId(std::string id)
+    void setAutomationId(std::string id);
+
+    [[nodiscard]] const std::string& debugName() const noexcept
     {
-        accessibilityId_ = std::move(id);
+        return debugName_;
     }
+
+    void setDebugName(std::string name);
 
     // A layout change also changes the pixels occupied by this node and its
     // ancestors, so it implicitly invalidates paint up to the root boundary.
@@ -202,8 +213,13 @@ private:
     friend class UiRoot;
     friend class OverlayHost;
 
-    void attachRecursively();
+    void attachRecursively(UiContext ownerContext = {});
     void detachRecursively() noexcept;
+    void requireTreeMutationThread() const;
+    void reportLifecycleException(
+        std::string_view phase,
+        std::string_view message = {}) const noexcept;
+    void validateIdentitySubtree() const noexcept;
 
     Node* parent_{nullptr};
     std::vector<NodePtr> children_;
@@ -213,7 +229,11 @@ private:
     std::function<void()> invalidationHandler_;
     RectF bounds_{};
     float flex_{0.0f};
-    std::string accessibilityId_;
+    std::string automationId_;
+    std::string debugName_;
+    UiContext ownerContext_;
+    UiContext diagnosticContext_;
+    std::thread::id ownerThread_{};
     bool attached_{false};
     DirtyFlags dirtyFlags_{toMask(DirtyFlag::Layout) | toMask(DirtyFlag::Paint)};
     mutable std::optional<Constraints> lastMeasuredConstraints_;

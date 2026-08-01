@@ -19,7 +19,9 @@ class DrawerNode;
 
 class UiWindow {
 public:
-    explicit UiWindow(std::unique_ptr<PlatformWindow> platformWindow);
+    explicit UiWindow(
+        std::unique_ptr<PlatformWindow> platformWindow,
+        UiContext context = {});
     ~UiWindow();
 
     [[nodiscard]] WindowId id() const noexcept;
@@ -103,6 +105,7 @@ private:
     [[nodiscard]] DrawerNode* activeModalDrawer() const noexcept;
 
     std::unique_ptr<PlatformWindow> platformWindow_;
+    UiContext context_;
     UiRoot uiRoot_;
     FocusManager focusManager_;
     InputRouter inputRouter_{&focusManager_};

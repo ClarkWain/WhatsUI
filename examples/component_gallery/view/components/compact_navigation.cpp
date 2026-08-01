@@ -54,7 +54,7 @@ void showCompactNavigationDrawer(const NavigationRailConfig& config,
                                  : wui::ButtonAppearance::Subtle)
             .icon(item.icon)
             .iconPosition(wui::ButtonIconPosition::Before)
-            .accessibilityId("gallery.navigation." + item.id)
+            .automationId("gallery.navigation." + item.id)
             .onClick([onNavigate, drawerNode, route] {
                 if (onNavigate) onNavigate(route);
                 drawerNode->dismiss();
@@ -89,7 +89,7 @@ std::unique_ptr<wui::Node> buildCompactNavigationBar(
                         .appearance(wui::ButtonAppearance::Subtle)
                         .icon(wui::IconName::MoreHorizontal)
                         .iconOnly()
-                        .accessibilityId("gallery.navigation.open")
+                        .automationId("gallery.navigation.open")
                         .onClick([config, onNavigate = std::move(onNavigate), &window] {
                             showCompactNavigationDrawer(config, onNavigate, window);
                         }),

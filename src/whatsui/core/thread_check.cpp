@@ -1,21 +1,18 @@
 #include "wui/thread_check.h"
 
+#include <algorithm>
 #include <mutex>
+#include <stdexcept>
+#include <vector>
 
 namespace wui {
 
 namespace {
 
-std::thread::id& uiThreadIdStorage() noexcept
+std::vector<std::thread::id>& uiThreadIds() noexcept
 {
-    static std::thread::id id{};
-    return id;
-}
-
-bool& uiThreadRegisteredFlag() noexcept
-{
-    static bool registered = false;
-    return registered;
+    static std::vector<std::thread::id> ids;
+    return ids;
 }
 
 std::mutex& uiThreadMutex() noexcept
@@ -29,19 +26,30 @@ std::mutex& uiThreadMutex() noexcept
 void registerUiThread() noexcept
 {
     std::lock_guard<std::mutex> lock(uiThreadMutex());
-    if (!uiThreadRegisteredFlag()) {
-        uiThreadIdStorage() = std::this_thread::get_id();
-        uiThreadRegisteredFlag() = true;
+    const auto current = std::this_thread::get_id();
+    if (std::find(uiThreadIds().begin(), uiThreadIds().end(), current)
+        == uiThreadIds().end()) {
+        uiThreadIds().push_back(current);
     }
 }
 
 bool isOnUiThread() noexcept
 {
     std::lock_guard<std::mutex> lock(uiThreadMutex());
-    if (!uiThreadRegisteredFlag()) {
+    if (uiThreadIds().empty()) {
         return true; // No thread registered - skip assertion
     }
-    return std::this_thread::get_id() == uiThreadIdStorage();
+    const auto current = std::this_thread::get_id();
+    return std::find(uiThreadIds().begin(), uiThreadIds().end(), current)
+        != uiThreadIds().end();
+}
+
+void requireUiThread()
+{
+    if (!isOnUiThread()) {
+        throw std::logic_error(
+            "This operation must run on a registered UI thread");
+    }
 }
 
 } // namespace wui

@@ -104,6 +104,16 @@ wui::PointerEvent pointer(wui::PointerAction action, wui::PointF position,
 void testHeaderSlotsAreStableAndReplaceable()
 {
     wui::CardHeaderNode header("Task plan", "Three actions due today");
+    bool rejectedDirectChild = false;
+    try {
+        header.appendChild(
+            std::make_unique<FixedNode>(wui::SizeF{12.0f, 12.0f}));
+    } catch (const std::logic_error&) {
+        rejectedDirectChild = true;
+    }
+    expect(rejectedDirectChild && header.children().empty(),
+           "CardHeader must reject child insertion outside its named slots");
+
     auto firstAction = std::make_unique<FixedNode>(wui::SizeF{32.0f, 24.0f});
     wui::Node* const firstActionRaw = firstAction.get();
     header.action(std::move(firstAction));

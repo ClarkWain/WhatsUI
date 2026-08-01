@@ -5,6 +5,7 @@
 #include "wui/avatar.h"
 #include "wui/accessibility.h"
 #include "wui/app.h"
+#include "wui/component.h"
 #include "wui/badge.h"
 #include "wui/date_time.h"
 #include "wui/events.h"

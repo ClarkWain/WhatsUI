@@ -287,7 +287,7 @@ void collectCards(wui::Node& node, std::vector<wui::CardNode*>& cards)
 template <class NodeType>
 NodeType* findNodeByAccessibilityId(wui::Node& node, std::string_view id)
 {
-    if (node.accessibilityId() == id) return dynamic_cast<NodeType*>(&node);
+    if (node.automationId() == id) return dynamic_cast<NodeType*>(&node);
     if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
         for (const auto& child : container->children()) {
             if (auto* result = findNodeByAccessibilityId<NodeType>(*child, id)) {

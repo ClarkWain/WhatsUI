@@ -346,7 +346,7 @@ AccessibilityProperties propertiesForNode(const Node& node, const Node* focused)
     if (const auto* persona = dynamic_cast<const PersonaNode*>(&node)) {
         properties.actions.focus = persona->isInteractive();
     }
-    properties.automationId = node.accessibilityId();
+    properties.automationId = node.automationId();
     properties.focused = &node == focused;
     properties.bounds = node.bounds();
     return properties;

@@ -29,6 +29,50 @@ struct HasContent<
     : std::true_type {
 };
 
+template <typename T, typename = void>
+struct HasAutomationId : std::false_type {
+};
+
+template <typename T>
+struct HasAutomationId<
+    T,
+    std::void_t<decltype(std::declval<T&&>().automationId("id"))>>
+    : std::true_type {
+};
+
+template <typename T, typename = void>
+struct HasDebugName : std::false_type {
+};
+
+template <typename T>
+struct HasDebugName<
+    T,
+    std::void_t<decltype(std::declval<T&&>().debugName("name"))>>
+    : std::true_type {
+};
+
+template <typename T, typename = void>
+struct HasMedia : std::false_type {
+};
+
+template <typename T>
+struct HasMedia<
+    T,
+    std::void_t<decltype(std::declval<T&&>().media(wui::Text()))>>
+    : std::true_type {
+};
+
+template <typename T, typename = void>
+struct HasAction : std::false_type {
+};
+
+template <typename T>
+struct HasAction<
+    T,
+    std::void_t<decltype(std::declval<T&&>().action(wui::Button()))>>
+    : std::true_type {
+};
+
 template <typename Parent, typename Child, typename = void>
 struct AcceptsChild : std::false_type {
 };
@@ -101,6 +145,18 @@ static_assert(std::is_same_v<
                   wui::ButtonAppearance::Primary)),
               wui::Button&&>);
 static_assert(!CanBuildAfterLvalueModifier<wui::Button>::value);
+static_assert(HasAutomationId<wui::Button>::value);
+static_assert(HasDebugName<wui::Button>::value);
+static_assert(std::is_same_v<
+              decltype(wui::IconButton().accessibleLabel("Icon")),
+              wui::IconButton&&>);
+static_assert(!std::is_convertible_v<std::string, wui::NodeKey>);
+static_assert(std::is_same_v<
+              decltype(wui::Button("Save").build()),
+              std::unique_ptr<wui::ButtonNode>>);
+static_assert(std::is_same_v<
+              decltype(wui::Dialog().build()),
+              std::unique_ptr<wui::DialogNode>>);
 
 #define WUI_ASSERT_LEAF_BUILDER(Builder, RuntimeNode)                         \
     static_assert(std::is_same_v<typename wui::Builder::node_type,            \
@@ -126,7 +182,9 @@ WUI_ASSERT_LEAF_BUILDER(Spacer, SpacerNode);
 WUI_ASSERT_LEAF_BUILDER(TextField, TextFieldNode);
 WUI_ASSERT_LEAF_BUILDER(TextArea, TextAreaNode);
 WUI_ASSERT_CONTAINER_BUILDER(Card, CardNode);
-WUI_ASSERT_CONTAINER_BUILDER(CardHeader, CardHeaderNode);
+WUI_ASSERT_LEAF_BUILDER(CardHeader, CardHeaderNode);
+static_assert(HasMedia<wui::CardHeader>::value);
+static_assert(HasAction<wui::CardHeader>::value);
 WUI_ASSERT_CONTAINER_BUILDER(CardPreview, CardPreviewNode);
 WUI_ASSERT_CONTAINER_BUILDER(CardFooter, CardFooterNode);
 WUI_ASSERT_LEAF_BUILDER(Label, LabelNode);

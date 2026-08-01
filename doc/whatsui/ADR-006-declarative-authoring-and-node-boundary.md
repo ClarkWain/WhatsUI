@@ -1,8 +1,10 @@
 # ADR-006: Declarative Authoring And Runtime Node Boundary
 
-状态：Accepted（分阶段实现中）
+状态：Accepted（已完成，2026-08-01）
 
-仓库维护者已确认本方向。运行时 `*Node` 命名、单一 `wui` 作者命名空间、显式 `build()` 所有权出口、modifier 双引用限定、`wui/declarative.h` 及 66 项映射/capability 门禁已进入实现；领域头拆分、身份属性拆分和逐 modifier inventory 门禁仍按本文阶段计划继续完成。
+仓库维护者已确认并完成本方向。运行时 `*Node` 命名、单一 `wui` 作者命名空间、
+显式 `build()` 所有权出口、modifier 双引用限定、领域头拆分、身份属性拆分、
+per-context UI owner、结构化诊断及 66 项映射/capability 门禁均已落地。
 
 ## Context
 
@@ -451,7 +453,10 @@ app.onDiagnostic([](const UiDiagnostic& diagnostic) {
 
 会阻断自定义绘制、节点级测试、平台集成和高级控件开发。节点应公开，但必须通过 `Node` 后缀明确标识。
 
-## Implementation Plan
+## Implementation Record
+
+以下阶段全部完成；细节与验证矩阵见
+`DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`。
 
 ### Phase 1: API contract tests
 

@@ -107,11 +107,11 @@ std::unique_ptr<wui::Node> buildTextViewport()
     document->setWrap(wui::TextWrap::NoWrap);
     document->setFillAvailableWidth(true);
     document->setColor(wui::theme().colors.text);
-    document->setAccessibilityId("gallery.long-text.document");
+    document->setAutomationId("gallery.long-text.document");
 
     auto scroller = std::make_unique<wui::ScrollViewNode>();
     scroller->setAxis(wui::ScrollAxis::Vertical);
-    scroller->setAccessibilityId("gallery.long-text.viewport");
+    scroller->setAutomationId("gallery.long-text.viewport");
     auto* const textViewport = scroller.get();
     scroller->content(std::move(document));
 

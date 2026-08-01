@@ -1,146 +1,75 @@
 # Declarative API Optimization Roadmap
 
-状态：Active
+状态：Completed（2026-08-01）
 
-本文记录 ADR-006 第一阶段实现后的架构评审结论和后续优化顺序。目标不是推翻现有方向，而是在保留单一 `wui` 命名空间、无后缀 Builder、`*Node` 运行时类型、move-only Builder、`unique_ptr` 单一所有权和 `build() &&` 的基础上，补齐组合安全、线程安全和长期维护能力。
+本文记录 ADR-006 后续优化的最终落地状态。WhatsUI 保留单一 `wui`
+作者命名空间、无后缀 Builder、`*Node` 运行时类型、move-only Builder、
+`unique_ptr` 单一所有权和单棵 retained tree。
 
-## 已确认保留的设计
+## 已稳定的作者契约
 
-- 页面作者使用 `wui::Button`、`wui::Text`、`wui::Column`。
+- 页面代码使用 `wui::Button`、`wui::Text`、`wui::Column`。
 - retained tree 使用 `wui::ButtonNode`、`wui::TextNode`、`wui::ColumnNode`。
-- Builder 是 move-only，所有权只能通过 `build() &&` 转移。
-- 运行时保持单棵 retained Node tree，不引入第二套 Widget/Element 树。
-- State 使用 `get()`、`set()`、`post()`，后台更新通过 `UiContext` 投递。
-- API inventory、行为测试和视觉基线作为重构门禁。
+- Builder 只能经 `build() &&` 消费，返回 `std::unique_ptr<NodeT>`；
+  `asNode()` 只在组合边界擦除为 `NodePtr`。
+- State 使用 `get()`、`set()`、`post()`；后台线程只能通过 `post()` 或
+  `UiContext::post()` 影响已挂接 UI。
+- `automationId`、`accessibleLabel`、`debugName` 和 `NodeKey` 各自承担唯一语义。
 
-## P0：优先修复的正确性问题
+## 完成结果
 
-### 1. 声明式组合能力不能直接复制运行时继承关系
+| 优先级 | 工作 | 最终结果 | 自动门禁 |
+| --- | --- | --- | --- |
+| P0 | 语义组合能力 | `AnyChildren`、`SingleContent`、`TypedChildren<T>`、`ItemFactory`、`Slots` 已分离；运行时也拒绝绕过 Builder 的非法树 | 声明式 API contract、ScrollView/Card/Accordion/Radio/Avatar/导航测试 |
+| P0 | UI 线程所有权 | 每个 `UiContext` 独立绑定 owner thread；已 attach 树在 Debug/Release 都验证线程；detached Node 可后台构造 | Dispatcher、State、生命周期及 Release 测试 |
+| P0 | 生命周期异常 | attach/detach/teardown/overlay 用户回调异常被隔离并写入结构化诊断，析构路径不因用户异常终止进程 | lifecycle tests |
+| P1 | 领域头拆分 | `declarative.h` 成为聚合入口；builder、text、layout、input、feedback、navigation、collections、structural 可独立 include | clean domain-header consumer target |
+| P1 | modifier 单实现 | 公开 modifier 保留 `&`/`&&` 对；复杂 `bind()`、`then()`、single content 共用内部实现 | API contract 与 modifier inventory |
+| P1 | keyed reconciliation | 强类型 `NodeKey`、空/重复 key 验证、hash 索引、非法快照回滚、可选 Props updater | structural smoke tests |
+| P1 | Component 边界 | 普通函数 + Props + Callbacks 为默认模式；`CallbackLifetime` 让已销毁 owner 的回调安全失效 | lifecycle callback test |
+| P2 | 具体 build 类型 | 所有 Builder 的 `build()` 返回 `unique_ptr<NodeT>`，删除 Dialog 特例 | compile-time contract |
+| P2 | 身份拆分 | 删除旧 `accessibilityId`；重复 automation ID、非法 key、缺失 accessible name 进入统一诊断 | contract、UIA、lifecycle tests |
+| P2 | 扩展与诊断 | 公开最小 Builder 基类/能力 mixin；错误 child、左值消费、空节点产生短诊断 | external custom-builder consumer |
 
-`ContainerNode` 只表示运行时能够持有子节点，不代表页面作者可以传入任意类型、任意数量的 children。声明式层需要按语义拆分：
+## 组合能力
 
-| 能力 | 适用对象 | 规则 |
+| 能力 | 代表控件 | 规则 |
 | --- | --- | --- |
-| `AnyChildren` | `Box`、`Row`、`Column`、普通内容容器 | 接受零到多个任意 Node |
-| `SingleContent` | `ScrollView`、`Dialog`、`Drawer`、`Field`、`AccordionItem` | 恰好一个或至多一个专用 content |
+| `AnyChildren` | `Box`、`Row`、`Column` | 零到多个任意 NodeLike |
+| `SingleContent` | `ScrollView`、`Dialog`、`Drawer`、`AccordionItem` | 至多一个具名 content，重复设置为替换 |
 | `TypedChildren<T>` | `RadioGroup`、`Accordion`、`AvatarGroup` | 只接受指定 Builder/Node 类型 |
-| `ItemFactory` | `TabList`、`Toolbar`、`Breadcrumb` | 通过 `tab/item/option` API 创建并登记语义项 |
-| `Slots` | `CardHeader` 等复合控件 | 每个槽位具有独立名称和数量规则 |
+| `ItemFactory` | `TabList`、`Toolbar`、`Breadcrumb` | 只能由语义 factory 登记 item |
+| `Slots` | `CardHeader` | `media()`、`action()` 独立槽位；不公开 `children()` |
 
-第一切片先处理 `ScrollView`：删除通用 `children()`，增加单一 `content()`；对应运行时节点也必须拒绝多个直接 child，避免“只布局第一个但绘制全部”的无效树。
+## KeyedForEach 更新语义
 
-### 2. UI 线程约束必须在 Release 中成立
+- 三参数构造保留简单模型：key 和值都未变化时复用 Node；同 key 值变化时重建该行。
+- 四参数构造可传 `ItemUpdater(Node&, const T&)`：同 key 值变化时原地更新 Props，
+  Node、焦点、选区和瞬时状态保持不变。
+- 初始空 key/重复 key 直接失败；运行中的非法快照保留上一棵合法树并发出
+  `InvalidNodeKey` 诊断。
 
-当前 `WUI_ASSERT_UI_THREAD` 在 Release 中为空操作，而 Node、UiRoot、Navigator、Overlay 和焦点对象仍然是 UI-thread confined。后续需要：
+## UI 所有权与诊断
 
-- 已 attach 的运行时树绑定明确的 `UiContext`/owner token。
-- 所有公开树修改入口在 Debug 和 Release 都校验 owner thread。
-- 明确定义 detached Node 是否允许后台构建；允许时不得绑定或读取 UI State。
-- 后台更新只通过 `UiContext::post()` 或 `State::post()` 进入 UI 队列。
-- 消除全局单一 UI thread ID 与 per-app `UiContext` 的双重模型。
+`UiDiagnostic` 统一承载：
 
-### 3. 生命周期回调与 `noexcept` 必须一致
+- `WrongThreadMutation`
+- `LifecycleCallbackException`
+- `DuplicateAutomationId`
+- `InvalidNodeKey`
+- `MissingAccessibleName`
 
-`UiRoot::setContent()`、递归 detach 和 Node 析构路径会执行 `std::function` 回调。不能只靠注释假设回调永不抛出。需要在以下方案中统一选择：
+诊断 handler 始终在所属 UI Context 的 owner thread 执行。已挂接树的结构修改
+违反线程约束时抛出 `std::logic_error`；声明为 `noexcept` 的低层属性失效入口采用
+fail-fast，因此业务层应通过 `State::post()` 投递后台结果。
 
-- 捕获回调异常并写入结构化诊断通道；或
-- 移除不真实的 `noexcept`，为 attach/detach 定义失败和回滚语义。
+## 交付门禁
 
-任何方案都必须保证析构路径不会因为用户回调直接 `std::terminate`。
+完成定义包括：Debug/Release 编译、声明式 contract、State/Dispatcher/lifecycle、
+Focus Tomato 新建任务与 Overlay/Dialog 回归、Component Gallery、外部领域头消费者、
+Software/OpenGL 相关视觉门禁和人工截图比较。新增 Builder 或 capability 时，必须同步
+更新 `DECLARATIVE_API_INVENTORY.md` 与契约测试。
 
-## P1：可维护性和扩展性
-
-### 4. 拆分声明式聚合头
-
-当前 `wui/declarative.h` 同时包含基础控件、结构控件、响应式绑定和 keyed reconciliation。计划拆分为：
-
-```text
-wui/declarative/core.h
-wui/declarative/layout.h
-wui/declarative/input.h
-wui/declarative/feedback.h
-wui/declarative/navigation.h
-wui/declarative/collections.h
-wui/declarative/structural.h
-wui/declarative.h
-```
-
-聚合头继续保留，但领域头必须能够独立由 external consumer 编译。
-
-### 5. 去除复杂 modifier 的双份实现
-
-`&`/`&&` 两个公开重载继续保留，但 `bind()`、`then()`、`content()` 等复杂行为只能有一份内部实现：
-
-```cpp
-void applyValue(Value value);
-
-Self& value(Value value) &
-{
-    applyValue(std::move(value));
-    return *this;
-}
-
-Self&& value(Value value) &&
-{
-    applyValue(std::move(value));
-    return std::move(*this);
-}
-```
-
-逐 modifier inventory 应验证左右值重载成对出现，并防止两套逻辑漂移。
-
-### 6. 重做 keyed reconciliation 契约
-
-- 使用强类型 `NodeKey`。
-- 空 key、重复 key 不再静默改写，必须进入结构化诊断；测试模式下失败。
-- 用 key index/hash map 避免 O(n²) 搜索。
-- 明确区分 insert、remove、move、update。
-- 同 key 数据变化应优先更新 Props，不能默认销毁 Node 并丢失焦点、选区和瞬时状态。
-- 在增量 Props 模型完成前，文档必须明确当前 key 只能保留“值未变化”的节点。
-
-### 7. 建立 Component/Props/Callbacks 边界
-
-复杂页面组件需要独立 Props 和 Callback 对象，避免把 ViewModel、Window 或临时局部变量直接引用捕获到长生命周期 Node。框架需要提供 owner/lifetime token 或 weak callback 辅助设施，使页面销毁后的后台完成事件安全失效。
-
-## P2：API 一致性与诊断体验
-
-### 8. 评估让 `build()` 保留具体 Node 类型
-
-当前通用 `build()` 返回 `NodePtr`，会过早丢失 `NodeT`。候选方案是统一返回 `std::unique_ptr<NodeT>`，由 `asNode()` 在组合边界上转为 `NodePtr`。这样可以删除 `Dialog::build()` 特例，并让 `auto node = Button(...).build()` 保留 `ButtonNode` API。
-
-无论是否调整返回类型，文档都必须强调：当前 Builder 在构造时已经创建 Node，`build()` 是一次性 finalize/ownership transfer，不是 Flutter 式可重复生命周期回调。
-
-### 9. 拆分身份属性
-
-删除含义模糊的 `accessibilityId`，分别提供：
-
-- `automationId`：UI 自动化和稳定测试定位。
-- `accessibleLabel`：辅助技术朗读名称。
-- `debugName`：Inspector、日志和诊断。
-- `NodeKey`：结构 reconciliation 身份。
-
-这些属性不能互相回退，重复 automationId 和非法 key 必须进入统一诊断通道。
-
-### 10. 改善编译诊断和自定义 Builder 扩展
-
-- 为 lvalue Builder、空 NodePtr、错误 child 类型提供短而明确的静态诊断。
-- 为自定义 Builder 提供公开、最小的 capability 组合接口，避免依赖 `detail`。
-- 增加 clean external-consumer 测试，覆盖领域头、聚合头和自定义 Node/Builder。
-
-## 实施与提交策略
-
-每个切片遵循以下顺序：
-
-1. 先增加编译期或运行期失败测试。
-2. 修改最小 API 和实现使测试通过。
-3. 迁移仓库内调用点，不保留未发布旧 API 别名。
-4. 运行 Debug/Release、行为、生命周期和相关视觉基线。
-5. 每个独立能力单独提交，避免线程、组合和头文件拆分混入同一提交。
-
-## 当前进度
-
-已完成第一切片：`ScrollView` 从 `AnyChildren` 迁移到 `SingleContent`，并建立了可复用的 `SingleContentBuilderBase`、Node child invariant hook、空内容/多内容事务验证以及 Debug/Release 契约测试。
-
-已完成第二切片：`RadioGroup`、`Accordion`、`AvatarGroup` 使用 `TypedChildren<T>`，错误 Builder 子类型在编译期不可用；`TabList`、`Toolbar`、`Breadcrumb` 只保留语义 item factory。六个运行时容器同时验证直接 child 类型，避免绕过 Builder 形成无效 retained tree。
-
-下一切片：统一 `UiContext` owner token、Release 树修改线程验证和结构化诊断通道。
+最终验收（2026-08-01）：Release 全量 CTest 208/208 通过。Focus Tomato 的任务列表、
+会话设置、专注计时、完成提醒和短休息截图已逐页比较；计时页保持紧凑宽度，主操作使用
+大尺寸图标按钮，次操作降级显示，未发现裁切、重叠或无效留白。

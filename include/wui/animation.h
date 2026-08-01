@@ -166,14 +166,13 @@ public:
     // Global singleton (UI-thread only, like State<T>).
     static Ticker& instance() noexcept
     {
-        static Ticker ticker;
+        thread_local Ticker ticker;
         return ticker;
     }
 
     // Add an animation and return its ID for later cancellation.
     [[nodiscard]] AnimationId add(Animation animation)
     {
-        WUI_ASSERT_UI_THREAD();
         const auto id = nextId_++;
         entries_.push_back({id, std::move(animation)});
         return id;
@@ -182,7 +181,6 @@ public:
     // Cancel a running animation by ID.
     void cancel(AnimationId id)
     {
-        WUI_ASSERT_UI_THREAD();
         entries_.erase(
             std::remove_if(entries_.begin(), entries_.end(),
                            [id](const Entry& e) { return e.id == id; }),
@@ -192,7 +190,6 @@ public:
     // Advance all animations by dt seconds. Removes finished ones.
     void tick(float dt)
     {
-        WUI_ASSERT_UI_THREAD();
         entries_.erase(
             std::remove_if(entries_.begin(), entries_.end(),
                            [dt](Entry& e) { return !e.animation.tick(dt); }),
@@ -202,21 +199,18 @@ public:
     // Whether any animations are currently running.
     [[nodiscard]] bool hasActive() const noexcept
     {
-        WUI_ASSERT_UI_THREAD();
         return !entries_.empty();
     }
 
     // Number of active animations.
     [[nodiscard]] std::size_t activeCount() const noexcept
     {
-        WUI_ASSERT_UI_THREAD();
         return entries_.size();
     }
 
     // Cancel all active animations.
     void cancelAll() noexcept
     {
-        WUI_ASSERT_UI_THREAD();
         entries_.clear();
     }
 

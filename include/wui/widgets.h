@@ -392,12 +392,19 @@ public:
     void layout(const RectF& bounds) override;
     void paint(PaintContext& context) override;
 
+protected:
+    void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const override;
+
 private:
     [[nodiscard]] std::size_t actionIndex() const noexcept;
     std::string title_;
     std::string description_;
     bool hasMedia_{false};
     bool hasAction_{false};
+    bool acceptingSlotMutation_{false};
 };
 
 class CardPreviewNode : public ContainerNode {

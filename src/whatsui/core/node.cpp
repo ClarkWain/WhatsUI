@@ -2,6 +2,7 @@
 #include "wui/thread_check.h"
 
 #include <stdexcept>
+#include <unordered_map>
 
 namespace wui {
 
@@ -13,7 +14,13 @@ Node::~Node()
     // make a child callback re-enter an owner whose vptr is already `Node`.
     for (auto& callback : teardown_) {
         if (callback) {
-            callback();
+            try {
+                callback();
+            } catch (const std::exception& error) {
+                reportLifecycleException("teardown", error.what());
+            } catch (...) {
+                reportLifecycleException("teardown");
+            }
         }
     }
 }
@@ -38,13 +45,13 @@ SizeF Node::measureWithConstraints(const Constraints& constraints) const
 
 void Node::appendChild(NodePtr child)
 {
-    WUI_ASSERT_UI_THREAD();
+    requireTreeMutationThread();
     insertChild(children_.size(), std::move(child));
 }
 
 void Node::appendChildren(std::vector<NodePtr> children)
 {
-    WUI_ASSERT_UI_THREAD();
+    requireTreeMutationThread();
     const std::size_t resultingCount = children_.size() + children.size();
     for (std::size_t index = 0; index < children.size(); ++index) {
         const auto& child = children[index];
@@ -64,17 +71,20 @@ void Node::appendChildren(std::vector<NodePtr> children)
         Node* const rawChild = child.get();
         children_.push_back(std::move(child));
         if (attached_) {
-            rawChild->attachRecursively();
+            rawChild->attachRecursively(ownerContext_);
         }
     }
     if (!children.empty()) {
+        if (attached_) {
+            validateIdentitySubtree();
+        }
         markDirty(DirtyFlag::Layout);
     }
 }
 
 void Node::insertChild(std::size_t index, NodePtr child)
 {
-    WUI_ASSERT_UI_THREAD();
+    requireTreeMutationThread();
     if (!child) {
         throw std::invalid_argument("child must not be null");
     }
@@ -87,14 +97,15 @@ void Node::insertChild(std::size_t index, NodePtr child)
     Node* const rawChild = child.get();
     children_.insert(children_.begin() + static_cast<std::ptrdiff_t>(index), std::move(child));
     if (attached_) {
-        rawChild->attachRecursively();
+        rawChild->attachRecursively(ownerContext_);
+        validateIdentitySubtree();
     }
     markDirty(DirtyFlag::Layout);
 }
 
 void Node::moveChild(std::size_t from, std::size_t to)
 {
-    WUI_ASSERT_UI_THREAD();
+    requireTreeMutationThread();
     if (from >= children_.size() || to >= children_.size()) {
         throw std::out_of_range("child move index out of range");
     }
@@ -109,7 +120,7 @@ void Node::moveChild(std::size_t from, std::size_t to)
 
 NodePtr Node::removeChild(std::size_t index)
 {
-    WUI_ASSERT_UI_THREAD();
+    requireTreeMutationThread();
     if (index >= children_.size()) {
         throw std::out_of_range("child index out of range");
     }
@@ -125,7 +136,7 @@ NodePtr Node::removeChild(std::size_t index)
 
 void Node::clearChildren()
 {
-    WUI_ASSERT_UI_THREAD();
+    requireTreeMutationThread();
     if (children_.empty()) {
         return;
     }
@@ -143,6 +154,7 @@ void Node::clearChildren()
 
 void Node::addTeardown(std::function<void()> callback)
 {
+    requireTreeMutationThread();
     teardown_.push_back(std::move(callback));
 }
 
@@ -156,36 +168,65 @@ void Node::validateChildInsertion(
     (void)resultingCount;
 }
 
+void Node::setAutomationId(std::string id)
+{
+    requireTreeMutationThread();
+    automationId_ = std::move(id);
+    if (attached_) {
+        validateIdentitySubtree();
+    }
+}
+
 void Node::addAttachCallback(std::function<void()> callback)
 {
+    requireTreeMutationThread();
     if (!callback) {
         return;
     }
     attachCallbacks_.push_back(std::move(callback));
     if (attached_) {
-        attachCallbacks_.back()();
+        try {
+            attachCallbacks_.back()();
+        } catch (const std::exception& error) {
+            reportLifecycleException("attach", error.what());
+        } catch (...) {
+            reportLifecycleException("attach");
+        }
     }
 }
 
 void Node::addDetachCallback(std::function<void()> callback)
 {
+    requireTreeMutationThread();
     if (callback) {
         detachCallbacks_.push_back(std::move(callback));
     }
 }
 
-void Node::attachRecursively()
+void Node::attachRecursively(UiContext ownerContext)
 {
     if (attached_) {
         return;
     }
+    ownerContext_ = std::move(ownerContext);
+    diagnosticContext_ = ownerContext_;
+    ownerThread_ = std::this_thread::get_id();
     attached_ = true;
     onAttach();
     for (auto& callback : attachCallbacks_) {
-        callback();
+        try {
+            callback();
+        } catch (const std::exception& error) {
+            reportLifecycleException("attach", error.what());
+        } catch (...) {
+            reportLifecycleException("attach");
+        }
     }
     for (const auto& child : children_) {
-        child->attachRecursively();
+        child->attachRecursively(ownerContext_);
+    }
+    if (parent_ == nullptr) {
+        validateIdentitySubtree();
     }
 }
 
@@ -202,14 +243,95 @@ void Node::detachRecursively() noexcept
         child->detachRecursively();
     }
     for (auto& callback : detachCallbacks_) {
-        callback();
+        try {
+            callback();
+        } catch (const std::exception& error) {
+            reportLifecycleException("detach", error.what());
+        } catch (...) {
+            reportLifecycleException("detach");
+        }
     }
     onDetach();
     attached_ = false;
+    ownerContext_ = {};
+    ownerThread_ = {};
+}
+
+void Node::requireTreeMutationThread() const
+{
+    if (!attached_) {
+        return;
+    }
+    if (ownerContext_.isValid()) {
+        ownerContext_.requireCurrentThread();
+        return;
+    }
+    if (ownerThread_ != std::this_thread::get_id()) {
+        throw std::logic_error(
+            "Attached Node mutation must run on its owning UI thread");
+    }
+}
+
+void Node::setDebugName(std::string name)
+{
+    requireTreeMutationThread();
+    debugName_ = std::move(name);
+}
+
+void Node::reportLifecycleException(
+    std::string_view phase,
+    std::string_view message) const noexcept
+{
+    try {
+        std::string text = "Node ";
+        text.append(phase);
+        text.append(" callback threw");
+        if (!message.empty()) {
+            text.append(": ");
+            text.append(message);
+        }
+        diagnosticContext_.reportDiagnostic({
+            UiDiagnosticCode::LifecycleCallbackException,
+            std::move(text),
+            debugName_,
+        });
+    } catch (...) {
+    }
+}
+
+void Node::validateIdentitySubtree() const noexcept
+{
+    try {
+        const Node* root = this;
+        while (root->parent_ != nullptr) {
+            root = root->parent_;
+        }
+
+        std::unordered_map<std::string, const Node*> ids;
+        std::function<void(const Node&)> visit = [&](const Node& node) {
+            if (!node.automationId_.empty()) {
+                const bool inserted =
+                    ids.emplace(node.automationId_, &node).second;
+                if (!inserted) {
+                    root->diagnosticContext_.reportDiagnostic({
+                        UiDiagnosticCode::DuplicateAutomationId,
+                        "Duplicate automationId: " + node.automationId_,
+                        node.debugName_,
+                    });
+                }
+            }
+            for (const auto& child : node.children_) {
+                visit(*child);
+            }
+        };
+        visit(*root);
+    } catch (...) {
+    }
 }
 
 void Node::setInvalidationHandler(std::function<void()> handler)
 {
+    requireTreeMutationThread();
     invalidationHandler_ = std::move(handler);
     for (const auto& child : children_) {
         child->setInvalidationHandler(invalidationHandler_);
@@ -291,7 +413,11 @@ AccessibilityActionStatus Node::performAccessibilityAction(
 
 void Node::markDirty(DirtyFlag flag) noexcept
 {
-    WUI_ASSERT_UI_THREAD();
+    try {
+        requireTreeMutationThread();
+    } catch (...) {
+        std::terminate();
+    }
     dirtyFlags_ |= toMask(flag);
     // Geometry is part of the rendered output.  Keeping layout and paint
     // invalidation coupled here prevents a relaid-out subtree from appearing
@@ -302,7 +428,13 @@ void Node::markDirty(DirtyFlag flag) noexcept
     if (parent_ != nullptr) {
         parent_->markDirty(flag);
     } else if (invalidationHandler_) {
-        invalidationHandler_();
+        try {
+            invalidationHandler_();
+        } catch (const std::exception& error) {
+            reportLifecycleException("invalidation", error.what());
+        } catch (...) {
+            reportLifecycleException("invalidation");
+        }
     }
 }
 

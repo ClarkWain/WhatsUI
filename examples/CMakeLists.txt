@@ -10,21 +10,6 @@ target_link_libraries(WhatsUIRenderToImage
 
 target_compile_features(WhatsUIRenderToImage PRIVATE cxx_std_17)
 
-add_executable(WhatsUITodoApp
-    todo_app/main.cpp
-    todo_app/todo_controller.cpp
-    todo_app/todo_interaction.cpp
-    todo_app/todo_storage.cpp
-)
-
-target_link_libraries(WhatsUITodoApp
-    PRIVATE
-        WhatsUI::WhatsUI
-        WhatsCanvas::Software
-)
-
-target_compile_features(WhatsUITodoApp PRIVATE cxx_std_17)
-
 set(WHATSUI_FOCUS_TOMATO_SOURCES
     focus_tomato/application/focus_data_service.cpp
     focus_tomato/domain/clock_drift.cpp
@@ -158,23 +143,6 @@ if(TARGET WhatsUI::Glfw)
     target_link_libraries(WhatsUIComponentGalleryGlfw
         PRIVATE WhatsUIComponentGalleryCore WhatsUI::Glfw)
     target_compile_features(WhatsUIComponentGalleryGlfw PRIVATE cxx_std_17)
-
-    # Same declarative Todo tree as WhatsUITodoApp, presented by the GLFW host.
-    # The compile definition only selects its interactive entry point.
-    add_executable(WhatsUITodoGlfw
-        todo_app/main.cpp
-        todo_app/todo_controller.cpp
-        todo_app/todo_interaction.cpp
-        todo_app/todo_storage.cpp
-    )
-
-    target_link_libraries(WhatsUITodoGlfw
-        PRIVATE
-            WhatsUI::Glfw
-    )
-
-    target_compile_definitions(WhatsUITodoGlfw PRIVATE WUI_TODO_INTERACTIVE=1)
-    target_compile_features(WhatsUITodoGlfw PRIVATE cxx_std_17)
 
     add_executable(WhatsUISettingsGlfw
         settings_panel/main.cpp

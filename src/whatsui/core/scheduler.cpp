@@ -1,6 +1,4 @@
 #include "wui/scheduler.h"
-#include "wui/thread_check.h"
-
 #include <utility>
 #include <vector>
 
@@ -15,7 +13,7 @@ struct Entry {
 
 std::vector<Entry>& queue()
 {
-    static std::vector<Entry> pending;
+    thread_local std::vector<Entry> pending;
     return pending;
 }
 
@@ -23,7 +21,6 @@ std::vector<Entry>& queue()
 
 void scheduleStructuralUpdate(const void* key, std::function<void()> action)
 {
-    WUI_ASSERT_UI_THREAD();
     auto& pending = queue();
     for (auto& entry : pending) {
         if (entry.key == key) {
@@ -36,7 +33,6 @@ void scheduleStructuralUpdate(const void* key, std::function<void()> action)
 
 void flushStructuralUpdates()
 {
-    WUI_ASSERT_UI_THREAD();
     auto& pending = queue();
     // A flushed action may schedule further work; drain with a guard against
     // pathological cycles.
@@ -54,7 +50,6 @@ void flushStructuralUpdates()
 
 bool hasPendingStructuralUpdates() noexcept
 {
-    WUI_ASSERT_UI_THREAD();
     return !queue().empty();
 }
 

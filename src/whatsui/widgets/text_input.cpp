@@ -96,16 +96,18 @@ void drawBottomStroke(PaintContext& context, const RectF& bounds, float radius,
     const RectF segment{
         left,
         bottom - snappedThickness,
-        std::max(context.physicalPixel(), right - left),
+        // Canvas fill coverage includes the pixel whose centre lies on the
+        // right edge on some backends. Keep the exclusive edge one physical
+        // pixel inside instead of relying on a path clip to remove spill.
+        std::max(context.physicalPixel(),
+                 right - left - context.physicalPixel()),
         snappedThickness,
     };
-    // Match Fluent's clipped ::after construction. At full width the input's
-    // bottom corners define the silhouette; during scaleX animation the
-    // segment retains clean rounded leading edges instead of square horns.
-    const int checkpoint = context.save();
-    context.clipRoundRect(bounds, radius);
-    context.fillRoundRect(segment, std::min(radius, thickness * 0.5f), color);
-    context.restoreTo(checkpoint);
+    // The segment is already snapped inside the field bounds. Giving it
+    // half-stroke end caps matches Fluent's clipped ::after silhouette while
+    // avoiding a path-clip/fill ordering hazard in batched OpenGL backends.
+    context.fillRoundRect(
+        segment, std::min(radius, snappedThickness * 0.5f), color);
 }
 
 [[nodiscard]] float measuredTextWidth(const std::string& text, std::size_t end,

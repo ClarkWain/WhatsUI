@@ -6,11 +6,37 @@
 
 #include <functional>
 #include <memory>
+#include <string>
+#include <utility>
 
 #include "wui/node.h"
 #include "wui/widgets.h"
 
 namespace wui {
+
+class NodeKey {
+public:
+    explicit NodeKey(std::string value)
+        : value_(std::move(value))
+    {
+    }
+
+    [[nodiscard]] const std::string& value() const noexcept { return value_; }
+    [[nodiscard]] bool empty() const noexcept { return value_.empty(); }
+
+    friend bool operator==(const NodeKey& left, const NodeKey& right) noexcept
+    {
+        return left.value_ == right.value_;
+    }
+
+    friend bool operator!=(const NodeKey& left, const NodeKey& right) noexcept
+    {
+        return !(left == right);
+    }
+
+private:
+    std::string value_;
+};
 
 // Mounts a single optional child produced by a factory when visible.
 class IfNode : public ContainerNode {

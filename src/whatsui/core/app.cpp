@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace wui {
 namespace {
@@ -88,8 +89,14 @@ private:
     UiWindow& window_;
 };
 
-UiWindow::UiWindow(std::unique_ptr<PlatformWindow> platformWindow)
-    : platformWindow_(std::move(platformWindow))
+UiWindow::UiWindow(
+    std::unique_ptr<PlatformWindow> platformWindow,
+    UiContext context)
+    : platformWindow_(std::move(platformWindow)),
+      context_(context),
+      uiRoot_(context),
+      navigator_(context),
+      overlayHost_(context)
 {
     if (!platformWindow_) {
         throw std::invalid_argument("platformWindow must not be null");
@@ -402,6 +409,34 @@ AccessibilitySnapshot UiWindow::accessibilitySnapshot() const
                 snapshot.push_back(std::move(entry));
             }
             ++overlayPath;
+        }
+    }
+
+    std::unordered_map<std::string, std::vector<std::size_t>> automationIds;
+    for (const auto& entry : snapshot) {
+        const auto& properties = entry.properties;
+        if (!properties.automationId.empty()) {
+            const auto [existing, inserted] = automationIds.emplace(
+                properties.automationId, entry.path);
+            if (!inserted) {
+                context_.reportDiagnostic({
+                    UiDiagnosticCode::DuplicateAutomationId,
+                    "Duplicate automationId in window snapshot: "
+                        + properties.automationId,
+                    {},
+                });
+            }
+        }
+        const bool requiresName = properties.actions.invoke
+            || properties.actions.toggle
+            || properties.actions.setValue
+            || properties.role == AccessibilityRole::TextField;
+        if (requiresName && !properties.hasAccessibleName()) {
+            context_.reportDiagnostic({
+                UiDiagnosticCode::MissingAccessibleName,
+                "Interactive accessibility node has no accessible name",
+                {},
+            });
         }
     }
     return snapshot;
@@ -880,7 +915,8 @@ UiContext UiApp::uiContext() const noexcept
 UiWindow& UiApp::attachWindow(std::unique_ptr<PlatformWindow> platformWindow)
 {
     WUI_ASSERT_UI_THREAD();
-    auto window = std::make_unique<UiWindow>(std::move(platformWindow));
+    auto window = std::make_unique<UiWindow>(
+        std::move(platformWindow), uiContext());
     windows_.push_back(std::move(window));
     return *windows_.back();
 }

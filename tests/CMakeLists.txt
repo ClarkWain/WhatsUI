@@ -88,6 +88,32 @@ add_test(
     COMMAND WhatsUIDeclarativeApiContractTests
 )
 
+add_executable(WhatsUIDeclarativeDomainHeaderTests
+    declarative_domain_builder_base.cpp
+    declarative_domain_text.cpp
+    declarative_domain_layout.cpp
+    declarative_domain_input.cpp
+    declarative_domain_feedback.cpp
+    declarative_domain_navigation.cpp
+    declarative_domain_collections.cpp
+    declarative_domain_structural.cpp
+    declarative_domain_headers_main.cpp
+)
+
+target_link_libraries(WhatsUIDeclarativeDomainHeaderTests
+    PRIVATE WhatsUI::WhatsUI)
+if(TARGET WhatsCanvas::Software)
+    target_link_libraries(
+        WhatsUIDeclarativeDomainHeaderTests PRIVATE WhatsCanvas::Software)
+endif()
+target_compile_features(
+    WhatsUIDeclarativeDomainHeaderTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_declarative_domain_header_tests
+    COMMAND WhatsUIDeclarativeDomainHeaderTests
+)
+
 add_executable(WhatsUIUiDispatcherTests
     ui_dispatcher_tests.cpp
 )
@@ -138,7 +164,7 @@ add_test(
 
 # Native OpenGL regression for the GLFW framebuffer-size callback.  It
 # validates that RenderSurface::resize updates GL_VIEWPORT after the default
-# framebuffer changes, preventing the resized Todo window from rendering only
+# framebuffer changes, preventing a resized application window from rendering only
 # into its former lower-left area.  The test is intentionally not a headless
 # substitute: unavailable desktop OpenGL is reported by CTest as skipped.
 if(TARGET WhatsUI::Glfw)
@@ -328,7 +354,7 @@ if(WHATSUI_ENABLE_SANITIZERS)
     endforeach()
 endif()
 
-# The Settings reference has a deliberately smaller contract than Todo's
+# The Settings reference has a deliberately smaller contract than Focus Tomato's
 # scripted product walkthrough: prove that its shared Software tree captures
 # at the documented Windows desktop size. Human review owns visual direction;
 # this test prevents the reference target or capture entry point from silently
@@ -1244,40 +1270,6 @@ add_test(
     COMMAND WhatsUIListViewTests
 )
 
-add_executable(WhatsUITodoStorageTests
-    todo_storage_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_storage.cpp
-)
-
-target_include_directories(WhatsUITodoStorageTests
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app
-)
-
-target_compile_features(WhatsUITodoStorageTests PRIVATE cxx_std_17)
-
-add_test(
-    NAME whatsui_todo_storage_tests
-    COMMAND WhatsUITodoStorageTests
-)
-
-add_executable(WhatsUITodoControllerTests
-    todo_controller_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_controller.cpp
-)
-
-target_include_directories(WhatsUITodoControllerTests
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app
-)
-
-target_compile_features(WhatsUITodoControllerTests PRIVATE cxx_std_17)
-
-add_test(
-    NAME whatsui_todo_controller_tests
-    COMMAND WhatsUITodoControllerTests
-)
-
 add_executable(WhatsUIFocusTomatoDataValidationTests
     focus_tomato_data_validation_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data.cpp
@@ -1410,65 +1402,17 @@ if(TARGET WhatsUIFocusTomatoCore)
     )
 endif()
 
-add_executable(WhatsUITodoInteractionTests
-    todo_interaction_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_controller.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_interaction.cpp
-)
-
-target_include_directories(WhatsUITodoInteractionTests
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app
-)
-
-target_compile_features(WhatsUITodoInteractionTests PRIVATE cxx_std_17)
-
-add_test(
-    NAME whatsui_todo_interaction_tests
-    COMMAND WhatsUITodoInteractionTests
-)
-
-# This drives the actual Todo declarative tree through UiWindow input routing.
-# The test-only definition suppresses the sample executable entry point while
-# retaining the exact buildTodoUi() implementation used by both Todo binaries.
-set(WHATSUI_TODO_CANVAS_INCLUDE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/WhatsCanvas/include")
-if(EXISTS "${WHATSUI_TODO_CANVAS_INCLUDE_DIR}/wsc/Canvas.h")
-    add_executable(WhatsUITodoUiInteractionSmokeTests
-        todo_ui_interaction_smoke_tests.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_controller.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app/todo_interaction.cpp
-    )
-
-    target_include_directories(WhatsUITodoUiInteractionSmokeTests
-        PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/../examples/todo_app
-            # main.cpp owns the shared Todo tree and includes Canvas.h even
-            # when this test selects its interactive (non-rendering) path.
-            ${WHATSUI_TODO_CANVAS_INCLUDE_DIR}
-    )
-
-    target_link_libraries(WhatsUITodoUiInteractionSmokeTests
-        PRIVATE
-            WhatsUI::WhatsUI
-    )
-
-    if(TARGET WhatsCanvas::Software)
-        target_link_libraries(WhatsUITodoUiInteractionSmokeTests PRIVATE WhatsCanvas::Software)
-    endif()
-
-    target_compile_features(WhatsUITodoUiInteractionSmokeTests PRIVATE cxx_std_17)
-
+if(TARGET WhatsUIFocusTomatoCapture)
+    set(WHATSUI_FOCUS_TOMATO_CAPTURE_DIR
+        "${CMAKE_CURRENT_BINARY_DIR}/focus_tomato_visual_review")
     add_test(
-        NAME whatsui_todo_ui_interaction_smoke_tests
-        COMMAND WhatsUITodoUiInteractionSmokeTests
+        NAME whatsui_focus_tomato_visual_capture
+        COMMAND WhatsUIFocusTomatoCapture
+            "${WHATSUI_FOCUS_TOMATO_CAPTURE_DIR}"
     )
-    # This is a headless input-routing test and normally completes in a few
-    # milliseconds.  Bound it so a Debug CRT dialog or unexpected modal
-    # platform regression cannot stall an unattended full CTest run.
-    set_tests_properties(whatsui_todo_ui_interaction_smoke_tests PROPERTIES
-        TIMEOUT 30
-    )
+    set_tests_properties(whatsui_focus_tomato_visual_capture PROPERTIES
+        LABELS "focus-tomato;capture;visual-review"
+        TIMEOUT 45)
 endif()
 
 add_executable(WhatsUIVirtualListTests
@@ -1502,6 +1446,7 @@ add_test(
     NAME whatsui_ui_inspector_tests
     COMMAND WhatsUIUiInspectorTests
 )
+set_tests_properties(whatsui_ui_inspector_tests PROPERTIES TIMEOUT 30)
 
 add_executable(WhatsUIBenchmarks
     m4_benchmarks.cpp
@@ -1542,70 +1487,11 @@ if(TARGET WhatsCanvas::Software)
             WhatsUIMenuButtonCompletionTests
             WhatsUIAccessibilityTests
             WhatsUIListViewTests
-            WhatsUITodoStorageTests
-            WhatsUITodoControllerTests
-            WhatsUITodoInteractionTests
             WhatsUIVirtualListTests
             WhatsUIUiInspectorTests
             WhatsUIBenchmarks)
         target_link_libraries(${whatsui_runtime_test_target} PRIVATE WhatsCanvas::Software)
     endforeach()
-endif()
-
-# The Todo sample is a deterministic, headless Software-renderer walkthrough.
-# Keep its pixel hashes in source control so UI changes are reviewed as visual
-# changes, while leaving the WhatsCanvas package's own test registration alone.
-if(TARGET WhatsUITodoApp)
-    add_test(
-        NAME whatsui_todo_visual_regression
-        COMMAND ${CMAKE_COMMAND}
-            -DWHATSUI_TODO_EXECUTABLE=$<TARGET_FILE:WhatsUITodoApp>
-            -DWHATSUI_TODO_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/todo_visual_regression
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/VerifyTodoVisualHashes.cmake
-    )
-    set_tests_properties(whatsui_todo_visual_regression PROPERTIES
-        LABELS "visual;software"
-    )
-
-    # Screenshot artifacts for human layout review.  This guards breakpoint
-    # coverage and valid physical captures, not their pixels; use it whenever
-    # modifying the Todo page's visual system.
-    add_test(
-        NAME whatsui_todo_visual_review
-        COMMAND ${CMAKE_COMMAND}
-            -DWHATSUI_TODO_EXECUTABLE=$<TARGET_FILE:WhatsUITodoApp>
-            -DWHATSUI_TODO_REVIEW_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/todo_visual_review
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/CaptureTodoVisualReview.cmake
-    )
-    set_tests_properties(whatsui_todo_visual_review PROPERTIES
-        LABELS "visual;software;review"
-        # Software readback creates three complete multi-scene 2x walkthroughs.
-        # The review job is intentionally comprehensive and can exceed CTest's
-        # default timeout on hosted Windows runners.
-        TIMEOUT 180
-    )
-endif()
-
-# Native Todo performance smoke.  Register it only when the optional GLFW
-# example exists; headless/source-only builds must not advertise a test they
-# cannot build.  The CMake runner asserts both lifecycle markers, retains all
-# child output for a diagnosable failure and makes a missing graphics desktop
-# an explicit CTest skip instead of a pass.
-if(TARGET WhatsUITodoGlfw)
-    add_test(
-        NAME whatsui_todo_native_perf_smoke
-        COMMAND ${CMAKE_COMMAND}
-            -DWHATSUI_TODO_GLFW_EXECUTABLE=$<TARGET_FILE:WhatsUITodoGlfw>
-            -DWHATSUI_TODO_NATIVE_PERF_WORKING_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/todo_native_perf_smoke
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/RunTodoNativePerfSmoke.cmake
-    )
-    set_tests_properties(whatsui_todo_native_perf_smoke PROPERTIES
-        LABELS "native;glfw;opengl;performance;todo"
-        SKIP_REGULAR_EXPRESSION "SKIP: native GLFW/OpenGL surface unavailable"
-        # The child runner has a 15-second watchdog; leave small process
-        # teardown/reporting headroom while still catching a stuck runner.
-        TIMEOUT 18
-    )
 endif()
 
 if(TARGET WhatsUIDebugInspectorApp)

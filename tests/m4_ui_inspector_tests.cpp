@@ -1,4 +1,5 @@
 #include <memory>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <typeinfo>
@@ -236,12 +237,17 @@ void testRepaintOverlayScalesLinearlyWithLargeFlatSnapshot()
 
 int main()
 {
-    testPreorderAndControlMetadata();
-    testHitPathAndDirtySummary();
-    testMeasuredConstraintsAndResolvedStyle();
-    testResolvedRadioStyleMatchesFluentComposition();
-    testResolvedCheckboxStyleMatchesFluentComposition();
-    testRepaintOverlayRetainsIndependentParentAndChildDirtyRegions();
-    testRepaintOverlayScalesLinearlyWithLargeFlatSnapshot();
-    return 0;
+    try {
+        testPreorderAndControlMetadata();
+        testHitPathAndDirtySummary();
+        testMeasuredConstraintsAndResolvedStyle();
+        testResolvedRadioStyleMatchesFluentComposition();
+        testResolvedCheckboxStyleMatchesFluentComposition();
+        testRepaintOverlayRetainsIndependentParentAndChildDirtyRegions();
+        testRepaintOverlayScalesLinearlyWithLargeFlatSnapshot();
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << "WhatsUI inspector test failure: " << error.what() << '\n';
+        return 1;
+    }
 }

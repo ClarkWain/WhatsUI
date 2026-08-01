@@ -48,7 +48,7 @@ namespace {
     const bool pressed = (states & toMask(ControlVisualState::Pressed)) != 0;
 
     if (const auto* button = dynamic_cast<const ButtonNode*>(&node)) {
-        auto style = makeStyle("ButtonNode", enabled);
+        auto style = makeStyle("Button", enabled);
         ColorTokens::Interaction ramp = current.colors.neutralBackground1;
         Color background = ramp.rest;
         Color foreground = current.colors.neutralForeground1;
@@ -78,7 +78,7 @@ namespace {
         return style;
     }
     if (const auto* checkbox = dynamic_cast<const CheckboxNode*>(&node)) {
-        auto style = makeStyle("CheckboxNode", enabled);
+        auto style = makeStyle("Checkbox", enabled);
         const bool checked = checkbox->state() == CheckboxState::Checked;
         const bool mixed = checkbox->state() == CheckboxState::Mixed;
         Color box{0, 0, 0, 0};
@@ -112,7 +112,7 @@ namespace {
         return style;
     }
     if (const auto* radio = dynamic_cast<const RadioNode*>(&node)) {
-        auto style = makeStyle("RadioNode", enabled);
+        auto style = makeStyle("Radio", enabled);
         const bool selected = radio->isSelected();
         Color border = selected ? current.colors.compoundBrandStroke.rest
                                 : current.colors.neutralStrokeAccessible;
@@ -140,7 +140,7 @@ namespace {
         return style;
     }
     if (const auto* toggle = dynamic_cast<const SwitchNode*>(&node)) {
-        auto style = makeStyle("SwitchNode", enabled);
+        auto style = makeStyle("Switch", enabled);
         const ColorTokens::Interaction& ramp = toggle->isOn() ? current.colors.brandBackground : current.colors.neutralBackground1;
         Color fill = ramp.rest;
         Color border = toggle->isOn() ? current.colors.brandBackground.rest : current.colors.neutralStrokeAccessible;
@@ -157,20 +157,20 @@ namespace {
         return style;
     }
     if (dynamic_cast<const SliderNode*>(&node) != nullptr) {
-        auto style = makeStyle("SliderNode", enabled);
+        auto style = makeStyle("Slider", enabled);
         style.background = !enabled ? current.colors.neutralForegroundDisabled
             : pressed ? current.colors.brandBackground.pressed : hovered ? current.colors.brandBackground.hover : current.colors.brandBackground.rest;
         style.border = current.colors.neutralStroke1; style.cornerRadius = current.radius.circular; style.controlExtent = current.controls.height;
         return style;
     }
     if (dynamic_cast<const ProgressBarNode*>(&node) != nullptr) {
-        auto style = makeStyle("ProgressBarNode", true);
+        auto style = makeStyle("ProgressBar", true);
         style.background = current.colors.brandBackground.rest; style.border = current.colors.neutralStroke1; style.cornerRadius = current.radius.circular;
         style.controlExtent = 4.0f;
         return style;
     }
     if (const auto* divider = dynamic_cast<const DividerNode*>(&node)) {
-        auto style = makeStyle("DividerNode", true);
+        auto style = makeStyle("Divider", true);
         style.background = current.colors.neutralStroke1; style.controlExtent = divider->thickness();
         return style;
     }

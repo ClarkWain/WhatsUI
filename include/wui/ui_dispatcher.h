@@ -26,6 +26,7 @@ public:
     [[nodiscard]] bool isOwnerThread() const noexcept;
 
     void setWakeCallback(WakeCallback callback);
+    void setDiagnosticHandler(UiDiagnosticHandler handler);
     void post(Task task);
     [[nodiscard]] UiContext context() const noexcept;
     [[nodiscard]] bool hasPending() const noexcept;

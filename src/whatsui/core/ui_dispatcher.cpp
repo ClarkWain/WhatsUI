@@ -17,6 +17,7 @@ public:
     mutable std::mutex mutex;
     std::deque<UiContext::Task> tasks;
     UiDispatcher::WakeCallback wake;
+    UiDiagnosticHandler diagnosticHandler;
     std::thread::id owner;
     bool bound{false};
     bool running{true};
@@ -83,8 +84,47 @@ DispatchResult UiContext::post(Task task) const
 void UiContext::requireCurrentThread() const
 {
     if (!isCurrentThread()) {
+        reportDiagnostic({
+            UiDiagnosticCode::WrongThreadMutation,
+            "UI mutation attempted outside its owning context",
+            {},
+        });
         throw std::logic_error(
             "This operation must run on its owning UI context");
+    }
+}
+
+void UiContext::reportDiagnostic(UiDiagnostic diagnostic) const noexcept
+{
+    try {
+        if (!core_) {
+            return;
+        }
+        if (!isCurrentThread()) {
+            (void)post([context = *this,
+                        diagnostic = std::move(diagnostic)]() mutable {
+                context.reportDiagnostic(std::move(diagnostic));
+            });
+            return;
+        }
+
+        UiDiagnosticHandler handler;
+        {
+            std::lock_guard<std::mutex> lock(core_->mutex);
+            if (!core_->running) {
+                return;
+            }
+            handler = core_->diagnosticHandler;
+        }
+        if (handler) {
+            try {
+                handler(diagnostic);
+            } catch (...) {
+                // Diagnostic observers must never change framework behavior.
+            }
+        }
+    } catch (...) {
+        // Reporting is best-effort and is safe from destructors/noexcept paths.
     }
 }
 
@@ -105,10 +145,6 @@ void UiDispatcher::bindToCurrentThread()
 {
     const std::thread::id current = std::this_thread::get_id();
     registerUiThread();
-    if (!isOnUiThread()) {
-        throw std::logic_error(
-            "UiDispatcher must bind to the registered UI thread");
-    }
     {
         std::lock_guard<std::mutex> lock(core_->mutex);
         if (!core_->running) {
@@ -139,6 +175,14 @@ void UiDispatcher::setWakeCallback(WakeCallback callback)
     std::lock_guard<std::mutex> lock(core_->mutex);
     if (core_->running) {
         core_->wake = std::move(callback);
+    }
+}
+
+void UiDispatcher::setDiagnosticHandler(UiDiagnosticHandler handler)
+{
+    std::lock_guard<std::mutex> lock(core_->mutex);
+    if (core_->running) {
+        core_->diagnosticHandler = std::move(handler);
     }
 }
 
