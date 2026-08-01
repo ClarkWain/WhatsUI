@@ -461,7 +461,7 @@ private:
 
 // A lightweight derived value (WHATSUI_ARCHITECTURE §11.4). Recomputes from an
 // explicit list of source States when any of them changes, and is itself
-// observable (get/subscribe), so it can feed Text().bind or another Computed.
+// observable (get/subscribe), so it can feed TextNode().bind or another Computed.
 // No automatic dependency tracking: you name the sources.
 template <typename T>
 class Computed {

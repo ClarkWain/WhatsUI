@@ -28,7 +28,7 @@ constexpr std::uint32_t bySize(IconSize size, std::uint32_t size16,
 {
     switch (size) {
     // Most public icon call sites begin at 16 DIP. Size12 currently exists
-    // for Fluent component internals such as Checkbox; icons without a
+    // for Fluent component internals such as CheckboxNode; icons without a
     // dedicated 12-DIP asset retain their 16-DIP silhouette at 12-DIP extent.
     case IconSize::Size12: return size16;
     case IconSize::Size16: return size16;
@@ -236,7 +236,7 @@ void drawIcon(PaintContext& context, IconName name, const RectF& bounds,
     // not symmetric around the visible vector outline. Centering the font's
     // ascent/descent box therefore leaves 20-DIP icon ink about 2 DIP above
     // the control centre. Apply the icon font's 10% optical correction here,
-    // once, so Icon, IconButton and icon-bearing Buttons share the same
+    // once, so IconNode, IconButtonNode and icon-bearing Buttons share the same
     // visible-ink centre at every semantic size and DPR.
     const float opticalYOffset = extent * 0.1f;
     context.drawText(
@@ -261,16 +261,16 @@ IconFontStatus registerDefaultIconFonts(wsc::Canvas& canvas)
 #endif
 }
 
-Icon::Icon(IconName name) : name_(name) {}
-Icon& Icon::name(IconName value) noexcept { setName(value); return *this; }
-Icon& Icon::size(IconSize value) noexcept { setSize(value); return *this; }
-Icon& Icon::style(IconStyle value) noexcept { setStyle(value); return *this; }
-Icon& Icon::color(Color value) noexcept { setColor(value); return *this; }
-Icon& Icon::useThemeColor() noexcept { setColor(std::nullopt); return *this; }
-void Icon::setName(IconName value) noexcept { if (name_ != value) { name_ = value; markDirty(DirtyFlag::Paint); } }
-void Icon::setSize(IconSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
-void Icon::setStyle(IconStyle value) noexcept { if (style_ != value) { style_ = value; markDirty(DirtyFlag::Paint); } }
-void Icon::setColor(std::optional<Color> value) noexcept
+IconNode::IconNode(IconName name) : name_(name) {}
+IconNode& IconNode::name(IconName value) noexcept { setName(value); return *this; }
+IconNode& IconNode::size(IconSize value) noexcept { setSize(value); return *this; }
+IconNode& IconNode::style(IconStyle value) noexcept { setStyle(value); return *this; }
+IconNode& IconNode::color(Color value) noexcept { setColor(value); return *this; }
+IconNode& IconNode::useThemeColor() noexcept { setColor(std::nullopt); return *this; }
+void IconNode::setName(IconName value) noexcept { if (name_ != value) { name_ = value; markDirty(DirtyFlag::Paint); } }
+void IconNode::setSize(IconSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
+void IconNode::setStyle(IconStyle value) noexcept { if (style_ != value) { style_ = value; markDirty(DirtyFlag::Paint); } }
+void IconNode::setColor(std::optional<Color> value) noexcept
 {
     const bool same =
         color_.has_value() == value.has_value() &&
@@ -282,18 +282,18 @@ void Icon::setColor(std::optional<Color> value) noexcept
         markDirty(DirtyFlag::Paint);
     }
 }
-IconName Icon::name() const noexcept { return name_; }
-IconSize Icon::size() const noexcept { return size_; }
-IconStyle Icon::style() const noexcept { return style_; }
-std::optional<Color> Icon::color() const noexcept { return color_; }
+IconName IconNode::name() const noexcept { return name_; }
+IconSize IconNode::size() const noexcept { return size_; }
+IconStyle IconNode::style() const noexcept { return style_; }
+std::optional<Color> IconNode::color() const noexcept { return color_; }
 
-SizeF Icon::measure(const Constraints& constraints) const
+SizeF IconNode::measure(const Constraints& constraints) const
 {
     const float extent = static_cast<float>(size_);
     return constraints.clamp({extent, extent});
 }
 
-void Icon::paint(PaintContext& context)
+void IconNode::paint(PaintContext& context)
 {
     drawIcon(context, name_, bounds(),
              color_.value_or(theme().colors.neutralForeground1), size_,

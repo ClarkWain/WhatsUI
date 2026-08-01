@@ -21,7 +21,7 @@ wui::PointerEvent click(float x, float y)
 void popoverPlacesFlipsAndDismisses()
 {
     bool dismissed = false;
-    wui::Popover popover("Project settings", "Choose how members receive notifications.");
+    wui::PopoverNode popover("Project settings", "Choose how members receive notifications.");
     popover.anchor({280, 184, 36, 32}).placement(wui::PopupPlacement::BelowEnd).onDismiss([&] { dismissed = true; });
     popover.layout({0, 0, 360, 240});
     expect(popover.panelBounds().y < popover.anchor().y, "Popover must flip above when below is constrained");
@@ -43,7 +43,7 @@ void triggerOwnsFreshOverlayAndRestoresState()
     wui::OverlayHost host;
     wui::FocusManager focus;
     host.bindFocusManager(focus);
-    wui::PopoverButton trigger("More details");
+    wui::PopoverButtonNode trigger("More details");
     trigger.layout({24, 24, 112, 32});
     trigger.bindOverlayHost(host).popover("Project settings", "Members can update this any time.");
     focus.setFocused(&trigger);
@@ -57,7 +57,7 @@ void triggerOwnsFreshOverlayAndRestoresState()
     expect(snapshot.size() == 1 && snapshot.front().properties.expanded.has_value() &&
                *snapshot.front().properties.expanded && snapshot.front().properties.actions.expandCollapse,
            "Popover trigger must expose expanded ExpandCollapse semantics");
-    auto* popover = dynamic_cast<wui::Popover*>(host.top()->content.get());
+    auto* popover = dynamic_cast<wui::PopoverNode*>(host.top()->content.get());
     expect(popover != nullptr && popover->onKeyEvent({0, wui::KeyAction::Down, 27}),
            "Overlay Popover must receive Escape dismissal");
     expect(!trigger.isOpen() && host.empty(),
@@ -70,17 +70,17 @@ void teachingFocusPolicyAndDialogSemantics()
     wui::OverlayHost host;
     wui::FocusManager focus;
     host.bindFocusManager(focus);
-    wui::PopoverButton trigger("Teach me");
+    wui::PopoverButtonNode trigger("Teach me");
     trigger.layout({64, 40, 100, 32});
     trigger.bindOverlayHost(host).popoverFactory([] {
-        auto teaching = std::make_unique<wui::TeachingPopover>("Keyboard help", "Use Ctrl+K to search.");
+        auto teaching = std::make_unique<wui::TeachingPopoverNode>("Keyboard help", "Use Ctrl+K to search.");
         teaching->primaryAction("Next").showArrow(true);
         return teaching;
     });
     focus.setFocused(&trigger);
     trigger.openPopover();
     host.layout({0, 0, 640, 420});
-    auto* teaching = host.top() ? dynamic_cast<wui::TeachingPopover*>(host.top()->content.get()) : nullptr;
+    auto* teaching = host.top() ? dynamic_cast<wui::TeachingPopoverNode*>(host.top()->content.get()) : nullptr;
     expect(teaching != nullptr && host.focused() == teaching,
            "Default TeachingPopover must move focus to its guided dialog surface");
     expect(teaching->onKeyEvent({0, wui::KeyAction::Down, 9}),
@@ -95,13 +95,13 @@ void teachingFocusPolicyAndDialogSemantics()
 
     trigger.openPopover();
     host.layout({0, 0, 640, 420});
-    teaching = host.top() ? dynamic_cast<wui::TeachingPopover*>(host.top()->content.get()) : nullptr;
+    teaching = host.top() ? dynamic_cast<wui::TeachingPopoverNode*>(host.top()->content.get()) : nullptr;
     expect(teaching != nullptr && teaching->onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Down,
                                                             wui::MouseButton::Left, {620, 400}}) &&
                host.empty() && host.focused() == &trigger,
            "Outside press must dismiss TeachingPopover and restore trigger focus");
 
-    wui::TeachingPopover nonModal("Tip", "This does not capture focus.");
+    wui::TeachingPopoverNode nonModal("Tip", "This does not capture focus.");
     nonModal.focusPolicy(wui::TeachingPopoverFocusPolicy::NonModal);
     expect(!nonModal.onKeyEvent({0, wui::KeyAction::Down, 9}),
            "Explicitly non-modal TeachingPopover must leave Tab routing to its page");
@@ -112,7 +112,7 @@ void teachingPopoverActionsAndSemantics()
     int primary = 0;
     int secondary = 0;
     int dismissed = 0;
-    wui::TeachingPopover teaching("Try keyboard shortcuts", "Use Ctrl+K to search commands.");
+    wui::TeachingPopoverNode teaching("Try keyboard shortcuts", "Use Ctrl+K to search commands.");
     teaching.primaryAction("Next", [&] { ++primary; })
         .secondaryAction("Back", [&] { ++secondary; })
         .stepText("Step 1 of 3")

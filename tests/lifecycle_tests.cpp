@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "wui/runtime.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/widgets.h"
 
 namespace {
@@ -108,7 +108,7 @@ void testParentReleaseDetachesEveryAttachedDescendantExactlyOnce()
     // Replacing the parent destroys the old subtree.  The explicit detach
     // phase must happen before destruction, in descendant-first order, and
     // Node's destructor fallback must not notify a second time.
-    root.setContent(std::make_unique<wui::Container>());
+    root.setContent(std::make_unique<wui::BoxNode>());
     expect(parentAttaches == 1 && childAttaches == 1,
            "Each node must receive one attach callback for one UiRoot adoption");
     expect(parentDetaches == 1 && childDetaches == 1,
@@ -121,9 +121,9 @@ void testParentReleaseDetachesEveryAttachedDescendantExactlyOnce()
 void testDetachedReactiveNodeStopsReceivingStateAndSelfRemovalIsSafe()
 {
     wui::State<std::string> value{"before"};
-    auto textNode = wui::ui::asNode(wui::ui::Text{}.bind(value));
-    auto* text = static_cast<wui::Text*>(textNode.get());
-    auto parent = std::make_unique<wui::Container>();
+    auto textNode = wui::asNode(wui::Text{}.bind(value));
+    auto* text = static_cast<wui::TextNode*>(textNode.get());
+    auto parent = std::make_unique<wui::BoxNode>();
     auto* parentRaw = parent.get();
     parent->appendChild(std::move(textNode));
 
@@ -155,9 +155,9 @@ void testDetachedReactiveNodeStopsReceivingStateAndSelfRemovalIsSafe()
 
 void testDetachingFocusedNodeClearsFocusBeforeDestruction()
 {
-    auto content = std::make_unique<wui::Container>();
-    auto focusedButton = std::make_unique<wui::Button>("Removed");
-    auto nextButton = std::make_unique<wui::Button>("Next");
+    auto content = std::make_unique<wui::BoxNode>();
+    auto focusedButton = std::make_unique<wui::ButtonNode>("Removed");
+    auto nextButton = std::make_unique<wui::ButtonNode>("Next");
     auto* contentRaw = content.get();
     auto* focusedRaw = focusedButton.get();
     auto* nextRaw = nextButton.get();
@@ -197,8 +197,8 @@ void testDetachingFocusedNodeClearsFocusBeforeDestruction()
 
 void testFocusDetachCallbackDoesNotOutliveFocusManager()
 {
-    auto content = std::make_unique<wui::Container>();
-    auto button = std::make_unique<wui::Button>("Temporary manager");
+    auto content = std::make_unique<wui::BoxNode>();
+    auto button = std::make_unique<wui::ButtonNode>("Temporary manager");
     auto* contentRaw = content.get();
     auto* buttonRaw = button.get();
     content->appendChild(std::move(button));
@@ -225,7 +225,7 @@ void testDetachingHoveredNodeClearsRouterBeforeDestruction()
     int survivorLeaves = 0;
     int survivorDowns = 0;
 
-    auto content = std::make_unique<wui::Container>();
+    auto content = std::make_unique<wui::BoxNode>();
     auto removed = std::make_unique<PointerProbe>(removedEnters, removedLeaves, removedDowns);
     auto survivor = std::make_unique<PointerProbe>(survivorEnters, survivorLeaves, survivorDowns);
     auto* contentRaw = content.get();
@@ -266,9 +266,9 @@ void testDetachingHoveredNodeClearsRouterBeforeDestruction()
 
 void testDetachCallbackMayClearSameParentDuringRemove()
 {
-    auto content = std::make_unique<wui::Container>();
-    auto removed = std::make_unique<wui::Container>();
-    auto survivor = std::make_unique<wui::Container>();
+    auto content = std::make_unique<wui::BoxNode>();
+    auto removed = std::make_unique<wui::BoxNode>();
+    auto survivor = std::make_unique<wui::BoxNode>();
     auto* contentRaw = content.get();
     auto* removedRaw = removed.get();
     int survivorDetaches = 0;
@@ -288,9 +288,9 @@ void testDetachCallbackMayClearSameParentDuringRemove()
 
 void testDetachCallbackMayClearSameParentDuringClear()
 {
-    auto content = std::make_unique<wui::Container>();
-    auto first = std::make_unique<wui::Container>();
-    auto second = std::make_unique<wui::Container>();
+    auto content = std::make_unique<wui::BoxNode>();
+    auto first = std::make_unique<wui::BoxNode>();
+    auto second = std::make_unique<wui::BoxNode>();
     auto* contentRaw = content.get();
     int firstDetaches = 0;
     int secondDetaches = 0;

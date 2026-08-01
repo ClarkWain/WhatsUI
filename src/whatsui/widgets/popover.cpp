@@ -80,24 +80,24 @@ void paintElevation(PaintContext& context, const RectF& bounds, float radius, co
 
 } // namespace
 
-Popover::Popover(std::string title, std::string body)
+PopoverNode::PopoverNode(std::string title, std::string body)
     : title_(std::move(title)), body_(std::move(body))
 {
 }
 
-Popover& Popover::title(std::string value) { title_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
-Popover& Popover::body(std::string value) { body_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
-Popover& Popover::appearance(PopoverAppearance value) noexcept { appearance_ = value; markDirty(DirtyFlag::Paint); return *this; }
-Popover& Popover::showArrow(bool value) noexcept { arrow_ = value; markDirty(DirtyFlag::Paint); return *this; }
-Popover& Popover::accessibleLabel(std::string value) { accessibleLabel_ = std::move(value); return *this; }
-const std::string& Popover::title() const noexcept { return title_; }
-const std::string& Popover::body() const noexcept { return body_; }
-PopoverAppearance Popover::appearance() const noexcept { return appearance_; }
-bool Popover::hasArrow() const noexcept { return arrow_; }
-const std::string& Popover::accessibleLabel() const noexcept { return accessibleLabel_; }
-RectF Popover::contentBounds() const noexcept { return contentBounds_; }
+PopoverNode& PopoverNode::title(std::string value) { title_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
+PopoverNode& PopoverNode::body(std::string value) { body_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
+PopoverNode& PopoverNode::appearance(PopoverAppearance value) noexcept { appearance_ = value; markDirty(DirtyFlag::Paint); return *this; }
+PopoverNode& PopoverNode::showArrow(bool value) noexcept { arrow_ = value; markDirty(DirtyFlag::Paint); return *this; }
+PopoverNode& PopoverNode::accessibleLabel(std::string value) { accessibleLabel_ = std::move(value); return *this; }
+const std::string& PopoverNode::title() const noexcept { return title_; }
+const std::string& PopoverNode::body() const noexcept { return body_; }
+PopoverAppearance PopoverNode::appearance() const noexcept { return appearance_; }
+bool PopoverNode::hasArrow() const noexcept { return arrow_; }
+const std::string& PopoverNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+RectF PopoverNode::contentBounds() const noexcept { return contentBounds_; }
 
-SizeF Popover::measure(const Constraints& constraints) const
+SizeF PopoverNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const float maxWidth = std::min(kPopoverMaxWidth, std::max(kPopoverMinWidth, constraints.maxWidth));
@@ -113,9 +113,9 @@ SizeF Popover::measure(const Constraints& constraints) const
     return constraints.clamp({width, std::max(48.0f, height)});
 }
 
-void Popover::layout(const RectF& bounds)
+void PopoverNode::layout(const RectF& bounds)
 {
-    Popup::layout(bounds);
+    PopupNode::layout(bounds);
     const auto panel = panelBounds();
     const float top = panel.y + kPadding;
     const auto& current = theme();
@@ -132,7 +132,7 @@ void Popover::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-Color Popover::backgroundColor() const noexcept
+Color PopoverNode::backgroundColor() const noexcept
 {
     const auto& colors = theme().colors;
     switch (appearance_) {
@@ -142,12 +142,12 @@ Color Popover::backgroundColor() const noexcept
     }
 }
 
-Color Popover::foregroundColor() const noexcept
+Color PopoverNode::foregroundColor() const noexcept
 {
     return appearance_ == PopoverAppearance::Surface ? theme().colors.neutralForeground1 : theme().colors.onBrand;
 }
 
-void Popover::paintArrow(PaintContext& context, const RectF& panel, Color color) const
+void PopoverNode::paintArrow(PaintContext& context, const RectF& panel, Color color) const
 {
     if (!arrow_) return;
     const float center = context.snapToPhysicalPixel(std::clamp(
@@ -183,7 +183,7 @@ void Popover::paintArrow(PaintContext& context, const RectF& panel, Color color)
         color);
 }
 
-void Popover::paint(PaintContext& context)
+void PopoverNode::paint(PaintContext& context)
 {
     const RectF panel = context.snapRectEdges(panelBounds());
     const auto& current = theme();
@@ -213,30 +213,30 @@ void Popover::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-float Popover::headerHeight() const noexcept { return 0.0f; }
-float Popover::footerHeight() const noexcept { return 0.0f; }
-float Popover::bodyBottom() const noexcept { return contentBounds_.y + contentBounds_.height; }
+float PopoverNode::headerHeight() const noexcept { return 0.0f; }
+float PopoverNode::footerHeight() const noexcept { return 0.0f; }
+float PopoverNode::bodyBottom() const noexcept { return contentBounds_.y + contentBounds_.height; }
 
-PopoverButton::PopoverButton(std::string label) : Button(std::move(label))
+PopoverButtonNode::PopoverButtonNode(std::string label) : ButtonNode(std::move(label))
 {
-    Button::onClick([this] { if (open_) closePopover(); else openPopover(); });
+    ButtonNode::onClick([this] { if (open_) closePopover(); else openPopover(); });
 }
-PopoverButton& PopoverButton::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
-PopoverButton& PopoverButton::popoverFactory(PopoverFactory factory) { factory_ = std::move(factory); return *this; }
-PopoverButton& PopoverButton::popover(std::string title, std::string body)
+PopoverButtonNode& PopoverButtonNode::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
+PopoverButtonNode& PopoverButtonNode::popoverFactory(PopoverFactory factory) { factory_ = std::move(factory); return *this; }
+PopoverButtonNode& PopoverButtonNode::popover(std::string title, std::string body)
 {
-    factory_ = [title = std::move(title), body = std::move(body)] { return std::make_unique<Popover>(title, body); };
+    factory_ = [title = std::move(title), body = std::move(body)] { return std::make_unique<PopoverNode>(title, body); };
     return *this;
 }
-bool PopoverButton::isOpen() const noexcept { return open_; }
-AccessibilityActionCapabilities PopoverButton::accessibilityActions() const noexcept
+bool PopoverButtonNode::isOpen() const noexcept { return open_; }
+AccessibilityActionCapabilities PopoverButtonNode::accessibilityActions() const noexcept
 {
-    auto actions = Button::accessibilityActions();
+    auto actions = ButtonNode::accessibilityActions();
     actions.invoke = false;
     actions.expandCollapse = true;
     return actions;
 }
-AccessibilityActionStatus PopoverButton::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
+AccessibilityActionStatus PopoverButtonNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
 {
     (void)value;
     if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
@@ -244,26 +244,26 @@ AccessibilityActionStatus PopoverButton::performAccessibilityAction(Accessibilit
     if (kind == AccessibilityActionKind::Collapse) { closePopover(); return AccessibilityActionStatus::Succeeded; }
     return AccessibilityActionStatus::NotSupported;
 }
-void PopoverButton::openPopover()
+void PopoverButtonNode::openPopover()
 {
     if (open_ || overlayHost_ == nullptr || !factory_) return;
     auto surface = factory_();
     if (!surface) return;
-    Popover* raw = surface.get();
+    PopoverNode* raw = surface.get();
     surface->anchor(bounds()).placement(PopupPlacement::BelowStart).onDismiss([this] { closePopover(); });
     open_ = true;
     setVisualState(ControlVisualState::Pressed, true);
     overlayId_ = overlayHost_->show(std::move(surface));
-    // A regular Popover is non-modal supplemental content and must not steal
-    // keyboard focus. A TeachingPopover defaults to a guided dialog boundary;
+    // A regular PopoverNode is non-modal supplemental content and must not steal
+    // keyboard focus. A TeachingPopoverNode defaults to a guided dialog boundary;
     // applications may make it explicitly non-modal when appropriate.
-    const auto* teaching = dynamic_cast<const TeachingPopover*>(raw);
+    const auto* teaching = dynamic_cast<const TeachingPopoverNode*>(raw);
     if (teaching != nullptr && teaching->focusPolicy() == TeachingPopoverFocusPolicy::TrapFocus) {
         overlayHost_->focus(raw);
     }
     markDirty(DirtyFlag::Paint);
 }
-void PopoverButton::closePopover()
+void PopoverButtonNode::closePopover()
 {
     if (!open_) return;
     OverlayHost* const host = overlayHost_;
@@ -275,36 +275,36 @@ void PopoverButton::closePopover()
     markDirty(DirtyFlag::Paint);
 }
 
-TeachingPopover::TeachingPopover(std::string title, std::string body)
-    : Popover(std::move(title), std::move(body))
+TeachingPopoverNode::TeachingPopoverNode(std::string title, std::string body)
+    : PopoverNode(std::move(title), std::move(body))
 {
-    // Unlike the general Popover (whose pointer is opt-in), Fluent's guided
+    // Unlike the general PopoverNode (whose pointer is opt-in), Fluent's guided
     // teaching surface is anchored by default.
     showArrow(true);
 }
-TeachingPopover& TeachingPopover::primaryAction(std::string label, ActionHandler handler) { primaryLabel_ = std::move(label); primaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
-TeachingPopover& TeachingPopover::secondaryAction(std::string label, ActionHandler handler) { secondaryLabel_ = std::move(label); secondaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
-TeachingPopover& TeachingPopover::dismissLabel(std::string label) { dismissLabel_ = std::move(label); markDirty(DirtyFlag::Layout); return *this; }
-TeachingPopover& TeachingPopover::stepText(std::string value) { stepText_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
-TeachingPopover& TeachingPopover::focusPolicy(TeachingPopoverFocusPolicy value) noexcept { focusPolicy_ = value; return *this; }
-TeachingPopover& TeachingPopover::onDismiss(DismissHandler handler) { dismissHandler_ = std::move(handler); return *this; }
-const std::string& TeachingPopover::primaryActionLabel() const noexcept { return primaryLabel_; }
-const std::string& TeachingPopover::secondaryActionLabel() const noexcept { return secondaryLabel_; }
-const std::string& TeachingPopover::dismissLabel() const noexcept { return dismissLabel_; }
-const std::string& TeachingPopover::stepText() const noexcept { return stepText_; }
-TeachingPopoverFocusPolicy TeachingPopover::focusPolicy() const noexcept { return focusPolicy_; }
-float TeachingPopover::headerHeight() const noexcept { return stepText_.empty() ? 0.0f : theme().typography.caption1.lineHeight + theme().spacing.vertical.xs; }
-float TeachingPopover::footerHeight() const noexcept { return primaryLabel_.empty() && secondaryLabel_.empty() ? 0.0f : theme().controls.height + theme().spacing.vertical.m + theme().spacing.vertical.l; }
-SizeF TeachingPopover::measure(const Constraints& constraints) const
+TeachingPopoverNode& TeachingPopoverNode::primaryAction(std::string label, ActionHandler handler) { primaryLabel_ = std::move(label); primaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
+TeachingPopoverNode& TeachingPopoverNode::secondaryAction(std::string label, ActionHandler handler) { secondaryLabel_ = std::move(label); secondaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
+TeachingPopoverNode& TeachingPopoverNode::dismissLabel(std::string label) { dismissLabel_ = std::move(label); markDirty(DirtyFlag::Layout); return *this; }
+TeachingPopoverNode& TeachingPopoverNode::stepText(std::string value) { stepText_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
+TeachingPopoverNode& TeachingPopoverNode::focusPolicy(TeachingPopoverFocusPolicy value) noexcept { focusPolicy_ = value; return *this; }
+TeachingPopoverNode& TeachingPopoverNode::onDismiss(DismissHandler handler) { dismissHandler_ = std::move(handler); return *this; }
+const std::string& TeachingPopoverNode::primaryActionLabel() const noexcept { return primaryLabel_; }
+const std::string& TeachingPopoverNode::secondaryActionLabel() const noexcept { return secondaryLabel_; }
+const std::string& TeachingPopoverNode::dismissLabel() const noexcept { return dismissLabel_; }
+const std::string& TeachingPopoverNode::stepText() const noexcept { return stepText_; }
+TeachingPopoverFocusPolicy TeachingPopoverNode::focusPolicy() const noexcept { return focusPolicy_; }
+float TeachingPopoverNode::headerHeight() const noexcept { return stepText_.empty() ? 0.0f : theme().typography.caption1.lineHeight + theme().spacing.vertical.xs; }
+float TeachingPopoverNode::footerHeight() const noexcept { return primaryLabel_.empty() && secondaryLabel_.empty() ? 0.0f : theme().controls.height + theme().spacing.vertical.m + theme().spacing.vertical.l; }
+SizeF TeachingPopoverNode::measure(const Constraints& constraints) const
 {
-    SizeF result = Popover::measure(constraints);
+    SizeF result = PopoverNode::measure(constraints);
     // The Fluent teaching surface is a 288-DIP content column with 16-DIP
     // padding on each side.
     result.width = std::max(result.width, std::min(320.0f, constraints.maxWidth));
     return constraints.clamp(result);
 }
-void TeachingPopover::layout(const RectF& bounds) { Popover::layout(bounds); }
-RectF TeachingPopover::primaryBounds() const noexcept
+void TeachingPopoverNode::layout(const RectF& bounds) { PopoverNode::layout(bounds); }
+RectF TeachingPopoverNode::primaryBounds() const noexcept
 {
     if (primaryLabel_.empty()) return {};
     const auto panel = panelBounds();
@@ -323,7 +323,7 @@ RectF TeachingPopover::primaryBounds() const noexcept
             panel.y + panel.height - kPadding - theme().controls.height,
             width, theme().controls.height};
 }
-RectF TeachingPopover::secondaryBounds() const noexcept
+RectF TeachingPopoverNode::secondaryBounds() const noexcept
 {
     if (secondaryLabel_.empty()) return {};
     const auto panel = panelBounds();
@@ -334,10 +334,10 @@ RectF TeachingPopover::secondaryBounds() const noexcept
             panel.y + panel.height - kPadding - theme().controls.height,
             width, theme().controls.height};
 }
-RectF TeachingPopover::dismissBounds() const noexcept { const auto panel = panelBounds(); return {panel.x + panel.width - kPadding - 24.0f, panel.y + kPadding - 2.0f, 24.0f, 24.0f}; }
-void TeachingPopover::paint(PaintContext& context)
+RectF TeachingPopoverNode::dismissBounds() const noexcept { const auto panel = panelBounds(); return {panel.x + panel.width - kPadding - 24.0f, panel.y + kPadding - 2.0f, 24.0f, 24.0f}; }
+void TeachingPopoverNode::paint(PaintContext& context)
 {
-    Popover::paint(context);
+    PopoverNode::paint(context);
     const auto& current = theme(); const auto panel = panelBounds();
     if (!stepText_.empty()) context.drawText(stepText_, panel.x + kPadding, panel.y + kPadding * 0.5f + current.typography.caption1.lineHeight,
         current.typography.caption1.size, current.colors.brandForeground1, current.typography.caption1.weight);
@@ -361,17 +361,17 @@ void TeachingPopover::paint(PaintContext& context)
     drawButton(secondaryBounds(), secondaryLabel_, false);
     drawButton(primaryBounds(), primaryLabel_, true);
 }
-void TeachingPopover::invoke(ActionHandler& handler) { if (handler) handler(); dismiss(); }
-bool TeachingPopover::onPointerEvent(const PointerEvent& event)
+void TeachingPopoverNode::invoke(ActionHandler& handler) { if (handler) handler(); dismiss(); }
+bool TeachingPopoverNode::onPointerEvent(const PointerEvent& event)
 {
     if (event.action == PointerAction::Up && event.button == MouseButton::Left) {
         if (primaryBounds().contains(event.position)) { invoke(primaryHandler_); return true; }
         if (secondaryBounds().contains(event.position)) { invoke(secondaryHandler_); return true; }
         if (dismissBounds().contains(event.position)) { dismiss(); return true; }
     }
-    return Popover::onPointerEvent(event);
+    return PopoverNode::onPointerEvent(event);
 }
-bool TeachingPopover::onKeyEvent(const KeyEvent& event)
+bool TeachingPopoverNode::onKeyEvent(const KeyEvent& event)
 {
     if (event.action == KeyAction::Down && (event.keyCode == 9 || event.keyCode == 258) &&
         focusPolicy_ == TeachingPopoverFocusPolicy::TrapFocus) {
@@ -379,8 +379,8 @@ bool TeachingPopover::onKeyEvent(const KeyEvent& event)
         // boundary is deterministic until one of its exposed actions closes.
         return true;
     }
-    return Popover::onKeyEvent(event);
+    return PopoverNode::onKeyEvent(event);
 }
-void TeachingPopover::dismiss() { if (dismissHandler_) dismissHandler_(); Popover::dismiss(); }
+void TeachingPopoverNode::dismiss() { if (dismissHandler_) dismissHandler_(); PopoverNode::dismiss(); }
 
 } // namespace wui

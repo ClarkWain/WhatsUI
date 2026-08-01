@@ -6,7 +6,7 @@ panel itself is painted by the dialog; provide the interior using ordinary
 layout nodes.
 
 ```cpp
-using namespace wui::ui;
+using namespace wui;
 
 auto dialog = Dialog()
     .maxWidth(360)
@@ -14,9 +14,9 @@ auto dialog = Dialog()
     .content(Column().padding(20).gap(12).children(
         Text("Discard draft?").size(18),
         Button("Cancel"),
-        Button("Discard").variant(wui::ButtonVariant::Danger)
+        Button("Discard").appearance(wui::ButtonAppearance::Danger)
     ));
-window.showDialog(dialog.intoDialog());
+window.showDialog(std::move(dialog).build());
 ```
 
 Use `UiWindow::showDialog` and `dismissDialog`, rather than treating a dialog

@@ -2,7 +2,7 @@
 
 // Fluent desktop overlays and compact action controls.  These nodes are
 // deliberately usable through OverlayHost directly: a host owns the overlay,
-// while Popup keeps the anchored surface, dismissal and keyboard contract in
+// while PopupNode keeps the anchored surface, dismissal and keyboard contract in
 // one place.
 
 #include <chrono>
@@ -26,16 +26,16 @@ enum class PopupPlacement {
     AboveEnd,
 };
 
-class Popup : public ContainerNode {
+class PopupNode : public ContainerNode {
 public:
     using DismissHandler = std::function<void()>;
 
-    Popup& content(std::unique_ptr<Node> content);
-    Popup& anchor(RectF anchor) noexcept;
-    Popup& placement(PopupPlacement placement) noexcept;
-    Popup& preferredSize(SizeF size) noexcept;
-    Popup& dismissOnOutsidePress(bool enabled = true) noexcept;
-    Popup& onDismiss(DismissHandler handler);
+    PopupNode& content(std::unique_ptr<Node> content);
+    PopupNode& anchor(RectF anchor) noexcept;
+    PopupNode& placement(PopupPlacement placement) noexcept;
+    PopupNode& preferredSize(SizeF size) noexcept;
+    PopupNode& dismissOnOutsidePress(bool enabled = true) noexcept;
+    PopupNode& onDismiss(DismissHandler handler);
 
     [[nodiscard]] const RectF& anchor() const noexcept;
     [[nodiscard]] const RectF& panelBounds() const noexcept;
@@ -75,11 +75,11 @@ struct MenuItem {
 // A native menu surface with deterministic keyboard navigation.  The owner
 // may dismiss it via OverlayHost from onDismiss(); invoking an item runs the
 // callback before dismissal so an action can safely update application state.
-class Menu : public Popup {
+class MenuNode : public PopupNode {
 public:
-    Menu& addItem(MenuItem item);
-    Menu& clearItems();
-    Menu& onDismiss(DismissHandler handler);
+    MenuNode& addItem(MenuItem item);
+    MenuNode& clearItems();
+    MenuNode& onDismiss(DismissHandler handler);
 
     [[nodiscard]] const std::vector<MenuItem>& items() const noexcept;
     [[nodiscard]] int selectedIndex() const noexcept;
@@ -109,13 +109,13 @@ private:
 // A Fluent command button that owns menu item definitions while OverlayHost
 // owns the transient popup lifetime. Bind it to the window's OverlayHost once
 // when assembling the page.
-class MenuButton : public Button {
+class MenuButtonNode : public ButtonNode {
 public:
-    explicit MenuButton(std::string label = {});
+    explicit MenuButtonNode(std::string label = {});
 
-    MenuButton& addItem(MenuItem item);
-    MenuButton& clearItems();
-    MenuButton& bindOverlayHost(OverlayHost& host) noexcept;
+    MenuButtonNode& addItem(MenuItem item);
+    MenuButtonNode& clearItems();
+    MenuButtonNode& bindOverlayHost(OverlayHost& host) noexcept;
     [[nodiscard]] const std::vector<MenuItem>& items() const noexcept;
     [[nodiscard]] bool isOpen() const noexcept;
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -134,17 +134,17 @@ private:
 };
 
 // A primary command plus an independently-operated menu disclosure. Unlike a
-// MenuButton, the left region never opens the menu.
-class SplitButton : public ControlNode {
+// MenuButtonNode, the left region never opens the menu.
+class SplitButtonNode : public ControlNode {
 public:
     using ClickHandler = std::function<void()>;
-    explicit SplitButton(std::string label = {});
-    SplitButton& label(std::string value);
+    explicit SplitButtonNode(std::string label = {});
+    SplitButtonNode& label(std::string value);
     void setLabel(std::string value);
     [[nodiscard]] const std::string& label() const noexcept;
-    SplitButton& onClick(ClickHandler handler);
-    SplitButton& addItem(MenuItem item);
-    SplitButton& bindOverlayHost(OverlayHost& host) noexcept;
+    SplitButtonNode& onClick(ClickHandler handler);
+    SplitButtonNode& addItem(MenuItem item);
+    SplitButtonNode& bindOverlayHost(OverlayHost& host) noexcept;
     [[nodiscard]] bool isOpen() const noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -173,16 +173,16 @@ enum class TooltipAppearance {
     Inverted,
 };
 
-// Tooltip owns a small anchored surface.  Pointer/focus code calls showAfter
+// TooltipNode owns a small anchored surface.  Pointer/focus code calls showAfter
 // and advance() from its host frame clock; separating the clock avoids hidden
 // threads and keeps test and deterministic-renderer behavior reproducible.
-class Tooltip : public Popup {
+class TooltipNode : public PopupNode {
 public:
-    Tooltip& text(std::string text);
-    Tooltip& appearance(TooltipAppearance appearance) noexcept;
-    Tooltip& delay(std::chrono::milliseconds delay) noexcept;
-    Tooltip& showAfter(std::chrono::milliseconds elapsed) noexcept;
-    Tooltip& hide() noexcept;
+    TooltipNode& text(std::string text);
+    TooltipNode& appearance(TooltipAppearance appearance) noexcept;
+    TooltipNode& delay(std::chrono::milliseconds delay) noexcept;
+    TooltipNode& showAfter(std::chrono::milliseconds elapsed) noexcept;
+    TooltipNode& hide() noexcept;
 
     [[nodiscard]] const std::string& text() const noexcept;
     [[nodiscard]] TooltipAppearance appearance() const noexcept;
@@ -204,19 +204,19 @@ private:
 
 // A compact Fluent command affordance. The semantic overload uses WhatsUI's
 // bundled Fluent icon font; the string overload remains for custom icon fonts.
-class IconButton : public ControlNode {
+class IconButtonNode : public ControlNode {
 public:
     using ClickHandler = std::function<void()>;
 
-    explicit IconButton(std::string icon = {}, std::string accessibleLabel = {});
-    explicit IconButton(IconName icon, std::string accessibleLabel = {});
+    explicit IconButtonNode(std::string icon = {}, std::string accessibleLabel = {});
+    explicit IconButtonNode(IconName icon, std::string accessibleLabel = {});
 
-    IconButton& icon(std::string value);
-    IconButton& accessibleLabel(std::string value);
+    IconButtonNode& icon(std::string value);
+    IconButtonNode& accessibleLabel(std::string value);
     // When present, the compact action is exposed as a two-state semantic
-    // control while retaining IconButton visuals.
-    IconButton& checked(bool value);
-    IconButton& onClick(ClickHandler handler);
+    // control while retaining IconButtonNode visuals.
+    IconButtonNode& checked(bool value);
+    IconButtonNode& onClick(ClickHandler handler);
     void setIcon(std::string value);
     void setIcon(IconName value) noexcept;
     void setIconStyle(IconStyle value) noexcept;
@@ -245,14 +245,14 @@ private:
     ClickHandler onClick_;
 };
 
-// The standard query field keeps TextInput editing/IME semantics intact while
+// The standard query field keeps TextFieldNode editing/IME semantics intact while
 // providing the expected Windows Escape-to-clear behavior for search.
-class SearchField : public TextInput {
+class SearchFieldNode : public TextFieldNode {
 public:
-    explicit SearchField(std::string placeholder = "Search");
+    explicit SearchFieldNode(std::string placeholder = "Search");
 
-    SearchField& query(std::string value);
-    SearchField& onQueryChange(ChangeHandler handler);
+    SearchFieldNode& query(std::string value);
+    SearchFieldNode& onQueryChange(ChangeHandler handler);
     [[nodiscard]] const std::string& query() const noexcept;
     bool onKeyEvent(const KeyEvent& event) override;
 };

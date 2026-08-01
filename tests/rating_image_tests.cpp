@@ -38,7 +38,7 @@ wui::KeyEvent key(int code)
 
 void testRatingValueAndInteraction()
 {
-    wui::Rating rating(2.0f, 5);
+    wui::RatingNode rating(2.0f, 5);
     rating.setStep(0.5f);
     rating.layout({10.0f, 10.0f, 140.0f, 28.0f});
     int changes = 0;
@@ -71,7 +71,7 @@ void testRatingValueAndInteraction()
     expect(rating.maximum() == 2,
            "Rating maximum must enforce Fluent's minimum of two items");
 
-    wui::Rating gapOwnership(0.0f, 5);
+    wui::RatingNode gapOwnership(0.0f, 5);
     gapOwnership.setSize(wui::RatingSize::Small);
     gapOwnership.layout({0.0f, 0.0f, 68.0f, 16.0f});
     gapOwnership.onPointerEvent(pointer(
@@ -95,7 +95,7 @@ void testRatingValueAndInteraction()
 void testRatingBindingReadonlyDisabledAndAccessibility()
 {
     wui::State<float> state{3.0f};
-    wui::Rating rating;
+    wui::RatingNode rating;
     rating.setAccessibleLabel("Product quality");
     rating.setItemLabel([](float value) { return value == 2.5f ? "Fair" : "Other"; });
     rating.bind(state).step(0.5f);
@@ -143,7 +143,7 @@ void testRatingRebindAndSetterInvalidation()
     // State values must outlive the Rating subscription handle.
     wui::State<float> oldState{2.0f};
     wui::State<float> newState{4.0f};
-    wui::Rating rating;
+    wui::RatingNode rating;
     rating.setStep(0.5f);
     rating.bind(oldState);
     rating.bind(newState);
@@ -176,7 +176,7 @@ void testRatingRebindAndSetterInvalidation()
     expect(rating.isDirty(wui::DirtyFlag::Style),
            "Rating accessible-name changes must refresh semantic style state");
 
-    wui::RatingDisplay display(3.0f, 5);
+    wui::RatingDisplayNode display(3.0f, 5);
     display.clearDirty();
     display.setValue(4.5f);
     expect(display.isDirty(wui::DirtyFlag::Layout),
@@ -197,7 +197,7 @@ void testRatingRebindAndSetterInvalidation()
 
 void testRatingDisplayContract()
 {
-    wui::Rating interactive;
+    wui::RatingNode interactive;
     interactive.setSize(wui::RatingSize::Small);
     expect(near(interactive.measure({}).width, 68.0f) &&
                near(interactive.measure({}).height, 16.0f),
@@ -215,7 +215,7 @@ void testRatingDisplayContract()
                near(interactive.measure({}).height, 28.0f),
            "Extra-large Rating must use five 28 DIP items separated by 2 DIP");
 
-    wui::RatingDisplay display(4.5f, 5);
+    wui::RatingDisplayNode display(4.5f, 5);
     display.setCount(12345);
     expect(display.valueText() == "4.5" && display.countText() == "12,345",
            "RatingDisplay must format visible value and count deterministically");
@@ -251,7 +251,7 @@ void testImageFluentPropertiesAndAccessibility()
         255, 0, 0, 255, 0, 255, 0, 255,
         0, 0, 255, 255, 255, 255, 255, 255,
     };
-    wui::Image image(pixels, 2, 2);
+    wui::ImageNode image(pixels, 2, 2);
     image.setFit(wui::ImageFit::Center);
     image.setShape(wui::ImageShape::Rounded);
     image.setBordered(true);
@@ -281,7 +281,7 @@ void testImageFluentPropertiesAndAccessibility()
     expect(wui::snapshotAccessibilityTree(image).empty(),
            "Decorative Image must be excluded from assistive semantics");
 
-    wui::Image fallbackOnly;
+    wui::ImageNode fallbackOnly;
     fallbackOnly.fallback(pixels, 2, 2);
     expect(fallbackOnly.hasSource() && near(fallbackOnly.intrinsicSize().width, 2.0f),
            "Image fallback must become the effective source when no primary source is available");

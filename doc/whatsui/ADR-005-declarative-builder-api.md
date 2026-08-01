@@ -1,6 +1,12 @@
 # ADR-005: Declarative Builder Authoring API
 
-状态：Accepted Draft
+状态：Superseded by ADR-006
+
+> 后续公开命名、Builder/Node 类型边界、所有权入口与团队级扩展规则见
+> `ADR-006-declarative-authoring-and-node-boundary.md`。ADR-005 保留对
+> Builder、CRTP、变参 `children()` 和 `unique_ptr` 单一所有权的原始决策记录。
+> 当前公开 API 使用单一 `wui` 命名空间、`wui/declarative.h`、无后缀
+> Builder、`*Node` 运行时类型和显式 `.build()`；下文代码仅保留为历史背景。
 
 ## Context
 
@@ -27,7 +33,7 @@
 页面作者写法：
 
 ```cpp
-using namespace wui::ui;
+using namespace wui;
 
 auto page =
     Column()

@@ -138,11 +138,11 @@ void paintProbe(wsc::Canvas& canvas, wui::PaintContext& paint)
                     static_cast<float>(kLogicalHeight)},
                    colors.neutralBackground2.rest);
 
-    wui::Radio radio("", true);
-    wui::Checkbox checkbox("", true);
-    wui::Switch toggle("", true);
-    wui::Slider slider(0, 100, 50);
-    wui::Button button("");
+    wui::RadioNode radio("", true);
+    wui::CheckboxNode checkbox("", true);
+    wui::SwitchNode toggle("", true);
+    wui::SliderNode slider(0, 100, 50);
+    wui::ButtonNode button("");
     button.setAppearance(wui::ButtonAppearance::Primary);
 
     paintNode(radio, paint, {12, 12, 32, 32});

@@ -19,32 +19,32 @@ void paintElevation(PaintContext& context, const RectF& bounds, float radius,
 
 } // namespace
 
-Dialog& Dialog::content(std::unique_ptr<Node> content)
+DialogNode& DialogNode::content(std::unique_ptr<Node> content)
 {
     clearChildren();
     appendChild(std::move(content));
     return *this;
 }
 
-void Dialog::setMaxWidth(float width) noexcept
+void DialogNode::setMaxWidth(float width) noexcept
 {
     maxWidth_ = std::max(0.0f, width);
     markDirty(DirtyFlag::Layout);
 }
 
-float Dialog::maxWidth() const noexcept { return maxWidth_; }
+float DialogNode::maxWidth() const noexcept { return maxWidth_; }
 
-void Dialog::setBackdropDismissEnabled(bool enabled) noexcept { backdropDismissEnabled_ = enabled; }
-bool Dialog::backdropDismissEnabled() const noexcept { return backdropDismissEnabled_; }
-void Dialog::onDismiss(DismissHandler handler) { onDismiss_ = std::move(handler); }
-void Dialog::setWindowDismissHandler(DismissHandler handler) { windowDismiss_ = std::move(handler); }
+void DialogNode::setBackdropDismissEnabled(bool enabled) noexcept { backdropDismissEnabled_ = enabled; }
+bool DialogNode::backdropDismissEnabled() const noexcept { return backdropDismissEnabled_; }
+void DialogNode::onDismiss(DismissHandler handler) { onDismiss_ = std::move(handler); }
+void DialogNode::setWindowDismissHandler(DismissHandler handler) { windowDismiss_ = std::move(handler); }
 
-SizeF Dialog::measure(const Constraints& constraints) const
+SizeF DialogNode::measure(const Constraints& constraints) const
 {
     return constraints.clamp({constraints.maxWidth, constraints.maxHeight});
 }
 
-void Dialog::layout(const RectF& bounds)
+void DialogNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     if (!children().empty()) {
@@ -63,7 +63,7 @@ void Dialog::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-void Dialog::paint(PaintContext& context)
+void DialogNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     context.fillRect(bounds(), current.colors.scrim);
@@ -80,7 +80,7 @@ void Dialog::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-Node* Dialog::hitTest(PointF point)
+Node* DialogNode::hitTest(PointF point)
 {
     if (!bounds().contains(point)) return nullptr;
     if (!children().empty()) {
@@ -89,7 +89,7 @@ Node* Dialog::hitTest(PointF point)
     return this;
 }
 
-bool Dialog::onPointerEvent(const PointerEvent& event)
+bool DialogNode::onPointerEvent(const PointerEvent& event)
 {
     if (event.action == PointerAction::Up && event.button == MouseButton::Left &&
         backdropDismissEnabled_ && !children().empty() && !children().front()->bounds().contains(event.position)) {
@@ -99,10 +99,10 @@ bool Dialog::onPointerEvent(const PointerEvent& event)
     return true;
 }
 
-void Dialog::dismiss()
+void DialogNode::dismiss()
 {
     // Either callback may synchronously mutate the overlay stack and destroy
-    // this Dialog. Copy both first; do not touch members after invoking one.
+    // this DialogNode. Copy both first; do not touch members after invoking one.
     auto authorHandler = onDismiss_;
     auto windowHandler = windowDismiss_;
     if (authorHandler) authorHandler();

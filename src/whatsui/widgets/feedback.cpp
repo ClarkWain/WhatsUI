@@ -96,41 +96,41 @@ const TextStyleToken& spinnerLabelStyle(const Theme& current,
 
 } // namespace
 
-Toast::Toast(std::string title, std::string body)
+ToastNode::ToastNode(std::string title, std::string body)
     : title_(std::move(title)), body_(std::move(body)) {}
 
-Toast::~Toast() { stopTimeoutTicker(); }
-Toast& Toast::title(std::string value) { setTitle(std::move(value)); return *this; }
-void Toast::setTitle(std::string value) { title_ = std::move(value); markDirty(DirtyFlag::Layout); }
-const std::string& Toast::title() const noexcept { return title_; }
-Toast& Toast::body(std::string value) { setBody(std::move(value)); return *this; }
-void Toast::setBody(std::string value) { body_ = std::move(value); markDirty(DirtyFlag::Layout); }
-const std::string& Toast::body() const noexcept { return body_; }
-Toast& Toast::intent(ToastIntent value) noexcept { setIntent(value); return *this; }
-void Toast::setIntent(ToastIntent value) noexcept { intent_ = value; markDirty(DirtyFlag::Paint); }
-ToastIntent Toast::intent() const noexcept { return intent_; }
-Toast& Toast::position(ToastPosition value) noexcept { setPosition(value); return *this; }
-ToastPosition Toast::position() const noexcept { return position_; }
-Toast& Toast::action(std::string label, Handler handler) { setAction(std::move(label), std::move(handler)); return *this; }
-void Toast::setAction(std::string label, Handler handler) { actionLabel_ = std::move(label); onAction_ = std::move(handler); markDirty(DirtyFlag::Layout); }
-const std::string& Toast::actionLabel() const noexcept { return actionLabel_; }
-Toast& Toast::onDismiss(Handler handler) { onDismiss_ = std::move(handler); return *this; }
-Toast& Toast::timeout(std::chrono::milliseconds value) noexcept { setTimeout(value); return *this; }
-void Toast::setTimeout(std::chrono::milliseconds value) noexcept
+ToastNode::~ToastNode() { stopTimeoutTicker(); }
+ToastNode& ToastNode::title(std::string value) { setTitle(std::move(value)); return *this; }
+void ToastNode::setTitle(std::string value) { title_ = std::move(value); markDirty(DirtyFlag::Layout); }
+const std::string& ToastNode::title() const noexcept { return title_; }
+ToastNode& ToastNode::body(std::string value) { setBody(std::move(value)); return *this; }
+void ToastNode::setBody(std::string value) { body_ = std::move(value); markDirty(DirtyFlag::Layout); }
+const std::string& ToastNode::body() const noexcept { return body_; }
+ToastNode& ToastNode::intent(ToastIntent value) noexcept { setIntent(value); return *this; }
+void ToastNode::setIntent(ToastIntent value) noexcept { intent_ = value; markDirty(DirtyFlag::Paint); }
+ToastIntent ToastNode::intent() const noexcept { return intent_; }
+ToastNode& ToastNode::position(ToastPosition value) noexcept { setPosition(value); return *this; }
+ToastPosition ToastNode::position() const noexcept { return position_; }
+ToastNode& ToastNode::action(std::string label, Handler handler) { setAction(std::move(label), std::move(handler)); return *this; }
+void ToastNode::setAction(std::string label, Handler handler) { actionLabel_ = std::move(label); onAction_ = std::move(handler); markDirty(DirtyFlag::Layout); }
+const std::string& ToastNode::actionLabel() const noexcept { return actionLabel_; }
+ToastNode& ToastNode::onDismiss(Handler handler) { onDismiss_ = std::move(handler); return *this; }
+ToastNode& ToastNode::timeout(std::chrono::milliseconds value) noexcept { setTimeout(value); return *this; }
+void ToastNode::setTimeout(std::chrono::milliseconds value) noexcept
 {
     timeout_ = std::max(value, std::chrono::milliseconds{0}); elapsed_ = std::chrono::milliseconds{0};
     if (timeout_.count() == 0) stopTimeoutTicker(); else startTimeoutTicker();
 }
-std::chrono::milliseconds Toast::timeout() const noexcept { return timeout_; }
-bool Toast::isPaused() const noexcept { return paused_; }
-void Toast::setPaused(bool value) noexcept { paused_ = value; lastTick_ = std::chrono::steady_clock::now(); }
-void Toast::advanceTimeout(std::chrono::milliseconds elapsed)
+std::chrono::milliseconds ToastNode::timeout() const noexcept { return timeout_; }
+bool ToastNode::isPaused() const noexcept { return paused_; }
+void ToastNode::setPaused(bool value) noexcept { paused_ = value; lastTick_ = std::chrono::steady_clock::now(); }
+void ToastNode::advanceTimeout(std::chrono::milliseconds elapsed)
 {
     if (dismissed_ || paused_ || timeout_.count() <= 0 || elapsed.count() <= 0) return;
     elapsed_ += elapsed;
     if (elapsed_ >= timeout_) dismiss();
 }
-void Toast::dismiss()
+void ToastNode::dismiss()
 {
     if (dismissed_) return;
     dismissed_ = true;
@@ -139,7 +139,7 @@ void Toast::dismiss()
     if (hostDismiss_) hostDismiss_();
 }
 
-SizeF Toast::measure(const Constraints& constraints) const
+SizeF ToastNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const float maxText = std::max(80.0f, std::min(kToastWidth, constraints.maxWidth) - kToastPadding * 2.0f - kToastIcon - kToastGap - 32.0f);
@@ -151,7 +151,7 @@ SizeF Toast::measure(const Constraints& constraints) const
     return constraints.clamp({std::min(kToastWidth, constraints.maxWidth), height});
 }
 
-void Toast::layout(const RectF& hostBounds)
+void ToastNode::layout(const RectF& hostBounds)
 {
     const SizeF size = measure({0.0f, hostBounds.width, 0.0f, hostBounds.height});
     const bool end = position_ == ToastPosition::TopEnd || position_ == ToastPosition::BottomEnd;
@@ -164,7 +164,7 @@ void Toast::layout(const RectF& hostBounds)
     clearLayoutDirtyRecursively();
 }
 
-RectF Toast::actionBounds() const noexcept
+RectF ToastNode::actionBounds() const noexcept
 {
     if (actionLabel_.empty()) return {};
     const auto& current = theme();
@@ -173,12 +173,12 @@ RectF Toast::actionBounds() const noexcept
             bounds().y + bounds().height - kToastPadding - current.controls.height,
             width, current.controls.height};
 }
-RectF Toast::dismissBounds() const noexcept
+RectF ToastNode::dismissBounds() const noexcept
 {
     return {bounds().x + bounds().width - kToastPadding - 24.0f, bounds().y + kToastPadding - 2.0f, 24.0f, 24.0f};
 }
 
-void Toast::paint(PaintContext& context)
+void ToastNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const auto box = bounds();
@@ -207,7 +207,7 @@ void Toast::paint(PaintContext& context)
         y += current.typography.body1Strong.lineHeight;
     }
     if (!body_.empty()) {
-        // Canvas text wrapping lives in Text; a toast intentionally clips to
+        // Canvas text wrapping lives in TextNode; a toast intentionally clips to
         // two visual lines rather than stretching an overlay beyond the host.
         const std::size_t fitting = textWidth > 0.0f ? static_cast<std::size_t>(textWidth / std::max(1.0f, current.typography.caption1.size * 0.54f)) : body_.size();
         std::string visible = body_;
@@ -227,8 +227,8 @@ void Toast::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-Node* Toast::hitTest(PointF point) { return bounds().contains(point) ? this : nullptr; }
-bool Toast::onPointerEvent(const PointerEvent& event)
+Node* ToastNode::hitTest(PointF point) { return bounds().contains(point) ? this : nullptr; }
+bool ToastNode::onPointerEvent(const PointerEvent& event)
 {
     if (event.action == PointerAction::Enter) { setPaused(true); return true; }
     if (event.action == PointerAction::Leave || event.action == PointerAction::Cancel) { setPaused(false); return true; }
@@ -241,25 +241,25 @@ bool Toast::onPointerEvent(const PointerEvent& event)
     }
     return true;
 }
-bool Toast::onKeyEvent(const KeyEvent& event)
+bool ToastNode::onKeyEvent(const KeyEvent& event)
 {
     if (event.action == KeyAction::Down && (event.keyCode == 27 || event.keyCode == 256)) { dismiss(); return true; }
     return false;
 }
-AccessibilityActionCapabilities Toast::accessibilityActions() const noexcept
+AccessibilityActionCapabilities ToastNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions; actions.invoke = !actionLabel_.empty(); return actions;
 }
-AccessibilityActionStatus Toast::performAccessibilityAction(AccessibilityActionKind kind, std::string_view)
+AccessibilityActionStatus ToastNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view)
 {
     if (kind != AccessibilityActionKind::Invoke || actionLabel_.empty()) return AccessibilityActionStatus::NotSupported;
     if (onAction_) onAction_(); dismiss(); return AccessibilityActionStatus::Succeeded;
 }
-void Toast::setPosition(ToastPosition value) noexcept { position_ = value; markDirty(DirtyFlag::Layout); }
-void Toast::setHostDismiss(Handler handler) { hostDismiss_ = std::move(handler); }
-void Toast::onAttach() noexcept { startTimeoutTicker(); }
-void Toast::onDetach() noexcept { stopTimeoutTicker(); }
-void Toast::startTimeoutTicker() noexcept
+void ToastNode::setPosition(ToastPosition value) noexcept { position_ = value; markDirty(DirtyFlag::Layout); }
+void ToastNode::setHostDismiss(Handler handler) { hostDismiss_ = std::move(handler); }
+void ToastNode::onAttach() noexcept { startTimeoutTicker(); }
+void ToastNode::onDetach() noexcept { stopTimeoutTicker(); }
+void ToastNode::startTimeoutTicker() noexcept
 {
     if (!isAttached() || timeout_.count() <= 0 || tickerId_.has_value() || dismissed_) return;
     lastTick_ = std::chrono::steady_clock::now();
@@ -270,11 +270,11 @@ void Toast::startTimeoutTicker() noexcept
         advanceTimeout(delta);
     }).repeat(-1));
 }
-void Toast::stopTimeoutTicker() noexcept { if (tickerId_) { Ticker::instance().cancel(*tickerId_); tickerId_.reset(); } }
+void ToastNode::stopTimeoutTicker() noexcept { if (tickerId_) { Ticker::instance().cancel(*tickerId_); tickerId_.reset(); } }
 
 Toaster::Toaster(OverlayHost& host, ToastPosition position) noexcept : host_(&host), position_(position) {}
 Toaster::~Toaster() { *alive_ = false; clear(); }
-void Toaster::show(std::unique_ptr<Toast> toast)
+void Toaster::show(std::unique_ptr<ToastNode> toast)
 {
     if (!toast) return;
     queue_.push_back(std::move(toast));
@@ -308,26 +308,26 @@ void Toaster::clear()
 }
 bool Toaster::hasActiveToast() const noexcept { return active_ != nullptr; }
 std::size_t Toaster::queuedCount() const noexcept { return queue_.size(); }
-Toast* Toaster::activeToast() const noexcept { return active_; }
+ToastNode* Toaster::activeToast() const noexcept { return active_; }
 void Toaster::setPosition(ToastPosition value) noexcept { position_ = value; if (active_) active_->setPosition(value); }
 ToastPosition Toaster::position() const noexcept { return position_; }
 
-Spinner::Spinner(std::string label) : label_(std::move(label)) {}
-Spinner::~Spinner() { stopTicker(); }
-Spinner& Spinner::label(std::string value) { setLabel(std::move(value)); return *this; }
-void Spinner::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
-const std::string& Spinner::label() const noexcept { return label_; }
-Spinner& Spinner::size(SpinnerSize value) noexcept { setSize(value); return *this; }
-void Spinner::setSize(SpinnerSize value) noexcept { size_ = value; markDirty(DirtyFlag::Layout); }
-SpinnerSize Spinner::size() const noexcept { return size_; }
-Spinner& Spinner::labelPosition(SpinnerLabelPosition value) noexcept { setLabelPosition(value); return *this; }
-void Spinner::setLabelPosition(SpinnerLabelPosition value) noexcept { labelPosition_ = value; markDirty(DirtyFlag::Layout); }
-SpinnerLabelPosition Spinner::labelPosition() const noexcept { return labelPosition_; }
-Spinner& Spinner::motionEnabled(bool value) noexcept { setMotionEnabled(value); return *this; }
-void Spinner::setMotionEnabled(bool value) noexcept { motionEnabled_ = value; if (value) startTicker(); else stopTicker(); markDirty(DirtyFlag::Paint); }
-bool Spinner::isMotionEnabled() const noexcept { return motionEnabled_; }
-float Spinner::indicatorSize() const noexcept { return spinnerDiameter(size_); }
-SizeF Spinner::measure(const Constraints& constraints) const
+SpinnerNode::SpinnerNode(std::string label) : label_(std::move(label)) {}
+SpinnerNode::~SpinnerNode() { stopTicker(); }
+SpinnerNode& SpinnerNode::label(std::string value) { setLabel(std::move(value)); return *this; }
+void SpinnerNode::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
+const std::string& SpinnerNode::label() const noexcept { return label_; }
+SpinnerNode& SpinnerNode::size(SpinnerSize value) noexcept { setSize(value); return *this; }
+void SpinnerNode::setSize(SpinnerSize value) noexcept { size_ = value; markDirty(DirtyFlag::Layout); }
+SpinnerSize SpinnerNode::size() const noexcept { return size_; }
+SpinnerNode& SpinnerNode::labelPosition(SpinnerLabelPosition value) noexcept { setLabelPosition(value); return *this; }
+void SpinnerNode::setLabelPosition(SpinnerLabelPosition value) noexcept { labelPosition_ = value; markDirty(DirtyFlag::Layout); }
+SpinnerLabelPosition SpinnerNode::labelPosition() const noexcept { return labelPosition_; }
+SpinnerNode& SpinnerNode::motionEnabled(bool value) noexcept { setMotionEnabled(value); return *this; }
+void SpinnerNode::setMotionEnabled(bool value) noexcept { motionEnabled_ = value; if (value) startTicker(); else stopTicker(); markDirty(DirtyFlag::Paint); }
+bool SpinnerNode::isMotionEnabled() const noexcept { return motionEnabled_; }
+float SpinnerNode::indicatorSize() const noexcept { return spinnerDiameter(size_); }
+SizeF SpinnerNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme(); const float indicator = indicatorSize();
     if (label_.empty()) return constraints.clamp({indicator, indicator});
@@ -343,7 +343,7 @@ SizeF Spinner::measure(const Constraints& constraints) const
         {indicator + current.spacing.horizontal.s + text,
          std::max(indicator, labelStyle.lineHeight)});
 }
-void Spinner::paint(PaintContext& context)
+void SpinnerNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const float diameter = indicatorSize();
@@ -435,14 +435,14 @@ void Spinner::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-AccessibilityActionCapabilities Spinner::accessibilityActions() const noexcept { AccessibilityActionCapabilities result; result.valueReadOnly = true; return result; }
-void Spinner::onAttach() noexcept { startTicker(); }
-void Spinner::onDetach() noexcept { stopTicker(); }
-void Spinner::startTicker() noexcept
+AccessibilityActionCapabilities SpinnerNode::accessibilityActions() const noexcept { AccessibilityActionCapabilities result; result.valueReadOnly = true; return result; }
+void SpinnerNode::onAttach() noexcept { startTicker(); }
+void SpinnerNode::onDetach() noexcept { stopTicker(); }
+void SpinnerNode::startTicker() noexcept
 {
     if (!isAttached() || !motionEnabled_ || tickerId_) return;
     tickerId_ = Ticker::instance().add(Animation(1.5f, [this](float progress) { phase_ = progress; markDirty(DirtyFlag::Paint); }).repeat(-1));
 }
-void Spinner::stopTicker() noexcept { if (tickerId_) { Ticker::instance().cancel(*tickerId_); tickerId_.reset(); } }
+void SpinnerNode::stopTicker() noexcept { if (tickerId_) { Ticker::instance().cancel(*tickerId_); tickerId_.reset(); } }
 
 } // namespace wui

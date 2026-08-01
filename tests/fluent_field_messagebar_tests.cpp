@@ -14,8 +14,8 @@ wui::PointerEvent pointer(wui::PointerAction action, float x, float y, wui::Mous
 int main()
 {
     try {
-        wui::Field field("Project name");
-        auto input = std::make_unique<wui::TextInput>("Required");
+        wui::FieldNode field("Project name");
+        auto input = std::make_unique<wui::TextFieldNode>("Required");
         auto* rawInput = input.get();
         field.setControl(std::move(input));
         field.setHint("Use a name your team will recognize");
@@ -40,7 +40,7 @@ int main()
         expect(!rawInput->isEnabled(), "Disabled Field must disable its supplied control");
 
         int invoked = 0, dismissed = 0;
-        wui::MessageBar message("The task owner was updated.");
+        wui::MessageBarNode message("The task owner was updated.");
         message.setTitle("Saved");
         message.setIntent(wui::MessageBarIntent::Success);
         message.setMultiline(true);

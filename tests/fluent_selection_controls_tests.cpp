@@ -19,10 +19,10 @@ wui::KeyEvent key(int code) { return {0, wui::KeyAction::Down, code}; }
 
 void listBoxSelectionAndKeyboard()
 {
-    wui::ListBox list({{"a", "Alpha"}, {"b", "Beta", false}, {"c", "Charlie"}});
+    wui::ListBoxNode list({{"a", "Alpha"}, {"b", "Beta", false}, {"c", "Charlie"}});
     expect(list.measure({0, 400, 0, 400}).height == 104.0f,
            "Single-line Fluent ListBox rows must remain 32 DIP with 4-DIP outer padding");
-    wui::ListBox twoLine(
+    wui::ListBoxNode twoLine(
         {{"a", "Alpha", std::string("Supporting detail")}});
     expect(twoLine.measure({0, 400, 0, 400}).height == 64.0f,
            "Two-line Fluent ListBox rows must remain 56 DIP with 4-DIP outer padding");
@@ -57,7 +57,7 @@ void listBoxTypeAheadWindowingAndOptionSemantics()
 {
     std::vector<wui::Option> options;
     for (int index = 0; index < 18; ++index) options.emplace_back("v" + std::to_string(index), index == 14 ? "Zulu" : "Alpha " + std::to_string(index));
-    wui::ListBox list(std::move(options));
+    wui::ListBoxNode list(std::move(options));
     list.setMaxVisibleOptions(3);
     list.layout({0, 0, 240, 104});
     expect(list.maximumScrollOffset() > 0.0f, "ListBox must expose a nonzero scroll range for windowed rows");
@@ -67,8 +67,8 @@ void listBoxTypeAheadWindowingAndOptionSemantics()
     expect(semantics.size() == 18 && semantics[14].properties.role == wui::AccessibilityRole::Option &&
                semantics[14].properties.value == "v14" && semantics[14].properties.bounds.has_value(),
            "ListBox must materialize per-option accessibility semantics for the visible window");
-    auto root = std::make_unique<wui::Container>();
-    auto snapshotList = std::make_unique<wui::ListBox>(list.options());
+    auto root = std::make_unique<wui::BoxNode>();
+    auto snapshotList = std::make_unique<wui::ListBoxNode>(list.options());
     snapshotList->setMaxVisibleOptions(3);
     snapshotList->layout({0, 0, 240, 104});
     root->appendChild(std::move(snapshotList));
@@ -99,7 +99,7 @@ void overlayComboboxAndDropdown()
     wui::OverlayHost host;
     wui::FocusManager focus;
     host.bindFocusManager(focus);
-    wui::Combobox combo("Search fruit");
+    wui::ComboboxNode combo("Search fruit");
     combo.bindOverlayHost(host).addOption({"apple", "Apple"}).addOption({"apricot", "Apricot"}).addOption({"banana", "Banana"});
     combo.layout({20, 20, 220, 32});
     expect(combo.performAccessibilityAction(wui::AccessibilityActionKind::Expand, {}) == wui::AccessibilityActionStatus::Succeeded && combo.isOpen() && host.size() == 1,
@@ -113,7 +113,7 @@ void overlayComboboxAndDropdown()
     expect(combo.isMultiselect() && combo.selectedIndices().size() == 2 && combo.controller().text().empty(),
            "Multiselect Combobox must retain multiple values without substituting a misleading single label");
 
-    wui::Dropdown dropdown("Pick fruit");
+    wui::DropdownNode dropdown("Pick fruit");
     dropdown.bindOverlayHost(host).addOption({"apple", "Apple"}).addOption({"banana", "Banana"});
     expect(dropdown.measure({0, 400, 0, 80}).height == 32.0f,
            "Fluent medium Dropdown must measure exactly 32 DIP high");

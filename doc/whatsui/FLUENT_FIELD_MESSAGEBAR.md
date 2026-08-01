@@ -14,7 +14,7 @@ places hint/validation text below the control column. `enabled(false)` also
 disables the supplied `ControlNode`.
 
 ```cpp
-using namespace wui::ui;
+using namespace wui;
 auto name = Field("Project name")
     .required()
     .hint("Visible to your team")

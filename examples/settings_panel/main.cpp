@@ -17,7 +17,7 @@
 
 #include "wui/paint_context.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/whatscanvas_text.h"
 
 #ifdef WUI_SETTINGS_INTERACTIVE
@@ -44,16 +44,16 @@ std::string densityLabel(int value)
 }
 
 // A low-emphasis one-pixel divider made from the existing Container primitive.
-wui::ui::Box divider()
+wui::Box divider()
 {
-    return wui::ui::Box().height(1.0f).background(wui::theme().colors.border);
+    return wui::Box().height(1.0f).background(wui::theme().colors.border);
 }
 
 std::unique_ptr<wui::Node> buildSettingsUi(SettingsModel& model,
                                            DialogRequest requestDialog,
                                            Action showMenu)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto canvas = wui::theme().colors.background;
     const auto surface = wui::theme().colors.surface;
     const auto ink = wui::theme().colors.text;
@@ -83,9 +83,9 @@ std::unique_ptr<wui::Node> buildSettingsUi(SettingsModel& model,
             Text("WORKSPACE").size(10.0f).lineHeight(14.0f).color(muted),
             Text("Settings").size(22.0f).lineHeight(30.0f).color(ink),
             Box().height(12.0f),
-            Button("General").variant(wui::ButtonVariant::Primary),
-            Button("Notifications").variant(wui::ButtonVariant::Ghost),
-            Button("Privacy").variant(wui::ButtonVariant::Ghost),
+            Button("General").appearance(wui::ButtonAppearance::Primary),
+            Button("Notifications").appearance(wui::ButtonAppearance::Outline),
+            Button("Privacy").appearance(wui::ButtonAppearance::Outline),
             Spacer().flex(1.0f),
             Text("WINDOWS FLUENT").size(10.0f).lineHeight(14.0f).color(muted)));
 
@@ -95,7 +95,7 @@ std::unique_ptr<wui::Node> buildSettingsUi(SettingsModel& model,
                 Column().gap(3.0f).flex(1.0f).children(
                     Text("General").size(28.0f).lineHeight(36.0f).color(ink),
                     Text("Shape the way this workspace feels and behaves.").size(13.0f).lineHeight(19.0f).color(muted)),
-                Button("...").variant(wui::ButtonVariant::Ghost).onClick(showMenu)),
+                Button("...").appearance(wui::ButtonAppearance::Outline).onClick(showMenu)),
             Box().background(surface).radius(8.0f).padding(20.0f).children(
                 Column().gap(16.0f).align(wui::Alignment::Stretch).children(
                     Text("Personalization").size(17.0f).lineHeight(24.0f).color(ink),
@@ -116,10 +116,10 @@ std::unique_ptr<wui::Node> buildSettingsUi(SettingsModel& model,
                         Column().gap(2.0f).flex(1.0f).children(
                             Text("Text scale").size(14.0f).lineHeight(20.0f).color(ink),
                             Text("A discrete, accessible slider substitute in M1.").size(12.0f).lineHeight(18.0f).color(muted)),
-                        Button("-").variant(wui::ButtonVariant::Ghost).onClick(densityDown),
+                        Button("-").appearance(wui::ButtonAppearance::Outline).onClick(densityDown),
                         Box().width(54.0f).contentAlign(wui::Alignment::Center, wui::Alignment::Center)
                             .children(Text().bind(model.density, densityLabel).size(13.0f).lineHeight(18.0f).color(accent)),
-                        Button("+").variant(wui::ButtonVariant::Ghost).onClick(densityUp)))),
+                        Button("+").appearance(wui::ButtonAppearance::Outline).onClick(densityUp)))),
             Box().background(surface).radius(8.0f).padding(20.0f).children(
                 Column().gap(16.0f).align(wui::Alignment::Stretch).children(
                     Text("Notifications").size(17.0f).lineHeight(24.0f).color(ink),
@@ -137,7 +137,7 @@ std::unique_ptr<wui::Node> buildSettingsUi(SettingsModel& model,
                         Column().flex(1.0f).gap(2.0f).children(
                             Text("Restore defaults").size(14.0f).lineHeight(20.0f).color(ink),
                             Text("Return every setting in this reference panel to its default.").size(12.0f).lineHeight(18.0f).color(muted)),
-                        Button("Reset").variant(wui::ButtonVariant::Ghost).onClick(
+                        Button("Reset").appearance(wui::ButtonAppearance::Outline).onClick(
                             [requestDialog, reset] {
                                 requestDialog("Restore default settings?",
                                               "Your local choices in this reference panel will be reset.", reset);
@@ -145,13 +145,14 @@ std::unique_ptr<wui::Node> buildSettingsUi(SettingsModel& model,
             Text("WhatsUI Settings reference  |  M1 input and scroll contract").size(11.0f).lineHeight(16.0f).color(muted)));
 
     return Box().background(canvas).children(Row().align(wui::Alignment::Stretch).children(
-        std::move(rail), std::move(page)));
+        std::move(rail), std::move(page)))
+        .build();
 }
 
 #ifdef WUI_SETTINGS_INTERACTIVE
 void showResetDialog(wui::UiWindow& window, std::string title, std::string detail, Action confirm)
 {
-    using namespace wui::ui;
+    using namespace wui;
     auto dialog = Dialog().maxWidth(392.0f).content(
         Box().width(392.0f).background(wui::theme().colors.surface).radius(8.0f)
             .padding({24.0f, 22.0f, 20.0f, 22.0f}).children(
@@ -161,39 +162,39 @@ void showResetDialog(wui::UiWindow& window, std::string title, std::string detai
                         Text(std::move(detail)).wrap().size(13.0f).lineHeight(19.0f).color(wui::theme().colors.textMuted)),
                     Row().align(wui::Alignment::Center).gap(8.0f).children(
                         Spacer().flex(1.0f),
-                        Button("Cancel").variant(wui::ButtonVariant::Ghost)
+                        Button("Cancel").appearance(wui::ButtonAppearance::Outline)
                             .onClick([&window] { (void)window.dismissTopDialog(); }),
-                        Button("Restore").variant(wui::ButtonVariant::Primary)
+                        Button("Restore").appearance(wui::ButtonAppearance::Primary)
                             .onClick([&window, confirm = std::move(confirm)]() mutable {
                                 (void)window.dismissTopDialog();
                                 confirm();
                             })))))
-            .intoDialog();
+            .build();
     (void)window.showDialog(std::move(dialog));
 }
 
 void showPopupMenu(wui::UiWindow& window, SettingsModel& model)
 {
-    using namespace wui::ui;
+    using namespace wui;
     auto id = std::make_shared<wui::OverlayId>(0);
     auto dismiss = [&window, id] { (void)window.overlayHost().dismiss(*id); };
     auto popup = Box().padding({24.0f, 62.0f, 24.0f, 0.0f}).contentAlign(wui::Alignment::End, wui::Alignment::Start)
         .children(Box().width(224.0f).background(wui::theme().colors.surface).radius(8.0f).padding(8.0f)
             .children(Column().gap(4.0f).align(wui::Alignment::Stretch).children(
                 Text("MORE OPTIONS").size(10.0f).lineHeight(14.0f).color(wui::theme().colors.textMuted),
-                Button("Use compact density").variant(wui::ButtonVariant::Ghost).onClick([&model, dismiss] {
+                Button("Use compact density").appearance(wui::ButtonAppearance::Outline).onClick([&model, dismiss] {
                     model.compactMode.set(true);
                     dismiss();
                 }),
-                Button("Restore defaults").variant(wui::ButtonVariant::Ghost).onClick([&window, &model, dismiss] {
+                Button("Restore defaults").appearance(wui::ButtonAppearance::Outline).onClick([&window, &model, dismiss] {
                     dismiss();
                     showResetDialog(window, "Restore default settings?", "Your local choices will be reset.", [&model] {
                         model.systemTheme.set(true); model.compactMode.set(false); model.notifications.set(true);
                         model.quietHours.set(false); model.diagnostics.set(false); model.density.set(100);
                     });
                 }),
-                Button("Close menu").variant(wui::ButtonVariant::Ghost).onClick(dismiss))));
-    *id = window.overlayHost().show(std::move(popup));
+                Button("Close menu").appearance(wui::ButtonAppearance::Outline).onClick(dismiss))));
+    *id = window.overlayHost().show(std::move(popup).build());
 }
 #endif
 

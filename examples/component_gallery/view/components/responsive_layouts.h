@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::gallery::view::components {
 
@@ -215,7 +215,7 @@ template <class... Children>
 {
     auto flow = std::make_unique<ResponsiveFlow>();
     flow->gap(horizontalGap);
-    (flow->appendChild(wui::ui::asNode(std::forward<Children>(children))), ...);
+    (flow->appendChild(wui::asNode(std::forward<Children>(children))), ...);
     return flow;
 }
 

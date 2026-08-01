@@ -62,13 +62,13 @@ void testPinnedMappings()
 
 void testPublicWidgets()
 {
-    wui::Icon icon(wui::IconName::Delete);
+    wui::IconNode icon(wui::IconName::Delete);
     icon.size(wui::IconSize::Size24).style(wui::IconStyle::Filled);
     const auto measured = icon.measure({0.0f, 100.0f, 0.0f, 100.0f});
     expect(measured.width == 24.0f && measured.height == 24.0f,
            "Icon must measure to its semantic DIP size");
 
-    wui::IconButton button(wui::IconName::Delete, "Delete task");
+    wui::IconButtonNode button(wui::IconName::Delete, "Delete task");
     expect(button.fluentIcon() == wui::IconName::Delete &&
                button.icon().empty() &&
                button.accessibleLabel() == "Delete task",

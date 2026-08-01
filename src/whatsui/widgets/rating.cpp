@@ -198,7 +198,7 @@ std::string formatCount(std::uint64_t value)
 {
     // The default visible count must be cross-platform deterministic for
     // tests, screenshots, and accessible text. Applications that need locale-
-    // specific formatting can override it through RatingDisplay::countFormatter.
+    // specific formatting can override it through RatingDisplayNode::countFormatter.
     std::string result = std::to_string(value);
     for (std::ptrdiff_t index = static_cast<std::ptrdiff_t>(result.size()) - 3;
          index > 0; index -= 3) {
@@ -214,24 +214,24 @@ bool primary(const PointerEvent& event) noexcept
 
 } // namespace
 
-Rating::Rating(float value, int maximum)
+RatingNode::RatingNode(float value, int maximum)
 {
     setMaximum(maximum);
     value_ = normalized(value);
 }
 
-float Rating::value() const noexcept
+float RatingNode::value() const noexcept
 {
     return normalized(hasBinding_ ? binding_->get() : value_);
 }
 
-Rating& Rating::value(float value)
+RatingNode& RatingNode::value(float value)
 {
     setValue(value);
     return *this;
 }
 
-void Rating::setValue(float value)
+void RatingNode::setValue(float value)
 {
     const float next = normalized(value);
     if (hasBinding_) {
@@ -242,58 +242,58 @@ void Rating::setValue(float value)
     }
 }
 
-int Rating::maximum() const noexcept { return maximum_; }
+int RatingNode::maximum() const noexcept { return maximum_; }
 
-void Rating::setMaximum(int maximum)
+void RatingNode::setMaximum(int maximum)
 {
     maximum_ = std::max(2, maximum);
     setValue(value());
     markDirty(DirtyFlag::Layout);
 }
 
-float Rating::step() const noexcept { return step_; }
-Rating& Rating::step(float step) { setStep(step); return *this; }
-void Rating::setStep(float step)
+float RatingNode::step() const noexcept { return step_; }
+RatingNode& RatingNode::step(float step) { setStep(step); return *this; }
+void RatingNode::setStep(float step)
 {
     step_ = std::abs(step - 0.5f) < 0.001f ? 0.5f : 1.0f;
     setValue(value());
     markDirty(DirtyFlag::Paint);
 }
-RatingColor Rating::color() const noexcept { return color_; }
-void Rating::setColor(RatingColor color) noexcept { color_ = color; markDirty(DirtyFlag::Paint); }
-RatingSize Rating::size() const noexcept { return size_; }
-void Rating::setSize(RatingSize size) noexcept { size_ = size; markDirty(DirtyFlag::Layout); }
-RatingShape Rating::shape() const noexcept { return shape_; }
-void Rating::setShape(RatingShape shape) noexcept { shape_ = shape; markDirty(DirtyFlag::Paint); }
-bool Rating::isReadOnly() const noexcept { return readOnly_; }
-void Rating::setReadOnly(bool value) noexcept
+RatingColor RatingNode::color() const noexcept { return color_; }
+void RatingNode::setColor(RatingColor color) noexcept { color_ = color; markDirty(DirtyFlag::Paint); }
+RatingSize RatingNode::size() const noexcept { return size_; }
+void RatingNode::setSize(RatingSize size) noexcept { size_ = size; markDirty(DirtyFlag::Layout); }
+RatingShape RatingNode::shape() const noexcept { return shape_; }
+void RatingNode::setShape(RatingShape shape) noexcept { shape_ = shape; markDirty(DirtyFlag::Paint); }
+bool RatingNode::isReadOnly() const noexcept { return readOnly_; }
+void RatingNode::setReadOnly(bool value) noexcept
 {
     readOnly_ = value;
     hoveredValue_.reset();
     setVisualState(ControlVisualState::Pressed, false);
     markDirty(DirtyFlag::Paint);
 }
-const std::string& Rating::accessibleLabel() const noexcept { return accessibleLabel_; }
-void Rating::setAccessibleLabel(std::string label)
+const std::string& RatingNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+void RatingNode::setAccessibleLabel(std::string label)
 {
     if (accessibleLabel_ != label) { accessibleLabel_ = std::move(label); markDirty(DirtyFlag::Style); }
 }
-Rating& Rating::itemLabel(ItemLabelHandler handler) { setItemLabel(std::move(handler)); return *this; }
-void Rating::setItemLabel(ItemLabelHandler handler)
+RatingNode& RatingNode::itemLabel(ItemLabelHandler handler) { setItemLabel(std::move(handler)); return *this; }
+void RatingNode::setItemLabel(ItemLabelHandler handler)
 {
     itemLabel_ = std::move(handler);
     markDirty(DirtyFlag::Style);
 }
-std::string Rating::labelForValue(float value) const
+std::string RatingNode::labelForValue(float value) const
 {
     return itemLabel_ ? itemLabel_(normalized(value)) : formatNumber(normalized(value));
 }
-std::string Rating::accessibleValueText() const
+std::string RatingNode::accessibleValueText() const
 {
     return formatNumber(value()) + " out of " + std::to_string(maximum_);
 }
 
-Rating& Rating::bind(State<float>& state)
+RatingNode& RatingNode::bind(State<float>& state)
 {
     binding_.emplace(state);
     hasBinding_ = true;
@@ -311,9 +311,9 @@ Rating& Rating::bind(State<float>& state)
     return *this;
 }
 
-Rating& Rating::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
+RatingNode& RatingNode::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
 
-float Rating::normalized(float value) const noexcept
+float RatingNode::normalized(float value) const noexcept
 {
     if (!std::isfinite(value)) value = 0.0f;
     value = std::clamp(value, 0.0f, static_cast<float>(maximum_));
@@ -321,7 +321,7 @@ float Rating::normalized(float value) const noexcept
     return std::clamp(value, 0.0f, static_cast<float>(maximum_));
 }
 
-float Rating::valueAt(float x) const noexcept
+float RatingNode::valueAt(float x) const noexcept
 {
     const float size = itemSize(size_);
     const float stride = size + kItemGap;
@@ -338,20 +338,20 @@ float Rating::valueAt(float x) const noexcept
     return static_cast<float>(item + 1);
 }
 
-void Rating::commit(float value)
+void RatingNode::commit(float value)
 {
     const float before = this->value();
     setValue(value);
     if (this->value() != before && onChange_) onChange_(this->value());
 }
 
-SizeF Rating::measure(const Constraints& constraints) const
+SizeF RatingNode::measure(const Constraints& constraints) const
 {
     return constraints.clamp(
         {itemsWidth(maximum_, size_), rowHeight(size_)});
 }
 
-void Rating::paint(PaintContext& context)
+void RatingNode::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const float size = itemSize(size_);
@@ -374,7 +374,7 @@ void Rating::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-bool Rating::onPointerEvent(const PointerEvent& event)
+bool RatingNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled() || readOnly_) return false;
     switch (event.action) {
@@ -413,7 +413,7 @@ bool Rating::onPointerEvent(const PointerEvent& event)
     }
 }
 
-bool Rating::onKeyEvent(const KeyEvent& event)
+bool RatingNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || readOnly_ || event.action != KeyAction::Down) return false;
     float next = value();
@@ -429,7 +429,7 @@ bool Rating::onKeyEvent(const KeyEvent& event)
     return true;
 }
 
-AccessibilityActionCapabilities Rating::accessibilityActions() const noexcept
+AccessibilityActionCapabilities RatingNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.setValue = !readOnly_;
@@ -437,7 +437,7 @@ AccessibilityActionCapabilities Rating::accessibilityActions() const noexcept
     return actions;
 }
 
-AccessibilityActionStatus Rating::performAccessibilityAction(
+AccessibilityActionStatus RatingNode::performAccessibilityAction(
     AccessibilityActionKind kind, std::string_view value)
 {
     if (kind != AccessibilityActionKind::SetValue) return AccessibilityActionStatus::NotSupported;
@@ -458,18 +458,18 @@ AccessibilityActionStatus Rating::performAccessibilityAction(
     }
 }
 
-RatingDisplay::RatingDisplay(std::optional<float> value, int maximum)
+RatingDisplayNode::RatingDisplayNode(std::optional<float> value, int maximum)
     : value_(value)
 {
     setMaximum(maximum);
     setValue(value);
 }
 
-std::optional<float> RatingDisplay::value() const noexcept { return value_; }
-RatingDisplay& RatingDisplay::value(float value) { setValue(value); return *this; }
-void RatingDisplay::setValue(std::optional<float> value) noexcept
+std::optional<float> RatingDisplayNode::value() const noexcept { return value_; }
+RatingDisplayNode& RatingDisplayNode::value(float value) { setValue(value); return *this; }
+void RatingDisplayNode::setValue(std::optional<float> value) noexcept
 {
-    // A rendered RatingDisplay always has a visible and spoken value. Callers
+    // A rendered RatingDisplayNode always has a visible and spoken value. Callers
     // with no result should omit the component rather than creating an empty
     // image semantic that assistive technology cannot describe.
     if (!value || !std::isfinite(*value)) value = 0.0f;
@@ -477,46 +477,46 @@ void RatingDisplay::setValue(std::optional<float> value) noexcept
     value_ = value;
     markDirty(DirtyFlag::Layout);
 }
-int RatingDisplay::maximum() const noexcept { return maximum_; }
-void RatingDisplay::setMaximum(int maximum) noexcept
+int RatingDisplayNode::maximum() const noexcept { return maximum_; }
+void RatingDisplayNode::setMaximum(int maximum) noexcept
 {
     maximum_ = std::max(2, maximum);
     setValue(value_);
     markDirty(DirtyFlag::Layout);
 }
-std::optional<std::uint64_t> RatingDisplay::count() const noexcept { return count_; }
-void RatingDisplay::setCount(std::optional<std::uint64_t> count) noexcept { count_ = count; markDirty(DirtyFlag::Layout); }
-RatingDisplay& RatingDisplay::countFormatter(CountFormatter formatter)
+std::optional<std::uint64_t> RatingDisplayNode::count() const noexcept { return count_; }
+void RatingDisplayNode::setCount(std::optional<std::uint64_t> count) noexcept { count_ = count; markDirty(DirtyFlag::Layout); }
+RatingDisplayNode& RatingDisplayNode::countFormatter(CountFormatter formatter)
 {
     setCountFormatter(std::move(formatter));
     return *this;
 }
-void RatingDisplay::setCountFormatter(CountFormatter formatter)
+void RatingDisplayNode::setCountFormatter(CountFormatter formatter)
 {
     countFormatter_ = std::move(formatter);
     markDirty(DirtyFlag::Layout);
 }
-bool RatingDisplay::isCompact() const noexcept { return compact_; }
-void RatingDisplay::setCompact(bool compact) noexcept { compact_ = compact; markDirty(DirtyFlag::Layout); }
-RatingColor RatingDisplay::color() const noexcept { return color_; }
-void RatingDisplay::setColor(RatingColor color) noexcept { color_ = color; markDirty(DirtyFlag::Paint); }
-RatingSize RatingDisplay::size() const noexcept { return size_; }
-void RatingDisplay::setSize(RatingSize size) noexcept { size_ = size; markDirty(DirtyFlag::Layout); }
-RatingShape RatingDisplay::shape() const noexcept { return shape_; }
-void RatingDisplay::setShape(RatingShape shape) noexcept { shape_ = shape; markDirty(DirtyFlag::Paint); }
-const std::string& RatingDisplay::accessibleLabel() const noexcept { return accessibleLabel_; }
-void RatingDisplay::setAccessibleLabel(std::string label)
+bool RatingDisplayNode::isCompact() const noexcept { return compact_; }
+void RatingDisplayNode::setCompact(bool compact) noexcept { compact_ = compact; markDirty(DirtyFlag::Layout); }
+RatingColor RatingDisplayNode::color() const noexcept { return color_; }
+void RatingDisplayNode::setColor(RatingColor color) noexcept { color_ = color; markDirty(DirtyFlag::Paint); }
+RatingSize RatingDisplayNode::size() const noexcept { return size_; }
+void RatingDisplayNode::setSize(RatingSize size) noexcept { size_ = size; markDirty(DirtyFlag::Layout); }
+RatingShape RatingDisplayNode::shape() const noexcept { return shape_; }
+void RatingDisplayNode::setShape(RatingShape shape) noexcept { shape_ = shape; markDirty(DirtyFlag::Paint); }
+const std::string& RatingDisplayNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+void RatingDisplayNode::setAccessibleLabel(std::string label)
 {
     if (accessibleLabel_ != label) { accessibleLabel_ = std::move(label); markDirty(DirtyFlag::Style); }
 }
 
-std::string RatingDisplay::valueText() const { return value_ ? formatNumber(*value_) : std::string{}; }
-std::string RatingDisplay::countText() const
+std::string RatingDisplayNode::valueText() const { return value_ ? formatNumber(*value_) : std::string{}; }
+std::string RatingDisplayNode::countText() const
 {
     if (!count_) return {};
     return countFormatter_ ? countFormatter_(*count_) : formatCount(*count_);
 }
-std::string RatingDisplay::generatedAccessibleLabel() const
+std::string RatingDisplayNode::generatedAccessibleLabel() const
 {
     if (!accessibleLabel_.empty()) return accessibleLabel_;
     if (!value_) return {};
@@ -525,7 +525,7 @@ std::string RatingDisplay::generatedAccessibleLabel() const
     return result;
 }
 
-SizeF RatingDisplay::measure(const Constraints& constraints) const
+SizeF RatingDisplayNode::measure(const Constraints& constraints) const
 {
     const Theme& current = theme();
     const float size = itemSize(size_);
@@ -545,7 +545,7 @@ SizeF RatingDisplay::measure(const Constraints& constraints) const
         {width, std::max(rowHeight(size_), labelSize * 1.35f)});
 }
 
-void RatingDisplay::paint(PaintContext& context)
+void RatingDisplayNode::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const float size = itemSize(size_);

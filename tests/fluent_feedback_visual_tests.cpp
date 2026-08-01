@@ -35,10 +35,10 @@ void render(const std::string& file, float scale)
     try {
         wui::PaintContext paint(*canvas, scale); canvas->beginFrame();
         paint.fillRect({0, 0, static_cast<float>(kWidth), static_cast<float>(kHeight)}, wui::theme().colors.neutralBackground2.rest);
-        wui::Toast success("Task completed", "The task was moved to Completed."); success.setIntent(wui::ToastIntent::Success); success.setPosition(wui::ToastPosition::TopEnd); success.setAction("Undo", [] {}); success.layout({0, 0, 740, 340}); success.paint(paint);
-        wui::Toast warning("Storage almost full", "Clear completed tasks to free space."); warning.setIntent(wui::ToastIntent::Warning); warning.setPosition(wui::ToastPosition::TopStart); warning.layout({0, 140, 740, 280}); warning.paint(paint);
-        wui::Spinner inlineSpinner("Syncing your tasks"); inlineSpinner.setSize(wui::SpinnerSize::Large); inlineSpinner.layout({32, 310, 230, 44}); inlineSpinner.paint(paint);
-        wui::Spinner verticalSpinner("Loading"); verticalSpinner.setSize(wui::SpinnerSize::Medium); verticalSpinner.setLabelPosition(wui::SpinnerLabelPosition::Below); verticalSpinner.setMotionEnabled(false); verticalSpinner.layout({320, 292, 110, 90}); verticalSpinner.paint(paint);
+        wui::ToastNode success("Task completed", "The task was moved to Completed."); success.setIntent(wui::ToastIntent::Success); success.setPosition(wui::ToastPosition::TopEnd); success.setAction("Undo", [] {}); success.layout({0, 0, 740, 340}); success.paint(paint);
+        wui::ToastNode warning("Storage almost full", "Clear completed tasks to free space."); warning.setIntent(wui::ToastIntent::Warning); warning.setPosition(wui::ToastPosition::TopStart); warning.layout({0, 140, 740, 280}); warning.paint(paint);
+        wui::SpinnerNode inlineSpinner("Syncing your tasks"); inlineSpinner.setSize(wui::SpinnerSize::Large); inlineSpinner.layout({32, 310, 230, 44}); inlineSpinner.paint(paint);
+        wui::SpinnerNode verticalSpinner("Loading"); verticalSpinner.setSize(wui::SpinnerSize::Medium); verticalSpinner.setLabelPosition(wui::SpinnerLabelPosition::Below); verticalSpinner.setMotionEnabled(false); verticalSpinner.layout({320, 292, 110, 90}); verticalSpinner.paint(paint);
         canvas->endFrame(); const auto pixels = canvas->readPixelsRGBA();
         expect(pixels.size() == static_cast<std::size_t>(width * height * 4), "feedback visual must return complete RGBA frame");
         expect(paint.paintStats().boxShadowCalls >= 4, "Toast visual must use Fluent elevation layers");

@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "wui/node.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::gallery::view::components {
 
@@ -91,21 +91,21 @@ private:
 
     [[nodiscard]] std::unique_ptr<wui::Node> buildDesktopContent()
     {
-        using namespace wui::ui;
-        auto rows = std::make_unique<wui::Column>();
+        using namespace wui;
+        auto rows = std::make_unique<wui::ColumnNode>();
         rows->setGap(6.0f);
         rows->setAlign(wui::Alignment::Start);
         const auto selected = selectedValue_();
         const auto rowLength = normalizedRowLength();
-        auto buttons = std::make_shared<std::vector<std::pair<std::string, wui::ToggleButton*>>>();
+        auto buttons = std::make_shared<std::vector<std::pair<std::string, wui::ToggleButtonNode*>>>();
         for (std::size_t begin = 0; begin < options_.size(); begin += rowLength) {
-            auto row = std::make_unique<wui::Row>();
+            auto row = std::make_unique<wui::RowNode>();
             row->setGap(6.0f);
             row->setAlign(wui::Alignment::Center);
             const auto end = std::min(options_.size(), begin + rowLength);
             for (std::size_t index = begin; index < end; ++index) {
                 const auto& option = options_[index];
-                auto button = std::make_unique<wui::ToggleButton>(option.label, option.value == selected);
+                auto button = std::make_unique<wui::ToggleButtonNode>(option.label, option.value == selected);
                 button->setAppearance(wui::ButtonAppearance::Subtle);
                 auto* raw = button.get();
                 buttons->push_back({option.value, raw});
@@ -129,7 +129,7 @@ private:
 
     [[nodiscard]] std::unique_ptr<wui::Node> buildCompactContent()
     {
-        auto group = std::make_unique<wui::RadioGroup>();
+        auto group = std::make_unique<wui::RadioGroupNode>();
         group->setAccessibleLabel(accessibleLabel_);
         group->setValue(selectedValue_());
         group->setGroupLayout(wui::RadioGroupLayout::Vertical);

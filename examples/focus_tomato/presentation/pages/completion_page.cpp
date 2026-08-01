@@ -3,7 +3,7 @@
 #include "../components/common_components.h"
 #include "../focus_style.h"
 #include "../../domain/focus_statistics.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 #include <algorithm>
 #include <iomanip>
@@ -36,7 +36,7 @@ std::string completedDuration(const FocusData& data)
 std::unique_ptr<wui::Node> buildCompletionMetrics(
     const FocusData& data, float availableWidth)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto statistics = calculateFocusStatistics(
         data, 0, std::numeric_limits<std::int64_t>::max());
     const float cardWidth =
@@ -54,13 +54,13 @@ std::unique_ptr<wui::Node> buildCompletionMetrics(
                 std::to_string(statistics.completedFocusSessions),
                 "个")
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildCompletionActions(
     CompletionPageActions actions)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Row()
         .gap(14.0f)
         .children(
@@ -69,7 +69,7 @@ std::unique_ptr<wui::Node> buildCompletionActions(
             buildPrimaryTextButton(
                 "继续专注", std::move(actions.continueFocus))
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -81,7 +81,7 @@ std::unique_ptr<wui::Node> buildCompletionPage(
     float pageHeight,
     CompletionPageActions actions)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const float contentWidth = std::max(320.0f, pageWidth - 56.0f);
     auto content = Column()
         .gap(14.0f)
@@ -102,7 +102,7 @@ std::unique_ptr<wui::Node> buildCompletionPage(
             buildCompletionMetrics(viewModel.data(), contentWidth),
             buildCompletionActions(std::move(actions))
         )
-        .intoNode();
+        .build();
 
     return Box()
         .background(style::canvas)
@@ -125,7 +125,7 @@ std::unique_ptr<wui::Node> buildCompletionPage(
                         )
                 )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::focus_tomato::presentation

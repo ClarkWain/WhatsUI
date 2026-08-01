@@ -5,7 +5,7 @@
 #include "presentation/focus_view_model.h"
 
 #include "wui/app.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -99,13 +99,13 @@ void successfulSubmitRefreshesOnlyAfterDialogDismissal()
 
     bool refreshed = false;
     bool refreshSawDialog = false;
-    auto newTask = std::make_unique<wui::Button>("新建任务");
+    auto newTask = std::make_unique<wui::ButtonNode>("新建任务");
     auto* newTaskRaw = newTask.get();
     newTask->onClick([&] {
         showNewTaskDialog(window, viewModel, [&] {
             refreshed = true;
             refreshSawDialog = window.hasDialog();
-            window.setRoot(wui::ui::Text("已刷新任务列表").intoNode());
+            window.setRoot(wui::Text("已刷新任务列表").build());
         });
     });
     window.setRoot(std::move(newTask));
@@ -173,7 +173,7 @@ void rejectedSubmitsKeepTheDialogAndNeverRefreshThePage()
         wui::UiApp app(
             whatsui::gallery::capture::createHeadlessPlatformHost(1.0f));
         auto& window = app.openWindow("invalid task", {520.0f, 720.0f});
-        window.setRoot(wui::ui::Text("任务列表").intoNode());
+        window.setRoot(wui::Text("任务列表").build());
         bool refreshed = false;
         showNewTaskDialog(
             window, viewModel, [&refreshed] { refreshed = true; });
@@ -204,7 +204,7 @@ void rejectedSubmitsKeepTheDialogAndNeverRefreshThePage()
         wui::UiApp app(
             whatsui::gallery::capture::createHeadlessPlatformHost(1.0f));
         auto& window = app.openWindow("failed save", {520.0f, 720.0f});
-        window.setRoot(wui::ui::Text("任务列表").intoNode());
+        window.setRoot(wui::Text("任务列表").build());
         bool refreshed = false;
         showNewTaskDialog(
             window, viewModel, [&refreshed] { refreshed = true; });

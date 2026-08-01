@@ -36,13 +36,39 @@ SizeF Node::measureWithConstraints(const Constraints& constraints) const
     return measure(constraints);
 }
 
-void Node::appendChild(std::unique_ptr<Node> child)
+void Node::appendChild(NodePtr child)
 {
     WUI_ASSERT_UI_THREAD();
     insertChild(children_.size(), std::move(child));
 }
 
-void Node::insertChild(std::size_t index, std::unique_ptr<Node> child)
+void Node::appendChildren(std::vector<NodePtr> children)
+{
+    WUI_ASSERT_UI_THREAD();
+    for (const auto& child : children) {
+        if (!child) {
+            throw std::invalid_argument("child must not be null");
+        }
+    }
+
+    // Reserve before mutating parent/child relationships. Invalid input and
+    // normal allocation failures therefore leave this node unchanged.
+    children_.reserve(children_.size() + children.size());
+    for (auto& child : children) {
+        child->parent_ = this;
+        child->setInvalidationHandler(invalidationHandler_);
+        Node* const rawChild = child.get();
+        children_.push_back(std::move(child));
+        if (attached_) {
+            rawChild->attachRecursively();
+        }
+    }
+    if (!children.empty()) {
+        markDirty(DirtyFlag::Layout);
+    }
+}
+
+void Node::insertChild(std::size_t index, NodePtr child)
 {
     WUI_ASSERT_UI_THREAD();
     if (!child) {
@@ -76,7 +102,7 @@ void Node::moveChild(std::size_t from, std::size_t to)
     markDirty(DirtyFlag::Layout);
 }
 
-std::unique_ptr<Node> Node::removeChild(std::size_t index)
+NodePtr Node::removeChild(std::size_t index)
 {
     WUI_ASSERT_UI_THREAD();
     if (index >= children_.size()) {
@@ -203,7 +229,7 @@ EventResult Node::onPointerEvent(const PointerEvent& event, EventContext& contex
 {
     // The legacy callback historically ran on the hit target and then during
     // bubbling. Do not invoke it during the newly introduced capture phase:
-    // existing ScrollView/Dialog/Button implementations must not observe the
+    // existing ScrollViewNode/DialogNode/ButtonNode implementations must not observe the
     // same gesture twice simply because the router gained capture semantics.
     if (context.phase() == EventPhase::Capture) {
         return EventResult::Ignored;

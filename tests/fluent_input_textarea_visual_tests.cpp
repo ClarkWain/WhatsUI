@@ -100,7 +100,7 @@ void savePpm(const std::string& path,
     }
 }
 
-void draw(wui::TextInput& input, wui::PaintContext& paint,
+void draw(wui::TextFieldNode& input, wui::PaintContext& paint,
           const wui::RectF& bounds)
 {
     input.layout(bounds);
@@ -133,14 +133,14 @@ void renderAndVerify(const std::string& outputPath, float scale)
         paint.drawText("Fluent Input and Textarea", 32, 38, 22,
                        current.colors.neutralForeground1, 600);
 
-        wui::TextInput rest("Rest");
+        wui::TextFieldNode rest("Rest");
         draw(rest, paint, {32, 64, 300, 32});
 
-        wui::TextInput hover("Hover");
+        wui::TextFieldNode hover("Hover");
         hover.setVisualState(wui::ControlVisualState::Hovered, true);
         draw(hover, paint, {380, 64, 300, 32});
 
-        wui::TextInput focusIn("Focus animation");
+        wui::TextFieldNode focusIn("Focus animation");
         focusIn.setVisualState(wui::ControlVisualState::Focused, true);
         draw(focusIn, paint, {32, 128, 648, 32});
         // 50 ms is one quarter of Fluent durationNormal. The decelerating
@@ -148,24 +148,24 @@ void renderAndVerify(const std::string& outputPath, float scale)
         wui::Ticker::instance().tick(0.05f);
         draw(focusIn, paint, {32, 128, 648, 32});
 
-        wui::TextInput focused;
+        wui::TextFieldNode focused;
         focused.text("Search");
         focused.controller().setCaret(0);
         focused.setMotionEnabled(false);
         focused.setVisualState(wui::ControlVisualState::Focused, true);
         draw(focused, paint, {32, 192, 648, 32});
 
-        wui::TextArea areaRest("Textarea placeholder");
+        wui::TextAreaNode areaRest("Textarea placeholder");
         draw(areaRest, paint, {32, 256, 300, 96});
 
-        wui::TextArea areaFocused;
+        wui::TextAreaNode areaFocused;
         areaFocused.text("Notes");
         areaFocused.controller().setCaret(0);
         areaFocused.setMotionEnabled(false);
         areaFocused.setVisualState(wui::ControlVisualState::Focused, true);
         draw(areaFocused, paint, {380, 256, 300, 96});
 
-        wui::TextInput disabled("Disabled");
+        wui::TextFieldNode disabled("Disabled");
         disabled.setEnabled(false);
         draw(disabled, paint, {32, 384, 300, 32});
 

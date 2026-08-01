@@ -16,7 +16,7 @@ struct WindowMetrics {
     float scaleFactor{1.0f};
 };
 
-// Projects a logical TextInput caret to the coordinate space required by
+// Projects a logical TextFieldNode caret to the coordinate space required by
 // native client-area APIs such as IMM32.  The returned point is deliberately
 // rounded because Win32 candidate/composition windows accept integer client
 // pixels.  Keep this independent of a particular window backend so the exact

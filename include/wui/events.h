@@ -62,7 +62,7 @@ public:
 
     // Scroll handlers may consume only the part of a wheel/trackpad delta
     // their viewport can actually apply.  The router presents this remaining
-    // delta to later bubble handlers, which lets a nested ScrollView hand an
+    // delta to later bubble handlers, which lets a nested ScrollViewNode hand an
     // edge overscroll to its ancestor without changing pointer-capture
     // semantics. This is meaningful only for PointerAction::Scroll.
     void setRemainingScrollDelta(PointF delta) noexcept;

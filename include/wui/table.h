@@ -1,7 +1,7 @@
 #pragma once
 
-// Fluent 2 tabular collections. Table is deliberately passive: it renders
-// stable column/row data with no selection or sorting side effects. DataGrid
+// Fluent 2 tabular collections. TableNode is deliberately passive: it renders
+// stable column/row data with no selection or sorting side effects. DataGridNode
 // builds on the same model and adds the interactive grid contract (sorting,
 // row selection, roving keyboard focus and a windowed viewport).
 
@@ -53,28 +53,28 @@ struct TableAccessibilityEntry {
 
 // A passive semantic table. Its data is value based so applications may
 // replace, sort, or window external data without rebuilding Node ownership.
-class Table : public ControlNode {
+class TableNode : public ControlNode {
 public:
     using RowProvider = std::function<TableRow(std::size_t)>;
     using RowEnabledProvider = std::function<bool(std::size_t)>;
 
-    Table();
-    explicit Table(std::vector<TableColumn> columns);
-    ~Table() override;
+    TableNode();
+    explicit TableNode(std::vector<TableColumn> columns);
+    ~TableNode() override;
 
-    Table& setColumns(std::vector<TableColumn> value);
-    Table& addColumn(TableColumn value);
+    TableNode& setColumns(std::vector<TableColumn> value);
+    TableNode& addColumn(TableColumn value);
     [[nodiscard]] const std::vector<TableColumn>& columns() const noexcept;
-    Table& setRows(std::vector<TableRow> value);
-    Table& setRowProvider(std::size_t count, RowProvider provider, RowEnabledProvider enabled = {});
-    Table& addRow(TableRow value);
-    Table& clearRows();
+    TableNode& setRows(std::vector<TableRow> value);
+    TableNode& setRowProvider(std::size_t count, RowProvider provider, RowEnabledProvider enabled = {});
+    TableNode& addRow(TableRow value);
+    TableNode& clearRows();
     [[nodiscard]] const std::vector<TableRow>& rows() const noexcept;
     [[nodiscard]] std::size_t rowCount() const noexcept;
-    Table& accessibleLabel(std::string value);
+    TableNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    Table& maxVisibleRows(std::size_t value) noexcept;
+    TableNode& maxVisibleRows(std::size_t value) noexcept;
     [[nodiscard]] std::size_t maxVisibleRows() const noexcept;
     [[nodiscard]] float scrollOffset() const noexcept;
     void setScrollOffset(float value) noexcept;
@@ -82,8 +82,8 @@ public:
     [[nodiscard]] std::size_t firstVisibleRow() const noexcept;
     [[nodiscard]] std::size_t lastVisibleRowExclusive() const noexcept;
     // Header plus the visible window's row and cell semantics. The fallback
-    // properties use portable roles (Text/ListItem/Button); a platform bridge
-    // should map `TableAccessibilityKind` to its native Table/Grid roles.
+    // properties use portable roles (TextNode/ListItem/ButtonNode); a platform bridge
+    // should map `TableAccessibilityKind` to its native TableNode/Grid roles.
     [[nodiscard]] std::vector<TableAccessibilityEntry> accessibilityEntries() const;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -115,7 +115,7 @@ protected:
     RowEnabledProvider rowEnabledProvider_;
     bool usesRowProvider_{false};
     std::size_t providerRowCount_{0};
-    std::string accessibleLabel_{"Table"};
+    std::string accessibleLabel_{"TableNode"};
     std::size_t maxVisibleRows_{8};
     std::unique_ptr<State> state_;
 };
@@ -123,17 +123,17 @@ protected:
 // Interactive table semantics. Sorting is deterministic by cell text unless
 // `onSort` is supplied; the callback can then sort an application-owned model
 // while the grid retains its requested column/direction state.
-class DataGrid final : public Table {
+class DataGridNode final : public TableNode {
 public:
     using SortHandler = std::function<void(std::size_t, TableSortDirection)>;
     using SelectionHandler = std::function<void(const std::vector<std::size_t>&)>;
 
-    DataGrid& selectionMode(DataGridSelectionMode value) noexcept;
+    DataGridNode& selectionMode(DataGridSelectionMode value) noexcept;
     [[nodiscard]] DataGridSelectionMode selectionMode() const noexcept;
-    DataGrid& selectedRows(std::vector<std::size_t> value);
+    DataGridNode& selectedRows(std::vector<std::size_t> value);
     [[nodiscard]] const std::vector<std::size_t>& selectedRows() const noexcept;
-    DataGrid& onSelectionChanged(SelectionHandler handler);
-    DataGrid& onSort(SortHandler handler);
+    DataGridNode& onSelectionChanged(SelectionHandler handler);
+    DataGridNode& onSort(SortHandler handler);
     [[nodiscard]] std::optional<std::size_t> sortColumn() const noexcept;
     [[nodiscard]] TableSortDirection sortDirection() const noexcept;
     void sortBy(std::size_t column);

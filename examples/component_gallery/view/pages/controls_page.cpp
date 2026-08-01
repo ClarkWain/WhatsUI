@@ -7,9 +7,9 @@
 #include "view/components/preview_surface.h"
 #include "view/components/responsive_action_grid.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
-using namespace wui::ui;
+using namespace wui;
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -24,10 +24,10 @@ std::unique_ptr<wui::Node> buildButtonSection(const std::function<void()>& onOpe
         .children(
             std::make_unique<view::components::ResponsiveActionGrid>(
                 std::vector<view::components::ResponsiveActionGrid::ItemFactory>{
-                    [] { return Button("Primary").appearance(wui::ButtonAppearance::Primary).intoNode(); },
-                    [] { return Button("Secondary").appearance(wui::ButtonAppearance::Secondary).intoNode(); },
-                    [] { return Button("Subtle").appearance(wui::ButtonAppearance::Subtle).intoNode(); },
-                    [] { return Button("Danger").appearance(wui::ButtonAppearance::Danger).intoNode(); },
+                    [] { return Button("Primary").appearance(wui::ButtonAppearance::Primary).build(); },
+                    [] { return Button("Secondary").appearance(wui::ButtonAppearance::Secondary).build(); },
+                    [] { return Button("Subtle").appearance(wui::ButtonAppearance::Subtle).build(); },
+                    [] { return Button("Danger").appearance(wui::ButtonAppearance::Danger).build(); },
                 }, 520.0f, 0.0f, 200.0f),
 
             Button("Open Button detail")
@@ -36,7 +36,7 @@ std::unique_ptr<wui::Node> buildButtonSection(const std::function<void()>& onOpe
             .iconPosition(wui::ButtonIconPosition::After)
             .onClick(onOpenDetail)
         )
-        .intoNode());
+        .build());
 }
 
 std::unique_ptr<wui::Node> buildCheckboxSection()
@@ -52,7 +52,7 @@ std::unique_ptr<wui::Node> buildCheckboxSection()
             Checkbox("Mixed selection").mixed(),
             Checkbox("Disabled option", false).enabled(false)
         )
-        .intoNode());
+        .build());
 }
 
 std::unique_ptr<wui::Node> buildToggleSection()
@@ -72,27 +72,27 @@ std::unique_ptr<wui::Node> buildToggleSection()
                 ToggleButton("Favorite", false).icon(wui::IconName::Star)
             )
         )
-        .intoNode());
+        .build());
 }
 
 std::unique_ptr<wui::Node> buildSliderSection()
 {
-    auto volumeText = std::make_unique<wui::Text>("Volume · 64");
+    auto volumeText = std::make_unique<wui::TextNode>("Volume · 64");
     volumeText->setFontSize(12.0f);
     volumeText->setColor(wui::theme().colors.textMuted);
     auto* volumeLabel = volumeText.get();
-    auto volume = std::make_unique<wui::Slider>(0.0f, 100.0f, 64.0f);
+    auto volume = std::make_unique<wui::SliderNode>(0.0f, 100.0f, 64.0f);
     volume->setStep(1.0f);
     volume->setAccessibleLabel("Volume");
     volume->onChange([volumeLabel](float value) {
         volumeLabel->setValue("Volume · " + std::to_string(static_cast<int>(value)));
     });
 
-    auto zoomText = std::make_unique<wui::Text>("Zoom · 125%");
+    auto zoomText = std::make_unique<wui::TextNode>("Zoom · 125%");
     zoomText->setFontSize(12.0f);
     zoomText->setColor(wui::theme().colors.textMuted);
     auto* zoomLabel = zoomText.get();
-    auto zoom = std::make_unique<wui::Slider>(50.0f, 200.0f, 125.0f);
+    auto zoom = std::make_unique<wui::SliderNode>(50.0f, 200.0f, 125.0f);
     zoom->setStep(25.0f);
     zoom->setAccessibleLabel("Zoom");
     zoom->onChange([zoomLabel](float value) {
@@ -110,7 +110,7 @@ std::unique_ptr<wui::Node> buildSliderSection()
             std::move(zoomText),
             std::move(zoom)
         )
-        .intoNode());
+        .build());
 }
 
 } // namespace
@@ -131,7 +131,7 @@ std::unique_ptr<wui::Node> buildControlsPage(std::function<void()> onOpenButtonD
                 buildSliderSection()
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::pages

@@ -34,7 +34,7 @@
 #include "wui/thread_check.h"
 #include "wui/ui_context.h"
 #include "wui/types.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/ui_inspector.h"
 #include "wui/whatscanvas_text.h"
 #include "wui/widgets.h"

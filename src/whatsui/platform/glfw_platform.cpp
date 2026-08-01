@@ -292,7 +292,7 @@ private:
 // Windows bridge for the reference GLFW host: it preserves the platform-neutral
 // TextInputSession API while forwarding pre-edit updates into UiWindow.
 //
-// This is intentionally hosted here rather than in TextInput. Widgets never
+// This is intentionally hosted here rather than in TextFieldNode. Widgets never
 // include Win32 headers and the editing controller remains platform agnostic.
 class GlfwTextInputSession : public TextInputSession {
 public:

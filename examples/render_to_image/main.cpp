@@ -8,7 +8,7 @@
 
 #include "wsc/Canvas.h"
 
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/paint_context.h"
 #include "wui/whatscanvas_text.h"
 
@@ -27,7 +27,7 @@ int main()
     wui::WhatsCanvasTextMeasurer measurer(*canvas);
     wui::setTextMeasurer(&measurer);
 
-    using namespace wui::ui;
+    using namespace wui;
     wui::State<int> count{3};
 
     std::unique_ptr<wui::Node> root =
@@ -41,7 +41,8 @@ int main()
                     Button("Cancel"),
                     Button("Confirm")
                 )
-            );
+            )
+            .build();
 
     root->layout({0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
 

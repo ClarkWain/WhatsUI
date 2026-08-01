@@ -47,8 +47,8 @@ namespace {
     const bool hovered = (states & toMask(ControlVisualState::Hovered)) != 0;
     const bool pressed = (states & toMask(ControlVisualState::Pressed)) != 0;
 
-    if (const auto* button = dynamic_cast<const Button*>(&node)) {
-        auto style = makeStyle("Button", enabled);
+    if (const auto* button = dynamic_cast<const ButtonNode*>(&node)) {
+        auto style = makeStyle("ButtonNode", enabled);
         ColorTokens::Interaction ramp = current.colors.neutralBackground1;
         Color background = ramp.rest;
         Color foreground = current.colors.neutralForeground1;
@@ -77,8 +77,8 @@ namespace {
         style.controlExtent = current.controls.height;
         return style;
     }
-    if (const auto* checkbox = dynamic_cast<const Checkbox*>(&node)) {
-        auto style = makeStyle("Checkbox", enabled);
+    if (const auto* checkbox = dynamic_cast<const CheckboxNode*>(&node)) {
+        auto style = makeStyle("CheckboxNode", enabled);
         const bool checked = checkbox->state() == CheckboxState::Checked;
         const bool mixed = checkbox->state() == CheckboxState::Mixed;
         Color box{0, 0, 0, 0};
@@ -111,8 +111,8 @@ namespace {
         style.cornerRadius = current.radius.small; style.controlExtent = current.controls.checkboxSize;
         return style;
     }
-    if (const auto* radio = dynamic_cast<const Radio*>(&node)) {
-        auto style = makeStyle("Radio", enabled);
+    if (const auto* radio = dynamic_cast<const RadioNode*>(&node)) {
+        auto style = makeStyle("RadioNode", enabled);
         const bool selected = radio->isSelected();
         Color border = selected ? current.colors.compoundBrandStroke.rest
                                 : current.colors.neutralStrokeAccessible;
@@ -131,7 +131,7 @@ namespace {
         } else if (selected) {
             foreground = current.colors.neutralForeground1;
         }
-        // Radio never owns an opaque surface: both the unchecked centre and
+        // RadioNode never owns an opaque surface: both the unchecked centre and
         // the annular gap around a checked dot expose the parent background.
         style.background = Color{0, 0, 0, 0};
         style.border = border;
@@ -139,8 +139,8 @@ namespace {
         style.cornerRadius = current.radius.circular; style.controlExtent = current.controls.checkboxSize;
         return style;
     }
-    if (const auto* toggle = dynamic_cast<const Switch*>(&node)) {
-        auto style = makeStyle("Switch", enabled);
+    if (const auto* toggle = dynamic_cast<const SwitchNode*>(&node)) {
+        auto style = makeStyle("SwitchNode", enabled);
         const ColorTokens::Interaction& ramp = toggle->isOn() ? current.colors.brandBackground : current.colors.neutralBackground1;
         Color fill = ramp.rest;
         Color border = toggle->isOn() ? current.colors.brandBackground.rest : current.colors.neutralStrokeAccessible;
@@ -149,28 +149,28 @@ namespace {
         else if (hovered) fill = ramp.hover;
         style.background = fill;
         style.border = border;
-        // Switch paint uses this foreground for both its compact thumb and
+        // SwitchNode paint uses this foreground for both its compact thumb and
         // label. Disabled switches override both with textDisabled.
         style.foreground = !enabled ? current.colors.neutralForegroundDisabled
             : toggle->isOn() ? current.colors.onBrand : current.colors.neutralForeground3;
         style.cornerRadius = current.radius.circular; style.controlExtent = current.controls.compactHeight;
         return style;
     }
-    if (dynamic_cast<const Slider*>(&node) != nullptr) {
-        auto style = makeStyle("Slider", enabled);
+    if (dynamic_cast<const SliderNode*>(&node) != nullptr) {
+        auto style = makeStyle("SliderNode", enabled);
         style.background = !enabled ? current.colors.neutralForegroundDisabled
             : pressed ? current.colors.brandBackground.pressed : hovered ? current.colors.brandBackground.hover : current.colors.brandBackground.rest;
         style.border = current.colors.neutralStroke1; style.cornerRadius = current.radius.circular; style.controlExtent = current.controls.height;
         return style;
     }
-    if (dynamic_cast<const ProgressBar*>(&node) != nullptr) {
-        auto style = makeStyle("ProgressBar", true);
+    if (dynamic_cast<const ProgressBarNode*>(&node) != nullptr) {
+        auto style = makeStyle("ProgressBarNode", true);
         style.background = current.colors.brandBackground.rest; style.border = current.colors.neutralStroke1; style.cornerRadius = current.radius.circular;
         style.controlExtent = 4.0f;
         return style;
     }
-    if (const auto* divider = dynamic_cast<const Divider*>(&node)) {
-        auto style = makeStyle("Divider", true);
+    if (const auto* divider = dynamic_cast<const DividerNode*>(&node)) {
+        auto style = makeStyle("DividerNode", true);
         style.background = current.colors.neutralStroke1; style.controlExtent = divider->thickness();
         return style;
     }

@@ -137,10 +137,10 @@ void renderAndVerify(const std::string& outputPath, float scale)
         paint.drawText("Fluent Button", 32, 38, 22,
                        current.colors.neutralForeground1, 600);
 
-        wui::Button secondaryRest("Example");
-        wui::Button secondaryHover("Example");
-        wui::Button secondaryPressed("Example");
-        wui::Button secondaryDisabled("Example");
+        wui::ButtonNode secondaryRest("Example");
+        wui::ButtonNode secondaryHover("Example");
+        wui::ButtonNode secondaryPressed("Example");
+        wui::ButtonNode secondaryDisabled("Example");
         secondaryHover.setVisualState(
             wui::ControlVisualState::Hovered, true);
         secondaryPressed.setVisualState(
@@ -151,11 +151,11 @@ void renderAndVerify(const std::string& outputPath, float scale)
         draw(secondaryPressed, paint, {272, 64, 96, 32});
         draw(secondaryDisabled, paint, {392, 64, 96, 32});
 
-        wui::Button primaryRest("Add");
-        wui::Button primaryHover("Add");
-        wui::Button primaryPressed("Add");
-        wui::Button pointerFocus("Add");
-        wui::Button keyboardFocus("Add");
+        wui::ButtonNode primaryRest("Add");
+        wui::ButtonNode primaryHover("Add");
+        wui::ButtonNode primaryPressed("Add");
+        wui::ButtonNode pointerFocus("Add");
+        wui::ButtonNode keyboardFocus("Add");
         for (auto* button : {&primaryRest, &primaryHover, &primaryPressed,
                              &pointerFocus, &keyboardFocus}) {
             button->setAppearance(wui::ButtonAppearance::Primary);
@@ -176,13 +176,13 @@ void renderAndVerify(const std::string& outputPath, float scale)
         draw(pointerFocus, paint, {392, 136, 96, 32});
         draw(keyboardFocus, paint, {512, 136, 96, 32});
 
-        wui::Button outlineRest("Text");
-        wui::Button outlineHover("Text");
-        wui::Button outlinePressed("Text");
-        wui::Button subtleRest("Text");
-        wui::Button subtleHover("Text");
-        wui::Button subtlePressed("Text");
-        wui::Button transparentHover("Text");
+        wui::ButtonNode outlineRest("Text");
+        wui::ButtonNode outlineHover("Text");
+        wui::ButtonNode outlinePressed("Text");
+        wui::ButtonNode subtleRest("Text");
+        wui::ButtonNode subtleHover("Text");
+        wui::ButtonNode subtlePressed("Text");
+        wui::ButtonNode transparentHover("Text");
         outlineRest.setAppearance(wui::ButtonAppearance::Outline);
         outlineHover.setAppearance(wui::ButtonAppearance::Outline);
         outlinePressed.setAppearance(wui::ButtonAppearance::Outline);
@@ -203,9 +203,9 @@ void renderAndVerify(const std::string& outputPath, float scale)
         draw(subtlePressed, paint, {532, 208, 80, 32});
         draw(transparentHover, paint, {632, 208, 80, 32});
 
-        wui::Button small("Small");
-        wui::Button medium("Medium");
-        wui::Button large("Large");
+        wui::ButtonNode small("Small");
+        wui::ButtonNode medium("Medium");
+        wui::ButtonNode large("Large");
         small.setSize(wui::ButtonSize::Small);
         large.setSize(wui::ButtonSize::Large);
         const auto smallSize = small.measure({});
@@ -216,19 +216,19 @@ void renderAndVerify(const std::string& outputPath, float scale)
                              mediumSize.height});
         draw(large, paint, {256, 304, largeSize.width, largeSize.height});
 
-        wui::Button iconText("Text");
+        wui::ButtonNode iconText("Text");
         iconText.setAppearance(wui::ButtonAppearance::Primary);
         iconText.setIcon(wui::IconName::Circle);
-        wui::Button iconOnly("Add");
+        wui::ButtonNode iconOnly("Add");
         iconOnly.setAppearance(wui::ButtonAppearance::Primary);
         iconOnly.setIcon(wui::IconName::Add);
         iconOnly.setIconOnly(true);
-        wui::ToggleButton secondarySelected("Text", true);
+        wui::ToggleButtonNode secondarySelected("Text", true);
         secondarySelected.setIcon(wui::IconName::Circle);
-        wui::ToggleButton outlineSelected("Text", true);
+        wui::ToggleButtonNode outlineSelected("Text", true);
         outlineSelected.setAppearance(wui::ButtonAppearance::Outline);
         outlineSelected.setIcon(wui::IconName::Circle);
-        wui::ToggleButton primaryIconSelected("Selected", true);
+        wui::ToggleButtonNode primaryIconSelected("Selected", true);
         primaryIconSelected.setAppearance(wui::ButtonAppearance::Primary);
         primaryIconSelected.setIcon(wui::IconName::Circle);
         primaryIconSelected.setIconOnly(true);
@@ -250,9 +250,7 @@ void renderAndVerify(const std::string& outputPath, float scale)
         savePpm(outputPath, pixels, width, height);
 
         expect(secondaryRest.appearance() ==
-                   wui::ButtonAppearance::Secondary &&
-                   secondaryRest.variant() ==
-                       wui::ButtonVariant::Secondary,
+                   wui::ButtonAppearance::Secondary,
                "Fluent Button default appearance must be Secondary");
         const float expectedSmallWidth =
             measurer.measureText("Small", 12.0f, 400, "Segoe UI").width +

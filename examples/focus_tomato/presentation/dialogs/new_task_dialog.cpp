@@ -3,7 +3,7 @@
 #include "../focus_style.h"
 #include "wui/app.h"
 #include "wui/scheduler.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 #include <memory>
 #include <utility>
@@ -14,14 +14,14 @@ void showNewTaskDialog(wui::UiWindow& window,
                        FocusViewModel& viewModel,
                        TaskCreatedCallback onCreated)
 {
-    using namespace wui::ui;
+    using namespace wui;
 
-    auto title = std::make_unique<wui::TextInput>("例如：完成产品设计稿");
+    auto title = std::make_unique<wui::TextFieldNode>("例如：完成产品设计稿");
     auto* titleRaw = title.get();
     titleRaw->setAccessibilityId("focus.new-task.title");
     titleRaw->setFlex(1.0f);
 
-    auto error = std::make_unique<wui::Text>();
+    auto error = std::make_unique<wui::TextNode>();
     auto* errorRaw = error.get();
     errorRaw->setTextStyle(style::text(12.0f, 400, 18.0f));
     errorRaw->setColor(style::accent);
@@ -79,19 +79,19 @@ void showNewTaskDialog(wui::UiWindow& window,
                                     Spacer().flex(1.0f),
                                     Button("取消")
                                         .accessibilityId("focus.new-task.cancel")
-                                        .variant(wui::ButtonVariant::Ghost)
+                                        .appearance(wui::ButtonAppearance::Outline)
                                         .onClick([&window] {
                                             (void)window.dismissTopDialog();
                                         }),
                                     Button("保存任务")
                                         .accessibilityId("focus.new-task.save")
-                                        .variant(wui::ButtonVariant::Primary)
+                                        .appearance(wui::ButtonAppearance::Primary)
                                         .onClick(std::move(submit))
                                 )
                         )
                 )
             )
-        .intoDialog();
+        .build();
     (void)window.showDialog(std::move(dialog));
     window.focusManager().setFocused(titleRaw);
 }

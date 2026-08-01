@@ -70,7 +70,7 @@ void drawLabel(wui::PaintContext& paint, const std::string& label, float y)
                    wui::theme().colors.neutralForeground3, 600);
 }
 
-void drawArea(wui::TextArea& area, wui::PaintContext& paint, float y)
+void drawArea(wui::TextAreaNode& area, wui::PaintContext& paint, float y)
 {
     area.layout({kLeft, y, kControlWidth, kControlHeight});
     area.prepare(paint);
@@ -96,11 +96,11 @@ int main(int argc, char** argv)
                        wui::theme().colors.neutralForeground1, 600);
 
         drawLabel(paint, "PLACEHOLDER", kPlaceholderY);
-        wui::TextArea placeholder("Describe the task across multiple lines");
+        wui::TextAreaNode placeholder("Describe the task across multiple lines");
         drawArea(placeholder, paint, kPlaceholderY);
 
         drawLabel(paint, "LONG TEXT + INTERNAL SCROLL", kLongTextY);
-        wui::TextArea longText;
+        wui::TextAreaNode longText;
         longText.text("Line one\nLine two\nLine three\nLine four\nLine five\nLine six\nLine seven");
         longText.controller().moveToEnd();
         longText.setMotionEnabled(false);
@@ -110,7 +110,7 @@ int main(int argc, char** argv)
                "Long Software TextArea must scroll to reveal its caret");
 
         drawLabel(paint, "MULTI-LINE SELECTION", kSelectionY);
-        wui::TextArea selection;
+        wui::TextAreaNode selection;
         selection.text("Select the first visual line and continue\ninto the second visual line.");
         selection.controller().setSelection({7, 62});
         selection.setMotionEnabled(false);
@@ -118,7 +118,7 @@ int main(int argc, char** argv)
         drawArea(selection, paint, kSelectionY);
 
         drawLabel(paint, "IME COMPOSITION", kCompositionY);
-        wui::TextArea composition;
+        wui::TextAreaNode composition;
         composition.setMotionEnabled(false);
         composition.setVisualState(wui::ControlVisualState::Focused, true);
         (void)composition.onCompositionInput({0,
@@ -127,19 +127,19 @@ int main(int argc, char** argv)
         drawArea(composition, paint, kCompositionY);
 
         drawLabel(paint, "FOCUSED", kFocusedY);
-        wui::TextArea focused;
+        wui::TextAreaNode focused;
         focused.text("Focused notes");
         focused.setMotionEnabled(false);
         focused.setVisualState(wui::ControlVisualState::Focused, true);
         drawArea(focused, paint, kFocusedY);
 
         drawLabel(paint, "INVALID", kInvalidY);
-        wui::TextArea invalid("Required notes");
+        wui::TextAreaNode invalid("Required notes");
         invalid.setInvalid(true);
         drawArea(invalid, paint, kInvalidY);
 
         drawLabel(paint, "DISABLED", kDisabledY);
-        wui::TextArea disabled;
+        wui::TextAreaNode disabled;
         disabled.text("Read-only disabled notes");
         disabled.setEnabled(false);
         disabled.setVisualState(wui::ControlVisualState::Focused, true);

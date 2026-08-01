@@ -3,7 +3,7 @@
 #include "../components/common_components.h"
 #include "../focus_style.h"
 #include "../../domain/focus_statistics.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 #include <algorithm>
 #include <iomanip>
@@ -16,13 +16,13 @@ namespace {
 
 std::unique_ptr<wui::Node> taskStatus(bool done)
 {
-    using namespace wui::ui;
+    using namespace wui;
     auto status = Box()
         .background(done ? style::success : style::border)
         .radius(999.0f)
         .width(20.0f)
         .height(20.0f);
-    if (done) return std::move(status).intoNode();
+    if (done) return std::move(status).build();
     return std::move(status)
         .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
         .children(
@@ -32,13 +32,13 @@ std::unique_ptr<wui::Node> taskStatus(bool done)
                 .width(16.0f)
                 .height(16.0f)
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildTaskRow(
     const TaskRecord& task, float width, std::function<void()> onClick)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const bool done = task.status == TaskStatus::Done;
     auto row = Box()
         .background(done ? style::successSurface : style::surface)
@@ -74,15 +74,15 @@ std::unique_ptr<wui::Node> buildTaskRow(
             .accessibleRole(wui::AccessibilityRole::Button)
             .accessibleLabel("选择任务：" + task.title)
             .onClick(std::move(onClick))
-            .intoNode();
+            .build();
     }
-    return std::move(row).intoNode();
+    return std::move(row).build();
 }
 
 std::unique_ptr<wui::Node> buildStatCard(
     float width, std::string label, std::string value, std::string unit)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .background(style::surface)
         .radius(16.0f)
@@ -105,12 +105,12 @@ std::unique_ptr<wui::Node> buildStatCard(
                         .color(style::textMuted)
                 )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildEmptyTasks(std::function<void()> createTask)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .background(style::surface)
         .radius(16.0f)
@@ -132,7 +132,7 @@ std::unique_ptr<wui::Node> buildEmptyTasks(std::function<void()> createTask)
                         "＋ 新建任务", std::move(createTask))
                 )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -144,12 +144,12 @@ std::unique_ptr<wui::Node> buildTaskListPage(
     float pageHeight,
     TaskListPageActions actions)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const float contentWidth = std::max(320.0f, pageWidth - 64.0f);
     const float taskWidth = std::min(500.0f, contentWidth);
     const float statWidth = (contentWidth - 28.0f) / 3.0f;
 
-    auto tasks = std::make_unique<wui::Column>();
+    auto tasks = std::make_unique<wui::ColumnNode>();
     tasks->setGap(10.0f);
     tasks->setAlign(wui::Alignment::Center);
     int visibleTasks = 0;
@@ -177,7 +177,7 @@ std::unique_ptr<wui::Node> buildTaskListPage(
     focusedTextStream << std::fixed << std::setprecision(1) << focusedHours;
     const std::string focusedText = focusedTextStream.str();
 
-    auto document = std::make_unique<wui::Column>();
+    auto document = std::make_unique<wui::ColumnNode>();
     document->setGap(18.0f);
     document->setPadding({32.0f, 28.0f, 32.0f, 28.0f});
     document->setAlign(wui::Alignment::Stretch);
@@ -191,7 +191,7 @@ std::unique_ptr<wui::Node> buildTaskListPage(
                 .flex(1.0f),
             buildPrimaryTextButton("＋ 新建任务", actions.createTask)
         )
-        .intoNode());
+        .build());
     document->appendChild(Row()
         .gap(8.0f)
         .children(
@@ -199,7 +199,7 @@ std::unique_ptr<wui::Node> buildTaskListPage(
             buildPill("进行中", false),
             buildPill("已完成", false)
         )
-        .intoNode());
+        .build());
     if (visibleTasks == 0) {
         document->appendChild(buildEmptyTasks(actions.createTask));
     } else {
@@ -215,7 +215,7 @@ std::unique_ptr<wui::Node> buildTaskListPage(
             buildStatCard(statWidth, "完成任务",
                           std::to_string(completedTasks), "项")
         )
-        .intoNode());
+        .build());
 
     return Box()
         .background(style::canvas)
@@ -235,7 +235,7 @@ std::unique_ptr<wui::Node> buildTaskListPage(
                         )
                 )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::focus_tomato::presentation

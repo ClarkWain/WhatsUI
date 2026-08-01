@@ -2,7 +2,7 @@
 
 #include "../components/common_components.h"
 #include "../focus_style.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 #include <algorithm>
 #include <utility>
@@ -26,7 +26,7 @@ const TaskRecord* findSessionTask(
 std::unique_ptr<wui::Node> buildTaskContext(
     const FocusSessionRecord& session, const TaskRecord* task, float width)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const int estimated = task ? task->estimatedPomodoros : 1;
     const int completed = task ? task->completedPomodoros : 0;
     const std::string progress =
@@ -69,7 +69,7 @@ std::unique_ptr<wui::Node> buildTaskContext(
                         )
                 )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildTimerStage(
@@ -79,7 +79,7 @@ std::unique_ptr<wui::Node> buildTimerStage(
     bool running,
     int remainingPomodoros)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .width(width)
         .height(340.0f)
@@ -113,7 +113,7 @@ std::unique_ptr<wui::Node> buildTimerStage(
                         .color(style::textSecondary)
                 )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildTimerControls(
@@ -122,7 +122,7 @@ std::unique_ptr<wui::Node> buildTimerControls(
     bool running,
     FocusTimerPageActions& actions)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .width(width)
         .height(76.0f)
@@ -155,7 +155,7 @@ std::unique_ptr<wui::Node> buildTimerControls(
                         std::move(actions.abort))
                 )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildFocusFooter(
@@ -163,7 +163,7 @@ std::unique_ptr<wui::Node> buildFocusFooter(
     float width,
     std::function<void()> recordInterruption)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .width(width)
         .height(48.0f)
@@ -189,13 +189,13 @@ std::unique_ptr<wui::Node> buildFocusFooter(
                         .color(style::textMuted)
                 )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildMissingSessionPage(
     float pageWidth, float pageHeight)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .background(style::canvas)
         .width(pageWidth)
@@ -206,7 +206,7 @@ std::unique_ptr<wui::Node> buildMissingSessionPage(
                 .style(style::text(18.0f, 700, 26.0f))
                 .color(style::textPrimary)
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -218,7 +218,7 @@ std::unique_ptr<wui::Node> buildFocusTimerPage(
     float pageHeight,
     FocusTimerPageActions actions)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const FocusSessionRecord* session = viewModel.activeSession();
     if (session == nullptr) {
         return buildMissingSessionPage(pageWidth, pageHeight);
@@ -250,7 +250,7 @@ std::unique_ptr<wui::Node> buildFocusTimerPage(
                 contentWidth,
                 std::move(actions.recordInterruption))
         )
-        .intoNode();
+        .build();
 
     return Box()
         .background(style::canvas)
@@ -273,7 +273,7 @@ std::unique_ptr<wui::Node> buildFocusTimerPage(
                         )
                 )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::focus_tomato::presentation

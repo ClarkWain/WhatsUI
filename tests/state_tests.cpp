@@ -10,7 +10,7 @@
 
 #include "wui/state.h"
 #include "wui/scheduler.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/ui_context.h"
 #include "wui/ui_dispatcher.h"
 
@@ -424,7 +424,7 @@ void testBoundTextCanOutliveStateHandle()
     std::unique_ptr<wui::Node> text;
     {
         wui::State<std::string> state{"retained"};
-        text = wui::ui::Text().bind(state).intoNode();
+        text = wui::Text().bind(state).build();
     }
 
     text.reset();
@@ -618,7 +618,7 @@ void testStructuralUpdatesDrainReentrantWork()
 // allowed to outlive the tree node that originally queued it.
 void testDeterministicMutationStress()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     constexpr int kOperations = 1200;
     std::uint32_t random = 0xC0FFEEu;
@@ -630,7 +630,7 @@ void testDeterministicMutationStress()
     wui::State<bool> visible{true};
     wui::State<std::vector<int>> items{{1, 2, 3}};
     wui::State<int> value{0};
-    wui::Column root;
+    wui::ColumnNode root;
     int mountedBranches = 0;
     int generatedRows = 0;
 
@@ -665,7 +665,8 @@ void testDeterministicMutationStress()
                 Text().bind(value, [](const int& current) {
                     return std::string("value:") + std::to_string(current);
                 })
-            );
+            )
+            .build();
     };
 
     for (int operation = 0; operation < kOperations; ++operation) {

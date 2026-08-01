@@ -383,7 +383,7 @@ $env:WHATSUI_DEBUG_CAPTURE_PPM = 'E:\temp\todo-frame.ppm'
 | `include/wui/paint_context.h` | 字体、字号、字重和 baseline 传递 |
 | `include/wui/text_metrics.h` | 带字重的测量/布局接口 |
 | `include/wui/whatscanvas_text.h` | WhatsCanvas 测量缓存与 Paint 创建 |
-| `include/wui/widgets.h`、`include/wui/ui.h` | `Text` 字重属性与 builder API |
+| `include/wui/widgets.h`、`include/wui/declarative.h` | `Text` 字重属性与 builder API |
 | `examples/todo_app/main.cpp` | Fluent Todo 字号、行高和标题字重 |
 | `doc/whatsui/FLUENT_TEXT_BASELINE_POSTMORTEM.md` | 清晰度修复后暴露的控件 baseline、Todo 行对齐和四档 DPI 像素验收复盘 |
 

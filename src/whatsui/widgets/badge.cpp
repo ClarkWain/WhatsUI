@@ -66,7 +66,7 @@ float estimateTextWidth(const std::string& text, float size) noexcept
 
 float presenceExtent(float avatarSize) noexcept
 {
-    // Fluent Avatar maps its presence badge to discrete Badge sizes. Keeping
+    // Fluent AvatarNode maps its presence badge to discrete BadgeNode sizes. Keeping
     // this table discrete prevents fractional circles at 125/150% DPI.
     if (avatarSize >= 96.0f) return 28.0f;
     if (avatarSize >= 64.0f) return 20.0f;
@@ -148,27 +148,27 @@ const char* presenceText(PresenceStatus status) noexcept
 
 } // namespace
 
-Badge::Badge(std::string text) : text_(std::move(text)) {}
-const std::string& Badge::text() const noexcept { return text_; }
-Badge& Badge::text(std::string value) { setText(std::move(value)); return *this; }
-void Badge::setText(std::string value) { if (text_ != value) { text_ = std::move(value); markDirty(DirtyFlag::Layout); } }
-const std::string& Badge::accessibleLabel() const noexcept { return accessibleLabel_; }
-Badge& Badge::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void Badge::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
-std::string Badge::generatedAccessibleLabel() const { return accessibleLabel_.empty() ? text_ : accessibleLabel_; }
-BadgeAppearance Badge::appearance() const noexcept { return appearance_; }
-Badge& Badge::appearance(BadgeAppearance value) noexcept { setAppearance(value); return *this; }
-void Badge::setAppearance(BadgeAppearance value) noexcept { if (appearance_ != value) { appearance_ = value; markDirty(DirtyFlag::Paint); } }
-BadgeColor Badge::color() const noexcept { return color_; }
-Badge& Badge::color(BadgeColor value) noexcept { setColor(value); return *this; }
-void Badge::setColor(BadgeColor value) noexcept { if (color_ != value) { color_ = value; markDirty(DirtyFlag::Paint); } }
-BadgeSize Badge::size() const noexcept { return size_; }
-Badge& Badge::size(BadgeSize value) noexcept { setSize(value); return *this; }
-void Badge::setSize(BadgeSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
-BadgeShape Badge::shape() const noexcept { return shape_; }
-Badge& Badge::shape(BadgeShape value) noexcept { setShape(value); return *this; }
-void Badge::setShape(BadgeShape value) noexcept { if (shape_ != value) { shape_ = value; markDirty(DirtyFlag::Paint); } }
-SizeF Badge::measure(const Constraints& constraints) const
+BadgeNode::BadgeNode(std::string text) : text_(std::move(text)) {}
+const std::string& BadgeNode::text() const noexcept { return text_; }
+BadgeNode& BadgeNode::text(std::string value) { setText(std::move(value)); return *this; }
+void BadgeNode::setText(std::string value) { if (text_ != value) { text_ = std::move(value); markDirty(DirtyFlag::Layout); } }
+const std::string& BadgeNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+BadgeNode& BadgeNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void BadgeNode::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
+std::string BadgeNode::generatedAccessibleLabel() const { return accessibleLabel_.empty() ? text_ : accessibleLabel_; }
+BadgeAppearance BadgeNode::appearance() const noexcept { return appearance_; }
+BadgeNode& BadgeNode::appearance(BadgeAppearance value) noexcept { setAppearance(value); return *this; }
+void BadgeNode::setAppearance(BadgeAppearance value) noexcept { if (appearance_ != value) { appearance_ = value; markDirty(DirtyFlag::Paint); } }
+BadgeColor BadgeNode::color() const noexcept { return color_; }
+BadgeNode& BadgeNode::color(BadgeColor value) noexcept { setColor(value); return *this; }
+void BadgeNode::setColor(BadgeColor value) noexcept { if (color_ != value) { color_ = value; markDirty(DirtyFlag::Paint); } }
+BadgeSize BadgeNode::size() const noexcept { return size_; }
+BadgeNode& BadgeNode::size(BadgeSize value) noexcept { setSize(value); return *this; }
+void BadgeNode::setSize(BadgeSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
+BadgeShape BadgeNode::shape() const noexcept { return shape_; }
+BadgeNode& BadgeNode::shape(BadgeShape value) noexcept { setShape(value); return *this; }
+void BadgeNode::setShape(BadgeShape value) noexcept { if (shape_ != value) { shape_ = value; markDirty(DirtyFlag::Paint); } }
+SizeF BadgeNode::measure(const Constraints& constraints) const
 {
     const auto m = metrics(size_);
     const auto& current = theme();
@@ -176,7 +176,7 @@ SizeF Badge::measure(const Constraints& constraints) const
                                        current.typography.weightSemibold);
     return constraints.clamp({std::max(m.height, textW + 2.0f * m.padX), m.height});
 }
-void Badge::paint(PaintContext& context)
+void BadgeNode::paint(PaintContext& context)
 {
     const Theme& current = theme(); const auto m = metrics(size_);
     Color background, foreground, border; palette(current, appearance_, color_, background, foreground, border);
@@ -192,25 +192,25 @@ void Badge::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-CounterBadge::CounterBadge(std::uint64_t count) : count_(count) {}
-std::uint64_t CounterBadge::count() const noexcept { return count_; }
-CounterBadge& CounterBadge::count(std::uint64_t value) noexcept { setCount(value); return *this; }
-void CounterBadge::setCount(std::uint64_t value) noexcept { if (count_ != value) { count_ = value; markDirty(DirtyFlag::Layout); } }
-std::uint64_t CounterBadge::max() const noexcept { return max_; }
-CounterBadge& CounterBadge::max(std::uint64_t value) noexcept { setMax(value); return *this; }
-void CounterBadge::setMax(std::uint64_t value) noexcept { value = std::max<std::uint64_t>(1, value); if (max_ != value) { max_ = value; markDirty(DirtyFlag::Layout); } }
-bool CounterBadge::showZero() const noexcept { return showZero_; }
-CounterBadge& CounterBadge::showZero(bool value) noexcept { setShowZero(value); return *this; }
-void CounterBadge::setShowZero(bool value) noexcept { if (showZero_ != value) { showZero_ = value; markDirty(DirtyFlag::Layout); } }
-std::string CounterBadge::text() const { if (count_ == 0 && !showZero_) return {}; return count_ > max_ ? std::to_string(max_) + "+" : std::to_string(count_); }
-const std::string& CounterBadge::accessibleLabel() const noexcept { return accessibleLabel_; }
-CounterBadge& CounterBadge::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void CounterBadge::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
-std::string CounterBadge::generatedAccessibleLabel() const { if (!accessibleLabel_.empty()) return accessibleLabel_; if (count_ == 0 && !showZero_) return {}; return std::to_string(count_) + (count_ == 1 ? " notification" : " notifications"); }
-BadgeSize CounterBadge::size() const noexcept { return size_; }
-CounterBadge& CounterBadge::size(BadgeSize value) noexcept { setSize(value); return *this; }
-void CounterBadge::setSize(BadgeSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
-SizeF CounterBadge::measure(const Constraints& constraints) const
+CounterBadgeNode::CounterBadgeNode(std::uint64_t count) : count_(count) {}
+std::uint64_t CounterBadgeNode::count() const noexcept { return count_; }
+CounterBadgeNode& CounterBadgeNode::count(std::uint64_t value) noexcept { setCount(value); return *this; }
+void CounterBadgeNode::setCount(std::uint64_t value) noexcept { if (count_ != value) { count_ = value; markDirty(DirtyFlag::Layout); } }
+std::uint64_t CounterBadgeNode::max() const noexcept { return max_; }
+CounterBadgeNode& CounterBadgeNode::max(std::uint64_t value) noexcept { setMax(value); return *this; }
+void CounterBadgeNode::setMax(std::uint64_t value) noexcept { value = std::max<std::uint64_t>(1, value); if (max_ != value) { max_ = value; markDirty(DirtyFlag::Layout); } }
+bool CounterBadgeNode::showZero() const noexcept { return showZero_; }
+CounterBadgeNode& CounterBadgeNode::showZero(bool value) noexcept { setShowZero(value); return *this; }
+void CounterBadgeNode::setShowZero(bool value) noexcept { if (showZero_ != value) { showZero_ = value; markDirty(DirtyFlag::Layout); } }
+std::string CounterBadgeNode::text() const { if (count_ == 0 && !showZero_) return {}; return count_ > max_ ? std::to_string(max_) + "+" : std::to_string(count_); }
+const std::string& CounterBadgeNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+CounterBadgeNode& CounterBadgeNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void CounterBadgeNode::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
+std::string CounterBadgeNode::generatedAccessibleLabel() const { if (!accessibleLabel_.empty()) return accessibleLabel_; if (count_ == 0 && !showZero_) return {}; return std::to_string(count_) + (count_ == 1 ? " notification" : " notifications"); }
+BadgeSize CounterBadgeNode::size() const noexcept { return size_; }
+CounterBadgeNode& CounterBadgeNode::size(BadgeSize value) noexcept { setSize(value); return *this; }
+void CounterBadgeNode::setSize(BadgeSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
+SizeF CounterBadgeNode::measure(const Constraints& constraints) const
 {
     const auto m = metrics(size_); const std::string value = text();
     if (value.empty()) return constraints.clamp({0.0f, 0.0f});
@@ -219,7 +219,7 @@ SizeF CounterBadge::measure(const Constraints& constraints) const
                                        current.typography.weightSemibold);
     return constraints.clamp({std::max(m.height, textW + 2.0f * m.padX), m.height});
 }
-void CounterBadge::paint(PaintContext& context)
+void CounterBadgeNode::paint(PaintContext& context)
 {
     const std::string value = text(); if (value.empty()) { clearDirty(DirtyFlag::Paint); return; }
     const Theme& current = theme(); const auto m = metrics(size_); const RectF rect = bounds();
@@ -231,34 +231,34 @@ void CounterBadge::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-PresenceBadge::PresenceBadge(PresenceStatus status) : status_(status) {}
-PresenceStatus PresenceBadge::status() const noexcept { return status_; }
-PresenceBadge& PresenceBadge::status(PresenceStatus value) noexcept { setStatus(value); return *this; }
-void PresenceBadge::setStatus(PresenceStatus value) noexcept { if (status_ != value) { status_ = value; markDirty(DirtyFlag::Paint); } }
-PresenceBadgePosition PresenceBadge::position() const noexcept { return position_; }
-PresenceBadge& PresenceBadge::position(PresenceBadgePosition value) noexcept { setPosition(value); return *this; }
-void PresenceBadge::setPosition(PresenceBadgePosition value) noexcept { position_ = value; markDirty(DirtyFlag::Layout); }
-float PresenceBadge::avatarSize() const noexcept { return avatarSize_; }
-PresenceBadge& PresenceBadge::avatarSize(float value) noexcept { setAvatarSize(value); return *this; }
-void PresenceBadge::setAvatarSize(float value) noexcept { value = std::isfinite(value) ? std::max(16.0f, value) : 32.0f; if (avatarSize_ != value) { avatarSize_ = value; markDirty(DirtyFlag::Layout); } }
-RectF PresenceBadge::boundsForAvatar(const RectF& avatar) const noexcept
+PresenceBadgeNode::PresenceBadgeNode(PresenceStatus status) : status_(status) {}
+PresenceStatus PresenceBadgeNode::status() const noexcept { return status_; }
+PresenceBadgeNode& PresenceBadgeNode::status(PresenceStatus value) noexcept { setStatus(value); return *this; }
+void PresenceBadgeNode::setStatus(PresenceStatus value) noexcept { if (status_ != value) { status_ = value; markDirty(DirtyFlag::Paint); } }
+PresenceBadgePosition PresenceBadgeNode::position() const noexcept { return position_; }
+PresenceBadgeNode& PresenceBadgeNode::position(PresenceBadgePosition value) noexcept { setPosition(value); return *this; }
+void PresenceBadgeNode::setPosition(PresenceBadgePosition value) noexcept { position_ = value; markDirty(DirtyFlag::Layout); }
+float PresenceBadgeNode::avatarSize() const noexcept { return avatarSize_; }
+PresenceBadgeNode& PresenceBadgeNode::avatarSize(float value) noexcept { setAvatarSize(value); return *this; }
+void PresenceBadgeNode::setAvatarSize(float value) noexcept { value = std::isfinite(value) ? std::max(16.0f, value) : 32.0f; if (avatarSize_ != value) { avatarSize_ = value; markDirty(DirtyFlag::Layout); } }
+RectF PresenceBadgeNode::boundsForAvatar(const RectF& avatar) const noexcept
 {
     const float extent = presenceExtent(std::min(avatar.width, avatar.height));
     const bool right = position_ == PresenceBadgePosition::TopRight || position_ == PresenceBadgePosition::BottomRight;
     const bool bottom = position_ == PresenceBadgePosition::BottomRight || position_ == PresenceBadgePosition::BottomLeft;
-    // The Figma component aligns the status instance's frame to the Avatar's
+    // The Figma component aligns the status instance's frame to the AvatarNode's
     // edge. Its own 1-DIP white separation ring performs the optical overlap;
     // applying a second positional overlap makes the badge sit too far out.
     return {right ? avatar.x + avatar.width - extent : avatar.x,
             bottom ? avatar.y + avatar.height - extent : avatar.y,
             extent, extent};
 }
-const std::string& PresenceBadge::accessibleLabel() const noexcept { return accessibleLabel_; }
-PresenceBadge& PresenceBadge::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void PresenceBadge::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
-std::string PresenceBadge::generatedAccessibleLabel() const { return accessibleLabel_.empty() ? presenceText(status_) : accessibleLabel_; }
-SizeF PresenceBadge::measure(const Constraints& constraints) const { const float extent = presenceExtent(avatarSize_); return constraints.clamp({extent, extent}); }
-void PresenceBadge::paint(PaintContext& context)
+const std::string& PresenceBadgeNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+PresenceBadgeNode& PresenceBadgeNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void PresenceBadgeNode::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
+std::string PresenceBadgeNode::generatedAccessibleLabel() const { return accessibleLabel_.empty() ? presenceText(status_) : accessibleLabel_; }
+SizeF PresenceBadgeNode::measure(const Constraints& constraints) const { const float extent = presenceExtent(avatarSize_); return constraints.clamp({extent, extent}); }
+void PresenceBadgeNode::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const RectF rect = context.snapRectEdges(bounds());

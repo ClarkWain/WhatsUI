@@ -13,9 +13,9 @@
 
 namespace wui {
 
-class TextInput;
-class Dialog;
-class Drawer;
+class TextFieldNode;
+class DialogNode;
+class DrawerNode;
 
 class UiWindow {
 public:
@@ -39,12 +39,12 @@ public:
 
     // Modal dialogs are overlays with input isolation. Escape and an enabled
     // backdrop dismissal route through this API so the prior focus is restored.
-    [[nodiscard]] OverlayId showDialog(std::unique_ptr<Dialog> dialog);
+    [[nodiscard]] OverlayId showDialog(std::unique_ptr<DialogNode> dialog);
     // During a UiWindow input dispatch, destruction is deferred until the
     // current handler has returned. In that case this returns nullptr; the
     // modal is removed before dispatchPointer()/dispatchKey() returns.
-    [[nodiscard]] std::unique_ptr<Dialog> dismissDialog(OverlayId id);
-    [[nodiscard]] std::unique_ptr<Dialog> dismissTopDialog();
+    [[nodiscard]] std::unique_ptr<DialogNode> dismissDialog(OverlayId id);
+    [[nodiscard]] std::unique_ptr<DialogNode> dismissTopDialog();
     [[nodiscard]] bool hasDialog() const noexcept;
 
     void setRoot(std::unique_ptr<Node> root);
@@ -96,11 +96,11 @@ private:
     void beginEventDispatch() noexcept;
     void endEventDispatch() noexcept;
     void requestDialogDismissal(OverlayId id);
-    [[nodiscard]] std::unique_ptr<Dialog> dismissDialogImmediately(OverlayId id);
+    [[nodiscard]] std::unique_ptr<DialogNode> dismissDialogImmediately(OverlayId id);
     void flushDeferredDialogDismissals() noexcept;
     [[nodiscard]] Node* hitTest(PointF point) const;
-    [[nodiscard]] Dialog* activeDialog() const noexcept;
-    [[nodiscard]] Drawer* activeModalDrawer() const noexcept;
+    [[nodiscard]] DialogNode* activeDialog() const noexcept;
+    [[nodiscard]] DrawerNode* activeModalDrawer() const noexcept;
 
     std::unique_ptr<PlatformWindow> platformWindow_;
     UiRoot uiRoot_;
@@ -108,7 +108,7 @@ private:
     InputRouter inputRouter_{&focusManager_};
     Navigator navigator_;
     OverlayHost overlayHost_;
-    TextInput* activeTextInput_{nullptr};
+    TextFieldNode* activeTextInput_{nullptr};
     struct DialogEntry {
         OverlayId id;
         Node* restoreFocus;

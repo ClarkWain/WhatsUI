@@ -4,14 +4,14 @@
 
 #include "responsive_layouts.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::gallery::view::components {
 namespace {
 
 std::unique_ptr<wui::Node> buildPreviewHeading(const PreviewSurfaceConfig& config)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& colors = wui::theme().colors;
     // A status badge must never compete with the explanatory copy for a
     // 267-DIP viewport.  The reusable responsive row remains a normal Fluent
@@ -23,14 +23,14 @@ std::unique_ptr<wui::Node> buildPreviewHeading(const PreviewSurfaceConfig& confi
         .children(
             Text(config.title).size(14.0f).weight(600).color(colors.text),
             Text(config.caption).size(11.0f).color(colors.textMuted))
-        .intoNode());
-    heading->appendChild(Spacer().flex(1.0f).intoNode());
+        .build());
+    heading->appendChild(Spacer().flex(1.0f).build());
     if (config.showStatus && !config.statusLabel.empty()) {
         heading->appendChild(Badge(config.statusLabel)
             .appearance(wui::BadgeAppearance::Tint)
             .color(wui::BadgeColor::Success)
             .size(wui::BadgeSize::Small)
-            .intoNode());
+            .build());
     }
     return heading;
 }
@@ -39,7 +39,7 @@ std::unique_ptr<wui::Node> buildCanvas(
     float minHeight,
     std::unique_ptr<wui::Node> content)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& current = wui::theme();
     auto canvas = Box()
         .height(minHeight)
@@ -50,7 +50,7 @@ std::unique_ptr<wui::Node> buildCanvas(
     if (content) {
         canvas = std::move(canvas).children(std::move(content));
     }
-    return std::move(canvas).intoNode();
+    return std::move(canvas).build();
 }
 
 } // namespace
@@ -59,7 +59,7 @@ std::unique_ptr<wui::Node> buildPreviewSurface(
     PreviewSurfaceConfig config,
     std::unique_ptr<wui::Node> content)
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     return Card()
         .appearance(wui::CardAppearance::Outline)
@@ -67,7 +67,7 @@ std::unique_ptr<wui::Node> buildPreviewSurface(
         .children(
             buildPreviewHeading(config),
             buildCanvas(config.minHeight, std::move(content)))
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::components

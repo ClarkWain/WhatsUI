@@ -42,22 +42,22 @@ void render(float scale, const std::string& file)
     canvas->beginFrame();
     context.fillRect({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)}, wui::theme().colors.neutralBackground2.rest);
 
-    wui::Popover regular("Share this project", "Members can view activity.");
+    wui::PopoverNode regular("Share this project", "Members can view activity.");
     regular.showArrow().anchor({84, 48, 124, 32}).placement(wui::PopupPlacement::BelowStart);
     regular.layout({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)});
     regular.paint(context);
 
-    wui::Popover inverse("Keyboard shortcut", "Press Ctrl+K to open command search.");
+    wui::PopoverNode inverse("Keyboard shortcut", "Press Ctrl+K to open command search.");
     inverse.appearance(wui::PopoverAppearance::Inverted).showArrow().anchor({84, 290, 118, 32}).placement(wui::PopupPlacement::AboveStart);
     inverse.layout({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)});
     inverse.paint(context);
 
-    wui::TeachingPopover teaching("Welcome to WhatsUI", "Create a task, then use filters to focus on what matters.");
+    wui::TeachingPopoverNode teaching("Welcome to WhatsUI", "Create a task, then use filters to focus on what matters.");
     teaching.stepText("Step 1 of 3").primaryAction("Next").secondaryAction("Back").anchor({580, 52, 120, 32});
     teaching.layout({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)});
     teaching.paint(context);
 
-    wui::Menu menu;
+    wui::MenuNode menu;
     menu.anchor({580, 360, 120, 32});
     menu.addItem({"Keyboard focus", "Enter", true, {}})
         .addItem({"Unavailable", "", false, {}})
@@ -78,7 +78,7 @@ void render(float scale, const std::string& file)
           menuPanel.y + 4.0f + 34.0f * 3.0f + 16.0f}});
     menu.paint(context);
 
-    wui::Tooltip tooltip;
+    wui::TooltipNode tooltip;
     tooltip.text("Helpful context")
         .showAfter(std::chrono::milliseconds{500})
         .anchor({84, 450, 124, 32})
@@ -87,7 +87,7 @@ void render(float scale, const std::string& file)
                     static_cast<float>(logicalHeight)});
     tooltip.paint(context);
 
-    wui::Tooltip brandTooltip;
+    wui::TooltipNode brandTooltip;
     brandTooltip.text("Brand context")
         .appearance(wui::TooltipAppearance::Brand)
         .showAfter(std::chrono::milliseconds{500});
@@ -97,7 +97,7 @@ void render(float scale, const std::string& file)
                          static_cast<float>(logicalHeight)});
     brandTooltip.paint(context);
 
-    wui::Tooltip invertedTooltip;
+    wui::TooltipNode invertedTooltip;
     invertedTooltip.text("Inverted context")
         .appearance(wui::TooltipAppearance::Inverted)
         .showAfter(std::chrono::milliseconds{500});

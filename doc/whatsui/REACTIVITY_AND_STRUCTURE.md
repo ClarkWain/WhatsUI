@@ -2,7 +2,7 @@
 
 状态：Draft v0.1
 
-本文记录构建器层之上的三块能力：响应式绑定、结构控件、可插拔文本测量，以及配套的新控件。实现见 `include/wui/ui.h`、`include/wui/structural.h`、`include/wui/text_metrics.h`。
+本文记录构建器层之上的三块能力：响应式绑定、结构控件、可插拔文本测量，以及配套的新控件。实现见 `include/wui/declarative.h`、`include/wui/structural.h`、`include/wui/text_metrics.h`。
 
 ## 1. 响应式绑定
 

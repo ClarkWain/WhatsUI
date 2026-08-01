@@ -57,7 +57,7 @@ constexpr float kDividerLabelGap = 12.0f;
 
 [[nodiscard]] float sliderThumbInnerRadius(SliderSize size) noexcept
 {
-    // Fluent Slider's white inset ring is a 12-DIP circle in the 20-DIP
+    // Fluent SliderNode's white inset ring is a 12-DIP circle in the 20-DIP
     // medium thumb and a 10-DIP circle in the 16-DIP small thumb.
     return size == SliderSize::Small ? 5.0f : 6.0f;
 }
@@ -156,7 +156,7 @@ void drawInsideFocusRing(PaintContext& context, const RectF& bounds,
             std::max(0.0f, radius - half), width, color);
     };
 
-    // Fluent's Figma Switch focus variant keeps both strokes inside the
+    // Fluent's Figma SwitchNode focus variant keeps both strokes inside the
     // exact 56x36 root: a 3-DIP white guard underneath a 2-DIP black focus
     // stroke.  Paint the wider guard first so its remaining inner edge
     // separates the focus stroke from the track without growing the root.
@@ -175,23 +175,23 @@ void drawInsideFocusRing(PaintContext& context, const RectF& bounds,
 
 } // namespace
 
-Radio::Radio(std::string label, bool selected)
+RadioNode::RadioNode(std::string label, bool selected)
     : label_(std::move(label)), value_(label_), selected_(selected) {}
 
-const std::string& Radio::label() const noexcept { return label_; }
-Radio& Radio::label(std::string value) { setLabel(std::move(value)); return *this; }
-void Radio::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
-const std::string& Radio::value() const noexcept { return value_; }
-Radio& Radio::value(std::string value) { setValue(std::move(value)); return *this; }
-void Radio::setValue(std::string value) { value_ = std::move(value); markDirty(DirtyFlag::Layout); }
-bool Radio::isSelected() const noexcept { return hasBinding_ ? binding_->get() : selected_; }
-Radio& Radio::selected(bool value) { setSelected(value); return *this; }
-void Radio::setSelected(bool value)
+const std::string& RadioNode::label() const noexcept { return label_; }
+RadioNode& RadioNode::label(std::string value) { setLabel(std::move(value)); return *this; }
+void RadioNode::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
+const std::string& RadioNode::value() const noexcept { return value_; }
+RadioNode& RadioNode::value(std::string value) { setValue(std::move(value)); return *this; }
+void RadioNode::setValue(std::string value) { value_ = std::move(value); markDirty(DirtyFlag::Layout); }
+bool RadioNode::isSelected() const noexcept { return hasBinding_ ? binding_->get() : selected_; }
+RadioNode& RadioNode::selected(bool value) { setSelected(value); return *this; }
+void RadioNode::setSelected(bool value)
 {
     if (hasBinding_) binding_->set(value);
     else if (selected_ != value) { selected_ = value; markDirty(DirtyFlag::Paint); }
 }
-Radio& Radio::bind(State<bool>& state)
+RadioNode& RadioNode::bind(State<bool>& state)
 {
     binding_.emplace(state);
     hasBinding_ = true;
@@ -200,8 +200,8 @@ Radio& Radio::bind(State<bool>& state)
     markDirty(DirtyFlag::Paint);
     return *this;
 }
-Radio& Radio::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
-SizeF Radio::measure(const Constraints& constraints) const
+RadioNode& RadioNode::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
+SizeF RadioNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     if (stackedLabel_ && !label_.empty()) {
@@ -216,7 +216,7 @@ SizeF Radio::measure(const Constraints& constraints) const
                                              labelWidth(label_, current)),
                               kRadioHeight});
 }
-void Radio::paint(PaintContext& context)
+void RadioNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const bool enabled = isEnabled();
@@ -263,7 +263,7 @@ void Radio::paint(PaintContext& context)
         dot = current.colors.neutralForegroundDisabled;
         text = current.colors.neutralForegroundDisabled;
     }
-    // Fluent Radio is transparent inside its 16-DIP border box. Checked state
+    // Fluent RadioNode is transparent inside its 16-DIP border box. Checked state
     // adds a 10-DIP compound-brand dot (16 * 0.625), leaving a visible annular
     // gap; it is not a solid brand disc with an inverse white dot.
     context.strokeCircle(indicatorCenter,
@@ -309,18 +309,18 @@ void Radio::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-void Radio::setSelectedFromGroup(bool value)
+void RadioNode::setSelectedFromGroup(bool value)
 {
     if (hasBinding_) binding_->set(value);
     else if (selected_ != value) { selected_ = value; markDirty(DirtyFlag::Paint); }
 }
-void Radio::setStackedLabel(bool value) noexcept
+void RadioNode::setStackedLabel(bool value) noexcept
 {
     if (stackedLabel_ != value) { stackedLabel_ = value; markDirty(DirtyFlag::Layout); }
 }
-void Radio::select()
+void RadioNode::select()
 {
-    if (auto* group = dynamic_cast<RadioGroup*>(parent())) {
+    if (auto* group = dynamic_cast<RadioGroupNode*>(parent())) {
         group->selectRadio(*this);
         return;
     }
@@ -329,7 +329,7 @@ void Radio::select()
         if (onChange_) onChange_(true);
     }
 }
-bool Radio::onPointerEvent(const PointerEvent& event)
+bool RadioNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     updateCommonPointerState(*this, event);
@@ -342,10 +342,10 @@ bool Radio::onPointerEvent(const PointerEvent& event)
     }
     return event.action == PointerAction::Enter || event.action == PointerAction::Move || event.action == PointerAction::Leave || event.action == PointerAction::Cancel;
 }
-bool Radio::onKeyEvent(const KeyEvent& event)
+bool RadioNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || event.action != KeyAction::Down) return false;
-    if (auto* group = dynamic_cast<RadioGroup*>(parent())) {
+    if (auto* group = dynamic_cast<RadioGroupNode*>(parent())) {
         if (event.keyCode == 37 || event.keyCode == 38) return group->moveSelection(*this, -1);
         if (event.keyCode == 39 || event.keyCode == 40) return group->moveSelection(*this, 1);
     }
@@ -353,13 +353,13 @@ bool Radio::onKeyEvent(const KeyEvent& event)
     select();
     return true;
 }
-AccessibilityActionCapabilities Radio::accessibilityActions() const noexcept
+AccessibilityActionCapabilities RadioNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.toggle = true;
     return actions;
 }
-AccessibilityActionStatus Radio::performAccessibilityAction(AccessibilityActionKind kind,
+AccessibilityActionStatus RadioNode::performAccessibilityAction(AccessibilityActionKind kind,
                                                               std::string_view actionValue)
 {
     (void)actionValue;
@@ -369,9 +369,9 @@ AccessibilityActionStatus Radio::performAccessibilityAction(AccessibilityActionK
     return AccessibilityActionStatus::Succeeded;
 }
 
-Radio& RadioGroup::addOption(std::string value, std::string label, bool enabled)
+RadioNode& RadioGroupNode::addOption(std::string value, std::string label, bool enabled)
 {
-    auto option = std::make_unique<Radio>(std::move(label));
+    auto option = std::make_unique<RadioNode>(std::move(label));
     option->setValue(std::move(value));
     option->setStackedLabel(layout_ == RadioGroupLayout::HorizontalStacked);
     option->optionEnabled_ = enabled;
@@ -382,43 +382,43 @@ Radio& RadioGroup::addOption(std::string value, std::string label, bool enabled)
     markDirty(DirtyFlag::Layout);
     return *result;
 }
-const std::string& RadioGroup::name() const noexcept { return name_; }
-RadioGroup& RadioGroup::name(std::string value) { setName(std::move(value)); return *this; }
-void RadioGroup::setName(std::string value)
+const std::string& RadioGroupNode::name() const noexcept { return name_; }
+RadioGroupNode& RadioGroupNode::name(std::string value) { setName(std::move(value)); return *this; }
+void RadioGroupNode::setName(std::string value)
 {
     if (name_ != value) { name_ = std::move(value); markDirty(DirtyFlag::Style); }
 }
-const std::string& RadioGroup::accessibleLabel() const noexcept { return accessibleLabel_; }
-RadioGroup& RadioGroup::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void RadioGroup::setAccessibleLabel(std::string value)
+const std::string& RadioGroupNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+RadioGroupNode& RadioGroupNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void RadioGroupNode::setAccessibleLabel(std::string value)
 {
     if (accessibleLabel_ != value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
 }
-const std::string& RadioGroup::value() const noexcept
+const std::string& RadioGroupNode::value() const noexcept
 {
     return hasBinding_ ? binding_->get() : value_;
 }
-RadioGroup& RadioGroup::value(std::string value) { setValue(std::move(value)); return *this; }
-void RadioGroup::setValue(std::string value) { applyValue(value, false); }
-Radio* RadioGroup::selectedRadio() noexcept
+RadioGroupNode& RadioGroupNode::value(std::string value) { setValue(std::move(value)); return *this; }
+void RadioGroupNode::setValue(std::string value) { applyValue(value, false); }
+RadioNode* RadioGroupNode::selectedRadio() noexcept
 {
     for (const auto& child : children()) {
-        if (auto* radio = dynamic_cast<Radio*>(child.get()); radio && radio->isSelected()) {
+        if (auto* radio = dynamic_cast<RadioNode*>(child.get()); radio && radio->isSelected()) {
             return radio;
         }
     }
     return nullptr;
 }
-const Radio* RadioGroup::selectedRadio() const noexcept
+const RadioNode* RadioGroupNode::selectedRadio() const noexcept
 {
     for (const auto& child : children()) {
-        if (const auto* radio = dynamic_cast<const Radio*>(child.get()); radio && radio->isSelected()) {
+        if (const auto* radio = dynamic_cast<const RadioNode*>(child.get()); radio && radio->isSelected()) {
             return radio;
         }
     }
     return nullptr;
 }
-RadioGroup& RadioGroup::bind(State<std::string>& state)
+RadioGroupNode& RadioGroupNode::bind(State<std::string>& state)
 {
     binding_.emplace(state);
     hasBinding_ = true;
@@ -427,38 +427,38 @@ RadioGroup& RadioGroup::bind(State<std::string>& state)
     applyValue(value_, false);
     return *this;
 }
-RadioGroup& RadioGroup::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
-RadioGroupLayout RadioGroup::groupLayout() const noexcept { return layout_; }
-RadioGroup& RadioGroup::groupLayout(RadioGroupLayout value) noexcept { setGroupLayout(value); return *this; }
-void RadioGroup::setGroupLayout(RadioGroupLayout value) noexcept
+RadioGroupNode& RadioGroupNode::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
+RadioGroupLayout RadioGroupNode::groupLayout() const noexcept { return layout_; }
+RadioGroupNode& RadioGroupNode::groupLayout(RadioGroupLayout value) noexcept { setGroupLayout(value); return *this; }
+void RadioGroupNode::setGroupLayout(RadioGroupLayout value) noexcept
 {
     if (layout_ == value) return;
     layout_ = value;
     const bool stacked = layout_ == RadioGroupLayout::HorizontalStacked;
     for (const auto& child : children()) {
-        if (auto* radio = dynamic_cast<Radio*>(child.get())) radio->setStackedLabel(stacked);
+        if (auto* radio = dynamic_cast<RadioNode*>(child.get())) radio->setStackedLabel(stacked);
     }
     markDirty(DirtyFlag::Layout);
 }
-bool RadioGroup::isRequired() const noexcept { return required_; }
-RadioGroup& RadioGroup::required(bool value) noexcept { setRequired(value); return *this; }
-void RadioGroup::setRequired(bool value) noexcept
+bool RadioGroupNode::isRequired() const noexcept { return required_; }
+RadioGroupNode& RadioGroupNode::required(bool value) noexcept { setRequired(value); return *this; }
+void RadioGroupNode::setRequired(bool value) noexcept
 {
     if (required_ != value) { required_ = value; markDirty(DirtyFlag::Style); }
 }
-void RadioGroup::setEnabled(bool enabled) noexcept
+void RadioGroupNode::setEnabled(bool enabled) noexcept
 {
     ControlNode::setEnabled(enabled);
     syncChildStates();
 }
-SizeF RadioGroup::measure(const Constraints& constraints) const
+SizeF RadioGroupNode::measure(const Constraints& constraints) const
 {
     float width = 0.0f;
     float height = 0.0f;
     std::size_t count = 0;
     const bool horizontal = layout_ != RadioGroupLayout::Vertical;
     for (const auto& child : children()) {
-        const auto* radio = dynamic_cast<const Radio*>(child.get());
+        const auto* radio = dynamic_cast<const RadioNode*>(child.get());
         if (!radio) continue;
         const SizeF item = radio->measure({0.0f, constraints.maxWidth, 0.0f, constraints.maxHeight});
         if (horizontal) {
@@ -476,14 +476,14 @@ SizeF RadioGroup::measure(const Constraints& constraints) const
     }
     return constraints.clamp({width, height});
 }
-void RadioGroup::layout(const RectF& bounds)
+void RadioGroupNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     syncChildStates();
     const bool horizontal = layout_ != RadioGroupLayout::Vertical;
     float cursor = horizontal ? bounds.x : bounds.y;
     for (const auto& child : children()) {
-        auto* radio = dynamic_cast<Radio*>(child.get());
+        auto* radio = dynamic_cast<RadioNode*>(child.get());
         if (!radio) continue;
         radio->setStackedLabel(layout_ == RadioGroupLayout::HorizontalStacked);
         const SizeF item = radio->measure({0.0f, bounds.width, 0.0f, bounds.height});
@@ -497,24 +497,24 @@ void RadioGroup::layout(const RectF& bounds)
     }
     clearDirty(DirtyFlag::Layout);
 }
-void RadioGroup::paint(PaintContext& context)
+void RadioGroupNode::paint(PaintContext& context)
 {
     ContainerNode::paint(context);
     clearDirty(DirtyFlag::Paint);
 }
-void RadioGroup::selectRadio(Radio& radio)
+void RadioGroupNode::selectRadio(RadioNode& radio)
 {
     if (!isEnabled() || !radio.isEnabled()) return;
     const bool changed = value() != radio.value();
     applyValue(radio.value(), true);
     if (changed && radio.onChange_) radio.onChange_(true);
 }
-bool RadioGroup::moveSelection(Radio& from, int delta)
+bool RadioGroupNode::moveSelection(RadioNode& from, int delta)
 {
     if (!isEnabled() || delta == 0) return false;
-    std::vector<Radio*> options;
+    std::vector<RadioNode*> options;
     for (const auto& child : children()) {
-        if (auto* radio = dynamic_cast<Radio*>(child.get()); radio && radio->isEnabled()) options.push_back(radio);
+        if (auto* radio = dynamic_cast<RadioNode*>(child.get()); radio && radio->isEnabled()) options.push_back(radio);
     }
     if (options.empty()) return false;
     const auto it = std::find(options.begin(), options.end(), &from);
@@ -524,65 +524,65 @@ bool RadioGroup::moveSelection(Radio& from, int delta)
     selectRadio(*options[static_cast<std::size_t>(index)]);
     return true;
 }
-void RadioGroup::applyValue(const std::string& value, bool notify)
+void RadioGroupNode::applyValue(const std::string& value, bool notify)
 {
     const bool changed = this->value() != value;
     if (hasBinding_ && binding_->get() != value) binding_->set(value);
     value_ = value;
     for (const auto& child : children()) {
-        if (auto* radio = dynamic_cast<Radio*>(child.get())) {
+        if (auto* radio = dynamic_cast<RadioNode*>(child.get())) {
             radio->setSelectedFromGroup(radio->value() == value);
         }
     }
     markDirty(DirtyFlag::Paint);
     if (notify && changed && onChange_) onChange_(value);
 }
-void RadioGroup::syncChildStates() noexcept
+void RadioGroupNode::syncChildStates() noexcept
 {
     for (const auto& child : children()) {
-        if (auto* radio = dynamic_cast<Radio*>(child.get())) {
+        if (auto* radio = dynamic_cast<RadioNode*>(child.get())) {
             radio->ControlNode::setEnabled(isEnabled() && radio->optionEnabled_);
         }
     }
 }
 
-Switch::Switch(std::string label, bool on) : label_(std::move(label)), on_(on) {}
-const std::string& Switch::label() const noexcept { return label_; }
-Switch& Switch::label(std::string value) { setLabel(std::move(value)); return *this; }
-void Switch::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
-bool Switch::isOn() const noexcept { return hasBinding_ ? binding_->get() : on_; }
-Switch& Switch::on(bool value) { setOn(value); return *this; }
-void Switch::setOn(bool value)
+SwitchNode::SwitchNode(std::string label, bool on) : label_(std::move(label)), on_(on) {}
+const std::string& SwitchNode::label() const noexcept { return label_; }
+SwitchNode& SwitchNode::label(std::string value) { setLabel(std::move(value)); return *this; }
+void SwitchNode::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
+bool SwitchNode::isOn() const noexcept { return hasBinding_ ? binding_->get() : on_; }
+SwitchNode& SwitchNode::on(bool value) { setOn(value); return *this; }
+void SwitchNode::setOn(bool value)
 {
     if (hasBinding_) binding_->set(value);
     else if (on_ != value) { on_ = value; markDirty(DirtyFlag::Paint); }
 }
-Switch& Switch::bind(State<bool>& state)
+SwitchNode& SwitchNode::bind(State<bool>& state)
 {
     binding_.emplace(state); hasBinding_ = true; on_ = state.get();
     subscription_.subscribe(state, [this](bool value) { on_ = value; markDirty(DirtyFlag::Paint); });
     markDirty(DirtyFlag::Paint); return *this;
 }
-Switch& Switch::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
-SwitchSize Switch::size() const noexcept { return size_; }
-Switch& Switch::size(SwitchSize value) noexcept { setSize(value); return *this; }
-void Switch::setSize(SwitchSize value) noexcept
+SwitchNode& SwitchNode::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
+SwitchSize SwitchNode::size() const noexcept { return size_; }
+SwitchNode& SwitchNode::size(SwitchSize value) noexcept { setSize(value); return *this; }
+void SwitchNode::setSize(SwitchSize value) noexcept
 {
     if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); }
 }
-SwitchLabelPosition Switch::labelPosition() const noexcept { return labelPosition_; }
-Switch& Switch::labelPosition(SwitchLabelPosition value) noexcept { setLabelPosition(value); return *this; }
-void Switch::setLabelPosition(SwitchLabelPosition value) noexcept
+SwitchLabelPosition SwitchNode::labelPosition() const noexcept { return labelPosition_; }
+SwitchNode& SwitchNode::labelPosition(SwitchLabelPosition value) noexcept { setLabelPosition(value); return *this; }
+void SwitchNode::setLabelPosition(SwitchLabelPosition value) noexcept
 {
     if (labelPosition_ != value) { labelPosition_ = value; markDirty(DirtyFlag::Layout); }
 }
-bool Switch::isRequired() const noexcept { return required_; }
-Switch& Switch::required(bool value) noexcept { setRequired(value); return *this; }
-void Switch::setRequired(bool value) noexcept
+bool SwitchNode::isRequired() const noexcept { return required_; }
+SwitchNode& SwitchNode::required(bool value) noexcept { setRequired(value); return *this; }
+void SwitchNode::setRequired(bool value) noexcept
 {
     if (required_ != value) { required_ = value; markDirty(DirtyFlag::Layout); }
 }
-SizeF Switch::measure(const Constraints& constraints) const
+SizeF SwitchNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const std::string displayLabel = required_ && !label_.empty() ? label_ + " *" : label_;
@@ -605,7 +605,7 @@ SizeF Switch::measure(const Constraints& constraints) const
              kSwitchHorizontalPadding,
          controlHeight});
 }
-void Switch::paint(PaintContext& context)
+void SwitchNode::paint(PaintContext& context)
 {
     const auto& current = theme(); const bool enabled = isEnabled(); const bool on = isOn();
     const std::string displayLabel = required_ && !label_.empty() ? label_ + " *" : label_;
@@ -709,8 +709,8 @@ void Switch::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-void Switch::toggle() { const bool value = !isOn(); setOn(value); if (onChange_) onChange_(value); }
-bool Switch::onPointerEvent(const PointerEvent& event)
+void SwitchNode::toggle() { const bool value = !isOn(); setOn(value); if (onChange_) onChange_(value); }
+bool SwitchNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     updateCommonPointerState(*this, event);
@@ -721,22 +721,22 @@ bool Switch::onPointerEvent(const PointerEvent& event)
     }
     return event.action == PointerAction::Enter || event.action == PointerAction::Move || event.action == PointerAction::Leave || event.action == PointerAction::Cancel;
 }
-bool Switch::onKeyEvent(const KeyEvent& event) { if (!isEnabled() || !isActivationKey(event)) return false; toggle(); return true; }
-AccessibilityActionCapabilities Switch::accessibilityActions() const noexcept { AccessibilityActionCapabilities actions; actions.toggle = true; return actions; }
-AccessibilityActionStatus Switch::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value) { (void)value; if (kind != AccessibilityActionKind::Toggle) return AccessibilityActionStatus::NotSupported; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; toggle(); return AccessibilityActionStatus::Succeeded; }
+bool SwitchNode::onKeyEvent(const KeyEvent& event) { if (!isEnabled() || !isActivationKey(event)) return false; toggle(); return true; }
+AccessibilityActionCapabilities SwitchNode::accessibilityActions() const noexcept { AccessibilityActionCapabilities actions; actions.toggle = true; return actions; }
+AccessibilityActionStatus SwitchNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value) { (void)value; if (kind != AccessibilityActionKind::Toggle) return AccessibilityActionStatus::NotSupported; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; toggle(); return AccessibilityActionStatus::Succeeded; }
 
-Slider::Slider(float minimum, float maximum, float value) { setRange(minimum, maximum); value_ = normalizedAndSnapped(value); }
-float Slider::minimum() const noexcept { return minimum_; }
-float Slider::maximum() const noexcept { return maximum_; }
-void Slider::setRange(float minimum, float maximum)
+SliderNode::SliderNode(float minimum, float maximum, float value) { setRange(minimum, maximum); value_ = normalizedAndSnapped(value); }
+float SliderNode::minimum() const noexcept { return minimum_; }
+float SliderNode::maximum() const noexcept { return maximum_; }
+void SliderNode::setRange(float minimum, float maximum)
 {
     if (!std::isfinite(minimum) || !std::isfinite(maximum)) { minimum = 0.0f; maximum = 100.0f; }
     if (maximum < minimum) std::swap(minimum, maximum);
     minimum_ = minimum; maximum_ = maximum; setValue(value_); markDirty(DirtyFlag::Layout);
 }
-float Slider::value() const noexcept { return value_; }
-Slider& Slider::value(float value) { setValue(value); return *this; }
-void Slider::setValue(float value)
+float SliderNode::value() const noexcept { return value_; }
+SliderNode& SliderNode::value(float value) { setValue(value); return *this; }
+void SliderNode::setValue(float value)
 {
     const float next = normalizedAndSnapped(value);
     if (hasBinding_) {
@@ -745,10 +745,10 @@ void Slider::setValue(float value)
     }
     else if (value_ != next) { value_ = next; markDirty(DirtyFlag::Paint); }
 }
-float Slider::step() const noexcept { return step_; }
-Slider& Slider::step(float value) { setStep(value); return *this; }
-void Slider::setStep(float value) { step_ = std::isfinite(value) && value > 0.0f ? value : 0.0f; setValue(this->value()); }
-Slider& Slider::bind(State<float>& state)
+float SliderNode::step() const noexcept { return step_; }
+SliderNode& SliderNode::step(float value) { setStep(value); return *this; }
+void SliderNode::setStep(float value) { step_ = std::isfinite(value) && value > 0.0f ? value : 0.0f; setValue(this->value()); }
+SliderNode& SliderNode::bind(State<float>& state)
 {
     binding_.emplace(state); hasBinding_ = true; value_ = normalizedAndSnapped(state.get());
     subscription_.subscribe(state, [this](float value) {
@@ -759,41 +759,41 @@ Slider& Slider::bind(State<float>& state)
     });
     setValue(value_); return *this;
 }
-Slider& Slider::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
-const std::string& Slider::accessibleLabel() const noexcept { return accessibleLabel_; }
-Slider& Slider::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void Slider::setAccessibleLabel(std::string value)
+SliderNode& SliderNode::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
+const std::string& SliderNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+SliderNode& SliderNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void SliderNode::setAccessibleLabel(std::string value)
 {
     if (accessibleLabel_ != value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
 }
-SliderSize Slider::size() const noexcept { return size_; }
-Slider& Slider::size(SliderSize value) noexcept { setSize(value); return *this; }
-void Slider::setSize(SliderSize value) noexcept
+SliderSize SliderNode::size() const noexcept { return size_; }
+SliderNode& SliderNode::size(SliderSize value) noexcept { setSize(value); return *this; }
+void SliderNode::setSize(SliderSize value) noexcept
 {
     if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); }
 }
-SliderOrientation Slider::orientation() const noexcept { return orientation_; }
-Slider& Slider::orientation(SliderOrientation value) noexcept { setOrientation(value); return *this; }
-void Slider::setOrientation(SliderOrientation value) noexcept
+SliderOrientation SliderNode::orientation() const noexcept { return orientation_; }
+SliderNode& SliderNode::orientation(SliderOrientation value) noexcept { setOrientation(value); return *this; }
+void SliderNode::setOrientation(SliderOrientation value) noexcept
 {
     if (orientation_ != value) { orientation_ = value; markDirty(DirtyFlag::Layout); }
 }
-SizeF Slider::measure(const Constraints& constraints) const
+SizeF SliderNode::measure(const Constraints& constraints) const
 {
     const float cross = sliderCrossAxisSize(size_);
     return orientation_ == SliderOrientation::Horizontal
         ? constraints.clamp({160.0f, cross})
         : constraints.clamp({cross, 160.0f});
 }
-float Slider::normalizedValue() const noexcept { const float span = maximum_ - minimum_; return span > 0.0f ? std::clamp((value() - minimum_) / span, 0.0f, 1.0f) : 0.0f; }
-float Slider::normalizedAndSnapped(float value) const noexcept
+float SliderNode::normalizedValue() const noexcept { const float span = maximum_ - minimum_; return span > 0.0f ? std::clamp((value() - minimum_) / span, 0.0f, 1.0f) : 0.0f; }
+float SliderNode::normalizedAndSnapped(float value) const noexcept
 {
     if (!std::isfinite(value)) value = minimum_;
     value = std::clamp(value, minimum_, maximum_);
     if (step_ > 0.0f) value = minimum_ + std::round((value - minimum_) / step_) * step_;
     return std::clamp(value, minimum_, maximum_);
 }
-void Slider::setValueFromPointer(float coordinate)
+void SliderNode::setValueFromPointer(float coordinate)
 {
     const float thumbSize = sliderThumbSize(size_);
     const float extent = orientation_ == SliderOrientation::Horizontal ? bounds().width : bounds().height;
@@ -805,7 +805,7 @@ void Slider::setValueFromPointer(float coordinate)
     setValue(minimum_ + fraction * (maximum_ - minimum_));
     if (value() != before && onChange_) onChange_(value());
 }
-void Slider::paint(PaintContext& context)
+void SliderNode::paint(PaintContext& context)
 {
     const auto& current = theme(); const bool enabled = isEnabled();
     const float baseThumbSize =
@@ -888,7 +888,7 @@ void Slider::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-bool Slider::onPointerEvent(const PointerEvent& event)
+bool SliderNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     updateCommonPointerState(*this, event);
@@ -898,7 +898,7 @@ bool Slider::onPointerEvent(const PointerEvent& event)
     if (event.action == PointerAction::Up && isPrimary(event)) { if ((visualStates() & toMask(ControlVisualState::Pressed)) != 0) setValueFromPointer(coordinate); setVisualState(ControlVisualState::Pressed, false); return true; }
     return event.action == PointerAction::Enter || event.action == PointerAction::Move || event.action == PointerAction::Leave || event.action == PointerAction::Cancel;
 }
-bool Slider::onKeyEvent(const KeyEvent& event)
+bool SliderNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || event.action != KeyAction::Down) return false;
     float next = value(); const float increment = step_ > 0.0f ? step_ : std::max((maximum_ - minimum_) / 100.0f, 1.0f);
@@ -913,13 +913,13 @@ bool Slider::onKeyEvent(const KeyEvent& event)
     }
     const float before = value(); setValue(next); if (value() != before && onChange_) onChange_(value()); return true;
 }
-AccessibilityActionCapabilities Slider::accessibilityActions() const noexcept
+AccessibilityActionCapabilities SliderNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.setValue = true;
     return actions;
 }
-AccessibilityActionStatus Slider::performAccessibilityAction(AccessibilityActionKind kind,
+AccessibilityActionStatus SliderNode::performAccessibilityAction(AccessibilityActionKind kind,
                                                                std::string_view actionValue)
 {
     if (kind != AccessibilityActionKind::SetValue) return AccessibilityActionStatus::NotSupported;
@@ -933,7 +933,7 @@ AccessibilityActionStatus Slider::performAccessibilityAction(AccessibilityAction
     return AccessibilityActionStatus::Succeeded;
 }
 
-ProgressBar::ProgressBar(float minimum, float maximum, std::optional<float> value)
+ProgressBarNode::ProgressBarNode(float minimum, float maximum, std::optional<float> value)
 {
     setRange(minimum, maximum);
     if (value.has_value()) {
@@ -944,10 +944,10 @@ ProgressBar::ProgressBar(float minimum, float maximum, std::optional<float> valu
         indeterminate_ = true;
     }
 }
-ProgressBar::~ProgressBar() { stopIndeterminateAnimation(); }
-float ProgressBar::minimum() const noexcept { return minimum_; }
-float ProgressBar::maximum() const noexcept { return maximum_; }
-void ProgressBar::setRange(float minimum, float maximum)
+ProgressBarNode::~ProgressBarNode() { stopIndeterminateAnimation(); }
+float ProgressBarNode::minimum() const noexcept { return minimum_; }
+float ProgressBarNode::maximum() const noexcept { return maximum_; }
+void ProgressBarNode::setRange(float minimum, float maximum)
 {
     if (!std::isfinite(minimum) || !std::isfinite(maximum)) { minimum = 0.0f; maximum = 100.0f; }
     if (maximum < minimum) std::swap(minimum, maximum);
@@ -959,9 +959,9 @@ void ProgressBar::setRange(float minimum, float maximum)
     if (hasBinding_ && binding_->get() != value_) binding_->set(value_);
     markDirty(DirtyFlag::Layout);
 }
-float ProgressBar::value() const noexcept { return value_; }
-ProgressBar& ProgressBar::value(float value) { setValue(value); return *this; }
-void ProgressBar::setValue(float value)
+float ProgressBarNode::value() const noexcept { return value_; }
+ProgressBarNode& ProgressBarNode::value(float value) { setValue(value); return *this; }
+void ProgressBarNode::setValue(float value)
 {
     const float next = clampedValue(value);
     // Providing a value is the public transition from Fluent's default
@@ -973,7 +973,7 @@ void ProgressBar::setValue(float value)
         if (value_ != next) { value_ = next; markDirty(DirtyFlag::Paint); }
     } else if (value_ != next) { value_ = next; markDirty(DirtyFlag::Paint); }
 }
-ProgressBar& ProgressBar::bind(State<float>& state)
+ProgressBarNode& ProgressBarNode::bind(State<float>& state)
 {
     binding_.emplace(state); hasBinding_ = true; value_ = clampedValue(state.get());
     setIndeterminate(false);
@@ -985,20 +985,20 @@ ProgressBar& ProgressBar::bind(State<float>& state)
     });
     setValue(value_); return *this;
 }
-const std::string& ProgressBar::accessibleLabel() const noexcept { return accessibleLabel_; }
-ProgressBar& ProgressBar::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void ProgressBar::setAccessibleLabel(std::string value)
+const std::string& ProgressBarNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+ProgressBarNode& ProgressBarNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void ProgressBarNode::setAccessibleLabel(std::string value)
 {
     if (accessibleLabel_ != value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
 }
-bool ProgressBar::isIndeterminate() const noexcept { return indeterminate_; }
-std::optional<float> ProgressBar::determinateValue() const noexcept
+bool ProgressBarNode::isIndeterminate() const noexcept { return indeterminate_; }
+std::optional<float> ProgressBarNode::determinateValue() const noexcept
 {
     if (indeterminate_) return std::nullopt;
     return value();
 }
-ProgressBar& ProgressBar::indeterminate(bool value) noexcept { setIndeterminate(value); return *this; }
-void ProgressBar::setIndeterminate(bool value) noexcept
+ProgressBarNode& ProgressBarNode::indeterminate(bool value) noexcept { setIndeterminate(value); return *this; }
+void ProgressBarNode::setIndeterminate(bool value) noexcept
 {
     if (indeterminate_ == value) return;
     indeterminate_ = value;
@@ -1006,27 +1006,27 @@ void ProgressBar::setIndeterminate(bool value) noexcept
     else stopIndeterminateAnimation();
     markDirty(DirtyFlag::Paint);
 }
-ProgressBarColor ProgressBar::color() const noexcept { return color_; }
-ProgressBar& ProgressBar::color(ProgressBarColor value) noexcept { setColor(value); return *this; }
-void ProgressBar::setColor(ProgressBarColor value) noexcept
+ProgressBarColor ProgressBarNode::color() const noexcept { return color_; }
+ProgressBarNode& ProgressBarNode::color(ProgressBarColor value) noexcept { setColor(value); return *this; }
+void ProgressBarNode::setColor(ProgressBarColor value) noexcept
 {
     if (color_ != value) { color_ = value; markDirty(DirtyFlag::Paint); }
 }
-ProgressBarShape ProgressBar::shape() const noexcept { return shape_; }
-ProgressBar& ProgressBar::shape(ProgressBarShape value) noexcept { setShape(value); return *this; }
-void ProgressBar::setShape(ProgressBarShape value) noexcept
+ProgressBarShape ProgressBarNode::shape() const noexcept { return shape_; }
+ProgressBarNode& ProgressBarNode::shape(ProgressBarShape value) noexcept { setShape(value); return *this; }
+void ProgressBarNode::setShape(ProgressBarShape value) noexcept
 {
     if (shape_ != value) { shape_ = value; markDirty(DirtyFlag::Paint); }
 }
-ProgressBarThickness ProgressBar::thickness() const noexcept { return thickness_; }
-ProgressBar& ProgressBar::thickness(ProgressBarThickness value) noexcept { setThickness(value); return *this; }
-void ProgressBar::setThickness(ProgressBarThickness value) noexcept
+ProgressBarThickness ProgressBarNode::thickness() const noexcept { return thickness_; }
+ProgressBarNode& ProgressBarNode::thickness(ProgressBarThickness value) noexcept { setThickness(value); return *this; }
+void ProgressBarNode::setThickness(ProgressBarThickness value) noexcept
 {
     if (thickness_ != value) { thickness_ = value; markDirty(DirtyFlag::Layout); }
 }
-bool ProgressBar::isMotionEnabled() const noexcept { return motionEnabled_; }
-ProgressBar& ProgressBar::motionEnabled(bool value) noexcept { setMotionEnabled(value); return *this; }
-void ProgressBar::setMotionEnabled(bool value) noexcept
+bool ProgressBarNode::isMotionEnabled() const noexcept { return motionEnabled_; }
+ProgressBarNode& ProgressBarNode::motionEnabled(bool value) noexcept { setMotionEnabled(value); return *this; }
+void ProgressBarNode::setMotionEnabled(bool value) noexcept
 {
     if (motionEnabled_ == value) return;
     motionEnabled_ = value;
@@ -1034,13 +1034,13 @@ void ProgressBar::setMotionEnabled(bool value) noexcept
     else stopIndeterminateAnimation();
     markDirty(DirtyFlag::Paint);
 }
-SizeF ProgressBar::measure(const Constraints& constraints) const
+SizeF ProgressBarNode::measure(const Constraints& constraints) const
 {
     return constraints.clamp({160.0f, progressHeight(thickness_)});
 }
-float ProgressBar::normalizedValue() const noexcept { const float span = maximum_ - minimum_; return span > 0.0f ? std::clamp((value() - minimum_) / span, 0.0f, 1.0f) : 0.0f; }
-float ProgressBar::clampedValue(float value) const noexcept { return std::clamp(std::isfinite(value) ? value : minimum_, minimum_, maximum_); }
-void ProgressBar::paint(PaintContext& context)
+float ProgressBarNode::normalizedValue() const noexcept { const float span = maximum_ - minimum_; return span > 0.0f ? std::clamp((value() - minimum_) / span, 0.0f, 1.0f) : 0.0f; }
+float ProgressBarNode::clampedValue(float value) const noexcept { return std::clamp(std::isfinite(value) ? value : minimum_, minimum_, maximum_); }
+void ProgressBarNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const float height = progressHeight(thickness_);
@@ -1071,15 +1071,15 @@ void ProgressBar::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-AccessibilityActionCapabilities ProgressBar::accessibilityActions() const noexcept
+AccessibilityActionCapabilities ProgressBarNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.valueReadOnly = true;
     return actions;
 }
-void ProgressBar::onAttach() noexcept { startIndeterminateAnimation(); }
-void ProgressBar::onDetach() noexcept { stopIndeterminateAnimation(); }
-void ProgressBar::startIndeterminateAnimation() noexcept
+void ProgressBarNode::onAttach() noexcept { startIndeterminateAnimation(); }
+void ProgressBarNode::onDetach() noexcept { stopIndeterminateAnimation(); }
+void ProgressBarNode::startIndeterminateAnimation() noexcept
 {
     if (!isAttached() || !indeterminate_ || !motionEnabled_ || animationId_.has_value()) return;
     animationId_ = Ticker::instance().add(
@@ -1088,43 +1088,43 @@ void ProgressBar::startIndeterminateAnimation() noexcept
             markDirty(DirtyFlag::Paint);
         }, easing::easeInOutCubic).repeat(-1));
 }
-void ProgressBar::stopIndeterminateAnimation() noexcept
+void ProgressBarNode::stopIndeterminateAnimation() noexcept
 {
     if (!animationId_.has_value()) return;
     Ticker::instance().cancel(*animationId_);
     animationId_.reset();
 }
 
-Divider::Divider(DividerOrientation orientation) : orientation_(orientation) {}
-DividerOrientation Divider::orientation() const noexcept { return orientation_; }
-void Divider::setOrientation(DividerOrientation orientation) noexcept { orientation_ = orientation; markDirty(DirtyFlag::Layout); }
-float Divider::thickness() const noexcept { return thickness_; }
-void Divider::setThickness(float thickness) noexcept { thickness_ = std::max(1.0f, std::isfinite(thickness) ? thickness : 1.0f); markDirty(DirtyFlag::Layout); }
-const std::string& Divider::content() const noexcept { return content_; }
-Divider& Divider::content(std::string value) { setContent(std::move(value)); return *this; }
-void Divider::setContent(std::string value)
+DividerNode::DividerNode(DividerOrientation orientation) : orientation_(orientation) {}
+DividerOrientation DividerNode::orientation() const noexcept { return orientation_; }
+void DividerNode::setOrientation(DividerOrientation orientation) noexcept { orientation_ = orientation; markDirty(DirtyFlag::Layout); }
+float DividerNode::thickness() const noexcept { return thickness_; }
+void DividerNode::setThickness(float thickness) noexcept { thickness_ = std::max(1.0f, std::isfinite(thickness) ? thickness : 1.0f); markDirty(DirtyFlag::Layout); }
+const std::string& DividerNode::content() const noexcept { return content_; }
+DividerNode& DividerNode::content(std::string value) { setContent(std::move(value)); return *this; }
+void DividerNode::setContent(std::string value)
 {
     if (content_ != value) { content_ = std::move(value); markDirty(DirtyFlag::Layout); }
 }
-DividerAppearance Divider::appearance() const noexcept { return appearance_; }
-Divider& Divider::appearance(DividerAppearance value) noexcept { setAppearance(value); return *this; }
-void Divider::setAppearance(DividerAppearance value) noexcept
+DividerAppearance DividerNode::appearance() const noexcept { return appearance_; }
+DividerNode& DividerNode::appearance(DividerAppearance value) noexcept { setAppearance(value); return *this; }
+void DividerNode::setAppearance(DividerAppearance value) noexcept
 {
     if (appearance_ != value) { appearance_ = value; markDirty(DirtyFlag::Paint); }
 }
-DividerContentAlignment Divider::contentAlignment() const noexcept { return contentAlignment_; }
-Divider& Divider::contentAlignment(DividerContentAlignment value) noexcept { setContentAlignment(value); return *this; }
-void Divider::setContentAlignment(DividerContentAlignment value) noexcept
+DividerContentAlignment DividerNode::contentAlignment() const noexcept { return contentAlignment_; }
+DividerNode& DividerNode::contentAlignment(DividerContentAlignment value) noexcept { setContentAlignment(value); return *this; }
+void DividerNode::setContentAlignment(DividerContentAlignment value) noexcept
 {
     if (contentAlignment_ != value) { contentAlignment_ = value; markDirty(DirtyFlag::Paint); }
 }
-bool Divider::isInset() const noexcept { return inset_; }
-Divider& Divider::inset(bool value) noexcept { setInset(value); return *this; }
-void Divider::setInset(bool value) noexcept
+bool DividerNode::isInset() const noexcept { return inset_; }
+DividerNode& DividerNode::inset(bool value) noexcept { setInset(value); return *this; }
+void DividerNode::setInset(bool value) noexcept
 {
     if (inset_ != value) { inset_ = value; markDirty(DirtyFlag::Paint); }
 }
-SizeF Divider::measure(const Constraints& constraints) const
+SizeF DividerNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     if (orientation_ == DividerOrientation::Horizontal) {
@@ -1135,7 +1135,7 @@ SizeF Divider::measure(const Constraints& constraints) const
         : labelWidth(content_, current) + kDividerLabelGap * 2.0f;
     return constraints.clamp({width, 0.0f});
 }
-void Divider::paint(PaintContext& context)
+void DividerNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     Color lineColor = current.colors.neutralStroke1;

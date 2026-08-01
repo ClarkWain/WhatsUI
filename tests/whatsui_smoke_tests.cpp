@@ -115,7 +115,7 @@ void testInvalidationReachesTheRootAndPaintsAfterLayout()
 
 void testContainerPaintStateIsolation()
 {
-    wui::Container root;
+    wui::BoxNode root;
     root.appendChild(std::make_unique<LeakyPaintStateNode>());
     root.appendChild(std::make_unique<DummyNode>());
     root.layout({0.0f, 0.0f, 100.0f, 100.0f});
@@ -129,11 +129,11 @@ void testContainerPaintStateIsolation()
 
 void testStructuralPaintStateIsolation()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     wui::State<bool> oldBranch{true};
     wui::State<bool> newBranch{false};
-    wui::Container root;
+    wui::BoxNode root;
     root.appendChild(asNode(If(oldBranch).then([] { return std::make_unique<LeakyPaintStateNode>(); })));
     root.appendChild(asNode(If(newBranch).then([] { return std::make_unique<DummyNode>(); })));
 
@@ -165,7 +165,7 @@ void testPluggableTextMeasurement()
     FixedMeasurer measurer;
     wui::setTextMeasurer(&measurer);
 
-    wui::Text text{"abcd"};
+    wui::TextNode text{"abcd"};
     const auto measured = text.measure(wui::Constraints{});
     expect(measured.width == 4.0f * 16.0f, "Text::measure should use the installed measurer's width");
     expect(measured.height == 32.0f, "Text::measure should use the installed measurer's height");
@@ -274,18 +274,18 @@ void testImageSourcesAreInternedAcrossRebuiltNodes()
         255, 0, 0, 255,
         0, 255, 0, 255,
     };
-    wui::Image first(pixels, 2, 1);
+    wui::ImageNode first(pixels, 2, 1);
     // Declarative rebuilding normally creates a new input vector each time.
-    wui::Image rebuilt(std::vector<unsigned char>(pixels), 2, 1);
+    wui::ImageNode rebuilt(std::vector<unsigned char>(pixels), 2, 1);
     expect(first.imageSource() == rebuilt.imageSource(),
            "Equivalent image data should share an immutable interned resource");
 
-    wui::Image different({255, 0, 0, 255, 0, 0, 255, 255}, 2, 1);
+    wui::ImageNode different({255, 0, 0, 255, 0, 0, 255, 255}, 2, 1);
     expect(first.imageSource() != different.imageSource(),
            "Different image bytes must not share an image resource");
 
     const auto reusable = first.imageSource();
-    wui::Image fromReusable(reusable);
+    wui::ImageNode fromReusable(reusable);
     expect(fromReusable.imageSource() == reusable,
            "Image should accept a reusable immutable image source without copying it");
 }
@@ -347,7 +347,7 @@ private:
 
 void testTextInputPointerSelectionAndClipboard()
 {
-    auto input = std::make_unique<wui::TextInput>();
+    auto input = std::make_unique<wui::TextFieldNode>();
     input->text("abcd");
     input->layout({0.0f, 0.0f, 160.0f, 32.0f});
     const auto characterWidth = wui::theme().typography.body * 0.56f;
@@ -400,7 +400,7 @@ void testTextInputUsesMeasuredGlyphPositions()
     wui::TextMeasurer* const previousMeasurer = wui::textMeasurer();
     wui::setTextMeasurer(&measurer);
 
-    auto input = std::make_unique<wui::TextInput>();
+    auto input = std::make_unique<wui::TextFieldNode>();
     input->text("Wi");
     input->layout({0.0f, 0.0f, 160.0f, 32.0f});
     wui::FocusManager focusManager;
@@ -423,7 +423,7 @@ void testTextInputUsesMeasuredGlyphPositions()
 
 void testInputRouterAndButton()
 {
-    auto button = std::make_unique<wui::Button>("Open");
+    auto button = std::make_unique<wui::ButtonNode>("Open");
     bool clicked = false;
     button->onClick([&clicked]() {
         clicked = true;
@@ -512,7 +512,7 @@ void testPointerCaptureTargetBubbleRoutingContract()
 void testCheckboxPointerKeyboardBindingAndDisabledState()
 {
     wui::State<bool> value{false};
-    auto checkbox = std::make_unique<wui::Checkbox>("Receive updates");
+    auto checkbox = std::make_unique<wui::CheckboxNode>("Receive updates");
     int changes = 0;
     checkbox->bind(value).onChange([&changes](bool) { ++changes; });
     checkbox->layout({0.0f, 0.0f, 180.0f, 24.0f});
@@ -532,12 +532,13 @@ void testCheckboxPointerKeyboardBindingAndDisabledState()
     expect(!router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false}), "Disabled Checkbox should not consume keyboard activation");
     expect(!value.get() && changes == 2, "Disabled Checkbox should not change its bound State");
 
-    std::unique_ptr<wui::Node> declarative = wui::ui::Checkbox("Builder bound").bind(value).enabled(true);
-    auto* builderCheckbox = dynamic_cast<wui::Checkbox*>(declarative.get());
+    std::unique_ptr<wui::Node> declarative =
+        wui::Checkbox("Builder bound").bind(value).enabled(true).build();
+    auto* builderCheckbox = dynamic_cast<wui::CheckboxNode*>(declarative.get());
     expect(builderCheckbox != nullptr && !builderCheckbox->isChecked(),
            "Checkbox builder should retain the strong State<bool> binding");
 
-    wui::Slider slider(0.0f, 10.0f, 6.0f);
+    wui::SliderNode slider(0.0f, 10.0f, 6.0f);
     slider.layout({0.0f, 0.0f, 160.0f, 32.0f});
     router.setRoot(&slider);
     focus.setFocused(&slider);
@@ -547,7 +548,7 @@ void testCheckboxPointerKeyboardBindingAndDisabledState()
            "Slider Enter must not synthesize a pointer click or change its value");
 
     int buttonInvocations = 0;
-    wui::Button button("Apply");
+    wui::ButtonNode button("Apply");
     button.onClick([&buttonInvocations] { ++buttonInvocations; });
     router.setRoot(&button);
     focus.setFocused(&button);
@@ -560,7 +561,7 @@ void testCheckboxPointerKeyboardBindingAndDisabledState()
 void testOverlayHitTestingAndRouting()
 {
     wui::OverlayHost overlays;
-    auto overlayButton = std::make_unique<wui::Button>("Overlay");
+    auto overlayButton = std::make_unique<wui::ButtonNode>("Overlay");
     auto* rawButton = overlayButton.get();
     bool clicked = false;
     overlayButton->onClick([&clicked] { clicked = true; });
@@ -581,7 +582,7 @@ void testOverlayHitTestingAndRouting()
 
 void testDeclarativeBuilderAndCounter()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     wui::State<int> count{0};
 
@@ -596,20 +597,21 @@ void testDeclarativeBuilderAndCounter()
                     Text("Value:"),
                     Button("Increment").onClick([&count] { count.set(count.get() + 1); })
                 )
-            );
+            )
+            .build();
 
-    auto* column = dynamic_cast<wui::Column*>(root.get());
+    auto* column = dynamic_cast<wui::ColumnNode*>(root.get());
     expect(column != nullptr, "Builder root should be a Column node");
     expect(column->children().size() == 2, "Column should have exactly two children");
     expect(column->padding().left == 16.0f && column->padding().top == 16.0f,
            "padding(16) should apply uniform insets to the Column node");
     expect(column->gap() == 8.0f, "gap(8) should apply to the Column node");
 
-    auto* row = dynamic_cast<wui::Row*>(column->children()[1].get());
+    auto* row = dynamic_cast<wui::RowNode*>(column->children()[1].get());
     expect(row != nullptr, "Second child should be the nested Row");
     expect(row->children().size() == 2, "Row should hold the label and the button");
 
-    auto* button = dynamic_cast<wui::Button*>(row->children()[1].get());
+    auto* button = dynamic_cast<wui::ButtonNode*>(row->children()[1].get());
     expect(button != nullptr, "Row's second child should be a Button");
 
     // Lay the tree out so node bounds are valid, then click the button.
@@ -627,13 +629,13 @@ void testDeclarativeBuilderAndCounter()
 
 void testReactiveText()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     wui::State<int> count{0};
     std::unique_ptr<wui::Node> node =
-        Text().bind(count, [](const int& value) { return std::string("Count: ") + std::to_string(value); });
+        Text().bind(count, [](const int& value) { return std::string("Count: ") + std::to_string(value); }).build();
 
-    auto* text = dynamic_cast<wui::Text*>(node.get());
+    auto* text = dynamic_cast<wui::TextNode*>(node.get());
     expect(text != nullptr, "Bound builder should yield a Text node");
     expect(text->value() == "Count: 0", "Reactive Text should render the initial state");
 
@@ -673,11 +675,11 @@ void testTheme()
 
 void testStructuralIf()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     wui::State<bool> show{false};
     std::unique_ptr<wui::Node> node =
-        If(show).then([] { return Text("Advanced"); });
+        If(show).then([] { return Text("Advanced"); }).build();
 
     auto* ifNode = dynamic_cast<wui::IfNode*>(node.get());
     expect(ifNode != nullptr, "If builder should yield an IfNode");
@@ -694,14 +696,14 @@ void testStructuralIf()
 
 void testDestroyedStructuralNodeSkipsQueuedUpdate()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     wui::State<bool> show{false};
     int factoryCalls = 0;
     std::unique_ptr<wui::Node> node = If(show).then([&] {
         ++factoryCalls;
         return Text("Advanced");
-    });
+    }).build();
     show.set(true);
     node.reset();
     wui::flushStructuralUpdates();
@@ -710,11 +712,11 @@ void testDestroyedStructuralNodeSkipsQueuedUpdate()
 
 void testStructuralForEach()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     wui::State<std::vector<std::string>> items{{"a", "b"}};
     std::unique_ptr<wui::Node> node =
-        ForEach<std::string>(items, [](const std::string& label) { return Text(label); });
+        ForEach<std::string>(items, [](const std::string& label) { return Text(label); }).build();
 
     auto* list = dynamic_cast<wui::ForEachNode*>(node.get());
     expect(list != nullptr, "ForEach builder should yield a ForEachNode");
@@ -731,7 +733,7 @@ void testStructuralForEach()
 
 void testKeyedForEachRetainsUnchangedRows()
 {
-    using namespace wui::ui;
+    using namespace wui;
     struct Item {
         int id{0};
         std::string label;
@@ -750,7 +752,7 @@ void testKeyedForEachRetainsUnchangedRows()
         [&built](const Item& item) {
             ++built;
             return Text(item.label);
-        });
+        }).build();
     auto* list = dynamic_cast<wui::ForEachNode*>(node.get());
     expect(list != nullptr && list->children().size() == 2, "KeyedForEach should build its initial rows");
     wui::Node* one = list->children()[0].get();
@@ -760,7 +762,7 @@ void testKeyedForEachRetainsUnchangedRows()
     wui::flushStructuralUpdates();
     expect(list->children().size() == 3, "KeyedForEach should add only the new row");
     expect(list->children()[0].get() == one, "An unchanged keyed row must retain its node");
-    const auto* refreshed = dynamic_cast<const wui::Text*>(list->children()[1].get());
+    const auto* refreshed = dynamic_cast<const wui::TextNode*>(list->children()[1].get());
     expect(refreshed != nullptr && refreshed->value() == "TWO",
            "A changed keyed row must refresh its rendered value");
     expect(built == 4, "Only changed and inserted keyed rows should be rebuilt");
@@ -775,7 +777,7 @@ void testKeyedForEachRetainsUnchangedRows()
 
 void testListActionCanRemoveItsOwnRow()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     wui::State<std::vector<int>> items{{1, 2}};
     std::unique_ptr<wui::Node> node = ForEach<int>(items, [&items](const int& id) {
@@ -784,11 +786,11 @@ void testListActionCanRemoveItsOwnRow()
             next.erase(std::remove(next.begin(), next.end(), id), next.end());
             items.set(next);
         });
-    });
+    }).build();
     auto* list = dynamic_cast<wui::ForEachNode*>(node.get());
     expect(list != nullptr && list->children().size() == 2, "List should build delete buttons");
 
-    auto* first = dynamic_cast<wui::Button*>(list->children().front().get());
+    auto* first = dynamic_cast<wui::ButtonNode*>(list->children().front().get());
     expect(first != nullptr, "First list child should be a button");
     first->layout({0.0f, 0.0f, 80.0f, 32.0f});
     const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down,
@@ -806,15 +808,16 @@ void testListActionCanRemoveItsOwnRow()
 
 void testLayoutFlexAndAlign()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     std::unique_ptr<wui::Node> root =
         Row().align(wui::Alignment::Center).children(
             Spacer(20.0f, 10.0f),
             Spacer().flex(1),
-            Spacer(30.0f, 40.0f));
+            Spacer(30.0f, 40.0f))
+            .build();
 
-    auto* row = dynamic_cast<wui::Row*>(root.get());
+    auto* row = dynamic_cast<wui::RowNode*>(root.get());
     expect(row != nullptr, "Builder should yield a Row node");
     row->layout({0.0f, 0.0f, 200.0f, 40.0f});
 
@@ -827,7 +830,7 @@ void testLayoutFlexAndAlign()
 
 void testTextInputRouting()
 {
-    auto input = std::make_unique<wui::TextInput>("Type here");
+    auto input = std::make_unique<wui::TextFieldNode>("Type here");
     input->layout({0.0f, 0.0f, 160.0f, 32.0f});
 
     wui::FocusManager focusManager;
@@ -859,7 +862,7 @@ void testFocusedControlsPaintAFluentFocusRing()
         return context.paintStats().commandCount;
     };
 
-    wui::Button button("Save");
+    wui::ButtonNode button("Save");
     button.layout({10.0f, 10.0f, 80.0f, 32.0f});
     const auto buttonRest = paintCommandCount(button);
     button.setVisualState(wui::ControlVisualState::Focused, true);
@@ -869,7 +872,7 @@ void testFocusedControlsPaintAFluentFocusRing()
     expect(paintCommandCount(button) == buttonRest + 2,
            "Focus-visible Button must paint the Fluent outer and inner focus strokes");
 
-    wui::Checkbox checkbox("Complete");
+    wui::CheckboxNode checkbox("Complete");
     checkbox.layout({10.0f, 10.0f, 120.0f, 24.0f});
     const auto checkboxRest = paintCommandCount(checkbox);
     checkbox.setVisualState(wui::ControlVisualState::Focused, true);
@@ -879,7 +882,7 @@ void testFocusedControlsPaintAFluentFocusRing()
     expect(paintCommandCount(checkbox) == checkboxRest + 2,
            "Focus-visible Checkbox must paint the Fluent outer and inner focus strokes");
 
-    wui::IconButton icon(".", "More actions");
+    wui::IconButtonNode icon(".", "More actions");
     icon.layout({10.0f, 10.0f, 32.0f, 32.0f});
     const auto iconRest = paintCommandCount(icon);
     icon.setVisualState(wui::ControlVisualState::Focused, true);
@@ -889,7 +892,7 @@ void testFocusedControlsPaintAFluentFocusRing()
     expect(paintCommandCount(icon) == iconRest + 2,
            "Focus-visible IconButton must paint the Fluent outer and inner focus strokes");
 
-    wui::Radio radio("Choice", true);
+    wui::RadioNode radio("Choice", true);
     radio.layout({10.0f, 10.0f, 120.0f, 32.0f});
     const auto radioRest = paintCommandCount(radio);
     radio.setVisualState(wui::ControlVisualState::Focused, true);
@@ -902,7 +905,7 @@ void testFocusedControlsPaintAFluentFocusRing()
 
 void testRadioFocusVisibilityTracksInputModality()
 {
-    auto radio = std::make_unique<wui::Radio>("Choice", false);
+    auto radio = std::make_unique<wui::RadioNode>("Choice", false);
     auto* radioRaw = radio.get();
     radio->layout({0.0f, 0.0f, 120.0f, 32.0f});
 
@@ -935,10 +938,10 @@ void testRadioFocusVisibilityTracksInputModality()
 
 void testKeyboardFocusTraversalAndControlActivation()
 {
-    auto root = std::make_unique<wui::Column>();
-    auto first = std::make_unique<wui::Button>("First");
-    auto disabled = std::make_unique<wui::Button>("Disabled");
-    auto last = std::make_unique<wui::Button>("Last");
+    auto root = std::make_unique<wui::ColumnNode>();
+    auto first = std::make_unique<wui::ButtonNode>("First");
+    auto disabled = std::make_unique<wui::ButtonNode>("Disabled");
+    auto last = std::make_unique<wui::ButtonNode>("Last");
     auto* firstRaw = first.get();
     auto* disabledRaw = disabled.get();
     auto* lastRaw = last.get();

@@ -150,20 +150,20 @@ int run(const std::string& outputPath, float scale)
     wui::setTextMeasurer(&measurer);
     const auto& colors = wui::theme().colors;
 
-    wui::Button primary("Add");
+    wui::ButtonNode primary("Add");
     primary.setAppearance(wui::ButtonAppearance::Primary);
-    wui::Button secondary("Clear done");
+    wui::ButtonNode secondary("Clear done");
     secondary.setAppearance(wui::ButtonAppearance::Secondary);
-    wui::Button edit("Edit");
+    wui::ButtonNode edit("Edit");
     edit.setAppearance(wui::ButtonAppearance::Subtle);
-    wui::IconButton star(wui::IconName::Star, "Important");
+    wui::IconButtonNode star(wui::IconName::Star, "Important");
     star.setChecked(true);
-    wui::IconButton remove(wui::IconName::Delete, "Delete");
+    wui::IconButtonNode remove(wui::IconName::Delete, "Delete");
     remove.setVisualState(wui::ControlVisualState::Hovered, true);
-    wui::Button pressed("Pressed");
+    wui::ButtonNode pressed("Pressed");
     pressed.setAppearance(wui::ButtonAppearance::Primary);
     pressed.setVisualState(wui::ControlVisualState::Pressed, true);
-    wui::Button focusVisible("Keyboard focus");
+    wui::ButtonNode focusVisible("Keyboard focus");
     focusVisible.setAppearance(wui::ButtonAppearance::Secondary);
     focusVisible.setVisualState(wui::ControlVisualState::Focused, true);
     focusVisible.setVisualState(wui::ControlVisualState::FocusVisible, true);

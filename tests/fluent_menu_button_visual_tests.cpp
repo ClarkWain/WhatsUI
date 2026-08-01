@@ -64,7 +64,7 @@ int main(int argc, char** argv)
         caption(paint, "PRESSED", 272, 72);
         caption(paint, "FOCUSED", 394, 72);
         caption(paint, "DISABLED", 516, 72);
-        wui::MenuButton rest("More"), hover("More"), pressed("More"), focused("More"), disabled("More");
+        wui::MenuButtonNode rest("More"), hover("More"), pressed("More"), focused("More"), disabled("More");
         hover.setVisualState(wui::ControlVisualState::Hovered, true);
         pressed.setVisualState(wui::ControlVisualState::Pressed, true);
         focused.setVisualState(wui::ControlVisualState::Focused, true);
@@ -77,7 +77,7 @@ int main(int argc, char** argv)
 
         caption(paint, "MENUBUTTON OPEN / FIRST ENABLED ITEM FOCUSED", 28, 154);
         wui::OverlayHost menuHost;
-        wui::MenuButton menuButton("More options");
+        wui::MenuButtonNode menuButton("More options");
         menuButton.bindOverlayHost(menuHost)
             .addItem({"Unavailable", "", false, {}})
             .addItem({"Rename", "F2", true, {}})
@@ -94,7 +94,7 @@ int main(int argc, char** argv)
 
         caption(paint, "SPLITBUTTON OPEN / DISCLOSURE IS INDEPENDENT", 390, 154);
         wui::OverlayHost splitHost;
-        wui::SplitButton split("Save");
+        wui::SplitButtonNode split("Save");
         split.bindOverlayHost(splitHost)
             .onClick([] {})
             .addItem({"Save as", "Ctrl+Shift+S", true, {}})

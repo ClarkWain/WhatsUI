@@ -135,9 +135,9 @@ void commitFrame(wui::UiWindow& window)
     window.layout();
 }
 
-wui::TextInput* composer(wui::Node* root)
+wui::TextFieldNode* composer(wui::Node* root)
 {
-    std::vector<wui::TextInput*> fields;
+    std::vector<wui::TextFieldNode*> fields;
     collect(root, fields);
     for (auto* field : fields) {
         if (field->placeholder() == "Add a task for today") return field;
@@ -145,9 +145,9 @@ wui::TextInput* composer(wui::Node* root)
     return nullptr;
 }
 
-wui::Button* button(wui::Node* root, const std::string& label)
+wui::ButtonNode* button(wui::Node* root, const std::string& label)
 {
-    std::vector<wui::Button*> buttons;
+    std::vector<wui::ButtonNode*> buttons;
     collect(root, buttons);
     for (auto* candidate : buttons) {
         if (candidate->label() == label) return candidate;
@@ -155,9 +155,9 @@ wui::Button* button(wui::Node* root, const std::string& label)
     return nullptr;
 }
 
-wui::IconButton* deleteButton(wui::Node* root)
+wui::IconButtonNode* deleteButton(wui::Node* root)
 {
-    std::vector<wui::IconButton*> buttons;
+    std::vector<wui::IconButtonNode*> buttons;
     collect(root, buttons);
     for (auto* candidate : buttons) {
         if (candidate->accessibleLabel() == "Delete task") return candidate;
@@ -165,9 +165,9 @@ wui::IconButton* deleteButton(wui::Node* root)
     return nullptr;
 }
 
-wui::IconButton* importantButton(wui::Node* root, const std::string& label)
+wui::IconButtonNode* importantButton(wui::Node* root, const std::string& label)
 {
-    std::vector<wui::IconButton*> buttons;
+    std::vector<wui::IconButtonNode*> buttons;
     collect(root, buttons);
     for (auto* candidate : buttons) {
         if (candidate->accessibleLabel() == label) return candidate;
@@ -181,14 +181,14 @@ wui::Node* dialogRoot(wui::UiWindow& window)
     return top != nullptr ? top->content.get() : nullptr;
 }
 
-wui::Button* dialogButton(wui::UiWindow& window, const std::string& label)
+wui::ButtonNode* dialogButton(wui::UiWindow& window, const std::string& label)
 {
     return button(dialogRoot(window), label);
 }
 
 bool containsText(wui::Node* root, const std::string& value)
 {
-    std::vector<wui::Text*> texts;
+    std::vector<wui::TextNode*> texts;
     collect(root, texts);
     for (const auto* text : texts) {
         if (text->value() == value) return true;
@@ -196,9 +196,9 @@ bool containsText(wui::Node* root, const std::string& value)
     return false;
 }
 
-wui::Text* textNode(wui::Node* root, const std::string& value)
+wui::TextNode* textNode(wui::Node* root, const std::string& value)
 {
-    std::vector<wui::Text*> texts;
+    std::vector<wui::TextNode*> texts;
     collect(root, texts);
     for (auto* text : texts) {
         if (text->value() == value) return text;
@@ -348,15 +348,15 @@ void testTodoUiTreeInputAndDestructiveConfirmation()
     click(window, *editDetails);
     commitFrame(window);
     expect(window.hasDialog(), "Edit should open the real Todo details dialog");
-    std::vector<wui::TextInput*> detailFields;
+    std::vector<wui::TextFieldNode*> detailFields;
     collect(dialogRoot(window), detailFields);
-    auto* dueDateField = static_cast<wui::TextInput*>(nullptr);
+    auto* dueDateField = static_cast<wui::TextFieldNode*>(nullptr);
     for (auto* field : detailFields) {
         if (field->placeholder() == "YYYY-MM-DD (optional)") dueDateField = field;
     }
     expect(dueDateField != nullptr, "Todo details dialog should expose its due-date field");
     dueDateField->text("2023-02-29");
-    std::vector<wui::Checkbox*> dialogChecks;
+    std::vector<wui::CheckboxNode*> dialogChecks;
     collect(dialogRoot(window), dialogChecks);
     expect(dialogChecks.size() == 1 && dialogChecks.front()->label() == "Important",
            "Todo details dialog should expose one named Important checkbox");
@@ -468,7 +468,7 @@ void testTodoUiTreeInputAndDestructiveConfirmation()
                && (firstTabControl->visualStates() & wui::toMask(wui::ControlVisualState::Focused)) != 0,
            "Shift+Tab should restore the preceding Todo control and its visible focus state");
 
-    std::vector<wui::Checkbox*> checkboxes;
+    std::vector<wui::CheckboxNode*> checkboxes;
     collect(window.root(), checkboxes);
     expect(checkboxes.size() == 1, "Added Todo row should expose a real checkbox");
     auto* taskTitle = textNode(window.root(), "Review Windows Todo");
@@ -593,7 +593,7 @@ void testTodoUiTreeInputAndDestructiveConfirmation()
     checkboxes.clear();
     collect(window.root(), checkboxes);
     expect(checkboxes.size() == 2, "One completed and one active Todo should expose two real checkboxes");
-    auto* enterCheckbox = static_cast<wui::Checkbox*>(nullptr);
+    auto* enterCheckbox = static_cast<wui::CheckboxNode*>(nullptr);
     for (auto* checkbox : checkboxes) {
         if (!checkbox->isChecked()) {
             enterCheckbox = checkbox;
@@ -653,7 +653,7 @@ void testTodoWrappedTitleKeepsFirstLineRailAlignment()
     window.setRoot(harness.build(window));
     commitFrame(window);
 
-    std::vector<wui::Checkbox*> checkboxes;
+    std::vector<wui::CheckboxNode*> checkboxes;
     collect(window.root(), checkboxes);
     auto* title = textNode(window.root(), longTitle);
     expect(checkboxes.size() == 1 && title != nullptr,
@@ -703,7 +703,7 @@ void testTodoAccessibilityProjectionUsesRealTaskTree()
                && *importantEntry->properties.checked,
            "Important state changes should update the accessible name and checked state");
 
-    std::vector<wui::Checkbox*> checkboxes;
+    std::vector<wui::CheckboxNode*> checkboxes;
     collect(window.root(), checkboxes);
     expect(checkboxes.size() == 1, "Accessibility fixture should expose the real Todo checkbox");
     click(window, *checkboxes.front());

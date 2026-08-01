@@ -8,10 +8,10 @@
 #include "view/components/page_header.h"
 #include "view/components/responsive_layouts.h"
 #include "wui/theme_extensions.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/ui_inspector.h"
 
-using namespace wui::ui;
+using namespace wui;
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -21,7 +21,7 @@ void dismissTopDialog(wui::UiWindow& window)
     (void)window.dismissTopDialog();
 }
 
-std::unique_ptr<wui::Dialog> buildCommandPaletteDialog(
+std::unique_ptr<wui::DialogNode> buildCommandPaletteDialog(
     wui::UiWindow& window,
     ApplyGalleryThemeHandler applyTheme
 )
@@ -61,12 +61,12 @@ std::unique_ptr<wui::Dialog> buildCommandPaletteDialog(
                 )
             )
         )
-        .intoDialog();
+        .build();
 }
 
-std::unique_ptr<wui::Dialog> buildInspectorDialog(wui::UiWindow& window)
+std::unique_ptr<wui::DialogNode> buildInspectorDialog(wui::UiWindow& window)
 {
-    auto entries = std::make_unique<wui::Column>();
+    auto entries = std::make_unique<wui::ColumnNode>();
     entries->setGap(6.0f);
     entries->setAlign(wui::Alignment::Stretch);
 
@@ -86,7 +86,7 @@ std::unique_ptr<wui::Dialog> buildInspectorDialog(wui::UiWindow& window)
                         .size(10.0f)
                         .color(wui::theme().colors.textMuted)
                 )
-                .intoNode());
+                .build());
         }
     }
 
@@ -113,7 +113,7 @@ std::unique_ptr<wui::Dialog> buildInspectorDialog(wui::UiWindow& window)
                 )
             )
         )
-        .intoDialog();
+        .build();
 }
 
 wui::Theme violetDemoPreset()
@@ -153,7 +153,7 @@ std::unique_ptr<wui::Node> buildCommandPreview()
         .gap(8.0f)
         .align(wui::Alignment::Center)
         .children(Icon(wui::IconName::Search), Text("Type a command...").size(12.0f))
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildInspectorPreview()
@@ -164,7 +164,7 @@ std::unique_ptr<wui::Node> buildInspectorPreview()
             Row().gap(8.0f).children(Badge("0"), Text("UiRoot").size(11.0f)),
             Row().gap(8.0f).children(Badge("1"), Text("ScrollView").size(11.0f))
         )
-        .intoNode();
+        .build();
 }
 
 // Reactive-style preset button: the caller decides whether the button is the
@@ -180,7 +180,7 @@ template <class Handler>
         .appearance(active ? wui::ButtonAppearance::Primary
                            : wui::ButtonAppearance::Subtle)
         .onClick(std::move(onClick))
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildThemeStudio(ThemeStudioViewModel& themeStudio,
@@ -205,11 +205,11 @@ std::unique_ptr<wui::Node> buildThemeStudio(ThemeStudioViewModel& themeStudio,
                     auto heading = std::make_unique<view::components::ResponsiveRow>();
                     heading->gap(10.0f).align(wui::Alignment::Center);
                     heading->appendChild(Icon(wui::IconName::Edit)
-                        .color(wui::theme().colors.accent).intoNode());
-                    heading->appendChild(Text("Theme Studio demo").size(16.0f).weight(600).intoNode());
-                    heading->appendChild(Spacer().flex(1.0f).intoNode());
+                        .color(wui::theme().colors.accent).build());
+                    heading->appendChild(Text("Theme Studio demo").size(16.0f).weight(600).build());
+                    heading->appendChild(Spacer().flex(1.0f).build());
                     heading->appendChild(Badge("LIMITED DEMO").appearance(wui::BadgeAppearance::Tint)
-                        .color(wui::BadgeColor::Warning).intoNode());
+                        .color(wui::BadgeColor::Warning).build());
                     return heading;
                 }(),
 
@@ -284,7 +284,7 @@ std::unique_ptr<wui::Node> buildThemeStudio(ThemeStudioViewModel& themeStudio,
                 )
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -326,7 +326,7 @@ std::unique_ptr<wui::Node> buildAddonsPage(
                 buildThemeStudio(themeStudio, std::move(applyTheme))
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::pages

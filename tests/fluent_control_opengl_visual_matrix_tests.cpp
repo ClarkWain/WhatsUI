@@ -304,7 +304,7 @@ void applyState(wui::ControlNode& control, MatrixState state)
     }
 }
 
-void pointAtSplitRegion(wui::SplitButton& split, wui::RectF bounds,
+void pointAtSplitRegion(wui::SplitButtonNode& split, wui::RectF bounds,
                         bool disclosure, bool pressed)
 {
     split.layout(bounds);
@@ -416,36 +416,36 @@ int run(const std::string& outputPath, float scale)
     const auto& colors = current.colors;
     wui::PaintContext paint(*canvas, scale, true);
 
-    std::array<wui::Button, 4> actionButtons{
-        wui::Button("Rest"), wui::Button("Hover"),
-        wui::Button("Pressed"), wui::Button("Focus")};
+    std::array<wui::ButtonNode, 4> actionButtons{
+        wui::ButtonNode("Rest"), wui::ButtonNode("Hover"),
+        wui::ButtonNode("Pressed"), wui::ButtonNode("Focus")};
     for (std::size_t index = 0; index < actionButtons.size(); ++index) {
         actionButtons[index].setAppearance(wui::ButtonAppearance::Primary);
         applyState(actionButtons[index],
                    static_cast<MatrixState>(index));
     }
-    wui::ToggleButton selectedAction("Selected", true);
-    wui::Button disabledAction("Disabled");
+    wui::ToggleButtonNode selectedAction("Selected", true);
+    wui::ButtonNode disabledAction("Disabled");
     disabledAction.setAppearance(wui::ButtonAppearance::Primary);
     applyState(disabledAction, MatrixState::Disabled);
 
-    std::array<wui::IconButton, 6> iconButtons{
-        wui::IconButton(wui::IconName::Star, "Rest"),
-        wui::IconButton(wui::IconName::Star, "Hover"),
-        wui::IconButton(wui::IconName::Delete, "Pressed"),
-        wui::IconButton(wui::IconName::Star, "Focus"),
-        wui::IconButton(wui::IconName::Star, "Selected"),
-        wui::IconButton(wui::IconName::Delete, "Disabled")};
+    std::array<wui::IconButtonNode, 6> iconButtons{
+        wui::IconButtonNode(wui::IconName::Star, "Rest"),
+        wui::IconButtonNode(wui::IconName::Star, "Hover"),
+        wui::IconButtonNode(wui::IconName::Delete, "Pressed"),
+        wui::IconButtonNode(wui::IconName::Star, "Focus"),
+        wui::IconButtonNode(wui::IconName::Star, "Selected"),
+        wui::IconButtonNode(wui::IconName::Delete, "Disabled")};
     for (std::size_t index = 0; index < iconButtons.size(); ++index) {
         applyState(iconButtons[index], static_cast<MatrixState>(index));
     }
     iconButtons[static_cast<std::size_t>(MatrixState::Selected)]
         .setChecked(true);
 
-    std::array<wui::TextInput, 6> inputs{
-        wui::TextInput("Rest"), wui::TextInput("Hover"),
-        wui::TextInput("Pressed"), wui::TextInput("Focus"),
-        wui::TextInput("Selected"), wui::TextInput("Disabled")};
+    std::array<wui::TextFieldNode, 6> inputs{
+        wui::TextFieldNode("Rest"), wui::TextFieldNode("Hover"),
+        wui::TextFieldNode("Pressed"), wui::TextFieldNode("Focus"),
+        wui::TextFieldNode("Selected"), wui::TextFieldNode("Disabled")};
     for (std::size_t index = 0; index < inputs.size(); ++index) {
         inputs[index].setMotionEnabled(false);
         applyState(inputs[index], static_cast<MatrixState>(index));
@@ -457,10 +457,10 @@ int run(const std::string& outputPath, float scale)
     inputs[static_cast<std::size_t>(MatrixState::Selected)]
         .setVisualState(wui::ControlVisualState::Focused, true);
 
-    std::array<wui::TextArea, 6> textAreas{
-        wui::TextArea("Rest"), wui::TextArea("Hover"),
-        wui::TextArea("Pressed"), wui::TextArea("Focus"),
-        wui::TextArea("Selected"), wui::TextArea("Disabled")};
+    std::array<wui::TextAreaNode, 6> textAreas{
+        wui::TextAreaNode("Rest"), wui::TextAreaNode("Hover"),
+        wui::TextAreaNode("Pressed"), wui::TextAreaNode("Focus"),
+        wui::TextAreaNode("Selected"), wui::TextAreaNode("Disabled")};
     for (std::size_t index = 0; index < textAreas.size(); ++index) {
         textAreas[index].setMotionEnabled(false);
         applyState(textAreas[index], static_cast<MatrixState>(index));
@@ -472,45 +472,45 @@ int run(const std::string& outputPath, float scale)
     textAreas[static_cast<std::size_t>(MatrixState::Selected)]
         .setVisualState(wui::ControlVisualState::Focused, true);
 
-    std::array<wui::Checkbox, 6> checkboxes{
-        wui::Checkbox("", false), wui::Checkbox("", false),
-        wui::Checkbox("", false), wui::Checkbox("", false),
-        wui::Checkbox("", true), wui::Checkbox("", true)};
+    std::array<wui::CheckboxNode, 6> checkboxes{
+        wui::CheckboxNode("", false), wui::CheckboxNode("", false),
+        wui::CheckboxNode("", false), wui::CheckboxNode("", false),
+        wui::CheckboxNode("", true), wui::CheckboxNode("", true)};
     for (std::size_t index = 0; index < checkboxes.size(); ++index) {
         applyState(checkboxes[index], static_cast<MatrixState>(index));
     }
 
-    std::array<wui::Radio, 6> radios{
-        wui::Radio("", false), wui::Radio("", false),
-        wui::Radio("", false), wui::Radio("", false),
-        wui::Radio("", true), wui::Radio("", true)};
+    std::array<wui::RadioNode, 6> radios{
+        wui::RadioNode("", false), wui::RadioNode("", false),
+        wui::RadioNode("", false), wui::RadioNode("", false),
+        wui::RadioNode("", true), wui::RadioNode("", true)};
     for (std::size_t index = 0; index < radios.size(); ++index) {
         applyState(radios[index], static_cast<MatrixState>(index));
     }
 
-    std::array<wui::Switch, 6> switches{
-        wui::Switch("", false), wui::Switch("", false),
-        wui::Switch("", false), wui::Switch("", false),
-        wui::Switch("", true), wui::Switch("", true)};
+    std::array<wui::SwitchNode, 6> switches{
+        wui::SwitchNode("", false), wui::SwitchNode("", false),
+        wui::SwitchNode("", false), wui::SwitchNode("", false),
+        wui::SwitchNode("", true), wui::SwitchNode("", true)};
     for (std::size_t index = 0; index < switches.size(); ++index) {
         applyState(switches[index], static_cast<MatrixState>(index));
     }
 
-    std::array<wui::Slider, 6> sliders{
-        wui::Slider(0, 100, 35), wui::Slider(0, 100, 35),
-        wui::Slider(0, 100, 35), wui::Slider(0, 100, 35),
-        wui::Slider(0, 100, 70), wui::Slider(0, 100, 70)};
+    std::array<wui::SliderNode, 6> sliders{
+        wui::SliderNode(0, 100, 35), wui::SliderNode(0, 100, 35),
+        wui::SliderNode(0, 100, 35), wui::SliderNode(0, 100, 35),
+        wui::SliderNode(0, 100, 70), wui::SliderNode(0, 100, 70)};
     for (std::size_t index = 0; index < sliders.size(); ++index) {
         applyState(sliders[index], static_cast<MatrixState>(index));
     }
 
-    std::array<wui::CompoundButton, 6> compoundButtons{
-        wui::CompoundButton("Action", "Rest"),
-        wui::CompoundButton("Action", "Hover"),
-        wui::CompoundButton("Action", "Pressed"),
-        wui::CompoundButton("Action", "Focus"),
-        wui::CompoundButton("Action", "Selected"),
-        wui::CompoundButton("Action", "Disabled")};
+    std::array<wui::CompoundButtonNode, 6> compoundButtons{
+        wui::CompoundButtonNode("Action", "Rest"),
+        wui::CompoundButtonNode("Action", "Hover"),
+        wui::CompoundButtonNode("Action", "Pressed"),
+        wui::CompoundButtonNode("Action", "Focus"),
+        wui::CompoundButtonNode("Action", "Selected"),
+        wui::CompoundButtonNode("Action", "Disabled")};
     for (std::size_t index = 0; index < compoundButtons.size(); ++index) {
         compoundButtons[index].setAppearance(
             wui::ButtonAppearance::Primary);
@@ -518,10 +518,10 @@ int run(const std::string& outputPath, float scale)
                    static_cast<MatrixState>(index));
     }
 
-    std::array<wui::MenuButton, 6> menuButtons{
-        wui::MenuButton("Menu"), wui::MenuButton("Menu"),
-        wui::MenuButton("Menu"), wui::MenuButton("Menu"),
-        wui::MenuButton("Menu"), wui::MenuButton("Menu")};
+    std::array<wui::MenuButtonNode, 6> menuButtons{
+        wui::MenuButtonNode("Menu"), wui::MenuButtonNode("Menu"),
+        wui::MenuButtonNode("Menu"), wui::MenuButtonNode("Menu"),
+        wui::MenuButtonNode("Menu"), wui::MenuButtonNode("Menu")};
     for (std::size_t index = 0; index < menuButtons.size(); ++index) {
         applyState(menuButtons[index], static_cast<MatrixState>(index));
     }
@@ -537,10 +537,10 @@ int run(const std::string& outputPath, float scale)
                wui::AccessibilityActionStatus::Succeeded,
            "MenuButton matrix setup must enter its retained open state");
 
-    std::array<wui::SplitButton, 6> splitButtons{
-        wui::SplitButton("Split"), wui::SplitButton("Split"),
-        wui::SplitButton("Split"), wui::SplitButton("Split"),
-        wui::SplitButton("Split"), wui::SplitButton("Split")};
+    std::array<wui::SplitButtonNode, 6> splitButtons{
+        wui::SplitButtonNode("Split"), wui::SplitButtonNode("Split"),
+        wui::SplitButtonNode("Split"), wui::SplitButtonNode("Split"),
+        wui::SplitButtonNode("Split"), wui::SplitButtonNode("Split")};
     constexpr float kSplitY = 548.0f;
     for (std::size_t index = 0; index < splitButtons.size(); ++index) {
         splitButtons[index].layout(
@@ -557,7 +557,7 @@ int run(const std::string& outputPath, float scale)
     splitButtons[5].setEnabled(false);
 
     wui::OverlayHost openSplitHost;
-    wui::SplitButton openSplitButton("Split open");
+    wui::SplitButtonNode openSplitButton("Split open");
     openSplitButton
         .bindOverlayHost(openSplitHost)
         .addItem({"Open item", {}, true, {}});

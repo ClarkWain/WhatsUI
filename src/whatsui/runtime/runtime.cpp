@@ -280,14 +280,14 @@ OverlayId OverlayHost::show(std::unique_ptr<Node> overlay)
     }
 
     const auto id = nextId_++;
-    Drawer* drawer = dynamic_cast<Drawer*>(overlay.get());
+    DrawerNode* drawer = dynamic_cast<DrawerNode*>(overlay.get());
     const bool modalDrawer = drawer != nullptr && drawer->trapsFocus();
     Node* const restoreFocus = modalDrawer && focusManager_ != nullptr ? focusManager_->focused() : nullptr;
     overlays_.push_back(OverlayEntry{id, std::move(overlay), restoreFocus});
     overlays_.back().content->attachRecursively();
     if (modalDrawer) {
         // This callback is separate from the author hook. Escape, close and
-        // backdrop dismissal all use Drawer::dismiss(), which now reliably
+        // backdrop dismissal all use DrawerNode::dismiss(), which now reliably
         // returns ownership to OverlayHost without caller boilerplate.
         drawer->setOverlayDismissHandler([this, id] { (void)dismiss(id); });
     }
@@ -295,7 +295,7 @@ OverlayId OverlayHost::show(std::unique_ptr<Node> overlay)
         onChange_();
     }
     // The window's overlay-change hook clears stale focus/capture pointers.
-    // Focus only after it has completed, otherwise a just-opened Drawer
+    // Focus only after it has completed, otherwise a just-opened DrawerNode
     // would immediately lose its modal keyboard owner.
     if (modalDrawer) focus(drawer);
     return id;

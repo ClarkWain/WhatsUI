@@ -8,7 +8,7 @@
 
 namespace wui {
 
-// Fluent Avatar sizes are physical-looking logical DIP sizes.  Keeping the
+// Fluent AvatarNode sizes are physical-looking logical DIP sizes.  Keeping the
 // size in the type avoids each application inventing a slightly different
 // circular person indicator.
 enum class AvatarSize {
@@ -42,40 +42,40 @@ enum class AvatarColor {
     Teal,
 };
 
-class Avatar : public Node {
+class AvatarNode : public Node {
 public:
-    explicit Avatar(std::string name = {}, AvatarSize size = AvatarSize::Size32);
+    explicit AvatarNode(std::string name = {}, AvatarSize size = AvatarSize::Size32);
 
     [[nodiscard]] const std::string& name() const noexcept;
-    Avatar& name(std::string value);
+    AvatarNode& name(std::string value);
     void setName(std::string value);
     [[nodiscard]] const std::string& initials() const noexcept;
-    Avatar& initials(std::string value);
+    AvatarNode& initials(std::string value);
     void setInitials(std::string value);
     [[nodiscard]] std::string displayedInitials() const;
 
-    Avatar& image(ImageSource source);
+    AvatarNode& image(ImageSource source);
     void setImage(ImageSource source);
     void clearImage() noexcept;
     [[nodiscard]] bool hasImage() const noexcept;
 
-    Avatar& size(AvatarSize value) noexcept;
+    AvatarNode& size(AvatarSize value) noexcept;
     void setSize(AvatarSize value) noexcept;
     [[nodiscard]] AvatarSize size() const noexcept;
-    Avatar& shape(AvatarShape value) noexcept;
+    AvatarNode& shape(AvatarShape value) noexcept;
     void setShape(AvatarShape value) noexcept;
     [[nodiscard]] AvatarShape shape() const noexcept;
-    Avatar& color(AvatarColor value) noexcept;
+    AvatarNode& color(AvatarColor value) noexcept;
     void setColor(AvatarColor value) noexcept;
     [[nodiscard]] AvatarColor color() const noexcept;
 
     // Fluent calls this the activity ring. It is a presence-of-activity
     // affordance, not a keyboard focus indicator: the ring stays outside the
-    // Avatar's visual circle and does not change its layout footprint.
-    Avatar& active(bool value = true) noexcept;
+    // AvatarNode's visual circle and does not change its layout footprint.
+    AvatarNode& active(bool value = true) noexcept;
     void setActive(bool value) noexcept;
     [[nodiscard]] bool isActive() const noexcept;
-    Avatar& accessibleLabel(std::string value);
+    AvatarNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
 
@@ -98,23 +98,23 @@ private:
 
 enum class AvatarGroupLayout { Stack, Spread };
 
-// An ordered collection of avatars. Children remain real Avatar nodes (rather
+// An ordered collection of avatars. Children remain real AvatarNode nodes (rather
 // than a flattened picture) so every person retains an accessible name and a
 // stable image resource. Excess avatars collapse into a deterministic +N
 // indicator.
-class AvatarGroup : public ContainerNode {
+class AvatarGroupNode : public ContainerNode {
 public:
-    Avatar& addAvatar(std::string name = {}, AvatarSize size = AvatarSize::Size32);
-    AvatarGroup& maxVisible(std::size_t value) noexcept;
+    AvatarNode& addAvatar(std::string name = {}, AvatarSize size = AvatarSize::Size32);
+    AvatarGroupNode& maxVisible(std::size_t value) noexcept;
     void setMaxVisible(std::size_t value) noexcept;
     [[nodiscard]] std::size_t maxVisible() const noexcept;
-    AvatarGroup& groupLayout(AvatarGroupLayout value) noexcept;
+    AvatarGroupNode& groupLayout(AvatarGroupLayout value) noexcept;
     void setGroupLayout(AvatarGroupLayout value) noexcept;
     [[nodiscard]] AvatarGroupLayout groupLayout() const noexcept;
-    AvatarGroup& size(AvatarSize value) noexcept;
+    AvatarGroupNode& size(AvatarSize value) noexcept;
     void setSize(AvatarSize value) noexcept;
     [[nodiscard]] AvatarSize size() const noexcept;
-    AvatarGroup& accessibleLabel(std::string value);
+    AvatarGroupNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
 

@@ -11,9 +11,9 @@
 #include "view/components/preview_surface.h"
 #include "view/components/responsive_layouts.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
-using namespace wui::ui;
+using namespace wui;
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -68,15 +68,15 @@ std::unique_ptr<wui::Node> buildCapabilityCard()
     badges->appendChild(Badge("10,000 LINES")
         .appearance(wui::BadgeAppearance::Tint)
         .color(wui::BadgeColor::Brand)
-        .intoNode());
+        .build());
     badges->appendChild(Badge("1 TEXT NODE")
         .appearance(wui::BadgeAppearance::Tint)
         .color(wui::BadgeColor::Informative)
-        .intoNode());
+        .build());
     badges->appendChild(Badge("12 LANGUAGES")
         .appearance(wui::BadgeAppearance::Tint)
         .color(wui::BadgeColor::Success)
-        .intoNode());
+        .build());
 
     return Card()
         .appearance(wui::CardAppearance::FilledAlternative)
@@ -96,12 +96,12 @@ std::unique_ptr<wui::Node> buildCapabilityCard()
                     .color(wui::theme().colors.textMuted)
             )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildTextViewport()
 {
-    auto document = std::make_unique<wui::Text>(buildDocument());
+    auto document = std::make_unique<wui::TextNode>(buildDocument());
     document->setFontSize(14.0f);
     document->setLineHeight(kLineHeight);
     document->setWrap(wui::TextWrap::NoWrap);
@@ -109,7 +109,7 @@ std::unique_ptr<wui::Node> buildTextViewport()
     document->setColor(wui::theme().colors.text);
     document->setAccessibilityId("gallery.long-text.document");
 
-    auto scroller = std::make_unique<wui::ScrollView>();
+    auto scroller = std::make_unique<wui::ScrollViewNode>();
     scroller->setAxis(wui::ScrollAxis::Vertical);
     scroller->setAccessibilityId("gallery.long-text.viewport");
     auto* const textViewport = scroller.get();
@@ -120,26 +120,26 @@ std::unique_ptr<wui::Node> buildTextViewport()
     actions->appendChild(Button("Line 1")
         .appearance(wui::ButtonAppearance::Subtle)
         .onClick([textViewport] { textViewport->setScrollOffset(0.0f); })
-        .intoNode());
+        .build());
     actions->appendChild(Button("Line 5,000")
         .appearance(wui::ButtonAppearance::Subtle)
         .onClick([textViewport] {
             textViewport->setScrollOffset(kLineHeight * 4999.0f);
         })
-        .intoNode());
+        .build());
     actions->appendChild(Button("Line 10,000")
         .appearance(wui::ButtonAppearance::Subtle)
         .onClick([textViewport] {
             textViewport->setScrollOffset(textViewport->maxScrollOffset());
         })
-        .intoNode());
+        .build());
 
     auto viewport = Box()
         .height(kViewportHeight)
         .background(wui::theme().colors.neutralBackground1.rest)
         .radius(wui::theme().radius.md)
         .children(std::move(scroller))
-        .intoNode();
+        .build();
 
     return view::components::buildPreviewSurface(
         {"Multilingual Text document",
@@ -151,7 +151,7 @@ std::unique_ptr<wui::Node> buildTextViewport()
             .gap(12.0f)
             .align(wui::Alignment::Stretch)
             .children(std::move(actions), std::move(viewport))
-            .intoNode());
+            .build());
 }
 
 } // namespace
@@ -175,7 +175,7 @@ std::unique_ptr<wui::Node> buildLongTextPage()
                 buildTextViewport()
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::pages

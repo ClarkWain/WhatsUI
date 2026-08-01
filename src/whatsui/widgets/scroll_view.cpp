@@ -5,14 +5,14 @@
 
 namespace wui {
 
-ScrollView& ScrollView::child(std::unique_ptr<Node> child)
+ScrollViewNode& ScrollViewNode::child(std::unique_ptr<Node> child)
 {
     clearChildren();
     appendChild(std::move(child));
     return *this;
 }
 
-ScrollView& ScrollView::setAxis(ScrollAxis axis) noexcept
+ScrollViewNode& ScrollViewNode::setAxis(ScrollAxis axis) noexcept
 {
     if (axis_ != axis) {
         axis_ = axis;
@@ -22,29 +22,29 @@ ScrollView& ScrollView::setAxis(ScrollAxis axis) noexcept
     return *this;
 }
 
-ScrollAxis ScrollView::axis() const noexcept { return axis_; }
+ScrollAxis ScrollViewNode::axis() const noexcept { return axis_; }
 
-void ScrollView::setScrollOffset(float offset) noexcept
+void ScrollViewNode::setScrollOffset(float offset) noexcept
 {
     setScrollOffset({scrollOffset_.x, offset});
 }
 
-void ScrollView::setScrollOffset(PointF offset) noexcept
+void ScrollViewNode::setScrollOffset(PointF offset) noexcept
 {
     scrollOffset_ = offset;
     clampOffset();
     markDirty(DirtyFlag::Paint);
 }
 
-float ScrollView::scrollOffset() const noexcept { return scrollOffset_.y; }
-float ScrollView::scrollOffsetX() const noexcept { return scrollOffset_.x; }
-float ScrollView::scrollOffsetY() const noexcept { return scrollOffset_.y; }
-float ScrollView::maxScrollOffset() const noexcept { return maxScrollOffsetY(); }
-float ScrollView::maxScrollOffsetX() const noexcept { return std::max(0.0f, contentSize_.width - bounds().width); }
-float ScrollView::maxScrollOffsetY() const noexcept { return std::max(0.0f, contentSize_.height - bounds().height); }
-SizeF ScrollView::contentSize() const noexcept { return contentSize_; }
+float ScrollViewNode::scrollOffset() const noexcept { return scrollOffset_.y; }
+float ScrollViewNode::scrollOffsetX() const noexcept { return scrollOffset_.x; }
+float ScrollViewNode::scrollOffsetY() const noexcept { return scrollOffset_.y; }
+float ScrollViewNode::maxScrollOffset() const noexcept { return maxScrollOffsetY(); }
+float ScrollViewNode::maxScrollOffsetX() const noexcept { return std::max(0.0f, contentSize_.width - bounds().width); }
+float ScrollViewNode::maxScrollOffsetY() const noexcept { return std::max(0.0f, contentSize_.height - bounds().height); }
+SizeF ScrollViewNode::contentSize() const noexcept { return contentSize_; }
 
-SizeF ScrollView::measure(const Constraints& constraints) const
+SizeF ScrollViewNode::measure(const Constraints& constraints) const
 {
     if (children().empty()) return constraints.clamp({});
     const bool horizontal = axis_ == ScrollAxis::Horizontal || axis_ == ScrollAxis::Both;
@@ -56,7 +56,7 @@ SizeF ScrollView::measure(const Constraints& constraints) const
     return constraints.clamp(content);
 }
 
-void ScrollView::layout(const RectF& bounds)
+void ScrollViewNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     contentSize_ = {};
@@ -78,7 +78,7 @@ void ScrollView::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-void ScrollView::paint(PaintContext& context)
+void ScrollViewNode::paint(PaintContext& context)
 {
     (void)context.save();
     context.clipRect(bounds());
@@ -88,7 +88,7 @@ void ScrollView::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-Node* ScrollView::hitTest(PointF point)
+Node* ScrollViewNode::hitTest(PointF point)
 {
     if (!bounds().contains(point)) return nullptr;
     const PointF documentPoint = mapPointToContent(point);
@@ -98,14 +98,14 @@ Node* ScrollView::hitTest(PointF point)
     return this;
 }
 
-PointF ScrollView::mapPointToContent(PointF point) const noexcept
+PointF ScrollViewNode::mapPointToContent(PointF point) const noexcept
 {
     return {point.x + scrollOffset_.x, point.y + scrollOffset_.y};
 }
 
-EventResult ScrollView::onPointerEvent(const PointerEvent& event, EventContext& context)
+EventResult ScrollViewNode::onPointerEvent(const PointerEvent& event, EventContext& context)
 {
-    // Capture is observational. Consuming here would let an outer ScrollView
+    // Capture is observational. Consuming here would let an outer ScrollViewNode
     // steal its child's wheel before the child reaches target/bubble.
     if (context.phase() == EventPhase::Capture || event.action != PointerAction::Scroll) return EventResult::Ignored;
 
@@ -132,7 +132,7 @@ EventResult ScrollView::onPointerEvent(const PointerEvent& event, EventContext& 
     return scrollOffset_.x != previous.x || scrollOffset_.y != previous.y ? EventResult::Handled : EventResult::Ignored;
 }
 
-bool ScrollView::onPointerEvent(const PointerEvent& event)
+bool ScrollViewNode::onPointerEvent(const PointerEvent& event)
 {
     if (event.action != PointerAction::Scroll) return false;
     const PointF previous = scrollOffset_;
@@ -143,7 +143,7 @@ bool ScrollView::onPointerEvent(const PointerEvent& event)
     return scrollOffset_.x != previous.x || scrollOffset_.y != previous.y;
 }
 
-void ScrollView::clampOffset() noexcept
+void ScrollViewNode::clampOffset() noexcept
 {
     const bool horizontal = axis_ == ScrollAxis::Horizontal || axis_ == ScrollAxis::Both;
     const bool vertical = axis_ == ScrollAxis::Vertical || axis_ == ScrollAxis::Both;

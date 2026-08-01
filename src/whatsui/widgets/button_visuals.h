@@ -32,7 +32,7 @@ struct ButtonVisual {
     const Theme& current, ButtonAppearance appearance, bool disabled,
     bool selected, ControlVisualStates states) noexcept;
 
-// Paints focus, fill, and stroke through the single Fluent Button state
+// Paints focus, fill, and stroke through the single Fluent ButtonNode state
 // resolver. Action-family controls use the returned foreground for all label
 // and icon content so their combined states cannot drift apart.
 [[nodiscard]] ButtonVisual paintButtonSurface(

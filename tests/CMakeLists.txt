@@ -67,6 +67,27 @@ add_test(
     COMMAND WhatsUIStateTests
 )
 
+add_executable(WhatsUIDeclarativeApiContractTests
+    declarative_api_contract_tests.cpp
+)
+
+target_link_libraries(WhatsUIDeclarativeApiContractTests
+    PRIVATE
+        WhatsUI::WhatsUI
+)
+
+if(TARGET WhatsCanvas::Software)
+    target_link_libraries(
+        WhatsUIDeclarativeApiContractTests PRIVATE WhatsCanvas::Software)
+endif()
+
+target_compile_features(WhatsUIDeclarativeApiContractTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_declarative_api_contract_tests
+    COMMAND WhatsUIDeclarativeApiContractTests
+)
+
 add_executable(WhatsUIUiDispatcherTests
     ui_dispatcher_tests.cpp
 )

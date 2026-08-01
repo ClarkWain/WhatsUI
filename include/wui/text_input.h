@@ -28,7 +28,7 @@ struct TextRange {
 // The complete, serializable state of an editable text control.  Positions
 // are UTF-8 byte offsets for now; the controller intentionally owns the edit
 // semantics so a future grapheme-aware text engine can replace that detail
-// without changing TextInput's public contract.
+// without changing TextFieldNode's public contract.
 struct EditingValue {
     std::string text;
     TextRange selection{};
@@ -103,14 +103,14 @@ private:
 // should use TextEditingController, which exposes the complete EditingValue.
 using TextInputModel = TextEditingController;
 
-class TextInput : public ControlNode {
+class TextFieldNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(const std::string&)>;
     using SubmitHandler = std::function<void()>;
     using CancelHandler = std::function<void()>;
-    TextInput() = default;
-    explicit TextInput(std::string placeholder);
-    ~TextInput() override;
+    TextFieldNode() = default;
+    explicit TextFieldNode(std::string placeholder);
+    ~TextFieldNode() override;
 
     [[nodiscard]] TextEditingController& controller() noexcept;
     [[nodiscard]] const TextEditingController& controller() const noexcept;
@@ -118,11 +118,11 @@ public:
     [[nodiscard]] const TextInputModel& model() const noexcept;
 
     [[nodiscard]] const std::string& placeholder() const noexcept;
-    TextInput& placeholder(std::string placeholder);
+    TextFieldNode& placeholder(std::string placeholder);
     void setPlaceholder(std::string placeholder);
 
-    TextInput& text(std::string text);
-    TextInput& accessibleLabel(std::string label);
+    TextFieldNode& text(std::string text);
+    TextFieldNode& accessibleLabel(std::string label);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
     void setAccessibleLabel(std::string label);
     void setSize(InputSize size) noexcept;
@@ -134,7 +134,7 @@ public:
     void setMotionEnabled(bool enabled) noexcept;
     [[nodiscard]] bool isMotionEnabled() const noexcept;
 
-    // TextArea reuses the same UTF-8 editing and IME controller as TextInput,
+    // TextAreaNode reuses the same UTF-8 editing and IME controller as TextFieldNode,
     // but opts into wrapped multi-line layout.  Keep this on the base class so
     // host integrations only need one native text-input session contract.
     void setMultiline(bool value) noexcept;
@@ -146,9 +146,9 @@ public:
 
     // Applications can react to editing without polling the controller. This
     // keeps filtering and Enter/Escape form semantics widget-local.
-    TextInput& onChange(ChangeHandler handler);
-    TextInput& onSubmit(SubmitHandler handler);
-    TextInput& onCancel(CancelHandler handler);
+    TextFieldNode& onChange(ChangeHandler handler);
+    TextFieldNode& onSubmit(SubmitHandler handler);
+    TextFieldNode& onCancel(CancelHandler handler);
 
     void syncSession(TextInputSession& session, const RectF& caretRect) const;
     [[nodiscard]] RectF caretRect() const noexcept;
@@ -202,13 +202,13 @@ private:
 };
 
 // A genuine editable multi-line field. It intentionally inherits the same
-// controller, clipboard and IME protocol as TextInput rather than faking a
-// text area with a static Text node.
-class TextArea final : public TextInput {
+// controller, clipboard and IME protocol as TextFieldNode rather than faking a
+// text area with a static TextNode node.
+class TextAreaNode final : public TextFieldNode {
 public:
-    explicit TextArea(std::string placeholder = {});
+    explicit TextAreaNode(std::string placeholder = {});
 
-    TextArea& rows(std::size_t value) noexcept;
+    TextAreaNode& rows(std::size_t value) noexcept;
     void setRows(std::size_t value) noexcept;
     [[nodiscard]] std::size_t rows() const noexcept;
 };

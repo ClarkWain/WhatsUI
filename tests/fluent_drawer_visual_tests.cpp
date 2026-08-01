@@ -43,11 +43,11 @@ void render(const std::string& output, float scale)
         paint.fillRect({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)}, wui::theme().colors.neutralBackground2.rest);
         paint.drawText("Fluent Drawer", 40, 56, 26, wui::theme().colors.neutralForeground1, 600);
         paint.drawText("Overlay and inline layouts", 40, 84, 15, wui::theme().colors.neutralForeground2, 400);
-        wui::Drawer overlay("Edit profile", "Changes are saved to your workspace");
+        wui::DrawerNode overlay("Edit profile", "Changes are saved to your workspace");
         overlay.size(wui::DrawerSize::Small).primaryAction("Save").secondaryAction("Cancel"); overlay.layout({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)}); overlay.prepare(paint); overlay.paint(paint);
         // An independent inline surface at the left demonstrates that it does
         // not require a scrim and remains visually distinct from the overlay.
-        wui::Drawer inlineDrawer("Navigation", "Pinned workspace sections");
+        wui::DrawerNode inlineDrawer("Navigation", "Pinned workspace sections");
         inlineDrawer.type(wui::DrawerType::Inline).position(wui::DrawerPosition::Start).width(252).modal(false).layout({40, 130, 252, 330}); inlineDrawer.prepare(paint); inlineDrawer.paint(paint);
         canvas->endFrame(); const auto pixels = canvas->readPixelsRGBA();
         const auto background = wui::theme().colors.neutralBackground2.rest;

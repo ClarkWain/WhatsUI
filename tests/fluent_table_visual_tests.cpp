@@ -56,10 +56,10 @@ void render(const std::string& path, float scale)
         canvas->beginFrame(); wui::PaintContext paint(*canvas, scale);
         paint.fillRect({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)}, wui::theme().colors.neutralBackground2.rest);
         paint.drawText("Fluent Table and DataGrid", 28, 38, 20, wui::theme().colors.neutralForeground1, 600);
-        wui::Table table(columns()); table.setRows(rows()).maxVisibleRows(3).accessibleLabel("Passive release work");
+        wui::TableNode table(columns()); table.setRows(rows()).maxVisibleRows(3).accessibleLabel("Passive release work");
         table.layout({28, 64, 340, 164}); table.prepare(paint); table.paint(paint);
         paint.drawText("Table", 28, 254, 12, wui::theme().colors.neutralForeground2, 600);
-        wui::DataGrid grid; grid.setColumns(columns()).setRows(rows()).maxVisibleRows(4); grid.sortBy(0);
+        wui::DataGridNode grid; grid.setColumns(columns()).setRows(rows()).maxVisibleRows(4); grid.sortBy(0);
         grid.onKeyEvent({0, wui::KeyAction::Down, 40}); grid.onKeyEvent({0, wui::KeyAction::Down, 32});
         grid.layout({402, 64, 330, 204}); grid.prepare(paint); grid.paint(paint);
         paint.drawText("DataGrid · sorted, selected, focused", 402, 294, 12, wui::theme().colors.neutralForeground2, 600);

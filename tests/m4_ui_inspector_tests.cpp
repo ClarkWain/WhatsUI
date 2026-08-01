@@ -117,9 +117,9 @@ void testHitPathAndDirtySummary()
 
 void testMeasuredConstraintsAndResolvedStyle()
 {
-    wui::Column root;
-    auto button = std::make_unique<wui::Button>("Save");
-    button->setVariant(wui::ButtonVariant::Ghost);
+    wui::ColumnNode root;
+    auto button = std::make_unique<wui::ButtonNode>("Save");
+    button->setAppearance(wui::ButtonAppearance::Outline);
     button->setVisualState(wui::ControlVisualState::Hovered, true);
     root.appendChild(std::move(button));
     root.layout({0.0f, 0.0f, 180.0f, 60.0f});
@@ -139,8 +139,8 @@ void testMeasuredConstraintsAndResolvedStyle()
 
 void testResolvedRadioStyleMatchesFluentComposition()
 {
-    wui::Column root;
-    auto radio = std::make_unique<wui::Radio>("Selected", true);
+    wui::ColumnNode root;
+    auto radio = std::make_unique<wui::RadioNode>("Selected", true);
     radio->setVisualState(wui::ControlVisualState::Hovered, true);
     root.appendChild(std::move(radio));
     root.layout({0.0f, 0.0f, 180.0f, 40.0f});
@@ -162,10 +162,10 @@ void testResolvedRadioStyleMatchesFluentComposition()
 
 void testResolvedCheckboxStyleMatchesFluentComposition()
 {
-    wui::Column root;
-    auto checked = std::make_unique<wui::Checkbox>("Checked", true);
+    wui::ColumnNode root;
+    auto checked = std::make_unique<wui::CheckboxNode>("Checked", true);
     checked->setVisualState(wui::ControlVisualState::Pressed, true);
-    auto mixed = std::make_unique<wui::Checkbox>("Mixed");
+    auto mixed = std::make_unique<wui::CheckboxNode>("Mixed");
     mixed->setMixed();
     mixed->setVisualState(wui::ControlVisualState::Hovered, true);
     root.appendChild(std::move(checked));

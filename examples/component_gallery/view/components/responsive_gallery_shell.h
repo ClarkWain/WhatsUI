@@ -8,7 +8,7 @@
 #include "wui/node.h"
 
 namespace wui {
-class Column;
+class ColumnNode;
 }
 
 namespace whatsui::gallery::view::components {
@@ -42,7 +42,7 @@ private:
     NavigationFactory navigationFactory_;
     bool compact_{false};
     bool modeInitialized_{false};
-    wui::Column* pageColumn_{nullptr};
+    wui::ColumnNode* pageColumn_{nullptr};
     std::optional<wui::InsetsF> desktopPageInsets_;
 };
 

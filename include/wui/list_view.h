@@ -2,8 +2,8 @@
 
 // A Fluent-styled, selectable, fixed-row list. Vector-backed lists retain
 // their item values, while provider-backed lists request only visible values;
-// both modes paint only the current viewport. ListView does not retain row
-// Nodes. Use VirtualList when keyed Node identity and recycling are required.
+// both modes paint only the current viewport. ListViewNode does not retain row
+// Nodes. Use VirtualListNode when keyed Node identity and recycling are required.
 
 #include <functional>
 #include <memory>
@@ -16,7 +16,7 @@
 
 namespace wui {
 
-class ListView : public ControlNode {
+class ListViewNode : public ControlNode {
 public:
     struct Item {
         std::string label;
@@ -37,8 +37,8 @@ public:
         [[nodiscard]] bool empty() const noexcept { return first == last; }
     };
 
-    explicit ListView(std::vector<Item> items = {}, int selectedIndex = -1);
-    ~ListView() override;
+    explicit ListViewNode(std::vector<Item> items = {}, int selectedIndex = -1);
+    ~ListViewNode() override;
 
     [[nodiscard]] const std::vector<Item>& items() const noexcept;
     [[nodiscard]] std::size_t itemCount() const noexcept;
@@ -48,10 +48,10 @@ public:
     void clearItems();
 
     [[nodiscard]] int selectedIndex() const noexcept;
-    ListView& selectedIndex(int index);
+    ListViewNode& selectedIndex(int index);
     void setSelectedIndex(int index);
-    ListView& bind(State<int>& state);
-    ListView& onSelectionChanged(SelectionHandler handler);
+    ListViewNode& bind(State<int>& state);
+    ListViewNode& onSelectionChanged(SelectionHandler handler);
 
     [[nodiscard]] float rowHeight() const noexcept;
     void setRowHeight(float value) noexcept;

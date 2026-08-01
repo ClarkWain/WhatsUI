@@ -16,7 +16,7 @@
 
 #include "wui/paint_context.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/ui_inspector.h"
 #include "wui/whatscanvas_text.h"
 
@@ -34,7 +34,7 @@ struct Diagnostics {
 
 std::unique_ptr<wui::Node> buildSampleTree()
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& current = wui::theme();
     return Box().background(current.colors.surface).radius(current.radius.lg).padding(16.0f).children(
         Column().gap(12.0f).align(wui::Alignment::Stretch).children(
@@ -45,8 +45,9 @@ std::unique_ptr<wui::Node> buildSampleTree()
                 Text("LIVE").size(10.0f).lineHeight(14.0f).color(current.colors.accent)),
             Checkbox("Mark the layout pass complete", false),
             Row().align(wui::Alignment::Center).gap(8.0f).children(
-                Button("Inspect node").variant(wui::ButtonVariant::Primary),
-                Button("Reset").variant(wui::ButtonVariant::Ghost))));
+                Button("Inspect node").appearance(wui::ButtonAppearance::Primary),
+                Button("Reset").appearance(wui::ButtonAppearance::Outline))))
+        .build();
 }
 
 std::string formatPath(const std::vector<std::size_t>& path)
@@ -100,7 +101,7 @@ Diagnostics collectDiagnostics()
 
 std::unique_ptr<wui::Node> buildInspectorPage(const Diagnostics& diagnostics)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& current = wui::theme();
     const std::string summary = std::to_string(diagnostics.dirty.nodeCount) + " nodes  ·  "
         + std::to_string(diagnostics.dirty.dirtyNodeCount) + " dirty  ·  "
@@ -110,7 +111,7 @@ std::unique_ptr<wui::Node> buildInspectorPage(const Diagnostics& diagnostics)
             + "  ·  " + formatRect(diagnostics.hit->bounds)
         : "No node was hit by the sample probe.";
 
-    auto entries = std::make_unique<wui::Column>();
+    auto entries = std::make_unique<wui::ColumnNode>();
     entries->setGap(4.0f);
     entries->setAlign(wui::Alignment::Stretch);
     for (const auto& entry : diagnostics.entries) {
@@ -120,7 +121,7 @@ std::unique_ptr<wui::Node> buildInspectorPage(const Diagnostics& diagnostics)
         entries->appendChild(Box().background(current.colors.surface).radius(current.radius.sm).padding({10.0f, 6.0f, 10.0f, 6.0f})
             .children(Column().gap(1.0f).children(
                 Text(title).size(11.0f).lineHeight(16.0f).color(current.colors.text),
-                Text(detail).size(10.0f).lineHeight(14.0f).color(current.colors.textMuted))).intoNode());
+                Text(detail).size(10.0f).lineHeight(14.0f).color(current.colors.textMuted))).build());
     }
 
     auto diagnosticsPanel = Box().background(current.colors.surfaceAlt).radius(current.radius.lg).padding(16.0f).children(
@@ -151,7 +152,8 @@ std::unique_ptr<wui::Node> buildInspectorPage(const Diagnostics& diagnostics)
             Row().align(wui::Alignment::Start).gap(16.0f).children(
                 std::move(previewPanel), std::move(diagnosticsPanel).flex(1.0f))));
     return Box().background(current.colors.background).children(
-        Row().align(wui::Alignment::Stretch).children(Spacer().flex(1.0f), std::move(rail), Spacer().flex(1.0f)));
+        Row().align(wui::Alignment::Stretch).children(Spacer().flex(1.0f), std::move(rail), Spacer().flex(1.0f)))
+        .build();
 }
 
 void render(wui::Node& root, wsc::Canvas& canvas, float scale)

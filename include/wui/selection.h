@@ -1,7 +1,7 @@
 #pragma once
 
-// Fluent selection controls.  ListBox is deliberately useful as a standalone
-// control, while Combobox and Dropdown compose it into an anchored overlay.
+// Fluent selection controls.  ListBoxNode is deliberately useful as a standalone
+// control, while ComboboxNode and DropdownNode compose it into an anchored overlay.
 // Options are stable value objects rather than visual children: this keeps a
 // filtered combobox from rebuilding an ownership tree on every keystroke.
 
@@ -35,7 +35,7 @@ struct Option {
 enum class ListBoxSelectionMode { Single, Multiple };
 
 // A materialized option semantic can be consumed by platform adapters that
-// represent a windowed ListBox as virtual children. Bounds are set only for
+// represent a windowed ListBoxNode as virtual children. Bounds are set only for
 // options currently visible in the viewport.
 struct ListBoxOptionAccessibility {
     std::size_t index{0};
@@ -46,35 +46,35 @@ struct ListBoxOptionAccessibility {
 // toggles the focused option and Enter commits it; in Single mode either key
 // selects it.  `activeIndex` is intentionally distinct from selection so a
 // combobox can preview/filter choices without mutating its committed value.
-class ListBox : public ControlNode {
+class ListBoxNode : public ControlNode {
 public:
     using SelectionHandler = std::function<void(int, const Option&)>;
 
-    ListBox();
-    explicit ListBox(std::vector<Option> options);
-    ~ListBox() override;
+    ListBoxNode();
+    explicit ListBoxNode(std::vector<Option> options);
+    ~ListBoxNode() override;
 
-    ListBox& addOption(Option option);
-    ListBox& setOptions(std::vector<Option> options);
-    ListBox& clearOptions();
+    ListBoxNode& addOption(Option option);
+    ListBoxNode& setOptions(std::vector<Option> options);
+    ListBoxNode& clearOptions();
     [[nodiscard]] const std::vector<Option>& options() const noexcept;
 
-    ListBox& selectionMode(ListBoxSelectionMode value) noexcept;
+    ListBoxNode& selectionMode(ListBoxSelectionMode value) noexcept;
     void setSelectionMode(ListBoxSelectionMode value) noexcept;
     [[nodiscard]] ListBoxSelectionMode selectionMode() const noexcept;
     [[nodiscard]] int selectedIndex() const noexcept;
     [[nodiscard]] const std::vector<int>& selectedIndices() const noexcept;
-    ListBox& selectedIndex(int index);
+    ListBoxNode& selectedIndex(int index);
     void setSelectedIndex(int index);
-    ListBox& selectedIndices(std::vector<int> indices);
+    ListBoxNode& selectedIndices(std::vector<int> indices);
     void setSelectedIndices(std::vector<int> indices);
     [[nodiscard]] int activeIndex() const noexcept;
     void setActiveIndex(int index);
-    ListBox& onSelectionChanged(SelectionHandler handler);
-    ListBox& accessibleLabel(std::string value);
+    ListBoxNode& onSelectionChanged(SelectionHandler handler);
+    ListBoxNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    ListBox& maxVisibleOptions(std::size_t value) noexcept;
+    ListBoxNode& maxVisibleOptions(std::size_t value) noexcept;
     void setMaxVisibleOptions(std::size_t value) noexcept;
     [[nodiscard]] std::size_t maxVisibleOptions() const noexcept;
     [[nodiscard]] float scrollOffset() const noexcept;
@@ -120,34 +120,34 @@ private:
     std::chrono::steady_clock::time_point lastTypeAhead_{};
 };
 
-// Editable selection control.  The retained TextInput base owns IME, native
+// Editable selection control.  The retained TextFieldNode base owns IME, native
 // text sessions and caret rendering; this class adds filtering and the popup
 // lifecycle without duplicating text-editor behavior.
-class Combobox : public TextInput {
+class ComboboxNode : public TextFieldNode {
 public:
     using SelectionHandler = std::function<void(int, const Option&)>;
 
-    explicit Combobox(std::string placeholder = {});
-    ~Combobox() override;
+    explicit ComboboxNode(std::string placeholder = {});
+    ~ComboboxNode() override;
 
-    Combobox& addOption(Option option);
-    Combobox& setOptions(std::vector<Option> options);
-    Combobox& clearOptions();
+    ComboboxNode& addOption(Option option);
+    ComboboxNode& setOptions(std::vector<Option> options);
+    ComboboxNode& clearOptions();
     [[nodiscard]] const std::vector<Option>& options() const noexcept;
     [[nodiscard]] int selectedIndex() const noexcept;
     [[nodiscard]] const std::vector<int>& selectedIndices() const noexcept;
-    Combobox& selectedIndex(int index);
+    ComboboxNode& selectedIndex(int index);
     void setSelectedIndex(int index);
-    Combobox& multiselect(bool value = true) noexcept;
+    ComboboxNode& multiselect(bool value = true) noexcept;
     void setMultiselect(bool value) noexcept;
     [[nodiscard]] bool isMultiselect() const noexcept;
-    Combobox& selectedIndices(std::vector<int> indices);
+    ComboboxNode& selectedIndices(std::vector<int> indices);
     void setSelectedIndices(std::vector<int> indices);
     [[nodiscard]] bool isOpen() const noexcept;
-    Combobox& bindOverlayHost(OverlayHost& host) noexcept;
-    Combobox& onSelectionChanged(SelectionHandler handler);
-    Combobox& onChange(ChangeHandler handler);
-    Combobox& openOnFocus(bool value) noexcept;
+    ComboboxNode& bindOverlayHost(OverlayHost& host) noexcept;
+    ComboboxNode& onSelectionChanged(SelectionHandler handler);
+    ComboboxNode& onChange(ChangeHandler handler);
+    ComboboxNode& openOnFocus(bool value) noexcept;
     void setOpenOnFocus(bool value) noexcept;
 
     EventResult onPointerEvent(const PointerEvent& event, EventContext& context) override;
@@ -183,32 +183,32 @@ private:
 // Non-editable Fluent selection control.  It is a button-like combobox with
 // the same option model and overlay behavior, exposed as an expandable field
 // rather than an editable text field.
-class Dropdown : public ControlNode {
+class DropdownNode : public ControlNode {
 public:
     using SelectionHandler = std::function<void(int, const Option&)>;
 
-    explicit Dropdown(std::string placeholder = "Select an option");
-    ~Dropdown() override;
+    explicit DropdownNode(std::string placeholder = "Select an option");
+    ~DropdownNode() override;
 
-    Dropdown& addOption(Option option);
-    Dropdown& setOptions(std::vector<Option> options);
-    Dropdown& clearOptions();
+    DropdownNode& addOption(Option option);
+    DropdownNode& setOptions(std::vector<Option> options);
+    DropdownNode& clearOptions();
     [[nodiscard]] const std::vector<Option>& options() const noexcept;
     [[nodiscard]] int selectedIndex() const noexcept;
     [[nodiscard]] const std::vector<int>& selectedIndices() const noexcept;
-    Dropdown& selectedIndex(int index);
+    DropdownNode& selectedIndex(int index);
     void setSelectedIndex(int index);
-    Dropdown& multiselect(bool value = true) noexcept;
+    DropdownNode& multiselect(bool value = true) noexcept;
     void setMultiselect(bool value) noexcept;
     [[nodiscard]] bool isMultiselect() const noexcept;
-    Dropdown& selectedIndices(std::vector<int> indices);
+    DropdownNode& selectedIndices(std::vector<int> indices);
     void setSelectedIndices(std::vector<int> indices);
     [[nodiscard]] const std::string& value() const noexcept;
     [[nodiscard]] const std::string& placeholder() const noexcept;
     [[nodiscard]] bool isOpen() const noexcept;
-    Dropdown& bindOverlayHost(OverlayHost& host) noexcept;
-    Dropdown& onSelectionChanged(SelectionHandler handler);
-    Dropdown& accessibleLabel(std::string value);
+    DropdownNode& bindOverlayHost(OverlayHost& host) noexcept;
+    DropdownNode& onSelectionChanged(SelectionHandler handler);
+    DropdownNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
 

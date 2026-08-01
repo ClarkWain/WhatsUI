@@ -6,7 +6,7 @@
 namespace {
 void expect(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
 
-void populateTree(wui::Tree& tree)
+void populateTree(wui::TreeNode& tree)
 {
     auto& files = tree.addItem("files", "Project files");
     files.addItem("readme", "README.md");
@@ -20,7 +20,7 @@ void populateTree(wui::Tree& tree)
 
 void testStableIdentityAndDisclosure()
 {
-    wui::Tree tree; populateTree(tree);
+    wui::TreeNode tree; populateTree(tree);
     expect(tree.rowHeight() == 32.0f,
            "Medium Tree must use the Fluent 32-DIP row token");
     auto* files = tree.visibleItems().front();
@@ -48,7 +48,7 @@ void testStableIdentityAndDisclosure()
 
 void testKeyboardAndDisabledSelection()
 {
-    wui::Tree tree; populateTree(tree);
+    wui::TreeNode tree; populateTree(tree);
     expect(tree.select("files") && tree.selectedId() == "files", "Tree must select a stable item id");
     expect(tree.onKeyEvent({0, wui::KeyAction::Down, 40}) && tree.selectedId() == "files", "Arrow Down must rove focus without changing selection");
     expect(tree.select("source"), "Tree must focus a stable branch before right-arrow navigation");
@@ -62,7 +62,7 @@ void testKeyboardAndDisabledSelection()
 
 void testScrollAndAccessibilityActions()
 {
-    wui::Tree tree; populateTree(tree);
+    wui::TreeNode tree; populateTree(tree);
     tree.setMaxVisibleItems(2); tree.layout({0, 0, 280, 64});
     expect(tree.maximumScrollOffset() > 0.0f, "Tree with a viewport must expose scroll range");
     tree.select("tree");
@@ -76,7 +76,7 @@ void testScrollAndAccessibilityActions()
 
 void testLargeTreeLayoutsOnlyViewportRows()
 {
-    wui::Tree tree;
+    wui::TreeNode tree;
     for (int index = 0; index < 1000; ++index) tree.addItem("item-" + std::to_string(index), "Item " + std::to_string(index));
     tree.layout({0, 0, 320, 64});
     auto range = tree.visibleRange();
@@ -97,7 +97,7 @@ void testLargeTreeLayoutsOnlyViewportRows()
 
     void testRemovingFocusedTreeItemDoesNotLeaveStalePointer()
     {
-        wui::Tree tree;
+        wui::TreeNode tree;
         tree.addItem("first", "First");
         tree.addItem("second", "Second");
         tree.layout({0, 0, 320, 64});
@@ -111,7 +111,7 @@ void testLargeTreeLayoutsOnlyViewportRows()
 
         void testCollapsingFocusedDescendantMovesFocusToAncestor()
         {
-            wui::Tree tree;
+            wui::TreeNode tree;
             populateTree(tree);
             auto* files = tree.visibleItems().front();
             auto* leaf = tree.visibleItems()[3];
@@ -124,7 +124,7 @@ void testLargeTreeLayoutsOnlyViewportRows()
 
         void testTreeItemChildMutationInvalidatesVisibleProjection()
         {
-            wui::Tree tree;
+            wui::TreeNode tree;
             auto& branch = tree.addItem("branch", "Branch");
             branch.addItem("child", "Child");
             tree.layout({0, 0, 320, 64});

@@ -24,18 +24,18 @@ float measuredTextWidth(const std::string& value, float textSize) noexcept
 }
 } // namespace
 
-Popup& Popup::content(std::unique_ptr<Node> content) { clearChildren(); if (content) appendChild(std::move(content)); return *this; }
-Popup& Popup::anchor(RectF value) noexcept { anchor_ = value; markDirty(DirtyFlag::Layout); return *this; }
-Popup& Popup::placement(PopupPlacement value) noexcept { placement_ = value; markDirty(DirtyFlag::Layout); return *this; }
-Popup& Popup::preferredSize(SizeF value) noexcept { preferredSize_ = {std::max(0.0f, value.width), std::max(0.0f, value.height)}; markDirty(DirtyFlag::Layout); return *this; }
-Popup& Popup::dismissOnOutsidePress(bool value) noexcept { dismissOnOutsidePress_ = value; return *this; }
-Popup& Popup::onDismiss(DismissHandler handler) { onDismiss_ = std::move(handler); return *this; }
-const RectF& Popup::anchor() const noexcept { return anchor_; }
-const RectF& Popup::panelBounds() const noexcept { return panelBounds_; }
-PopupPlacement Popup::placement() const noexcept { return placement_; }
-bool Popup::dismissOnOutsidePress() const noexcept { return dismissOnOutsidePress_; }
+PopupNode& PopupNode::content(std::unique_ptr<Node> content) { clearChildren(); if (content) appendChild(std::move(content)); return *this; }
+PopupNode& PopupNode::anchor(RectF value) noexcept { anchor_ = value; markDirty(DirtyFlag::Layout); return *this; }
+PopupNode& PopupNode::placement(PopupPlacement value) noexcept { placement_ = value; markDirty(DirtyFlag::Layout); return *this; }
+PopupNode& PopupNode::preferredSize(SizeF value) noexcept { preferredSize_ = {std::max(0.0f, value.width), std::max(0.0f, value.height)}; markDirty(DirtyFlag::Layout); return *this; }
+PopupNode& PopupNode::dismissOnOutsidePress(bool value) noexcept { dismissOnOutsidePress_ = value; return *this; }
+PopupNode& PopupNode::onDismiss(DismissHandler handler) { onDismiss_ = std::move(handler); return *this; }
+const RectF& PopupNode::anchor() const noexcept { return anchor_; }
+const RectF& PopupNode::panelBounds() const noexcept { return panelBounds_; }
+PopupPlacement PopupNode::placement() const noexcept { return placement_; }
+bool PopupNode::dismissOnOutsidePress() const noexcept { return dismissOnOutsidePress_; }
 
-SizeF Popup::measure(const Constraints& constraints) const
+SizeF PopupNode::measure(const Constraints& constraints) const
 {
     SizeF desired = preferredSize_;
     if (!children().empty()) {
@@ -46,7 +46,7 @@ SizeF Popup::measure(const Constraints& constraints) const
     return constraints.clamp(desired);
 }
 
-RectF Popup::resolvePanelBounds(const RectF& host, SizeF desired) const noexcept
+RectF PopupNode::resolvePanelBounds(const RectF& host, SizeF desired) const noexcept
 {
     constexpr float gap = 4.0f;
     const float right = host.x + host.width;
@@ -64,7 +64,7 @@ RectF Popup::resolvePanelBounds(const RectF& host, SizeF desired) const noexcept
     return {x, y, width, height};
 }
 
-void Popup::layout(const RectF& bounds)
+void PopupNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     panelBounds_ = resolvePanelBounds(bounds, measure({0.0f, bounds.width, 0.0f, bounds.height}));
@@ -72,7 +72,7 @@ void Popup::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-void Popup::paintSurface(PaintContext& context, const RectF& panel) const
+void PopupNode::paintSurface(PaintContext& context, const RectF& panel) const
 {
     const auto& current = theme();
     const RectF alignedPanel = context.snapRectEdges(panel);
@@ -88,30 +88,30 @@ void Popup::paintSurface(PaintContext& context, const RectF& panel) const
                           current.colors.surfaceRaised);
 }
 
-void Popup::paint(PaintContext& context) { paintSurface(context, panelBounds_); ContainerNode::paint(context); clearDirty(DirtyFlag::Paint); }
-Node* Popup::hitTest(PointF point)
+void PopupNode::paint(PaintContext& context) { paintSurface(context, panelBounds_); ContainerNode::paint(context); clearDirty(DirtyFlag::Paint); }
+Node* PopupNode::hitTest(PointF point)
 {
     if (!bounds().contains(point)) return nullptr;
     if (panelBounds_.contains(point)) for (auto it = children().rbegin(); it != children().rend(); ++it) if (auto* hit = (*it)->hitTest(point)) return hit;
     return this;
 }
-bool Popup::onPointerEvent(const PointerEvent& event)
+bool PopupNode::onPointerEvent(const PointerEvent& event)
 {
     if (event.action == PointerAction::Down && event.button == MouseButton::Left && !panelBounds_.contains(event.position)) { if (dismissOnOutsidePress_) dismiss(); return true; }
     return bounds().contains(event.position);
 }
-bool Popup::onKeyEvent(const KeyEvent& event) { if (event.action == KeyAction::Down && (event.keyCode == 27 || event.keyCode == 256)) { dismiss(); return true; } return false; }
-void Popup::dismiss() { if (onDismiss_) onDismiss_(); }
-const RectF& Popup::hostBounds() const noexcept { return bounds(); }
+bool PopupNode::onKeyEvent(const KeyEvent& event) { if (event.action == KeyAction::Down && (event.keyCode == 27 || event.keyCode == 256)) { dismiss(); return true; } return false; }
+void PopupNode::dismiss() { if (onDismiss_) onDismiss_(); }
+const RectF& PopupNode::hostBounds() const noexcept { return bounds(); }
 
-Menu& Menu::addItem(MenuItem item) { items_.push_back(std::move(item)); if (selectedIndex_ < 0) moveSelection(1); markDirty(DirtyFlag::Layout); return *this; }
-Menu& Menu::clearItems() { items_.clear(); selectedIndex_ = hoveredIndex_ = pressedIndex_ = -1; markDirty(DirtyFlag::Layout); return *this; }
-Menu& Menu::onDismiss(DismissHandler handler) { onDismiss_ = std::move(handler); return *this; }
-const std::vector<MenuItem>& Menu::items() const noexcept { return items_; }
-int Menu::selectedIndex() const noexcept { return selectedIndex_; }
-void Menu::setSelectedIndex(int index) noexcept { if (index >= 0 && index < static_cast<int>(items_.size()) && items_[static_cast<std::size_t>(index)].enabled) { selectedIndex_ = index; markDirty(DirtyFlag::Paint); } }
-float Menu::rowHeight() const noexcept { return std::max(28.0f, theme().controls.height); }
-SizeF Menu::measure(const Constraints& constraints) const
+MenuNode& MenuNode::addItem(MenuItem item) { items_.push_back(std::move(item)); if (selectedIndex_ < 0) moveSelection(1); markDirty(DirtyFlag::Layout); return *this; }
+MenuNode& MenuNode::clearItems() { items_.clear(); selectedIndex_ = hoveredIndex_ = pressedIndex_ = -1; markDirty(DirtyFlag::Layout); return *this; }
+MenuNode& MenuNode::onDismiss(DismissHandler handler) { onDismiss_ = std::move(handler); return *this; }
+const std::vector<MenuItem>& MenuNode::items() const noexcept { return items_; }
+int MenuNode::selectedIndex() const noexcept { return selectedIndex_; }
+void MenuNode::setSelectedIndex(int index) noexcept { if (index >= 0 && index < static_cast<int>(items_.size()) && items_[static_cast<std::size_t>(index)].enabled) { selectedIndex_ = index; markDirty(DirtyFlag::Paint); } }
+float MenuNode::rowHeight() const noexcept { return std::max(28.0f, theme().controls.height); }
+SizeF MenuNode::measure(const Constraints& constraints) const
 {
     constexpr float kItemHorizontalPadding = 8.0f;
     constexpr float kContentGap = 8.0f;
@@ -136,8 +136,8 @@ SizeF Menu::measure(const Constraints& constraints) const
         {width, kMenuPadding * 2.0f +
                     rowHeight() * static_cast<float>(items_.size()) + gaps});
 }
-void Menu::layout(const RectF& bounds) { Popup::layout(bounds); }
-void Menu::paint(PaintContext& context)
+void MenuNode::layout(const RectF& bounds) { PopupNode::layout(bounds); }
+void MenuNode::paint(PaintContext& context)
 {
     const auto panel = panelBounds(); const auto& current = theme(); paintSurface(context, panel);
     for (std::size_t i = 0; i < items_.size(); ++i) {
@@ -210,8 +210,8 @@ void Menu::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-Node* Menu::hitTest(PointF point) { return Popup::hitTest(point); }
-int Menu::itemAt(PointF point) const noexcept
+Node* MenuNode::hitTest(PointF point) { return PopupNode::hitTest(point); }
+int MenuNode::itemAt(PointF point) const noexcept
 {
     constexpr float kRowGap = 2.0f;
     const auto panel = panelBounds();
@@ -226,13 +226,13 @@ int Menu::itemAt(PointF point) const noexcept
     }
     return index;
 }
-void Menu::moveSelection(int delta) noexcept
+void MenuNode::moveSelection(int delta) noexcept
 {
     if (items_.empty() || delta == 0) return; hoveredIndex_ = -1; pressedIndex_ = -1; const int count = static_cast<int>(items_.size()); int candidate = selectedIndex_;
     for (int attempt = 0; attempt < count; ++attempt) { candidate = (candidate + delta + count) % count; if (items_[static_cast<std::size_t>(candidate)].enabled) { selectedIndex_ = candidate; markDirty(DirtyFlag::Paint); return; } }
 }
-void Menu::invokeSelection() { if (selectedIndex_ < 0 || selectedIndex_ >= static_cast<int>(items_.size())) return; auto& item = items_[static_cast<std::size_t>(selectedIndex_)]; if (!item.enabled) return; if (item.onInvoke) item.onInvoke(); dismiss(); }
-bool Menu::onPointerEvent(const PointerEvent& event)
+void MenuNode::invokeSelection() { if (selectedIndex_ < 0 || selectedIndex_ >= static_cast<int>(items_.size())) return; auto& item = items_[static_cast<std::size_t>(selectedIndex_)]; if (!item.enabled) return; if (item.onInvoke) item.onInvoke(); dismiss(); }
+bool MenuNode::onPointerEvent(const PointerEvent& event)
 {
     const int index = itemAt(event.position);
     if (event.action == PointerAction::Enter ||
@@ -275,46 +275,46 @@ bool Menu::onPointerEvent(const PointerEvent& event)
             return true;
         }
     }
-    return Popup::onPointerEvent(event);
+    return PopupNode::onPointerEvent(event);
 }
-bool Menu::onKeyEvent(const KeyEvent& event)
+bool MenuNode::onKeyEvent(const KeyEvent& event)
 {
     if (event.action != KeyAction::Down) return false;
-    switch (event.keyCode) { case 38: case 265: moveSelection(-1); return true; case 40: case 264: moveSelection(1); return true; case 36: case 268: selectedIndex_ = -1; moveSelection(1); return true; case 35: case 269: selectedIndex_ = 0; moveSelection(-1); return true; case 13: case 32: case 257: invokeSelection(); return true; default: return Popup::onKeyEvent(event); }
+    switch (event.keyCode) { case 38: case 265: moveSelection(-1); return true; case 40: case 264: moveSelection(1); return true; case 36: case 268: selectedIndex_ = -1; moveSelection(1); return true; case 35: case 269: selectedIndex_ = 0; moveSelection(-1); return true; case 13: case 32: case 257: invokeSelection(); return true; default: return PopupNode::onKeyEvent(event); }
 }
-void Menu::dismiss() { if (onDismiss_) onDismiss_(); }
+void MenuNode::dismiss() { if (onDismiss_) onDismiss_(); }
 
-MenuButton::MenuButton(std::string label)
-    : Button(std::move(label))
+MenuButtonNode::MenuButtonNode(std::string label)
+    : ButtonNode(std::move(label))
 {
-    // A MenuButton is a regular Fluent Button whose trailing content is the
-    // standard disclosure glyph. Keeping it in Button's content layout gives
+    // A MenuButtonNode is a regular Fluent ButtonNode whose trailing content is the
+    // standard disclosure glyph. Keeping it in ButtonNode's content layout gives
     // the pair the canonical 6-DIP gap and symmetric 12-DIP padding.
     setIcon(IconName::ChevronDown);
     setIconPosition(ButtonIconPosition::After);
-    Button::onClick([this] { openMenu(); });
+    ButtonNode::onClick([this] { openMenu(); });
 }
-MenuButton& MenuButton::addItem(MenuItem item) { items_.push_back(std::move(item)); return *this; }
-MenuButton& MenuButton::clearItems() { items_.clear(); return *this; }
-MenuButton& MenuButton::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
-const std::vector<MenuItem>& MenuButton::items() const noexcept { return items_; }
-bool MenuButton::isOpen() const noexcept { return open_; }
-SizeF MenuButton::measure(const Constraints& constraints) const
+MenuButtonNode& MenuButtonNode::addItem(MenuItem item) { items_.push_back(std::move(item)); return *this; }
+MenuButtonNode& MenuButtonNode::clearItems() { items_.clear(); return *this; }
+MenuButtonNode& MenuButtonNode::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
+const std::vector<MenuItem>& MenuButtonNode::items() const noexcept { return items_; }
+bool MenuButtonNode::isOpen() const noexcept { return open_; }
+SizeF MenuButtonNode::measure(const Constraints& constraints) const
 {
-    return Button::measure(constraints);
+    return ButtonNode::measure(constraints);
 }
-void MenuButton::paint(PaintContext& context)
+void MenuButtonNode::paint(PaintContext& context)
 {
-    Button::paint(context);
+    ButtonNode::paint(context);
     clearDirty(DirtyFlag::Paint);
 }
-AccessibilityActionCapabilities MenuButton::accessibilityActions() const noexcept
+AccessibilityActionCapabilities MenuButtonNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.expandCollapse = overlayHost_ != nullptr && !items_.empty();
     return actions;
 }
-AccessibilityActionStatus MenuButton::performAccessibilityAction(
+AccessibilityActionStatus MenuButtonNode::performAccessibilityAction(
     AccessibilityActionKind kind, std::string_view value)
 {
     (void)value;
@@ -330,11 +330,11 @@ AccessibilityActionStatus MenuButton::performAccessibilityAction(
     }
     return AccessibilityActionStatus::NotSupported;
 }
-void MenuButton::openMenu()
+void MenuButtonNode::openMenu()
 {
     if (open_ || overlayHost_ == nullptr || items_.empty()) return;
-    auto menu = std::make_unique<Menu>();
-    Menu* const menuRaw = menu.get();
+    auto menu = std::make_unique<MenuNode>();
+    MenuNode* const menuRaw = menu.get();
     menu->anchor(bounds()).placement(PopupPlacement::BelowStart);
     for (const auto& item : items_) menu->addItem(item);
     menu->onDismiss([this] { closeMenu(); });
@@ -347,7 +347,7 @@ void MenuButton::openMenu()
     overlayHost_->focus(menuRaw);
     markDirty(DirtyFlag::Paint);
 }
-void MenuButton::closeMenu()
+void MenuButtonNode::closeMenu()
 {
     if (!open_) return;
     OverlayHost* const host = overlayHost_;
@@ -362,15 +362,15 @@ void MenuButton::closeMenu()
     markDirty(DirtyFlag::Paint);
 }
 
-SplitButton::SplitButton(std::string label) : label_(std::move(label)) {}
-SplitButton& SplitButton::label(std::string value) { setLabel(std::move(value)); return *this; }
-void SplitButton::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
-const std::string& SplitButton::label() const noexcept { return label_; }
-SplitButton& SplitButton::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
-SplitButton& SplitButton::addItem(MenuItem item) { items_.push_back(std::move(item)); return *this; }
-SplitButton& SplitButton::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
-bool SplitButton::isOpen() const noexcept { return open_; }
-SizeF SplitButton::measure(const Constraints& constraints) const
+SplitButtonNode::SplitButtonNode(std::string label) : label_(std::move(label)) {}
+SplitButtonNode& SplitButtonNode::label(std::string value) { setLabel(std::move(value)); return *this; }
+void SplitButtonNode::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
+const std::string& SplitButtonNode::label() const noexcept { return label_; }
+SplitButtonNode& SplitButtonNode::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
+SplitButtonNode& SplitButtonNode::addItem(MenuItem item) { items_.push_back(std::move(item)); return *this; }
+SplitButtonNode& SplitButtonNode::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
+bool SplitButtonNode::isOpen() const noexcept { return open_; }
+SizeF SplitButtonNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const auto textStyle =
@@ -384,7 +384,7 @@ SizeF SplitButton::measure(const Constraints& constraints) const
              disclosureWidth,
          button_visuals::buttonHeight(current, ButtonSize::Medium)});
 }
-void SplitButton::paint(PaintContext& context)
+void SplitButtonNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     constexpr float disclosureWidth = 32.0f;
@@ -398,7 +398,7 @@ void SplitButton::paint(PaintContext& context)
         std::max(0.0f, bounds().x + bounds().width - dividerX),
         bounds().height};
 
-    // SplitButton is two adjacent commands, not one large pressed plate.
+    // SplitButtonNode is two adjacent commands, not one large pressed plate.
     // Paint the shared rest surface first, then apply hover/press only to the
     // region currently being operated while retaining a single outer radius.
     const auto interactiveMask =
@@ -460,7 +460,7 @@ void SplitButton::paint(PaintContext& context)
              visual.foreground, IconSize::Size16);
     clearDirty(DirtyFlag::Paint);
 }
-bool SplitButton::onPointerEvent(const PointerEvent& event)
+bool SplitButtonNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     const auto inDisclosure = [this](PointF point) {
@@ -516,22 +516,22 @@ bool SplitButton::onPointerEvent(const PointerEvent& event)
     default: return false;
     }
 }
-bool SplitButton::onKeyEvent(const KeyEvent& event)
+bool SplitButtonNode::onKeyEvent(const KeyEvent& event)
 { if (!isEnabled() || event.action != KeyAction::Down) return false; if (event.keyCode == 40 || event.keyCode == 264 || event.keyCode == 293) { openMenu(); return true; } if (event.keyCode == 13 || event.keyCode == 32 || event.keyCode == 257) { if (onClick_) onClick_(); return true; } return false; }
-AccessibilityActionCapabilities SplitButton::accessibilityActions() const noexcept { AccessibilityActionCapabilities a; a.invoke = static_cast<bool>(onClick_); a.expandCollapse = overlayHost_ != nullptr && !items_.empty(); return a; }
-AccessibilityActionStatus SplitButton::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
+AccessibilityActionCapabilities SplitButtonNode::accessibilityActions() const noexcept { AccessibilityActionCapabilities a; a.invoke = static_cast<bool>(onClick_); a.expandCollapse = overlayHost_ != nullptr && !items_.empty(); return a; }
+AccessibilityActionStatus SplitButtonNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
 { (void)value; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; if (kind == AccessibilityActionKind::Invoke) { if (!onClick_) return AccessibilityActionStatus::NotSupported; onClick_(); return AccessibilityActionStatus::Succeeded; } if (kind == AccessibilityActionKind::Expand) { if (overlayHost_ == nullptr || items_.empty()) return AccessibilityActionStatus::NotSupported; openMenu(); return open_ ? AccessibilityActionStatus::Succeeded : AccessibilityActionStatus::Failed; } if (kind == AccessibilityActionKind::Collapse) { if (overlayHost_ == nullptr || items_.empty()) return AccessibilityActionStatus::NotSupported; if (open_) closeMenu(); return AccessibilityActionStatus::Succeeded; } return AccessibilityActionStatus::NotSupported; }
-void SplitButton::openMenu()
+void SplitButtonNode::openMenu()
 {
     if (open_ || overlayHost_ == nullptr || items_.empty()) return;
-    auto menu = std::make_unique<Menu>(); Menu* const menuRaw = menu.get(); menu->anchor(bounds()).placement(PopupPlacement::BelowStart);
+    auto menu = std::make_unique<MenuNode>(); MenuNode* const menuRaw = menu.get(); menu->anchor(bounds()).placement(PopupPlacement::BelowStart);
     for (const auto& item : items_) menu->addItem(item);
     menu->onDismiss([this] { closeMenu(); });
     open_ = true; disclosurePressed_ = true;
     setVisualState(ControlVisualState::Pressed, true);
     overlayId_ = overlayHost_->show(std::move(menu)); overlayHost_->focus(menuRaw); markDirty(DirtyFlag::Paint);
 }
-void SplitButton::closeMenu()
+void SplitButtonNode::closeMenu()
 {
     if (!open_) return;
     OverlayHost* const host = overlayHost_;
@@ -545,16 +545,16 @@ void SplitButton::closeMenu()
     markDirty(DirtyFlag::Paint);
 }
 
-Tooltip& Tooltip::text(std::string value) { text_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
-Tooltip& Tooltip::appearance(TooltipAppearance value) noexcept { appearance_ = value; markDirty(DirtyFlag::Paint); return *this; }
-Tooltip& Tooltip::delay(std::chrono::milliseconds value) noexcept { delay_ = std::max(std::chrono::milliseconds{0}, value); return *this; }
-Tooltip& Tooltip::showAfter(std::chrono::milliseconds elapsed) noexcept { elapsed_ = std::max(std::chrono::milliseconds{0}, elapsed); const bool next = elapsed_ >= delay_ && !text_.empty(); if (visible_ != next) { visible_ = next; markDirty(DirtyFlag::Paint); } return *this; }
-Tooltip& Tooltip::hide() noexcept { elapsed_ = std::chrono::milliseconds{0}; if (visible_) { visible_ = false; markDirty(DirtyFlag::Paint); } return *this; }
-const std::string& Tooltip::text() const noexcept { return text_; }
-TooltipAppearance Tooltip::appearance() const noexcept { return appearance_; }
-bool Tooltip::isVisible() const noexcept { return visible_; }
-std::chrono::milliseconds Tooltip::delay() const noexcept { return delay_; }
-SizeF Tooltip::measure(const Constraints& constraints) const
+TooltipNode& TooltipNode::text(std::string value) { text_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
+TooltipNode& TooltipNode::appearance(TooltipAppearance value) noexcept { appearance_ = value; markDirty(DirtyFlag::Paint); return *this; }
+TooltipNode& TooltipNode::delay(std::chrono::milliseconds value) noexcept { delay_ = std::max(std::chrono::milliseconds{0}, value); return *this; }
+TooltipNode& TooltipNode::showAfter(std::chrono::milliseconds elapsed) noexcept { elapsed_ = std::max(std::chrono::milliseconds{0}, elapsed); const bool next = elapsed_ >= delay_ && !text_.empty(); if (visible_ != next) { visible_ = next; markDirty(DirtyFlag::Paint); } return *this; }
+TooltipNode& TooltipNode::hide() noexcept { elapsed_ = std::chrono::milliseconds{0}; if (visible_) { visible_ = false; markDirty(DirtyFlag::Paint); } return *this; }
+const std::string& TooltipNode::text() const noexcept { return text_; }
+TooltipAppearance TooltipNode::appearance() const noexcept { return appearance_; }
+bool TooltipNode::isVisible() const noexcept { return visible_; }
+std::chrono::milliseconds TooltipNode::delay() const noexcept { return delay_; }
+SizeF TooltipNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     return constraints.clamp({
@@ -563,8 +563,8 @@ SizeF Tooltip::measure(const Constraints& constraints) const
                      current.spacing.horizontal.m * 2.0f),
         current.typography.caption1.lineHeight + 12.0f});
 }
-void Tooltip::layout(const RectF& bounds) { Popup::layout(bounds); }
-void Tooltip::paint(PaintContext& context)
+void TooltipNode::layout(const RectF& bounds) { PopupNode::layout(bounds); }
+void TooltipNode::paint(PaintContext& context)
 {
     if (!visible_) {
         clearDirty(DirtyFlag::Paint);
@@ -600,32 +600,32 @@ void Tooltip::paint(PaintContext& context)
         current.typography.caption1.family);
     clearDirty(DirtyFlag::Paint);
 }
-Node* Tooltip::hitTest(PointF point) { (void)point; return nullptr; }
+Node* TooltipNode::hitTest(PointF point) { (void)point; return nullptr; }
 
-IconButton::IconButton(std::string icon, std::string accessibleLabel) : icon_(std::move(icon)), accessibleLabel_(std::move(accessibleLabel)) {}
-IconButton::IconButton(IconName icon, std::string accessibleLabel) : fluentIcon_(icon), accessibleLabel_(std::move(accessibleLabel)) {}
-IconButton& IconButton::icon(std::string value) { setIcon(std::move(value)); return *this; }
-IconButton& IconButton::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-IconButton& IconButton::checked(bool value) { setChecked(value); return *this; }
-IconButton& IconButton::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
-void IconButton::setIcon(std::string value) { icon_ = std::move(value); fluentIcon_.reset(); markDirty(DirtyFlag::Layout); }
-void IconButton::setIcon(IconName value) noexcept { fluentIcon_ = value; icon_.clear(); markDirty(DirtyFlag::Layout); }
-void IconButton::setIconStyle(IconStyle value) noexcept { if (iconStyle_ != value) { iconStyle_ = value; markDirty(DirtyFlag::Paint); } }
-void IconButton::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); }
-void IconButton::setChecked(std::optional<bool> value) noexcept { if (checked_ != value) { checked_ = value; markDirty(DirtyFlag::Paint); } }
-const std::string& IconButton::icon() const noexcept { return icon_; }
-std::optional<IconName> IconButton::fluentIcon() const noexcept { return fluentIcon_; }
-IconStyle IconButton::iconStyle() const noexcept { return iconStyle_; }
-const std::string& IconButton::accessibleLabel() const noexcept { return accessibleLabel_; }
-std::optional<bool> IconButton::checked() const noexcept { return checked_; }
-SizeF IconButton::measure(const Constraints& constraints) const { const float side = std::max(theme().controls.height, 32.0f); return constraints.clamp({side, side}); }
-void IconButton::paint(PaintContext& context)
+IconButtonNode::IconButtonNode(std::string icon, std::string accessibleLabel) : icon_(std::move(icon)), accessibleLabel_(std::move(accessibleLabel)) {}
+IconButtonNode::IconButtonNode(IconName icon, std::string accessibleLabel) : fluentIcon_(icon), accessibleLabel_(std::move(accessibleLabel)) {}
+IconButtonNode& IconButtonNode::icon(std::string value) { setIcon(std::move(value)); return *this; }
+IconButtonNode& IconButtonNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+IconButtonNode& IconButtonNode::checked(bool value) { setChecked(value); return *this; }
+IconButtonNode& IconButtonNode::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
+void IconButtonNode::setIcon(std::string value) { icon_ = std::move(value); fluentIcon_.reset(); markDirty(DirtyFlag::Layout); }
+void IconButtonNode::setIcon(IconName value) noexcept { fluentIcon_ = value; icon_.clear(); markDirty(DirtyFlag::Layout); }
+void IconButtonNode::setIconStyle(IconStyle value) noexcept { if (iconStyle_ != value) { iconStyle_ = value; markDirty(DirtyFlag::Paint); } }
+void IconButtonNode::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); }
+void IconButtonNode::setChecked(std::optional<bool> value) noexcept { if (checked_ != value) { checked_ = value; markDirty(DirtyFlag::Paint); } }
+const std::string& IconButtonNode::icon() const noexcept { return icon_; }
+std::optional<IconName> IconButtonNode::fluentIcon() const noexcept { return fluentIcon_; }
+IconStyle IconButtonNode::iconStyle() const noexcept { return iconStyle_; }
+const std::string& IconButtonNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+std::optional<bool> IconButtonNode::checked() const noexcept { return checked_; }
+SizeF IconButtonNode::measure(const Constraints& constraints) const { const float side = std::max(theme().controls.height, 32.0f); return constraints.clamp({side, side}); }
+void IconButtonNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const bool enabled = isEnabled();
     const bool selected = checked_.value_or(false);
 
-    // IconButton is the icon-only form of a medium Subtle Button. Reusing the
+    // IconButtonNode is the icon-only form of a medium Subtle ButtonNode. Reusing the
     // same resolver preserves rest/hover/pressed/selected/disabled/focus
     // semantics instead of maintaining a second state table.
     const auto visual = button_visuals::paintButtonSurface(
@@ -645,25 +645,25 @@ void IconButton::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-bool IconButton::onPointerEvent(const PointerEvent& event)
+bool IconButtonNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     switch (event.action) { case PointerAction::Enter: setVisualState(ControlVisualState::Hovered, true); return true; case PointerAction::Leave: setVisualState(ControlVisualState::Hovered, false); return true; case PointerAction::Down: if (event.button == MouseButton::Left) { setVisualState(ControlVisualState::Pressed, true); setVisualState(ControlVisualState::Focused, true); return true; } return false; case PointerAction::Up: if (event.button == MouseButton::Left) { const bool invoke = (visualStates() & toMask(ControlVisualState::Pressed)) != 0 && bounds().contains(event.position); setVisualState(ControlVisualState::Pressed, false); if (invoke && onClick_) onClick_(); return true; } return false; case PointerAction::Cancel: setVisualState(ControlVisualState::Pressed, false); return true; default: return false; }
 }
-bool IconButton::onKeyEvent(const KeyEvent& event)
+bool IconButtonNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || event.action != KeyAction::Down || (event.keyCode != 13 && event.keyCode != 32 && event.keyCode != 257)) return false;
     if (onClick_) onClick_();
     return true;
 }
-AccessibilityActionCapabilities IconButton::accessibilityActions() const noexcept
+AccessibilityActionCapabilities IconButtonNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.toggle = checked_.has_value();
     actions.invoke = !checked_.has_value() && static_cast<bool>(onClick_);
     return actions;
 }
-AccessibilityActionStatus IconButton::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
+AccessibilityActionStatus IconButtonNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
 {
     (void)value;
     if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
@@ -679,10 +679,10 @@ AccessibilityActionStatus IconButton::performAccessibilityAction(AccessibilityAc
     return AccessibilityActionStatus::NotSupported;
 }
 
-SearchField::SearchField(std::string placeholder) : TextInput(std::move(placeholder)) {}
-SearchField& SearchField::query(std::string value) { TextInput::text(std::move(value)); return *this; }
-SearchField& SearchField::onQueryChange(ChangeHandler handler) { TextInput::onChange(std::move(handler)); return *this; }
-const std::string& SearchField::query() const noexcept { return controller().text(); }
-bool SearchField::onKeyEvent(const KeyEvent& event) { if (event.action == KeyAction::Down && (event.keyCode == 27 || event.keyCode == 256) && !query().empty()) { TextInput::text({}); return true; } return TextInput::onKeyEvent(event); }
+SearchFieldNode::SearchFieldNode(std::string placeholder) : TextFieldNode(std::move(placeholder)) {}
+SearchFieldNode& SearchFieldNode::query(std::string value) { TextFieldNode::text(std::move(value)); return *this; }
+SearchFieldNode& SearchFieldNode::onQueryChange(ChangeHandler handler) { TextFieldNode::onChange(std::move(handler)); return *this; }
+const std::string& SearchFieldNode::query() const noexcept { return controller().text(); }
+bool SearchFieldNode::onKeyEvent(const KeyEvent& event) { if (event.action == KeyAction::Down && (event.keyCode == 27 || event.keyCode == 256) && !query().empty()) { TextFieldNode::text({}); return true; } return TextFieldNode::onKeyEvent(event); }
 
 } // namespace wui

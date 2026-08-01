@@ -32,7 +32,7 @@
 
 #include "wui/paint_context.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/whatscanvas_text.h"
 
 #include "todo_model.h"
@@ -97,7 +97,7 @@ void collectTodoNodes(wui::Node* node, std::vector<NodeT*>& result)
 
 // Defined below with the shared Todo tree helpers.  The native smoke uses it
 // to exercise a below-fold task row through the real document viewport.
-wui::ScrollView* todoScrollView(wui::Node* node);
+wui::ScrollViewNode* todoScrollView(wui::Node* node);
 
 // A native smoke test must never appear healthy simply because the host failed
 // to deliver a frame.  This watchdog exists only for --perf-smoke: ordinary
@@ -192,9 +192,9 @@ void installTodoPerformanceSmoke(wui::UiWindow& window)
         sampleAction(sample->radio);
 
         if (!sample->composer.dispatched && progress >= 0.20f) {
-            std::vector<wui::TextInput*> fields;
+            std::vector<wui::TextFieldNode*> fields;
             collectTodoNodes(window.root(), fields);
-            const auto composer = std::find_if(fields.begin(), fields.end(), [](const wui::TextInput* field) {
+            const auto composer = std::find_if(fields.begin(), fields.end(), [](const wui::TextFieldNode* field) {
                 return field->placeholder() == "Add a task for today";
             });
             if (composer != fields.end() && (*composer)->bounds().width > 0.0f) {
@@ -218,7 +218,7 @@ void installTodoPerformanceSmoke(wui::UiWindow& window)
         }
 
         if (!sample->checkbox.dispatched && sample->composer.dispatched && progress >= 0.48f) {
-            std::vector<wui::Checkbox*> checkboxes;
+            std::vector<wui::CheckboxNode*> checkboxes;
             collectTodoNodes(window.root(), checkboxes);
             // Task rows live inside the document ScrollView. Move to its end
             // and translate the row's document bounds back into viewport
@@ -228,7 +228,7 @@ void installTodoPerformanceSmoke(wui::UiWindow& window)
             auto* scroll = todoScrollView(window.root());
             if (scroll != nullptr) scroll->setScrollOffset(scroll->maxScrollOffset());
             const float scrollOffset = scroll != nullptr ? scroll->scrollOffset() : 0.0f;
-            const auto checkbox = std::find_if(checkboxes.rbegin(), checkboxes.rend(), [scroll, scrollOffset](const wui::Checkbox* node) {
+            const auto checkbox = std::find_if(checkboxes.rbegin(), checkboxes.rend(), [scroll, scrollOffset](const wui::CheckboxNode* node) {
                 const auto& bounds = node->bounds();
                 const wui::PointF viewportPoint{bounds.x + bounds.width * 0.5f,
                                                 bounds.y + bounds.height * 0.5f - scrollOffset};
@@ -250,7 +250,7 @@ void installTodoPerformanceSmoke(wui::UiWindow& window)
         }
 
         if (!sample->radio.dispatched && progress >= 0.70f) {
-            std::vector<wui::Radio*> radios;
+            std::vector<wui::RadioNode*> radios;
             collectTodoNodes(window.root(), radios);
             if (auto* scroll = todoScrollView(window.root()); scroll != nullptr) {
                 scroll->setScrollOffset(0.0f);
@@ -338,10 +338,10 @@ void synchronizeTodoPresentation(const std::vector<Todo>& all,
 // sample lets the deterministic Software walkthrough capture the bottom of a
 // compact page, which proves task rows remain reachable rather than merely
 // painted below the 640x560 viewport.
-wui::ScrollView* todoScrollView(wui::Node* node)
+wui::ScrollViewNode* todoScrollView(wui::Node* node)
 {
     if (node == nullptr) return nullptr;
-    if (auto* scroll = dynamic_cast<wui::ScrollView*>(node)) return scroll;
+    if (auto* scroll = dynamic_cast<wui::ScrollViewNode*>(node)) return scroll;
     for (const auto& child : node->children()) {
         if (auto* scroll = todoScrollView(child.get())) return scroll;
     }
@@ -354,7 +354,7 @@ void showConfirmation(wui::UiWindow& window,
                       std::string detail,
                       std::function<void()> confirm)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& type = wui::theme().typography;
     // The dialog is deliberately built at the point of invocation so each
     // request owns its action and the window can restore focus to the exact
@@ -367,15 +367,15 @@ void showConfirmation(wui::UiWindow& window,
                     Text(std::move(detail)).wrap().style(type.windows.body).color({97, 97, 97, 255})),
                 Row().align(wui::Alignment::Center).gap(8.0f).children(
                     Spacer().flex(1.0f),
-                    Button("Cancel").accessibilityId("todo.confirm.cancel").variant(wui::ButtonVariant::Ghost)
+                    Button("Cancel").accessibilityId("todo.confirm.cancel").appearance(wui::ButtonAppearance::Outline)
                         .onClick([&window] { (void)window.dismissTopDialog(); }),
-                    Button("Remove").accessibilityId("todo.confirm.remove").variant(wui::ButtonVariant::Danger)
+                    Button("Remove").accessibilityId("todo.confirm.remove").appearance(wui::ButtonAppearance::Danger)
                         .onClick([&window, confirm = std::move(confirm)]() mutable {
                             // Restore focus and detach the modal before the
                             // state mutation can remove its invoking row.
                             (void)window.dismissTopDialog();
                             confirm();
-                        }))))).intoDialog();
+                        }))))).build();
     (void)window.showDialog(std::move(dialog));
 }
 
@@ -390,25 +390,25 @@ void showEditDialog(wui::UiWindow& window,
                         std::string, bool, std::optional<std::string>)> save,
                     std::function<void()> cancel)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& type = wui::theme().typography;
-    auto editor = std::make_unique<wui::TextInput>("Task title");
+    auto editor = std::make_unique<wui::TextFieldNode>("Task title");
     auto* editorRaw = editor.get();
     editorRaw->setAccessibilityId("todo.edit.title");
     editorRaw->text(std::move(initialTitle));
     editorRaw->setFlex(1.0f);
 
-    auto important = std::make_unique<wui::Checkbox>("Important", initialImportant);
+    auto important = std::make_unique<wui::CheckboxNode>("Important", initialImportant);
     auto* importantRaw = important.get();
     importantRaw->setAccessibilityId("todo.edit.important");
 
-    auto dueDate = std::make_unique<wui::TextInput>("YYYY-MM-DD (optional)");
+    auto dueDate = std::make_unique<wui::TextFieldNode>("YYYY-MM-DD (optional)");
     auto* dueDateRaw = dueDate.get();
     dueDateRaw->setAccessibilityId("todo.edit.due-date");
     dueDateRaw->text(initialDueDate.value_or(""));
     dueDateRaw->setFlex(1.0f);
 
-    auto error = std::make_unique<wui::Text>();
+    auto error = std::make_unique<wui::TextNode>();
     auto* errorRaw = error.get();
     errorRaw->setTextStyle(type.windows.body);
     errorRaw->setColor({196, 43, 28, 255});
@@ -456,9 +456,9 @@ void showEditDialog(wui::UiWindow& window,
                 std::move(error),
                 Row().align(wui::Alignment::Center).gap(8.0f).children(
                     Spacer().flex(1.0f),
-                    Button("Cancel").accessibilityId("todo.edit.cancel").variant(wui::ButtonVariant::Ghost)
+                    Button("Cancel").accessibilityId("todo.edit.cancel").appearance(wui::ButtonAppearance::Outline)
                         .onClick([&window] { (void)window.dismissTopDialog(); }),
-                    Button("Save").accessibilityId("todo.edit.save").variant(wui::ButtonVariant::Primary).onClick(std::move(submit)))))).intoDialog();
+                    Button("Save").accessibilityId("todo.edit.save").appearance(wui::ButtonAppearance::Primary).onClick(std::move(submit)))))).build();
     (void)window.showDialog(std::move(dialog));
     // Start the modal in its only editable field so the Windows text session
     // and IME candidate placement are immediately associated with the task.
@@ -496,7 +496,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                                        ConfirmationRequest requestConfirmation,
                                        ImportantRequest setImportant = {})
 {
-    using namespace wui::ui;
+    using namespace wui;
     if (!setImportant) setImportant = [](int, bool) {};
     auto summary = [](const std::vector<Todo>& items) {
         int done = 0;
@@ -520,7 +520,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
     // The composer is deliberately a real TextInput, not a decorative Text
     // node. Its raw pointer is safe for the lifetime of this returned tree and
     // gives the Add button access to the live IME-backed model.
-    auto composer = std::make_unique<wui::TextInput>("Add a task for today");
+    auto composer = std::make_unique<wui::TextFieldNode>("Add a task for today");
     auto* composerRaw = composer.get();
     composerRaw->setAccessibleLabel("Add a task");
     composerRaw->setAccessibilityId("todo.composer");
@@ -564,7 +564,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
             Box().background(surface).radius(12.0f).padding({12.0f, 10.0f, 10.0f, 10.0f})
                 .children(Row().align(wui::Alignment::Center).gap(10.0f).children(
                     std::move(composerNode),
-                    Button("Add").accessibilityId("todo.add").variant(wui::ButtonVariant::Primary).onClick(submit))),
+                    Button("Add").accessibilityId("todo.add").appearance(wui::ButtonAppearance::Primary).onClick(submit))),
             // Search stays on its own rail above the compact view selector.
             // This prevents the filter choice from competing with the composer
             // at portrait widths, while keeping both controls within one tab
@@ -594,7 +594,7 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                     .children(Row().align(wui::Alignment::Center).gap(8.0f).children(
                         Text().bind(undoMessage).style(body).color(blue),
                         Spacer().flex(1.0f),
-                        Button("Undo").accessibilityId("todo.undo").variant(wui::ButtonVariant::Ghost).onClick(undo)));
+                        Button("Undo").accessibilityId("todo.undo").appearance(wui::ButtonAppearance::Outline).onClick(undo)));
             }),
             Card().appearance(wui::CardAppearance::FilledAlternative)
                 .children(Row().align(wui::Alignment::Center).gap(12.0f).children(
@@ -743,7 +743,8 @@ std::unique_ptr<wui::Node> buildTodoUi(wui::State<std::vector<Todo>>& todos,
                     }).gap(8.0f).align(wui::Alignment::Stretch));
             }),
             Spacer(0.0f, 0.0f)))),
-            Spacer().flex(1.0f)));
+            Spacer().flex(1.0f)))
+        .build();
 }
 
 } // namespace

@@ -12,17 +12,19 @@
 4. `ADR-003-navigation-window-and-platform-host.md`
 5. `ADR-004-theme-and-authoring.md`
 6. `ADR-005-declarative-builder-api.md`
-7. `REACTIVITY_AND_STRUCTURE.md`
-8. `LAYOUT_MODEL.md`
-9. `TEXT_INPUT_AND_IME.md`
-10. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
-11. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
-12. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
-13. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
-14. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
-15. `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`（集合控件 viewport、回收与懒加载架构）
-16. `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`（集合虚拟化分步实现、测试与最终基线）
-17. `COLLECTION_VIRTUALIZATION_BASELINE.md`（集合虚拟化最终验证结果与测试基线）
+7. `ADR-006-declarative-authoring-and-node-boundary.md`
+8. `DECLARATIVE_API_INVENTORY.md`
+9. `REACTIVITY_AND_STRUCTURE.md`
+10. `LAYOUT_MODEL.md`
+11. `TEXT_INPUT_AND_IME.md`
+12. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
+13. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
+14. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
+15. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
+16. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
+17. `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`（集合控件 viewport、回收与懒加载架构）
+18. `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`（集合虚拟化分步实现、测试与最终基线）
+19. `COLLECTION_VIRTUALIZATION_BASELINE.md`（集合虚拟化最终验证结果与测试基线）
 
 ## 文档职责
 
@@ -32,6 +34,8 @@
 - `ADR-003-navigation-window-and-platform-host.md`：说明多页面、多窗口、浮层和平台壳的关系与边界。
 - `ADR-004-theme-and-authoring.md`：说明 UI 编写方式、样式体系和复合控件策略。
 - `ADR-005-declarative-builder-api.md`：说明声明式构建器编写 API（move-only 构建器 + CRTP + 变参 children），以及为何保留 `unique_ptr` 而不改用句柄。
+- `ADR-006-declarative-authoring-and-node-boundary.md`：定义声明式 Builder、运行时 `*Node`、单一 `wui` 作者命名空间、Builder 能力分层、所有权入口、组件边界和迁移验收标准。
+- `DECLARATIVE_API_INVENTORY.md`：记录全部 Builder/Node 映射、组合能力、公共所有权契约和当前自动门禁范围。
 - `REACTIVITY_AND_STRUCTURE.md`：说明响应式绑定（`Text().bind`、节点 teardown 生命周期）、结构控件 `If`/`ForEach`、可插拔文本测量与新控件。
 - `LAYOUT_MODEL.md`：细化约束布局模型、容器语义、逻辑单位与滚动边界。
 - `TEXT_INPUT_AND_IME.md`：细化文本输入、组合输入、光标、选区和平台 IME 会话边界。

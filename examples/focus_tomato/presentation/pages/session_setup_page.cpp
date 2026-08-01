@@ -2,7 +2,7 @@
 
 #include "../components/common_components.h"
 #include "../focus_style.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 #include <algorithm>
 #include <utility>
@@ -13,7 +13,7 @@ namespace {
 std::unique_ptr<wui::Node> buildSelectedTaskCard(
     std::string title, std::string progress, float width)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .background(style::surface)
         .radius(16.0f)
@@ -33,13 +33,13 @@ std::unique_ptr<wui::Node> buildSelectedTaskCard(
                         .color(style::textSecondary)
                 )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildSessionConfiguration(
     std::string configuration, float width)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .background(style::surface)
         .radius(16.0f)
@@ -51,7 +51,7 @@ std::unique_ptr<wui::Node> buildSessionConfiguration(
                 .style(style::text(12.0f, 500, 18.0f))
                 .color(style::textSecondary)
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildSetupContent(
@@ -62,7 +62,7 @@ std::unique_ptr<wui::Node> buildSetupContent(
     std::string configuration,
     SessionSetupPageActions actions)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Column()
         .gap(18.0f)
         .align(wui::Alignment::Center)
@@ -81,7 +81,7 @@ std::unique_ptr<wui::Node> buildSetupContent(
                 .style(style::text(11.0f, 400, 16.0f))
                 .color(style::textMuted)
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -93,7 +93,7 @@ std::unique_ptr<wui::Node> buildSessionSetupPage(
     float pageHeight,
     SessionSetupPageActions actions)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const TaskRecord* task = viewModel.selectedTask();
     const std::string title = task ? task->title : "选择一个任务";
     const int completed = task ? task->completedPomodoros : 0;
@@ -149,7 +149,7 @@ std::unique_ptr<wui::Node> buildSessionSetupPage(
                         )
                 )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::focus_tomato::presentation

@@ -35,7 +35,7 @@ bool isColor(const std::vector<unsigned char>& pixels, int x, int y, wui::Color 
         && pixels[offset + 3] == color.a;
 }
 
-std::vector<unsigned char> render(wui::TextInput& input,
+std::vector<unsigned char> render(wui::TextFieldNode& input,
                                   const char* artifact = nullptr)
 {
     auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software, kWidth, kHeight);
@@ -109,7 +109,7 @@ bool isTransparentInRect(const std::vector<unsigned char>& pixels, int left, int
 
 void testCompositionUsesUnderlineAndClearsOnEnd()
 {
-    wui::TextInput input;
+    wui::TextFieldNode input;
     input.text("abcd");
     input.layout({4.0f, 4.0f, 144.0f, 32.0f});
     input.setMotionEnabled(false);
@@ -155,7 +155,7 @@ void testCompositionUsesUnderlineAndClearsOnEnd()
 
 void testLongTextClipsAndKeepsCaretVisible()
 {
-    wui::TextInput input;
+    wui::TextFieldNode input;
     input.text("A long task title that must stay inside this compact field");
     input.layout({4.0f, 4.0f, 72.0f, 32.0f});
     input.setMotionEnabled(false);
@@ -179,7 +179,7 @@ void testLongTextClipsAndKeepsCaretVisible()
 void testCaretBlinksAndEditingRestartsVisiblePhase()
 {
     wui::Ticker::instance().cancelAll();
-    wui::TextInput input;
+    wui::TextFieldNode input;
     input.text("Task");
     input.layout({4.0f, 4.0f, 144.0f, 32.0f});
     input.setMotionEnabled(false);

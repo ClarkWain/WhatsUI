@@ -1,7 +1,7 @@
 #include "common_components.h"
 
 #include "../focus_style.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::focus_tomato::presentation {
 
@@ -13,25 +13,25 @@ std::unique_ptr<wui::Node> buildFixedImage(
     bool circular,
     bool decorative)
 {
-    auto image = std::make_unique<wui::Image>(source);
+    auto image = std::make_unique<wui::ImageNode>(source);
     image->setFit(wui::ImageFit::Cover);
     image->setBlock(true);
     image->setShape(circular ? wui::ImageShape::Circular
                              : wui::ImageShape::Square);
     image->setAlt(std::move(alt));
     image->setDecorative(decorative);
-    return wui::ui::Box()
+    return wui::Box()
         .width(width)
         .height(height)
         .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
         .children(std::move(image))
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildWindowBar(
     float width, std::string title, const FocusAssets& assets)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .background(style::surface)
         .width(width)
@@ -53,13 +53,13 @@ std::unique_ptr<wui::Node> buildWindowBar(
                         .color(style::textSecondary)
                 )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildPill(
     std::string label, bool selected, std::function<void()> onClick)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const std::string accessibleLabel = "筛选：" + label;
     auto pill = Box()
         .background(selected ? style::accent : style::surface)
@@ -79,15 +79,15 @@ std::unique_ptr<wui::Node> buildPill(
             .accessibleRole(wui::AccessibilityRole::Button)
             .accessibleLabel(accessibleLabel)
             .onClick(std::move(onClick))
-            .intoNode();
+            .build();
     }
-    return std::move(pill).intoNode();
+    return std::move(pill).build();
 }
 
 std::unique_ptr<wui::Node> buildPrimaryTextButton(
     std::string label, std::function<void()> onClick)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const std::string accessibleLabel = label;
     return Box()
         .background(style::actionPrimary)
@@ -104,13 +104,13 @@ std::unique_ptr<wui::Node> buildPrimaryTextButton(
                 .style(style::text(13.0f, 500, 20.0f))
                 .color(style::surface)
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildSecondaryTextButton(
     std::string label, std::function<void()> onClick)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const std::string accessibleLabel = label;
     return Box()
         .background(style::surface)
@@ -127,7 +127,7 @@ std::unique_ptr<wui::Node> buildSecondaryTextButton(
                 .style(style::text(13.0f, 500, 20.0f))
                 .color(style::textPrimary)
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildMetricCard(
@@ -136,7 +136,7 @@ std::unique_ptr<wui::Node> buildMetricCard(
     std::string value,
     std::string unit)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .background(style::surface)
         .radius(16.0f)
@@ -159,7 +159,7 @@ std::unique_ptr<wui::Node> buildMetricCard(
                         .color(style::textMuted)
                 )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildIconControl(
@@ -170,7 +170,7 @@ std::unique_ptr<wui::Node> buildIconControl(
     std::string accessibleLabel,
     std::function<void()> onClick)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .background(primary ? style::actionPrimary : style::surface)
         .hoverBackground(primary ? style::actionPrimaryHover
@@ -184,7 +184,7 @@ std::unique_ptr<wui::Node> buildIconControl(
         .accessibleLabel(std::move(accessibleLabel))
         .onClick(std::move(onClick))
         .children(buildFixedImage(icon, iconSize, iconSize, {}, false, true))
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildGlyphControl(
@@ -195,7 +195,7 @@ std::unique_ptr<wui::Node> buildGlyphControl(
     std::string accessibleLabel,
     std::function<void()> onClick)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Box()
         .background(primary ? style::actionPrimary : style::surface)
         .hoverBackground(primary ? style::actionPrimaryHover
@@ -213,7 +213,7 @@ std::unique_ptr<wui::Node> buildGlyphControl(
                 .style(style::text(glyphSize, 700, glyphSize))
                 .color(primary ? style::surface : style::accent)
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::focus_tomato::presentation

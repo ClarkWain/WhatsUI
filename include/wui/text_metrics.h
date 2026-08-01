@@ -1,7 +1,7 @@
 #pragma once
 
 // Pluggable text measurement (ADR-002 §渲染接入). The core library measures
-// text through this interface so `Text` layout can use real shaped metrics when
+// text through this interface so `TextNode` layout can use real shaped metrics when
 // a backend (e.g. WhatsCanvas) is available, and a heuristic otherwise.
 
 #include <cstddef>
@@ -24,7 +24,7 @@ struct TextExtents {
 // A resolved visual line. `text` is always valid UTF-8 when supplied by a
 // backend text engine, even when the original input contained malformed data.
 // `sourceStart` and `sourceLength` are UTF-8 byte offsets into the submitted
-// string; byte offsets deliberately match the TextInput protocol until its
+// string; byte offsets deliberately match the TextFieldNode protocol until its
 // grapheme-aware controller becomes public API.
 struct TextLayoutLine {
     std::string text;
@@ -53,7 +53,7 @@ public:
 
     // Family-aware measurement is additive: older hosts which only implement
     // the overloads above retain their existing behaviour, while native hosts
-    // can keep Text layout in lockstep with the exact family sent to paint.
+    // can keep TextNode layout in lockstep with the exact family sent to paint.
     [[nodiscard]] virtual TextExtents measureText(const std::string& text, float fontSize,
                                                   int fontWeight,
                                                   std::string_view fontFamily) const
@@ -64,13 +64,13 @@ public:
 };
 
 // Optional extension for a renderer that owns Unicode line breaking and text
-// shaping. `Text` discovers this interface at runtime, so the headless core
+// shaping. `TextNode` discovers this interface at runtime, so the headless core
 // remains dependency-free while a WhatsCanvas host uses one consistent engine
 // for measuring, line breaking, fallback selection and painting.
 //
 // `availableWidth` and `lineHeight` use WhatsUI logical units. `maxLines == 0`
-// means unlimited. The method is called only for word-wrapped Text nodes;
-// explicit newline and no-wrap behaviour continues to be handled by Text.
+// means unlimited. The method is called only for word-wrapped TextNode nodes;
+// explicit newline and no-wrap behaviour continues to be handled by TextNode.
 class TextLayoutProvider : public TextMeasurer {
 public:
     ~TextLayoutProvider() override = default;

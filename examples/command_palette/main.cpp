@@ -22,7 +22,7 @@
 #include "wui/paint_context.h"
 #include "wui/scheduler.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/whatscanvas_text.h"
 
 #ifdef WUI_COMMAND_PALETTE_INTERACTIVE
@@ -99,9 +99,9 @@ std::string resultSummary(const std::vector<PaletteCommand>& results)
 std::unique_ptr<wui::Node> buildPaletteContent(PaletteModel& model,
                                                std::function<void(const PaletteCommand&)> execute,
                                                std::function<void()> close,
-                                               wui::TextInput** inputOut = nullptr)
+                                               wui::TextFieldNode** inputOut = nullptr)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& current = wui::theme();
     auto executeFirst = [&model, execute] {
         if (!model.results.get().empty()) {
@@ -114,7 +114,7 @@ std::unique_ptr<wui::Node> buildPaletteContent(PaletteModel& model,
         .onSubmit(executeFirst)
         .onCancel(close);
     if (inputOut != nullptr) {
-        *inputOut = search.get();
+        *inputOut = search.node();
     }
 
     return Box().width(560.0f).padding({24.0f, 20.0f, 24.0f, 22.0f}).children(
@@ -138,7 +138,7 @@ std::unique_ptr<wui::Node> buildPaletteContent(PaletteModel& model,
                                     Column().gap(1.0f).flex(1.0f).children(
                                         Text(command.title).size(14.0f).lineHeight(20.0f).color(wui::theme().colors.text),
                                         Text(command.detail).size(11.0f).lineHeight(16.0f).color(wui::theme().colors.textMuted)),
-                                    Button(command.shortcut).variant(wui::ButtonVariant::Ghost)
+                                    Button(command.shortcut).appearance(wui::ButtonAppearance::Outline)
                                         .onClick([execute, command] { execute(command); })));
                     }).gap(4.0f).align(wui::Alignment::Stretch));
             }),
@@ -151,12 +151,13 @@ std::unique_ptr<wui::Node> buildPaletteContent(PaletteModel& model,
                         Text("No matching commands").size(14.0f).lineHeight(20.0f).color(wui::theme().colors.text),
                         Text("Try task, focus, or settings.").size(11.0f).lineHeight(16.0f).color(wui::theme().colors.textMuted)));
             }),
-            Text("Tip: use concise words such as focus, settings, or task.").size(11.0f).lineHeight(16.0f).color(current.colors.textMuted)));
+            Text("Tip: use concise words such as focus, settings, or task.").size(11.0f).lineHeight(16.0f).color(current.colors.textMuted)))
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildLanding(PaletteModel& model, std::function<void()> open)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& current = wui::theme();
     auto actionCard = Box().background(current.colors.surface).radius(current.radius.lg).padding(24.0f).children(
         Column().gap(14.0f).align(wui::Alignment::Stretch).children(
@@ -164,7 +165,7 @@ std::unique_ptr<wui::Node> buildLanding(PaletteModel& model, std::function<void(
             Text().bind(model.lastAction, [](const std::string& value) { return "Last: " + value; })
                 .size(12.0f).lineHeight(18.0f).color(current.colors.textMuted),
             Row().align(wui::Alignment::Center).gap(12.0f).children(
-                Button("Open command palette").variant(wui::ButtonVariant::Primary).onClick(open),
+                Button("Open command palette").appearance(wui::ButtonAppearance::Primary).onClick(open),
                 Text("Ctrl+K is the familiar host shortcut.").size(11.0f).lineHeight(16.0f).color(current.colors.textMuted))));
     auto content = Column().gap(20.0f).align(wui::Alignment::Stretch).children(
         Text("Workspace").size(11.0f).lineHeight(16.0f).color(current.colors.accent),
@@ -174,13 +175,14 @@ std::unique_ptr<wui::Node> buildLanding(PaletteModel& model, std::function<void(
         std::move(actionCard));
     auto rail = Box().width(720.0f).padding({48.0f, 40.0f, 48.0f, 40.0f}).children(std::move(content));
     return Box().background(current.colors.background).children(
-        Row().align(wui::Alignment::Stretch).children(Spacer().flex(1.0f), std::move(rail), Spacer().flex(1.0f)));
+        Row().align(wui::Alignment::Stretch).children(Spacer().flex(1.0f), std::move(rail), Spacer().flex(1.0f)))
+        .build();
 }
 
 #ifdef WUI_COMMAND_PALETTE_INTERACTIVE
 void showPalette(wui::UiWindow& window, PaletteModel& model)
 {
-    using namespace wui::ui;
+    using namespace wui;
     filter(model, "");
     auto dialog = Dialog().maxWidth(608.0f).dismissOnBackdrop().content(
         buildPaletteContent(model,
@@ -189,14 +191,14 @@ void showPalette(wui::UiWindow& window, PaletteModel& model)
                 (void)window.dismissTopDialog();
             },
             [&window] { (void)window.dismissTopDialog(); }))
-        .intoDialog();
+        .build();
     const auto id = window.showDialog(std::move(dialog));
     (void)id;
     // Dialog owns the keyboard domain. Focusing the first control immediately
     // gives IME and ordinary typing to the search field.
     auto* dialogRoot = window.overlayHost().top()->content.get();
-    auto findInput = [](const auto& self, wui::Node* node) -> wui::TextInput* {
-        if (auto* input = dynamic_cast<wui::TextInput*>(node)) return input;
+    auto findInput = [](const auto& self, wui::Node* node) -> wui::TextFieldNode* {
+        if (auto* input = dynamic_cast<wui::TextFieldNode*>(node)) return input;
         for (const auto& child : node->children()) if (auto* result = self(self, child.get())) return result;
         return nullptr;
     };
@@ -245,9 +247,9 @@ int main(int argc, char** argv)
     constexpr float scale = 2.0f;
     PaletteModel model;
     filter(model, "");
-    wui::TextInput* searchInput = nullptr;
-    auto root = wui::ui::Dialog().maxWidth(608.0f).content(buildPaletteContent(
-        model, [&model](const PaletteCommand& command) { model.lastAction.set(command.title); }, [] {}, &searchInput)).intoNode();
+    wui::TextFieldNode* searchInput = nullptr;
+    auto root = wui::Dialog().maxWidth(608.0f).content(buildPaletteContent(
+        model, [&model](const PaletteCommand& command) { model.lastAction.set(command.title); }, [] {}, &searchInput)).build();
     auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software, static_cast<int>(width * scale), static_cast<int>(height * scale));
     if (!canvas || !canvas->initializeContext()) throw std::runtime_error("failed to create software canvas");
     render(*root, *canvas, scale);

@@ -4,7 +4,7 @@
 
 #include "wui/drawer.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::gallery::view::components {
 namespace {
@@ -32,9 +32,9 @@ void showCompactNavigationDrawer(const NavigationRailConfig& config,
                                  CompactNavigationHandler onNavigate,
                                  wui::UiWindow& window)
 {
-    using namespace wui::ui;
+    using namespace wui;
 
-    auto drawer = std::make_unique<wui::Drawer>("WhatsUI", "Component Gallery");
+    auto drawer = std::make_unique<wui::DrawerNode>("WhatsUI", "Component Gallery");
     drawer->type(wui::DrawerType::Overlay)
         .position(wui::DrawerPosition::Start)
         .width(280.0f)
@@ -43,7 +43,7 @@ void showCompactNavigationDrawer(const NavigationRailConfig& config,
         .closeOnEscape(true);
     auto* const drawerNode = drawer.get();
 
-    auto destinations = std::make_unique<wui::Column>();
+    auto destinations = std::make_unique<wui::ColumnNode>();
     destinations->setGap(4.0f);
     destinations->setAlign(wui::Alignment::Stretch);
     for (const auto& item : config.items) {
@@ -59,7 +59,7 @@ void showCompactNavigationDrawer(const NavigationRailConfig& config,
                 if (onNavigate) onNavigate(route);
                 drawerNode->dismiss();
             });
-        destinations->appendChild(std::move(button).intoNode());
+        destinations->appendChild(std::move(button).build());
     }
     drawer->content(std::move(destinations));
     (void)window.overlayHost().show(std::move(drawer));
@@ -72,7 +72,7 @@ std::unique_ptr<wui::Node> buildCompactNavigationBar(
     CompactNavigationHandler onNavigate,
     wui::UiWindow& window)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& colors = wui::theme().colors;
     const auto selected = selectedLabel(config);
 
@@ -97,7 +97,7 @@ std::unique_ptr<wui::Node> buildCompactNavigationBar(
                         .size(16.0f)
                         .weight(600)
                         .color(colors.text)))
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::components

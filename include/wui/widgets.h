@@ -14,14 +14,14 @@
 namespace wui {
 
 struct TextStyleToken;
-class TextInput;
+class TextFieldNode;
 
 enum class LabelSize { Small, Medium, Large };
 
-class Label : public Node {
+class LabelNode : public Node {
 public:
-    explicit Label(std::string text = {});
-    Label& text(std::string text);
+    explicit LabelNode(std::string text = {});
+    LabelNode& text(std::string text);
     [[nodiscard]] const std::string& text() const noexcept;
     void setText(std::string text);
     void setSize(LabelSize size) noexcept;
@@ -30,8 +30,8 @@ public:
     [[nodiscard]] bool isRequired() const noexcept;
     // Associates the visual label and accessible name with one input. The
     // caller keeps both nodes alive in the same UI tree.
-    void setForControl(TextInput* control) noexcept;
-    [[nodiscard]] TextInput* forControl() const noexcept;
+    void setForControl(TextFieldNode* control) noexcept;
+    [[nodiscard]] TextFieldNode* forControl() const noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
@@ -41,7 +41,7 @@ private:
     std::string text_;
     LabelSize size_{LabelSize::Medium};
     bool required_{false};
-    TextInput* control_{nullptr};
+    TextFieldNode* control_{nullptr};
 };
 
 namespace detail {
@@ -50,7 +50,7 @@ class ImageTexture;
 }
 
 // Immutable, interned RGBA image data. Constructing equivalent sources reuses
-// the same backing resource, so declaratively rebuilt Image nodes do not keep
+// the same backing resource, so declaratively rebuilt ImageNode nodes do not keep
 // duplicate pixel buffers or backend textures alive.
 class ImageSource {
 public:
@@ -67,10 +67,10 @@ private:
     explicit ImageSource(std::shared_ptr<detail::ImageResource> resource) noexcept;
     std::shared_ptr<detail::ImageResource> resource_;
 
-    friend class Image;
+    friend class ImageNode;
 };
 
-// Text wraps only at explicit line breaks unless Word wrapping is enabled.
+// TextNode wraps only at explicit line breaks unless Word wrapping is enabled.
 // When a maximum line count drops content, Ellipsis appends a fitted "..." to
 // the final visible line (where the available width permits it).
 enum class TextWrap {
@@ -89,12 +89,12 @@ enum class TextOverflow {
 enum class TextRole { Span, Paragraph, Heading, Code };
 enum class TextAlign { Start, Center, End };
 
-class Text : public Node {
+class TextNode : public Node {
 public:
-    explicit Text(std::string value = {});
+    explicit TextNode(std::string value = {});
 
     [[nodiscard]] const std::string& value() const noexcept;
-    Text& value(std::string value);
+    TextNode& value(std::string value);
     void setValue(std::string value);
 
     [[nodiscard]] float fontSize() const noexcept;
@@ -126,12 +126,12 @@ public:
     void setOverflow(TextOverflow overflow) noexcept;
     // Block text can use the finite layout width directly instead of
     // resolving an expensive intrinsic width. This is particularly useful
-    // for large documents hosted by a vertical ScrollView.
+    // for large documents hosted by a vertical ScrollViewNode.
     void setFillAvailableWidth(bool fill) noexcept;
     [[nodiscard]] bool fillsAvailableWidth() const noexcept;
 
     // Resolves explicit breaks, wrapping and optional truncation in logical
-    // coordinates. It is useful to custom renderers that need to mirror Text's
+    // coordinates. It is useful to custom renderers that need to mirror TextNode's
     // layout decisions.
     [[nodiscard]] std::vector<std::string> resolvedLines(float availableWidth) const;
 
@@ -157,7 +157,7 @@ private:
     float fontSize_{16.0f};
     int fontWeight_{400};
     float lineHeight_{0.0f};
-    // Resolved in Text's constructor from the active Theme. Leaving this
+    // Resolved in TextNode's constructor from the active Theme. Leaving this
     // empty here avoids freezing the legacy Segoe UI family before a caller
     // has selected its Windows typography token set.
     std::string fontFamily_{};
@@ -190,48 +190,48 @@ enum class ImageShape {
     Rounded,
 };
 
-class Image : public Node {
+class ImageNode : public Node {
 public:
-    Image();
-    Image(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
-    explicit Image(ImageSource source);
-    ~Image() override;
+    ImageNode();
+    ImageNode(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
+    explicit ImageNode(ImageSource source);
+    ~ImageNode() override;
 
-    Image& source(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
-    Image& source(ImageSource source);
+    ImageNode& source(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
+    ImageNode& source(ImageSource source);
     void setSource(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
     void setSource(ImageSource source);
     void clearSource() noexcept;
-    Image& fallback(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
-    Image& fallback(ImageSource source);
+    ImageNode& fallback(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight);
+    ImageNode& fallback(ImageSource source);
     void setFallback(ImageSource source);
     void clearFallback() noexcept;
 
     [[nodiscard]] const ImageSource imageSource() const noexcept;
 
-    Image& fit(ImageFit fit) noexcept;
+    ImageNode& fit(ImageFit fit) noexcept;
     void setFit(ImageFit fit) noexcept;
     [[nodiscard]] ImageFit fit() const noexcept;
 
-    Image& align(float x, float y) noexcept;
+    ImageNode& align(float x, float y) noexcept;
     void setAlignment(float x, float y) noexcept;
     [[nodiscard]] PointF alignment() const noexcept;
-    Image& shape(ImageShape shape) noexcept;
+    ImageNode& shape(ImageShape shape) noexcept;
     void setShape(ImageShape shape) noexcept;
     [[nodiscard]] ImageShape shape() const noexcept;
-    Image& bordered(bool bordered = true) noexcept;
+    ImageNode& bordered(bool bordered = true) noexcept;
     void setBordered(bool bordered) noexcept;
     [[nodiscard]] bool isBordered() const noexcept;
-    Image& shadow(bool shadow = true) noexcept;
+    ImageNode& shadow(bool shadow = true) noexcept;
     void setShadow(bool shadow) noexcept;
     [[nodiscard]] bool hasShadow() const noexcept;
-    Image& block(bool block = true) noexcept;
+    ImageNode& block(bool block = true) noexcept;
     void setBlock(bool block) noexcept;
     [[nodiscard]] bool isBlock() const noexcept;
-    Image& alt(std::string description);
+    ImageNode& alt(std::string description);
     void setAlt(std::string description);
     [[nodiscard]] const std::string& alt() const noexcept;
-    Image& decorative(bool decorative = true) noexcept;
+    ImageNode& decorative(bool decorative = true) noexcept;
     void setDecorative(bool decorative) noexcept;
     [[nodiscard]] bool isDecorative() const noexcept;
     [[nodiscard]] SizeF intrinsicSize() const noexcept;
@@ -258,9 +258,9 @@ private:
     std::unique_ptr<detail::ImageTexture> texture_;
 };
 
-class Spacer : public Node {
+class SpacerNode : public Node {
 public:
-    explicit Spacer(SizeF size = {}) noexcept;
+    explicit SpacerNode(SizeF size = {}) noexcept;
 
     [[nodiscard]] SizeF size() const noexcept;
     void setSize(SizeF size) noexcept;
@@ -272,9 +272,9 @@ private:
     SizeF size_{};
 };
 
-class Container : public ContainerNode {
+class BoxNode : public ContainerNode {
 public:
-    Container& child(std::unique_ptr<Node> child);
+    BoxNode& child(std::unique_ptr<Node> child);
 
     void setBackground(Color color) noexcept;
     void setRadius(float radius) noexcept;
@@ -335,10 +335,10 @@ enum class CardOrientation { Vertical, Horizontal };
 
 // A semantic Fluent surface. Cards own layout padding and elevation so apps
 // do not recreate visually inconsistent Box combinations on every screen.
-class Card : public ControlNode {
+class CardNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(bool)>;
-    Card& child(std::unique_ptr<Node> child);
+    CardNode& child(std::unique_ptr<Node> child);
     void setAppearance(CardAppearance appearance) noexcept;
     [[nodiscard]] CardAppearance appearance() const noexcept;
     void setSize(CardSize size) noexcept;
@@ -347,9 +347,9 @@ public:
     [[nodiscard]] CardOrientation orientation() const noexcept;
     void setSelected(bool selected) noexcept;
     [[nodiscard]] bool isSelected() const noexcept;
-    Card& selectable(bool value = true) noexcept;
+    CardNode& selectable(bool value = true) noexcept;
     [[nodiscard]] bool isSelectable() const noexcept;
-    Card& onSelectionChange(ChangeHandler handler);
+    CardNode& onSelectionChange(ChangeHandler handler);
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
@@ -370,9 +370,9 @@ private:
     ChangeHandler onSelectionChange_;
 };
 
-class CardHeader : public ContainerNode {
+class CardHeaderNode : public ContainerNode {
 public:
-    CardHeader(std::string title = {}, std::string description = {});
+    CardHeaderNode(std::string title = {}, std::string description = {});
     void setTitle(std::string title);
     void setDescription(std::string description);
     [[nodiscard]] const std::string& title() const noexcept;
@@ -381,8 +381,8 @@ public:
     // the order in which callers configure them. Passing nullptr clears the
     // respective slot; a later non-null value replaces it safely even while
     // the header is attached to a live tree.
-    CardHeader& media(std::unique_ptr<Node> media);
-    CardHeader& action(std::unique_ptr<Node> action);
+    CardHeaderNode& media(std::unique_ptr<Node> media);
+    CardHeaderNode& action(std::unique_ptr<Node> action);
     void setMedia(std::unique_ptr<Node> media);
     void setAction(std::unique_ptr<Node> action);
     [[nodiscard]] Node* media() const noexcept;
@@ -400,9 +400,9 @@ private:
     bool hasAction_{false};
 };
 
-class CardPreview : public ContainerNode {
+class CardPreviewNode : public ContainerNode {
 public:
-    CardPreview& child(std::unique_ptr<Node> child);
+    CardPreviewNode& child(std::unique_ptr<Node> child);
     void setHeight(float value) noexcept;
     [[nodiscard]] float height() const noexcept;
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -412,25 +412,25 @@ private:
     float height_{0.0f};
 };
 
-class CardFooter : public ContainerNode {
+class CardFooterNode : public ContainerNode {
 public:
-    CardFooter& child(std::unique_ptr<Node> child);
+    CardFooterNode& child(std::unique_ptr<Node> child);
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;
 };
 
-class Row : public ContainerNode {
+class RowNode : public ContainerNode {
 public:
-    Row& child(std::unique_ptr<Node> child);
-    Row& gap(float gap) noexcept;
+    RowNode& child(std::unique_ptr<Node> child);
+    RowNode& gap(float gap) noexcept;
     void setGap(float gap) noexcept;
     [[nodiscard]] float gap() const noexcept;
 
-    Row& padding(InsetsF padding) noexcept;
+    RowNode& padding(InsetsF padding) noexcept;
     void setPadding(InsetsF padding) noexcept;
     [[nodiscard]] InsetsF padding() const noexcept;
 
-    Row& align(Alignment align) noexcept;
+    RowNode& align(Alignment align) noexcept;
     void setAlign(Alignment align) noexcept;
     [[nodiscard]] Alignment align() const noexcept;
 
@@ -443,18 +443,18 @@ private:
     Alignment align_{Alignment::Start};
 };
 
-class Column : public ContainerNode {
+class ColumnNode : public ContainerNode {
 public:
-    Column& child(std::unique_ptr<Node> child);
-    Column& gap(float gap) noexcept;
+    ColumnNode& child(std::unique_ptr<Node> child);
+    ColumnNode& gap(float gap) noexcept;
     void setGap(float gap) noexcept;
     [[nodiscard]] float gap() const noexcept;
 
-    Column& padding(InsetsF padding) noexcept;
+    ColumnNode& padding(InsetsF padding) noexcept;
     void setPadding(InsetsF padding) noexcept;
     [[nodiscard]] InsetsF padding() const noexcept;
 
-    Column& align(Alignment align) noexcept;
+    ColumnNode& align(Alignment align) noexcept;
     void setAlign(Alignment align) noexcept;
     [[nodiscard]] Alignment align() const noexcept;
 
@@ -477,10 +477,10 @@ enum class ScrollAxis {
 // axes; offsets are logical pixels and are clamped after every layout/content
 // change. A wheel handler consumes the part it can apply and leaves the
 // remainder in EventContext for ancestor ScrollViews during bubbling.
-class ScrollView : public ContainerNode {
+class ScrollViewNode : public ContainerNode {
 public:
-    ScrollView& child(std::unique_ptr<Node> child);
-    ScrollView& setAxis(ScrollAxis axis) noexcept;
+    ScrollViewNode& child(std::unique_ptr<Node> child);
+    ScrollViewNode& setAxis(ScrollAxis axis) noexcept;
     [[nodiscard]] ScrollAxis axis() const noexcept;
     void setScrollOffset(float offset) noexcept;
     void setScrollOffset(PointF offset) noexcept;
@@ -507,15 +507,15 @@ private:
     ScrollAxis axis_{ScrollAxis::Vertical};
 };
 
-// A window-sized modal surface. Dialog owns exactly one content subtree,
+// A window-sized modal surface. DialogNode owns exactly one content subtree,
 // centers it in the available window bounds, paints a dimming scrim behind
 // it, and consumes backdrop pointer input. UiWindow supplies Escape handling
 // and focus restoration through showDialog()/dismissDialog().
-class Dialog : public ContainerNode {
+class DialogNode : public ContainerNode {
 public:
     using DismissHandler = std::function<void()>;
 
-    Dialog& content(std::unique_ptr<Node> content);
+    DialogNode& content(std::unique_ptr<Node> content);
     void setMaxWidth(float width) noexcept;
     [[nodiscard]] float maxWidth() const noexcept;
     void setBackdropDismissEnabled(bool enabled) noexcept;
@@ -538,17 +538,6 @@ private:
     bool backdropDismissEnabled_{false};
     DismissHandler onDismiss_;
     DismissHandler windowDismiss_;
-};
-
-enum class ButtonVariant {
-    // Compatibility names for the original WhatsUI button API. New code uses
-    // ButtonAppearance so every state belongs to a Fluent semantic role.
-    Primary,
-    Ghost,
-    Danger,
-    // Appended to preserve the numeric values of the original variants while
-    // allowing the Fluent default to round-trip through the compatibility API.
-    Secondary,
 };
 
 enum class ButtonAppearance {
@@ -577,31 +566,29 @@ enum class ButtonIconPosition {
     After,
 };
 
-class Button : public ControlNode {
+class ButtonNode : public ControlNode {
 public:
     using ClickHandler = std::function<void()>;
 
-    explicit Button(std::string label = {});
+    explicit ButtonNode(std::string label = {});
 
     [[nodiscard]] const std::string& label() const noexcept;
-    Button& label(std::string label);
+    ButtonNode& label(std::string label);
     void setLabel(std::string label);
 
-    Button& onClick(ClickHandler handler);
+    ButtonNode& onClick(ClickHandler handler);
 
-    void setVariant(ButtonVariant variant) noexcept;
-    [[nodiscard]] ButtonVariant variant() const noexcept;
     void setAppearance(ButtonAppearance appearance) noexcept;
     [[nodiscard]] ButtonAppearance appearance() const noexcept;
     void setSize(ButtonSize size) noexcept;
     [[nodiscard]] ButtonSize size() const noexcept;
     void setShape(ButtonShape shape) noexcept;
     [[nodiscard]] ButtonShape shape() const noexcept;
-    Button& icon(IconName value) noexcept;
-    Button& iconStyle(IconStyle value) noexcept;
-    Button& iconPosition(ButtonIconPosition value) noexcept;
-    Button& iconOnly(bool value = true) noexcept;
-    Button& clearIcon() noexcept;
+    ButtonNode& icon(IconName value) noexcept;
+    ButtonNode& iconStyle(IconStyle value) noexcept;
+    ButtonNode& iconPosition(ButtonIconPosition value) noexcept;
+    ButtonNode& iconOnly(bool value = true) noexcept;
+    ButtonNode& clearIcon() noexcept;
     void setIcon(std::optional<IconName> value) noexcept;
     void setIconStyle(IconStyle value) noexcept;
     void setIconPosition(ButtonIconPosition value) noexcept;
@@ -621,7 +608,6 @@ public:
 private:
     std::string label_;
     ClickHandler onClick_;
-    ButtonVariant variant_{ButtonVariant::Secondary};
     ButtonAppearance appearance_{ButtonAppearance::Secondary};
     ButtonSize size_{ButtonSize::Medium};
     ButtonShape shape_{ButtonShape::Rounded};
@@ -633,18 +619,18 @@ private:
 
 // Fluent's two-line command button. The secondary content is descriptive
 // text, not a second action: the whole surface invokes one command.
-class CompoundButton : public ControlNode {
+class CompoundButtonNode : public ControlNode {
 public:
     using ClickHandler = std::function<void()>;
 
-    CompoundButton(std::string label = {}, std::string secondaryContent = {});
+    CompoundButtonNode(std::string label = {}, std::string secondaryContent = {});
     [[nodiscard]] const std::string& label() const noexcept;
     [[nodiscard]] const std::string& secondaryContent() const noexcept;
-    CompoundButton& label(std::string value);
-    CompoundButton& secondaryContent(std::string value);
+    CompoundButtonNode& label(std::string value);
+    CompoundButtonNode& secondaryContent(std::string value);
     void setLabel(std::string value);
     void setSecondaryContent(std::string value);
-    CompoundButton& onClick(ClickHandler handler);
+    CompoundButtonNode& onClick(ClickHandler handler);
     void setAppearance(ButtonAppearance value) noexcept;
     [[nodiscard]] ButtonAppearance appearance() const noexcept;
     void setSize(ButtonSize value) noexcept;
@@ -668,33 +654,33 @@ private:
     ButtonShape shape_{ButtonShape::Rounded};
 };
 
-// A command-style two-state control. Unlike Checkbox it is rendered as a
+// A command-style two-state control. Unlike CheckboxNode it is rendered as a
 // button surface, which makes it appropriate for formatting and view toggles.
-class ToggleButton : public ControlNode {
+class ToggleButtonNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(bool)>;
 
-    explicit ToggleButton(std::string label = {}, bool checked = false);
+    explicit ToggleButtonNode(std::string label = {}, bool checked = false);
 
     [[nodiscard]] const std::string& label() const noexcept;
-    ToggleButton& label(std::string value);
+    ToggleButtonNode& label(std::string value);
     void setLabel(std::string value);
     [[nodiscard]] bool isChecked() const noexcept;
-    ToggleButton& checked(bool value);
+    ToggleButtonNode& checked(bool value);
     void setChecked(bool value);
-    ToggleButton& bind(State<bool>& state);
-    ToggleButton& onChange(ChangeHandler handler);
+    ToggleButtonNode& bind(State<bool>& state);
+    ToggleButtonNode& onChange(ChangeHandler handler);
     void setSize(ButtonSize value) noexcept;
     [[nodiscard]] ButtonSize size() const noexcept;
     void setShape(ButtonShape value) noexcept;
     [[nodiscard]] ButtonShape shape() const noexcept;
     void setAppearance(ButtonAppearance value) noexcept;
     [[nodiscard]] ButtonAppearance appearance() const noexcept;
-    ToggleButton& icon(IconName value) noexcept;
-    ToggleButton& iconStyle(IconStyle value) noexcept;
-    ToggleButton& iconPosition(ButtonIconPosition value) noexcept;
-    ToggleButton& iconOnly(bool value = true) noexcept;
-    ToggleButton& clearIcon() noexcept;
+    ToggleButtonNode& icon(IconName value) noexcept;
+    ToggleButtonNode& iconStyle(IconStyle value) noexcept;
+    ToggleButtonNode& iconPosition(ButtonIconPosition value) noexcept;
+    ToggleButtonNode& iconOnly(bool value = true) noexcept;
+    ToggleButtonNode& clearIcon() noexcept;
     void setIcon(std::optional<IconName> value) noexcept;
     void setIconStyle(IconStyle value) noexcept;
     void setIconPosition(ButtonIconPosition value) noexcept;
@@ -750,49 +736,49 @@ enum class CheckboxLabelPosition {
     Before,
 };
 
-// A Fluent tri-state form control. Checkbox owns its state unless bound to a
+// A Fluent tri-state form control. CheckboxNode owns its state unless bound to a
 // State<bool>; a bool binding deliberately supports only checked/unchecked.
-class Checkbox : public ControlNode {
+class CheckboxNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(bool)>;
     using StateChangeHandler = std::function<void(CheckboxState)>;
 
-    explicit Checkbox(std::string label = {}, bool checked = false);
+    explicit CheckboxNode(std::string label = {}, bool checked = false);
 
     [[nodiscard]] const std::string& label() const noexcept;
-    Checkbox& label(std::string label);
+    CheckboxNode& label(std::string label);
     void setLabel(std::string label);
 
     // An optional semantic name for compact controls whose visible task title
-    // is rendered by a neighbouring Text node rather than by the checkbox.
+    // is rendered by a neighbouring TextNode node rather than by the checkbox.
     // It never affects layout or painting.
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    Checkbox& accessibleLabel(std::string label);
+    CheckboxNode& accessibleLabel(std::string label);
     void setAccessibleLabel(std::string label);
 
     [[nodiscard]] bool isChecked() const noexcept;
     [[nodiscard]] bool isMixed() const noexcept;
     [[nodiscard]] CheckboxState state() const noexcept;
-    Checkbox& checked(bool value);
+    CheckboxNode& checked(bool value);
     void setChecked(bool value);
-    Checkbox& mixed(bool value = true);
+    CheckboxNode& mixed(bool value = true);
     void setMixed(bool value = true);
-    Checkbox& checkState(CheckboxState value);
+    CheckboxNode& checkState(CheckboxState value);
     void setCheckState(CheckboxState value);
-    Checkbox& bind(State<bool>& state);
-    Checkbox& onChange(ChangeHandler handler);
-    Checkbox& onStateChange(StateChangeHandler handler);
+    CheckboxNode& bind(State<bool>& state);
+    CheckboxNode& onChange(ChangeHandler handler);
+    CheckboxNode& onStateChange(StateChangeHandler handler);
 
-    Checkbox& size(CheckboxSize value) noexcept;
+    CheckboxNode& size(CheckboxSize value) noexcept;
     void setSize(CheckboxSize value) noexcept;
     [[nodiscard]] CheckboxSize size() const noexcept;
-    Checkbox& shape(CheckboxShape value) noexcept;
+    CheckboxNode& shape(CheckboxShape value) noexcept;
     void setShape(CheckboxShape value) noexcept;
     [[nodiscard]] CheckboxShape shape() const noexcept;
-    Checkbox& labelPosition(CheckboxLabelPosition value) noexcept;
+    CheckboxNode& labelPosition(CheckboxLabelPosition value) noexcept;
     void setLabelPosition(CheckboxLabelPosition value) noexcept;
     [[nodiscard]] CheckboxLabelPosition labelPosition() const noexcept;
-    Checkbox& required(bool value = true) noexcept;
+    CheckboxNode& required(bool value = true) noexcept;
     void setRequired(bool value = true) noexcept;
     [[nodiscard]] bool isRequired() const noexcept;
 

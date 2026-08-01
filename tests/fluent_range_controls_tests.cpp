@@ -21,14 +21,14 @@ wui::PointerEvent pointer(wui::PointerAction action, float x, float y)
 
 void testRadioGroupOwnsSelectionAndArrowPolicy()
 {
-    wui::Radio iconOnly;
+    wui::RadioNode iconOnly;
     expect(iconOnly.measure({}).width == 32.0f &&
                iconOnly.measure({}).height == 32.0f,
            "An unlabeled Radio must retain Fluent's square 32-DIP hit slot");
     // Bound State must outlive the group because Node teardown unsubscribes
     // from it during group destruction.
     wui::State<std::string> state{"third"};
-    wui::RadioGroup group;
+    wui::RadioGroupNode group;
     group.name("delivery-speed").accessibleLabel("Delivery speed");
     auto& first = group.addOption("first", "First");
     auto& unavailable = group.addOption("disabled", "Unavailable", false);
@@ -67,7 +67,7 @@ void testRadioGroupOwnsSelectionAndArrowPolicy()
                firstStackedMeasure.height == 56.0f,
            "Horizontal-stacked RadioGroup must reserve a 32-DIP indicator slot, 4-DIP gap, and 20-DIP label line");
 
-    wui::RadioGroup initiallyStacked;
+    wui::RadioGroupNode initiallyStacked;
     initiallyStacked.setGroupLayout(wui::RadioGroupLayout::HorizontalStacked);
     initiallyStacked.addOption("a", "Alpha");
     initiallyStacked.addOption("b", "Beta");
@@ -77,7 +77,7 @@ void testRadioGroupOwnsSelectionAndArrowPolicy()
 
 void testRadioGroupArrowKeysMoveRovingFocus()
 {
-    wui::RadioGroup group;
+    wui::RadioGroupNode group;
     auto& first = group.addOption("first", "First");
     group.addOption("disabled", "Disabled", false);
     auto& third = group.addOption("third", "Third");
@@ -100,7 +100,7 @@ void testRadioGroupArrowKeysMoveRovingFocus()
 
 void testSwitchOfficialSizesAndLabelPositions()
 {
-    wui::Switch iconOnly;
+    wui::SwitchNode iconOnly;
     iconOnly.setSize(wui::SwitchSize::Small);
     expect(iconOnly.measure({}).width == 48.0f,
            "Small Switch must reserve its 32-DIP track plus two 8-DIP hit margins");
@@ -108,7 +108,7 @@ void testSwitchOfficialSizesAndLabelPositions()
     expect(iconOnly.measure({}).width == 56.0f,
            "Medium Switch must reserve its 40-DIP track plus two 8-DIP hit margins");
 
-    wui::Switch toggle("Sync", false);
+    wui::SwitchNode toggle("Sync", false);
     toggle.setSize(wui::SwitchSize::Small);
     expect(toggle.measure({}).height == 32.0f, "Small Switch must use Fluent's 32 DIP control row");
     toggle.setSize(wui::SwitchSize::Medium);
@@ -127,7 +127,7 @@ void testSwitchOfficialSizesAndLabelPositions()
 
 void testSliderSizeOrientationAndAccessibleValue()
 {
-    wui::Slider slider(0, 10, 2);
+    wui::SliderNode slider(0, 10, 2);
     slider.accessibleLabel("Volume");
     expect(slider.accessibleLabel() == "Volume", "Slider must expose an accessible field name");
     slider.step(2);
@@ -167,7 +167,7 @@ void testSliderSizeOrientationAndAccessibleValue()
 
 void testProgressVariantsAndIndeterminateRendering()
 {
-    wui::ProgressBar defaultProgress;
+    wui::ProgressBarNode defaultProgress;
     defaultProgress.accessibleLabel("Uploading files");
     expect(defaultProgress.accessibleLabel() == "Uploading files",
            "ProgressBar must expose an accessible operation description");
@@ -184,7 +184,7 @@ void testProgressVariantsAndIndeterminateRendering()
                !defaultProperties.value.has_value() && defaultProperties.busy &&
                defaultProperties.actions.valueReadOnly,
            "Default ProgressBar accessibility must be busy, value-less, and read-only");
-    wui::ProgressBar progress(0.0f, 10.0f, 4.0f);
+    wui::ProgressBarNode progress(0.0f, 10.0f, 4.0f);
     expect(!progress.isIndeterminate() && progress.determinateValue() == std::optional<float>{4.0f},
            "Supplying a ProgressBar value must select determinate mode");
     progress.setValue(5.0f);
@@ -216,7 +216,7 @@ void testProgressVariantsAndIndeterminateRendering()
 
 void testDividerContentAppearanceAndOrientation()
 {
-    wui::Divider divider;
+    wui::DividerNode divider;
     divider.content("OR").appearance(wui::DividerAppearance::Brand)
         .contentAlignment(wui::DividerContentAlignment::Start).inset(true);
     expect(divider.measure({}).height >= 20.0f,

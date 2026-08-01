@@ -9,7 +9,7 @@
 #include "view/components/compact_navigation.h"
 #include "view/components/responsive_gallery_shell.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::gallery::view {
 namespace {

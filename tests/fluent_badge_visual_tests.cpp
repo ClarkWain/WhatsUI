@@ -53,19 +53,19 @@ void render(const std::string& output, float scale)
         canvas->beginFrame();
         paint.fillRect({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)}, wui::theme().colors.neutralBackground2.rest);
         paint.drawText("Fluent Badge", 24, 32, 20, wui::theme().colors.neutralForeground1, 600);
-        wui::Badge neutral("New"); neutral.layout({24, 54, 44, 20}); neutral.paint(paint);
-        wui::Badge brand("Preview"); brand.setAppearance(wui::BadgeAppearance::Filled); brand.setColor(wui::BadgeColor::Brand); brand.layout({86, 54, 64, 20}); brand.paint(paint);
-        wui::Badge success("Ready"); success.setColor(wui::BadgeColor::Success); success.setAppearance(wui::BadgeAppearance::Outline); success.layout({168, 54, 58, 20}); success.paint(paint);
-        wui::Badge warning("Review"); warning.setColor(wui::BadgeColor::Warning); warning.setSize(wui::BadgeSize::Large); warning.layout({244, 52, 74, 24}); warning.paint(paint);
-        wui::Badge circular("Live"); circular.setColor(wui::BadgeColor::Danger); circular.setAppearance(wui::BadgeAppearance::Filled); circular.setShape(wui::BadgeShape::Circular); circular.layout({338, 54, 52, 20}); circular.paint(paint);
+        wui::BadgeNode neutral("New"); neutral.layout({24, 54, 44, 20}); neutral.paint(paint);
+        wui::BadgeNode brand("Preview"); brand.setAppearance(wui::BadgeAppearance::Filled); brand.setColor(wui::BadgeColor::Brand); brand.layout({86, 54, 64, 20}); brand.paint(paint);
+        wui::BadgeNode success("Ready"); success.setColor(wui::BadgeColor::Success); success.setAppearance(wui::BadgeAppearance::Outline); success.layout({168, 54, 58, 20}); success.paint(paint);
+        wui::BadgeNode warning("Review"); warning.setColor(wui::BadgeColor::Warning); warning.setSize(wui::BadgeSize::Large); warning.layout({244, 52, 74, 24}); warning.paint(paint);
+        wui::BadgeNode circular("Live"); circular.setColor(wui::BadgeColor::Danger); circular.setAppearance(wui::BadgeAppearance::Filled); circular.setShape(wui::BadgeShape::Circular); circular.layout({338, 54, 52, 20}); circular.paint(paint);
         paint.drawText("Counters", 24, 112, 14, wui::theme().colors.neutralForeground1, 600);
-        wui::CounterBadge zero(0); zero.setShowZero(true); zero.layout({24, 126, 20, 20}); zero.paint(paint);
-        wui::CounterBadge many(99); many.layout({60, 126, 28, 20}); many.paint(paint);
-        wui::CounterBadge overflow(120); overflow.layout({106, 126, 34, 20}); overflow.paint(paint);
+        wui::CounterBadgeNode zero(0); zero.setShowZero(true); zero.layout({24, 126, 20, 20}); zero.paint(paint);
+        wui::CounterBadgeNode many(99); many.layout({60, 126, 28, 20}); many.paint(paint);
+        wui::CounterBadgeNode overflow(120); overflow.layout({106, 126, 34, 20}); overflow.paint(paint);
         paint.drawText("Presence", 190, 112, 14, wui::theme().colors.neutralForeground1, 600);
         const wui::RectF avatar{190, 126, 48, 48}; paint.fillRoundRect(avatar, wui::theme().radius.circular, wui::theme().colors.brandBackground.rest);
         for (auto [status, x] : std::vector<std::pair<wui::PresenceStatus, float>>{{wui::PresenceStatus::Available, 256.0f}, {wui::PresenceStatus::Away, 286.0f}, {wui::PresenceStatus::DoNotDisturb, 316.0f}, {wui::PresenceStatus::OutOfOffice, 346.0f}}) {
-            wui::PresenceBadge badge(status); badge.setAvatarSize(48); badge.layout({x, 140, 14, 14}); badge.paint(paint);
+            wui::PresenceBadgeNode badge(status); badge.setAvatarSize(48); badge.layout({x, 140, 14, 14}); badge.paint(paint);
         }
         canvas->endFrame();
         const auto pixels = canvas->readPixelsRGBA();

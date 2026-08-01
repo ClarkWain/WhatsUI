@@ -20,11 +20,11 @@ constexpr float kDefaultWidth = 160.0f;
 
 } // namespace
 
-struct ListView::State {
+struct ListViewNode::State {
     internal::ViewportModel viewport;
 };
 
-ListView::ListView(std::vector<Item> items, int selectedIndex)
+ListViewNode::ListViewNode(std::vector<Item> items, int selectedIndex)
     : items_(std::move(items))
     , selectedIndex_(normalizedSelection(selectedIndex))
     , state_(std::make_unique<State>())
@@ -32,19 +32,19 @@ ListView::ListView(std::vector<Item> items, int selectedIndex)
     syncViewport();
 }
 
-ListView::~ListView() = default;
+ListViewNode::~ListViewNode() = default;
 
-const std::vector<ListView::Item>& ListView::items() const noexcept
+const std::vector<ListViewNode::Item>& ListViewNode::items() const noexcept
 {
     return items_;
 }
 
-std::size_t ListView::itemCount() const noexcept
+std::size_t ListViewNode::itemCount() const noexcept
 {
     return usesItemProvider_ ? providerItemCount_ : items_.size();
 }
 
-void ListView::setItems(std::vector<Item> items)
+void ListViewNode::setItems(std::vector<Item> items)
 {
     usesItemProvider_ = false;
     itemProvider_ = nullptr;
@@ -58,7 +58,7 @@ void ListView::setItems(std::vector<Item> items)
     markDirty(DirtyFlag::Layout);
 }
 
-void ListView::setItemProvider(std::size_t count, ItemProvider provider, SelectableProvider selectable)
+void ListViewNode::setItemProvider(std::size_t count, ItemProvider provider, SelectableProvider selectable)
 {
     usesItemProvider_ = static_cast<bool>(provider);
     itemProvider_ = std::move(provider);
@@ -72,7 +72,7 @@ void ListView::setItemProvider(std::size_t count, ItemProvider provider, Selecta
     markDirty(DirtyFlag::Layout);
 }
 
-void ListView::appendItem(Item item)
+void ListViewNode::appendItem(Item item)
 {
     if (usesItemProvider_) {
         setItems({std::move(item)});
@@ -83,7 +83,7 @@ void ListView::appendItem(Item item)
     markDirty(DirtyFlag::Layout);
 }
 
-void ListView::clearItems()
+void ListViewNode::clearItems()
 {
     if (!usesItemProvider_ && items_.empty()) return;
     usesItemProvider_ = false;
@@ -99,19 +99,19 @@ void ListView::clearItems()
     markDirty(DirtyFlag::Layout);
 }
 
-int ListView::selectedIndex() const noexcept
+int ListViewNode::selectedIndex() const noexcept
 {
     const int value = hasBinding_ ? binding_->get() : selectedIndex_;
     return isSelectable(value) ? value : -1;
 }
 
-ListView& ListView::selectedIndex(int index)
+ListViewNode& ListViewNode::selectedIndex(int index)
 {
     setSelectedIndex(index);
     return *this;
 }
 
-void ListView::setSelectedIndex(int index)
+void ListViewNode::setSelectedIndex(int index)
 {
     const int next = normalizedSelection(index);
     if (hasBinding_) {
@@ -123,7 +123,7 @@ void ListView::setSelectedIndex(int index)
     }
 }
 
-ListView& ListView::bind(wui::State<int>& state)
+ListViewNode& ListViewNode::bind(wui::State<int>& state)
 {
     binding_.emplace(state);
     hasBinding_ = true;
@@ -141,18 +141,18 @@ ListView& ListView::bind(wui::State<int>& state)
     return *this;
 }
 
-ListView& ListView::onSelectionChanged(SelectionHandler handler)
+ListViewNode& ListViewNode::onSelectionChanged(SelectionHandler handler)
 {
     onSelectionChanged_ = std::move(handler);
     return *this;
 }
 
-float ListView::rowHeight() const noexcept
+float ListViewNode::rowHeight() const noexcept
 {
     return rowHeight_;
 }
 
-void ListView::setRowHeight(float value) noexcept
+void ListViewNode::setRowHeight(float value) noexcept
 {
     const float next = std::isfinite(value) ? std::max(24.0f, value) : 36.0f;
     if (rowHeight_ != next) {
@@ -162,12 +162,12 @@ void ListView::setRowHeight(float value) noexcept
     }
 }
 
-float ListView::scrollOffset() const noexcept
+float ListViewNode::scrollOffset() const noexcept
 {
     return state_->viewport.scrollOffset();
 }
 
-void ListView::setScrollOffset(float value) noexcept
+void ListViewNode::setScrollOffset(float value) noexcept
 {
     syncViewport();
     const float previous = state_->viewport.scrollOffset();
@@ -175,30 +175,30 @@ void ListView::setScrollOffset(float value) noexcept
     if (state_->viewport.scrollOffset() != previous) markDirty(DirtyFlag::Paint);
 }
 
-float ListView::maximumScrollOffset() const noexcept
+float ListViewNode::maximumScrollOffset() const noexcept
 {
     return state_->viewport.maxScrollOffset();
 }
 
-ListView::Range ListView::visibleRange() const noexcept
+ListViewNode::Range ListViewNode::visibleRange() const noexcept
 {
     const auto range = state_->viewport.visibleRange();
     return {range.first, range.last};
 }
 
-SizeF ListView::measure(const Constraints& constraints) const
+SizeF ListViewNode::measure(const Constraints& constraints) const
 {
     return constraints.clamp({preferredWidth(), rowHeight_ * static_cast<float>(itemCount())});
 }
 
-void ListView::layout(const RectF& bounds)
+void ListViewNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     syncViewport();
     clearLayoutDirtyRecursively();
 }
 
-void ListView::paint(PaintContext& context)
+void ListViewNode::paint(PaintContext& context)
 {
     syncViewport();
     const Theme& current = theme();
@@ -268,7 +268,7 @@ void ListView::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-bool ListView::onPointerEvent(const PointerEvent& event)
+bool ListViewNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     const int row = rowAt(event.position);
@@ -311,7 +311,7 @@ bool ListView::onPointerEvent(const PointerEvent& event)
     return false;
 }
 
-EventResult ListView::onPointerEvent(const PointerEvent& event, EventContext& context)
+EventResult ListViewNode::onPointerEvent(const PointerEvent& event, EventContext& context)
 {
     if (context.phase() == EventPhase::Capture || event.action != PointerAction::Scroll) {
         return ControlNode::onPointerEvent(event, context);
@@ -326,7 +326,7 @@ EventResult ListView::onPointerEvent(const PointerEvent& event, EventContext& co
     return applied != 0.0f ? EventResult::Handled : EventResult::Ignored;
 }
 
-bool ListView::onKeyEvent(const KeyEvent& event)
+bool ListViewNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || event.action != KeyAction::Down) return false;
     const int current = selectedIndex();
@@ -351,19 +351,19 @@ bool ListView::onKeyEvent(const KeyEvent& event)
     return true;
 }
 
-bool ListView::isSelectable(int index) const noexcept
+bool ListViewNode::isSelectable(int index) const noexcept
 {
     if (index < 0 || static_cast<std::size_t>(index) >= itemCount()) return false;
     const auto itemIndex = static_cast<std::size_t>(index);
     return usesItemProvider_ ? providerItemSelectable(itemIndex) : items_[itemIndex].enabled;
 }
 
-int ListView::normalizedSelection(int index) const noexcept
+int ListViewNode::normalizedSelection(int index) const noexcept
 {
     return isSelectable(index) ? index : -1;
 }
 
-int ListView::rowAt(PointF point) const noexcept
+int ListViewNode::rowAt(PointF point) const noexcept
 {
     if (!bounds().contains(point) || rowHeight_ <= 0.0f) return -1;
     const float contentY = point.y - bounds().y - 1.0f + state_->viewport.scrollOffset();
@@ -372,7 +372,7 @@ int ListView::rowAt(PointF point) const noexcept
     return index >= 0 && static_cast<std::size_t>(index) < itemCount() ? index : -1;
 }
 
-int ListView::nextEnabled(int from, int direction) const noexcept
+int ListViewNode::nextEnabled(int from, int direction) const noexcept
 {
     if (direction == 0) return -1;
     for (int index = from + direction; index >= 0 && static_cast<std::size_t>(index) < itemCount(); index += direction) {
@@ -381,7 +381,7 @@ int ListView::nextEnabled(int from, int direction) const noexcept
     return -1;
 }
 
-float ListView::preferredWidth() const noexcept
+float ListViewNode::preferredWidth() const noexcept
 {
     if (usesItemProvider_) return kDefaultWidth;
     const float characterWidth = theme().typography.body1.size * 0.56f;
@@ -392,13 +392,13 @@ float ListView::preferredWidth() const noexcept
     return width;
 }
 
-ListView::Item ListView::itemAt(std::size_t index) const
+ListViewNode::Item ListViewNode::itemAt(std::size_t index) const
 {
     if (usesItemProvider_ && itemProvider_ && index < providerItemCount_) return itemProvider_(index);
     return index < items_.size() ? items_[index] : Item{};
 }
 
-bool ListView::providerItemSelectable(std::size_t index) const noexcept
+bool ListViewNode::providerItemSelectable(std::size_t index) const noexcept
 {
     try {
         return selectableProvider_ ? selectableProvider_(index) : itemAt(index).enabled;
@@ -410,14 +410,14 @@ bool ListView::providerItemSelectable(std::size_t index) const noexcept
     }
 }
 
-void ListView::syncViewport() noexcept
+void ListViewNode::syncViewport() noexcept
 {
     state_->viewport.setItemCount(itemCount());
     state_->viewport.setItemExtent(rowHeight_);
     state_->viewport.setViewportExtent(std::max(0.0f, bounds().height - theme().stroke.thin * 2.0f));
 }
 
-void ListView::select(int index)
+void ListViewNode::select(int index)
 {
     if (!isSelectable(index) || index == selectedIndex()) return;
     setSelectedIndex(index);

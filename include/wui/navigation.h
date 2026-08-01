@@ -16,20 +16,20 @@ namespace wui {
 enum class ToolbarItemAppearance { Subtle, Primary };
 enum class ToolbarOrientation { Horizontal, Vertical };
 
-class Toolbar;
+class ToolbarNode;
 
-class ToolbarItem : public ControlNode {
+class ToolbarItemNode : public ControlNode {
 public:
     using InvokeHandler = std::function<void()>;
 
-    explicit ToolbarItem(std::string label = {});
+    explicit ToolbarItemNode(std::string label = {});
     [[nodiscard]] const std::string& label() const noexcept;
-    ToolbarItem& label(std::string value);
+    ToolbarItemNode& label(std::string value);
     void setLabel(std::string value);
     [[nodiscard]] ToolbarItemAppearance appearance() const noexcept;
-    ToolbarItem& appearance(ToolbarItemAppearance value) noexcept;
+    ToolbarItemNode& appearance(ToolbarItemAppearance value) noexcept;
     void setAppearance(ToolbarItemAppearance value) noexcept;
-    ToolbarItem& onInvoke(InvokeHandler handler);
+    ToolbarItemNode& onInvoke(InvokeHandler handler);
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
@@ -46,19 +46,19 @@ private:
     InvokeHandler onInvoke_;
 };
 
-class Toolbar : public ContainerNode {
+class ToolbarNode : public ContainerNode {
 public:
     using OverflowHandler = std::function<void(const std::vector<std::string>&)>;
-    ToolbarItem& addItem(std::string label, ToolbarItemAppearance appearance = ToolbarItemAppearance::Subtle);
-    Toolbar& orientation(ToolbarOrientation value) noexcept;
+    ToolbarItemNode& addItem(std::string label, ToolbarItemAppearance appearance = ToolbarItemAppearance::Subtle);
+    ToolbarNode& orientation(ToolbarOrientation value) noexcept;
     void setOrientation(ToolbarOrientation value) noexcept;
     [[nodiscard]] ToolbarOrientation orientation() const noexcept;
     // Trailing items that cannot fit remain owned by the toolbar but are not
     // painted/hit-testable. `overflowedItems()` and onOverflow() let a future
-    // Menu/Popover surface them without recomputing layout policy.
+    // MenuNode/PopoverNode surface them without recomputing layout policy.
     [[nodiscard]] const std::vector<std::string>& overflowedItems() const noexcept;
-    Toolbar& onOverflow(OverflowHandler handler);
-    Toolbar& accessibleLabel(std::string value);
+    ToolbarNode& onOverflow(OverflowHandler handler);
+    ToolbarNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
     [[nodiscard]] std::size_t focusedIndex() const noexcept;
@@ -72,7 +72,7 @@ public:
 private:
     bool moveFocus(int delta);
     [[nodiscard]] RectF overflowBounds() const noexcept;
-    std::string accessibleLabel_{"Toolbar"};
+    std::string accessibleLabel_{"ToolbarNode"};
     ToolbarOrientation orientation_{ToolbarOrientation::Horizontal};
     std::size_t focusedIndex_{0};
     std::vector<std::string> overflowedItems_;
@@ -83,16 +83,16 @@ private:
     bool overflowFocused_{false};
 };
 
-class TabList;
+class TabListNode;
 
-class Tab : public ControlNode {
+class TabNode : public ControlNode {
 public:
-    explicit Tab(std::string value = {}, std::string label = {});
+    explicit TabNode(std::string value = {}, std::string label = {});
     [[nodiscard]] const std::string& value() const noexcept;
-    Tab& value(std::string value);
+    TabNode& value(std::string value);
     void setValue(std::string value);
     [[nodiscard]] const std::string& label() const noexcept;
-    Tab& label(std::string value);
+    TabNode& label(std::string value);
     void setLabel(std::string value);
     [[nodiscard]] bool isSelected() const noexcept;
 
@@ -105,7 +105,7 @@ public:
                                                           std::string_view value) override;
 
 private:
-    friend class TabList;
+    friend class TabListNode;
     void setSelectedFromList(bool selected) noexcept;
     void select();
     std::string value_;
@@ -113,22 +113,22 @@ private:
     bool selected_{false};
 };
 
-class TabList : public ControlNode {
+class TabListNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(const std::string&)>;
 
     enum class ActivationMode { Automatic, Manual };
 
-    Tab& addTab(std::string value, std::string label, bool enabled = true);
+    TabNode& addTab(std::string value, std::string label, bool enabled = true);
     [[nodiscard]] const std::string& value() const noexcept;
-    TabList& value(std::string value);
+    TabListNode& value(std::string value);
     void setValue(std::string value);
-    TabList& onChange(ChangeHandler handler);
+    TabListNode& onChange(ChangeHandler handler);
     [[nodiscard]] ActivationMode activationMode() const noexcept;
-    TabList& activationMode(ActivationMode value) noexcept;
+    TabListNode& activationMode(ActivationMode value) noexcept;
     void setActivationMode(ActivationMode value) noexcept;
     [[nodiscard]] std::size_t focusedIndex() const noexcept;
-    TabList& accessibleLabel(std::string value);
+    TabListNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
 
@@ -138,8 +138,8 @@ public:
     bool onKeyEvent(const KeyEvent& event) override;
 
 private:
-    friend class Tab;
-    void selectTab(Tab& tab, bool notify = true);
+    friend class TabNode;
+    void selectTab(TabNode& tab, bool notify = true);
     bool moveSelection(int delta);
     bool moveFocus(int delta);
     bool selectFocused();
@@ -150,26 +150,26 @@ private:
     std::size_t focusedIndex_{0};
 };
 
-// TabPanel is intentionally a normal container. Application code selects
+// TabPanelNode is intentionally a normal container. Application code selects
 // which panel is visible (or binds visibility structurally) while this class
 // gives that panel a stable tab value and a labelled accessibility boundary.
-class TabPanel : public ContainerNode {
+class TabPanelNode : public ContainerNode {
 public:
-    explicit TabPanel(std::string value = {});
+    explicit TabPanelNode(std::string value = {});
     [[nodiscard]] const std::string& value() const noexcept;
-    TabPanel& value(std::string value);
+    TabPanelNode& value(std::string value);
     void setValue(std::string value);
-    TabPanel& accessibleLabel(std::string value);
+    TabPanelNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    // Links this panel's value to a TabList. Only the matching active panel
+    // Links this panel's value to a TabListNode. Only the matching active panel
     // participates in measure/layout/paint/hit-testing; applications can
     // therefore keep all panels retained without stale hidden content.
-    TabPanel& tabList(TabList& value) noexcept;
-    void setTabList(TabList* value) noexcept;
-    [[nodiscard]] const TabList* tabList() const noexcept;
+    TabPanelNode& tabList(TabListNode& value) noexcept;
+    void setTabList(TabListNode* value) noexcept;
+    [[nodiscard]] const TabListNode* tabList() const noexcept;
     [[nodiscard]] bool isActive() const noexcept;
-    TabPanel& active(bool value) noexcept;
+    TabPanelNode& active(bool value) noexcept;
     void setActive(bool value) noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -180,21 +180,21 @@ public:
 private:
     std::string value_;
     std::string accessibleLabel_;
-    TabList* tabList_{nullptr};
+    TabListNode* tabList_{nullptr};
     bool active_{true};
 };
 
-class Link : public ControlNode {
+class LinkNode : public ControlNode {
 public:
     using InvokeHandler = std::function<void()>;
-    explicit Link(std::string label = {});
+    explicit LinkNode(std::string label = {});
     [[nodiscard]] const std::string& label() const noexcept;
-    Link& label(std::string value);
+    LinkNode& label(std::string value);
     void setLabel(std::string value);
     [[nodiscard]] const std::string& href() const noexcept;
-    Link& href(std::string value);
+    LinkNode& href(std::string value);
     void setHref(std::string value);
-    Link& onInvoke(InvokeHandler handler);
+    LinkNode& onInvoke(InvokeHandler handler);
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
@@ -211,19 +211,19 @@ private:
     InvokeHandler onInvoke_;
 };
 
-class Breadcrumb;
+class BreadcrumbNode;
 
-class BreadcrumbItem : public ControlNode {
+class BreadcrumbItemNode : public ControlNode {
 public:
     using InvokeHandler = std::function<void()>;
-    explicit BreadcrumbItem(std::string label = {}, bool current = false);
+    explicit BreadcrumbItemNode(std::string label = {}, bool current = false);
     [[nodiscard]] const std::string& label() const noexcept;
-    BreadcrumbItem& label(std::string value);
+    BreadcrumbItemNode& label(std::string value);
     void setLabel(std::string value);
     [[nodiscard]] bool isCurrent() const noexcept;
-    BreadcrumbItem& current(bool value = true) noexcept;
+    BreadcrumbItemNode& current(bool value = true) noexcept;
     void setCurrent(bool value) noexcept;
-    BreadcrumbItem& onInvoke(InvokeHandler handler);
+    BreadcrumbItemNode& onInvoke(InvokeHandler handler);
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
@@ -240,16 +240,16 @@ private:
     InvokeHandler onInvoke_;
 };
 
-// Breadcrumb uses a deterministic responsive collapse policy: retain first
+// BreadcrumbNode uses a deterministic responsive collapse policy: retain first
 // and final items, then elide middle destinations as width requires. A future
-// menu/Popover can use hiddenItems() to surface the collapsed destinations.
-class Breadcrumb : public ContainerNode {
+// menu/PopoverNode can use hiddenItems() to surface the collapsed destinations.
+class BreadcrumbNode : public ContainerNode {
 public:
-    BreadcrumbItem& addItem(std::string label, bool current = false);
-    Breadcrumb& maxVisible(std::size_t value) noexcept;
+    BreadcrumbItemNode& addItem(std::string label, bool current = false);
+    BreadcrumbNode& maxVisible(std::size_t value) noexcept;
     void setMaxVisible(std::size_t value) noexcept;
     [[nodiscard]] std::size_t maxVisible() const noexcept;
-    Breadcrumb& accessibleLabel(std::string value);
+    BreadcrumbNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
     [[nodiscard]] std::vector<std::string> hiddenItems() const;
@@ -261,7 +261,7 @@ public:
 private:
     [[nodiscard]] std::vector<std::size_t> visibleIndices() const;
     std::size_t maxVisible_{4};
-    std::string accessibleLabel_{"Breadcrumb"};
+    std::string accessibleLabel_{"BreadcrumbNode"};
 };
 
 } // namespace wui

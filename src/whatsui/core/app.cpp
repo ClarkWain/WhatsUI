@@ -30,7 +30,7 @@ NodeTreeStats collectTreeStats(const Node* node)
     stats.layoutDirty = layoutDirty ? 1u : 0u;
     stats.paintDirty = paintDirty ? 1u : 0u;
     stats.compositingDirty = compositingDirty ? 1u : 0u;
-    stats.textNodes = dynamic_cast<const Text*>(node) != nullptr ? 1u : 0u;
+    stats.textNodes = dynamic_cast<const TextNode*>(node) != nullptr ? 1u : 0u;
     for (const auto& child : node->children()) {
         const auto nested = collectTreeStats(child.get());
         stats.nodes += nested.nodes;
@@ -194,7 +194,7 @@ const OverlayHost& UiWindow::overlayHost() const noexcept
     return overlayHost_;
 }
 
-OverlayId UiWindow::showDialog(std::unique_ptr<Dialog> dialog)
+OverlayId UiWindow::showDialog(std::unique_ptr<DialogNode> dialog)
 {
     WUI_ASSERT_UI_THREAD();
     if (!dialog) {
@@ -206,7 +206,7 @@ OverlayId UiWindow::showDialog(std::unique_ptr<Dialog> dialog)
         : activeModalDrawer() != nullptr
             ? static_cast<Node*>(activeModalDrawer())
             : uiRoot_.content();
-    Dialog* const raw = dialog.get();
+    DialogNode* const raw = dialog.get();
 
     // UiWindow owns dialog focus restoration. Clear focus before handing the
     // modal to OverlayHost so that its generic overlay entry does not retain a
@@ -227,7 +227,7 @@ OverlayId UiWindow::showDialog(std::unique_ptr<Dialog> dialog)
     return id;
 }
 
-std::unique_ptr<Dialog> UiWindow::dismissDialog(OverlayId id)
+std::unique_ptr<DialogNode> UiWindow::dismissDialog(OverlayId id)
 {
     WUI_ASSERT_UI_THREAD();
     if (eventDispatchDepth_ != 0) {
@@ -237,7 +237,7 @@ std::unique_ptr<Dialog> UiWindow::dismissDialog(OverlayId id)
     return dismissDialogImmediately(id);
 }
 
-std::unique_ptr<Dialog> UiWindow::dismissDialogImmediately(OverlayId id)
+std::unique_ptr<DialogNode> UiWindow::dismissDialogImmediately(OverlayId id)
 {
     auto it = std::find_if(dialogs_.begin(), dialogs_.end(), [id](const DialogEntry& entry) { return entry.id == id; });
     if (it == dialogs_.end()) {
@@ -253,10 +253,10 @@ std::unique_ptr<Dialog> UiWindow::dismissDialogImmediately(OverlayId id)
     Node* const restoreRoot = it->restoreRoot;
     dialogs_.erase(it);
     auto overlay = overlayHost_.dismiss(id);
-    auto* rawDialog = dynamic_cast<Dialog*>(overlay.get());
+    auto* rawDialog = dynamic_cast<DialogNode*>(overlay.get());
     if (rawDialog != nullptr) {
         (void)overlay.release();
-        std::unique_ptr<Dialog> dialog(rawDialog);
+        std::unique_ptr<DialogNode> dialog(rawDialog);
         // Restoring after OverlayHost's change hook avoids retaining a focus
         // pointer into the removed modal subtree.
         // A nested dialog hands keyboard routing back to the dialog beneath it;
@@ -330,7 +330,7 @@ void UiWindow::flushDeferredDialogDismissals() noexcept
     }
 }
 
-std::unique_ptr<Dialog> UiWindow::dismissTopDialog()
+std::unique_ptr<DialogNode> UiWindow::dismissTopDialog()
 {
     WUI_ASSERT_UI_THREAD();
     return dialogs_.empty() ? nullptr : dismissDialog(dialogs_.back().id);
@@ -388,7 +388,7 @@ AccessibilitySnapshot UiWindow::accessibilitySnapshot() const
         snapshot.push_back(std::move(entry));
     }
     // Non-modal overlays remain part of the active accessibility surface.
-    // In particular, a focused Menu must not disappear from UIA while its
+    // In particular, a focused MenuNode must not disappear from UIA while its
     // owner correctly reports Expanded. Dialogs continue to replace the page
     // tree entirely through the activeRoot branch above.
     if (activeDialog() == nullptr && activeModalDrawer() == nullptr) {
@@ -432,8 +432,8 @@ AccessibilityActionStatus UiWindow::performAccessibilityAction(
     Node* target = activeDialog() != nullptr ? static_cast<Node*>(activeDialog())
         : activeModalDrawer() != nullptr ? static_cast<Node*>(activeModalDrawer()) : uiRoot_.content();
     if (target == nullptr) return AccessibilityActionStatus::ElementNotAvailable;
-    // Table and DataGrid headers/rows/cells are virtual snapshot children.
-    // Resolve the physical Table prefix first, then validate the current
+    // TableNode and DataGridNode headers/rows/cells are virtual snapshot children.
+    // Resolve the physical TableNode prefix first, then validate the current
     // materialized semantic before dispatching its supported grid operation.
     const auto virtualMarker = std::find(request.path.begin() + 1, request.path.end(),
                                          detail::kVirtualAccessibilityChild);
@@ -444,7 +444,7 @@ AccessibilityActionStatus UiWindow::performAccessibilityAction(
             }
             target = target->children()[*it].get();
         }
-        if (auto* table = dynamic_cast<Table*>(target)) {
+        if (auto* table = dynamic_cast<TableNode*>(target)) {
             const std::size_t marker = static_cast<std::size_t>(virtualMarker - request.path.begin());
             if (marker + 1 >= request.path.size()) return AccessibilityActionStatus::ElementNotAvailable;
             const auto kind = static_cast<TableAccessibilityKind>(request.path[marker + 1]);
@@ -471,7 +471,7 @@ AccessibilityActionStatus UiWindow::performAccessibilityAction(
             });
             if (entry == entries.end()) return AccessibilityActionStatus::ElementNotAvailable;
             if (!entry->properties.enabled) return AccessibilityActionStatus::ElementNotEnabled;
-            auto* grid = dynamic_cast<DataGrid*>(table);
+            auto* grid = dynamic_cast<DataGridNode*>(table);
             if (grid == nullptr || request.kind != AccessibilityActionKind::Invoke) {
                 return AccessibilityActionStatus::NotSupported;
             }
@@ -488,8 +488,8 @@ AccessibilityActionStatus UiWindow::performAccessibilityAction(
             return AccessibilityActionStatus::Succeeded;
         }
     }
-    // ListBox options are virtual snapshot children. They do not own Nodes;
-    // invoke the stable parent ListBox value API after validating that the
+    // ListBoxNode options are virtual snapshot children. They do not own Nodes;
+    // invoke the stable parent ListBoxNode value API after validating that the
     // current materialized option still matches the retained UIA provider.
     if (request.path.size() >= 3 &&
         request.path[request.path.size() - 2] == detail::kVirtualAccessibilityChild) {
@@ -501,7 +501,7 @@ AccessibilityActionStatus UiWindow::performAccessibilityAction(
             }
             target = target->children()[index].get();
         }
-        auto* listBox = dynamic_cast<ListBox*>(target);
+        auto* listBox = dynamic_cast<ListBoxNode*>(target);
         if (listBox == nullptr || optionIndex >= listBox->options().size()) {
             return AccessibilityActionStatus::ElementNotAvailable;
         }
@@ -690,10 +690,10 @@ bool UiWindow::dispatchKey(const KeyEvent& event)
 
         // Clipboard ownership is a platform concern, while selection ownership is
         // a text-control concern. Keep this small bridge at the window boundary
-        // so TextInput remains usable in headless/unit-test trees and native
+        // so TextFieldNode remains usable in headless/unit-test trees and native
         // backends never need widget-specific shortcut handling.
         if (!handled && event.action == KeyAction::Down && (event.modifiers & KeyModifierControl) != 0) {
-            if (auto* input = dynamic_cast<TextInput*>(focusManager_.focused())) {
+            if (auto* input = dynamic_cast<TextFieldNode*>(focusManager_.focused())) {
                 switch (event.keyCode) {
                 case 67: // Ctrl+C
                     if (input->copySelection(platformWindow_->clipboard())) {
@@ -791,7 +791,7 @@ void UiWindow::onOverlayChanged() noexcept
     platformWindow_->requestRedraw();
 }
 
-Dialog* UiWindow::activeDialog() const noexcept
+DialogNode* UiWindow::activeDialog() const noexcept
 {
     if (dialogs_.empty()) {
         return nullptr;
@@ -799,18 +799,18 @@ Dialog* UiWindow::activeDialog() const noexcept
     const auto id = dialogs_.back().id;
     for (const auto& overlay : overlayHost_.overlays()) {
         if (overlay.id == id) {
-            return dynamic_cast<Dialog*>(overlay.content.get());
+            return dynamic_cast<DialogNode*>(overlay.content.get());
         }
     }
     return nullptr;
 }
 
-Drawer* UiWindow::activeModalDrawer() const noexcept
+DrawerNode* UiWindow::activeModalDrawer() const noexcept
 {
-    // Any modal Drawer blocks the page even if a non-modal supplemental
+    // Any modal DrawerNode blocks the page even if a non-modal supplemental
     // overlay (for example a tooltip) was opened after it.
     for (auto it = overlayHost_.overlays().rbegin(); it != overlayHost_.overlays().rend(); ++it) {
-        if (auto* drawer = dynamic_cast<Drawer*>(it->content.get()); drawer != nullptr && drawer->trapsFocus()) {
+        if (auto* drawer = dynamic_cast<DrawerNode*>(it->content.get()); drawer != nullptr && drawer->trapsFocus()) {
             return drawer;
         }
     }
@@ -819,7 +819,7 @@ Drawer* UiWindow::activeModalDrawer() const noexcept
 
 void UiWindow::syncTextInputSession() noexcept
 {
-    auto* focused = dynamic_cast<TextInput*>(focusManager_.focused());
+    auto* focused = dynamic_cast<TextFieldNode*>(focusManager_.focused());
     if (focused == activeTextInput_) {
         if (focused != nullptr) {
             focused->syncSession(platformWindow_->textInput(), focused->caretRect());

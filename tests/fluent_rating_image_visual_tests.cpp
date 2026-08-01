@@ -79,41 +79,41 @@ void render(const std::string& outputPath, float scale)
         paint.fillRect({0, 0, kLogicalWidth, kLogicalHeight}, wui::theme().colors.neutralBackground2.rest);
         paint.drawText("Fluent Rating", 24, 36, 20, wui::theme().colors.neutralForeground1, 600);
 
-        wui::Rating neutral(3.0f);
+        wui::RatingNode neutral(3.0f);
         neutral.layout({24, 56, 148, 28});
         neutral.paint(paint);
-        wui::Rating half(3.5f);
+        wui::RatingNode half(3.5f);
         half.setStep(0.5f);
         half.setColor(wui::RatingColor::Brand);
         half.setVisualState(wui::ControlVisualState::Focused, true);
         half.layout({200, 56, 148, 28});
         half.paint(paint);
-        wui::Rating marigold(4.0f);
+        wui::RatingNode marigold(4.0f);
         marigold.setColor(wui::RatingColor::Marigold);
         marigold.setSize(wui::RatingSize::Large);
         marigold.layout({376, 60, 108, 20});
         marigold.paint(paint);
-        wui::Rating disabled(2.0f);
+        wui::RatingNode disabled(2.0f);
         disabled.setEnabled(false);
         disabled.setSize(wui::RatingSize::Medium);
         disabled.layout({512, 62, 88, 16});
         disabled.paint(paint);
 
-        wui::Rating circles(2.5f);
+        wui::RatingNode circles(2.5f);
         circles.setStep(0.5f);
         circles.setShape(wui::RatingShape::Circle);
         circles.setColor(wui::RatingColor::Brand);
         circles.setSize(wui::RatingSize::Medium);
         circles.layout({24, 112, 88, 16});
         circles.paint(paint);
-        wui::Rating squares(4.5f);
+        wui::RatingNode squares(4.5f);
         squares.setStep(0.5f);
         squares.setShape(wui::RatingShape::Square);
         squares.setSize(wui::RatingSize::Small);
         squares.layout({136, 112, 68, 16});
         squares.paint(paint);
 
-        wui::Rating hovered(0.0f);
+        wui::RatingNode hovered(0.0f);
         hovered.setSize(wui::RatingSize::Small);
         hovered.setColor(wui::RatingColor::Brand);
         hovered.layout({236, 112, 68, 16});
@@ -122,7 +122,7 @@ void render(const std::string& outputPath, float scale)
         hoverEvent.position = {270.0f, 120.0f};
         hovered.onPointerEvent(hoverEvent);
         hovered.paint(paint);
-        wui::Rating pressed(0.0f);
+        wui::RatingNode pressed(0.0f);
         pressed.setSize(wui::RatingSize::Small);
         pressed.setColor(wui::RatingColor::Brand);
         pressed.layout({328, 112, 68, 16});
@@ -132,17 +132,17 @@ void render(const std::string& outputPath, float scale)
         pressEvent.position = {362.0f, 120.0f};
         pressed.onPointerEvent(pressEvent);
         pressed.paint(paint);
-        wui::Rating readOnly(3.0f);
+        wui::RatingNode readOnly(3.0f);
         readOnly.setSize(wui::RatingSize::Small);
         readOnly.setReadOnly(true);
         readOnly.layout({420, 112, 68, 16});
         readOnly.paint(paint);
 
-        wui::RatingDisplay display(4.5f);
+        wui::RatingDisplayNode display(4.5f);
         display.setCount(12345);
         display.layout({24, 156, 220, 24});
         display.paint(paint);
-        wui::RatingDisplay compact(3.8f);
+        wui::RatingDisplayNode compact(3.8f);
         compact.setCount(1160);
         compact.setCompact(true);
         compact.setColor(wui::RatingColor::Marigold);
@@ -157,7 +157,7 @@ void render(const std::string& outputPath, float scale)
                                       wui::ImageShape::Rounded,
                                       wui::ImageShape::Circular};
         for (int index = 0; index < 3; ++index) {
-            wui::Image image(source, 64, 40);
+            wui::ImageNode image(source, 64, 40);
             image.setShape(shapes[index]);
             image.setFit(index == 0 ? wui::ImageFit::Contain
                                     : index == 1 ? wui::ImageFit::Cover : wui::ImageFit::Center);
@@ -167,7 +167,7 @@ void render(const std::string& outputPath, float scale)
             image.prepare(paint);
             image.paint(paint);
         }
-        wui::Image fallbackImage;
+        wui::ImageNode fallbackImage;
         fallbackImage.fallback(source, 64, 40);
         fallbackImage.setFit(wui::ImageFit::Cover);
         fallbackImage.setShape(wui::ImageShape::Rounded);

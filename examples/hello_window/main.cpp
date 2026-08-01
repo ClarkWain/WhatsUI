@@ -6,7 +6,7 @@
 #include "wui/wui.h"
 #include "wui/glfw_platform.h"
 
-using namespace wui::ui;
+using namespace wui;
 
 wui::State<int> clickCount{0};
 
@@ -32,7 +32,8 @@ auto buildView() {
                     clickCount.set(0);
                 })
             )
-        );
+        )
+        .build();
 }
 
 int main()

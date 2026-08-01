@@ -9,7 +9,7 @@
 
 namespace wui {
 
-Text::Text(std::string value)
+TextNode::TextNode(std::string value)
     : value_(std::move(value))
     , fontFamily_(theme().typography.familyBase.empty()
                       ? std::string(theme().typography.familyBaseFallback)
@@ -17,63 +17,63 @@ Text::Text(std::string value)
 {
 }
 
-const std::string& Text::value() const noexcept
+const std::string& TextNode::value() const noexcept
 {
     return value_;
 }
 
-Text& Text::value(std::string value)
+TextNode& TextNode::value(std::string value)
 {
     setValue(std::move(value));
     return *this;
 }
 
-void Text::setValue(std::string value)
+void TextNode::setValue(std::string value)
 {
     value_ = std::move(value);
     invalidateLineCache();
     markDirty(DirtyFlag::Layout);
 }
 
-float Text::fontSize() const noexcept
+float TextNode::fontSize() const noexcept
 {
     return fontSize_;
 }
 
-void Text::setFontSize(float size) noexcept
+void TextNode::setFontSize(float size) noexcept
 {
     fontSize_ = std::max(1.0f, size);
     markDirty(DirtyFlag::Layout);
 }
 
-int Text::fontWeight() const noexcept
+int TextNode::fontWeight() const noexcept
 {
     return fontWeight_;
 }
 
-void Text::setFontWeight(int weight) noexcept
+void TextNode::setFontWeight(int weight) noexcept
 {
     fontWeight_ = std::clamp(weight, 1, 1000);
     markDirty(DirtyFlag::Layout);
 }
 
-float Text::lineHeight() const noexcept
+float TextNode::lineHeight() const noexcept
 {
     return lineHeight_;
 }
 
-void Text::setLineHeight(float height) noexcept
+void TextNode::setLineHeight(float height) noexcept
 {
     lineHeight_ = std::max(0.0f, height);
     markDirty(DirtyFlag::Layout);
 }
 
-const std::string& Text::fontFamily() const noexcept
+const std::string& TextNode::fontFamily() const noexcept
 {
     return fontFamily_;
 }
 
-void Text::setFontFamily(std::string family)
+void TextNode::setFontFamily(std::string family)
 {
     if (family.empty()) {
         family = theme().typography.familyBase.empty()
@@ -85,7 +85,7 @@ void Text::setFontFamily(std::string family)
     markDirty(DirtyFlag::Layout);
 }
 
-void Text::setTextStyle(const TextStyleToken& style)
+void TextNode::setTextStyle(const TextStyleToken& style)
 {
     const std::string family(style.family.empty()
                                  ? (theme().typography.familyBase.empty()
@@ -103,44 +103,44 @@ void Text::setTextStyle(const TextStyleToken& style)
     markDirty(DirtyFlag::Layout);
 }
 
-void Text::setRole(TextRole role) noexcept { if (role_ != role) { role_ = role; markDirty(DirtyFlag::Paint); } }
-TextRole Text::role() const noexcept { return role_; }
-void Text::setAlignment(TextAlign alignment) noexcept { if (alignment_ != alignment) { alignment_ = alignment; markDirty(DirtyFlag::Paint); } }
-TextAlign Text::alignment() const noexcept { return alignment_; }
-void Text::setUnderline(bool value) noexcept { if (underline_ != value) { underline_ = value; markDirty(DirtyFlag::Paint); } }
-bool Text::isUnderlined() const noexcept { return underline_; }
-void Text::setStrikethrough(bool value) noexcept { if (strikethrough_ != value) { strikethrough_ = value; markDirty(DirtyFlag::Paint); } }
-bool Text::isStrikethrough() const noexcept { return strikethrough_; }
+void TextNode::setRole(TextRole role) noexcept { if (role_ != role) { role_ = role; markDirty(DirtyFlag::Paint); } }
+TextRole TextNode::role() const noexcept { return role_; }
+void TextNode::setAlignment(TextAlign alignment) noexcept { if (alignment_ != alignment) { alignment_ = alignment; markDirty(DirtyFlag::Paint); } }
+TextAlign TextNode::alignment() const noexcept { return alignment_; }
+void TextNode::setUnderline(bool value) noexcept { if (underline_ != value) { underline_ = value; markDirty(DirtyFlag::Paint); } }
+bool TextNode::isUnderlined() const noexcept { return underline_; }
+void TextNode::setStrikethrough(bool value) noexcept { if (strikethrough_ != value) { strikethrough_ = value; markDirty(DirtyFlag::Paint); } }
+bool TextNode::isStrikethrough() const noexcept { return strikethrough_; }
 
-TextWrap Text::wrap() const noexcept { return wrap_; }
-void Text::setWrap(TextWrap wrap) noexcept { wrap_ = wrap; markDirty(DirtyFlag::Layout); }
-std::size_t Text::maxLines() const noexcept { return maxLines_; }
-void Text::setMaxLines(std::size_t lines) noexcept { maxLines_ = lines; markDirty(DirtyFlag::Layout); }
-TextOverflow Text::overflow() const noexcept { return overflow_; }
-void Text::setOverflow(TextOverflow overflow) noexcept { overflow_ = overflow; markDirty(DirtyFlag::Layout); }
-void Text::setFillAvailableWidth(bool fill) noexcept
+TextWrap TextNode::wrap() const noexcept { return wrap_; }
+void TextNode::setWrap(TextWrap wrap) noexcept { wrap_ = wrap; markDirty(DirtyFlag::Layout); }
+std::size_t TextNode::maxLines() const noexcept { return maxLines_; }
+void TextNode::setMaxLines(std::size_t lines) noexcept { maxLines_ = lines; markDirty(DirtyFlag::Layout); }
+TextOverflow TextNode::overflow() const noexcept { return overflow_; }
+void TextNode::setOverflow(TextOverflow overflow) noexcept { overflow_ = overflow; markDirty(DirtyFlag::Layout); }
+void TextNode::setFillAvailableWidth(bool fill) noexcept
 {
     if (fillAvailableWidth_ == fill) return;
     fillAvailableWidth_ = fill;
     markDirty(DirtyFlag::Layout);
 }
-bool Text::fillsAvailableWidth() const noexcept { return fillAvailableWidth_; }
-std::vector<std::string> Text::resolvedLines(float availableWidth) const { return layoutLines(availableWidth); }
+bool TextNode::fillsAvailableWidth() const noexcept { return fillAvailableWidth_; }
+std::vector<std::string> TextNode::resolvedLines(float availableWidth) const { return layoutLines(availableWidth); }
 
-void Text::setColor(Color color) noexcept
+void TextNode::setColor(Color color) noexcept
 {
     color_ = color;
     hasColor_ = true;
     markDirty(DirtyFlag::Paint);
 }
 
-void Text::clearColor() noexcept
+void TextNode::clearColor() noexcept
 {
     hasColor_ = false;
     markDirty(DirtyFlag::Paint);
 }
 
-SizeF Text::measure(const Constraints& constraints) const
+SizeF TextNode::measure(const Constraints& constraints) const
 {
     if (wrap_ == TextWrap::NoWrap && overflow_ == TextOverflow::Clip) {
         const auto& explicitLineRanges = explicitLines();
@@ -165,7 +165,7 @@ SizeF Text::measure(const Constraints& constraints) const
     return constraints.clamp({width, effectiveLineHeight() * static_cast<float>(lines.size())});
 }
 
-const std::vector<Text::ExplicitLine>& Text::explicitLines() const
+const std::vector<TextNode::ExplicitLine>& TextNode::explicitLines() const
 {
     if (explicitLineCacheValid_) return explicitLineCache_;
     explicitLineCache_.clear();
@@ -182,13 +182,13 @@ const std::vector<Text::ExplicitLine>& Text::explicitLines() const
     return explicitLineCache_;
 }
 
-void Text::invalidateLineCache() noexcept
+void TextNode::invalidateLineCache() noexcept
 {
     explicitLineCacheValid_ = false;
     explicitLineCache_.clear();
 }
 
-float Text::textWidth(const std::string& value) const
+float TextNode::textWidth(const std::string& value) const
 {
     if (const TextMeasurer* measurer = textMeasurer()) {
         return measurer->measureText(value, fontSize_, fontWeight_, fontFamily_).width;
@@ -200,7 +200,7 @@ float Text::textWidth(const std::string& value) const
     return static_cast<float>(codepoints) * (fontSize_ * 0.5f);
 }
 
-float Text::effectiveLineHeight() const noexcept
+float TextNode::effectiveLineHeight() const noexcept
 {
     if (lineHeight_ > 0.0f) return lineHeight_;
     if (const TextMeasurer* measurer = textMeasurer()) {
@@ -209,7 +209,7 @@ float Text::effectiveLineHeight() const noexcept
     return fontSize_ * 1.25f;
 }
 
-std::vector<std::string> Text::layoutLines(float availableWidth) const
+std::vector<std::string> TextNode::layoutLines(float availableWidth) const
 {
     const bool constrained = std::isfinite(availableWidth);
     const bool canWrap = wrap_ == TextWrap::Word && constrained;
@@ -258,7 +258,7 @@ std::vector<std::string> Text::layoutLines(float availableWidth) const
             lines.reserve(resolved.size());
             for (const auto& line : resolved) lines.push_back(line.text);
             // An empty paragraph is still one visible logical line. Backends
-            // return no lines for an empty input, while Text's longstanding
+            // return no lines for an empty input, while TextNode's longstanding
             // measure/paint contract reserves that line.
             if (lines.empty() && value_.empty()) lines.emplace_back();
             return lines;
@@ -315,7 +315,7 @@ std::vector<std::string> Text::layoutLines(float availableWidth) const
     return lines;
 }
 
-float Text::baselineOffset() const noexcept
+float TextNode::baselineOffset() const noexcept
 {
     TextExtents extents;
     extents.height = fontSize_ * 1.25f;
@@ -329,7 +329,7 @@ float Text::baselineOffset() const noexcept
     return std::max(0.0f, height - glyphHeight) * 0.5f + extents.ascent;
 }
 
-void Text::paint(PaintContext& context)
+void TextNode::paint(PaintContext& context)
 {
     const Color color = hasColor_ ? color_ : theme().colors.text;
     const float lineHeight = effectiveLineHeight();
@@ -365,8 +365,8 @@ void Text::paint(PaintContext& context)
 #ifndef WHATSUI_HAS_WHATSCANVAS
         // WhatsCanvas batches glyphs after paint returns, so native viewport
         // clipping remains owned by the enclosing viewport. The headless
-        // contract still records Text's literal overflow clip when an
-        // ancestor is not already clipping inside the Text bounds.
+        // contract still records TextNode's literal overflow clip when an
+        // ancestor is not already clipping inside the TextNode bounds.
         const bool ancestorClipsWidth = activeClip
             && activeClip->x >= bounds().x - 0.01f
             && activeClip->x + activeClip->width
@@ -439,28 +439,28 @@ void Text::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-Spacer::Spacer(SizeF size) noexcept
+SpacerNode::SpacerNode(SizeF size) noexcept
     : size_(size)
 {
 }
 
-SizeF Spacer::size() const noexcept
+SizeF SpacerNode::size() const noexcept
 {
     return size_;
 }
 
-void Spacer::setSize(SizeF size) noexcept
+void SpacerNode::setSize(SizeF size) noexcept
 {
     size_ = size;
     markDirty(DirtyFlag::Layout);
 }
 
-SizeF Spacer::measure(const Constraints& constraints) const
+SizeF SpacerNode::measure(const Constraints& constraints) const
 {
     return constraints.clamp(size_);
 }
 
-void Spacer::paint(PaintContext& context)
+void SpacerNode::paint(PaintContext& context)
 {
     (void)context;
     clearDirty(DirtyFlag::Paint);

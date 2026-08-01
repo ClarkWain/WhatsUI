@@ -9,9 +9,9 @@
 #include "view/components/responsive_overview_hero.h"
 #include "view/components/responsive_column_pair.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
-using namespace wui::ui;
+using namespace wui;
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -102,7 +102,7 @@ std::unique_ptr<wui::Node> buildHero(GalleryViewModel& gallery, const NavigateHa
                 )
             )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildCategoryPreview(wui::IconName icon)
@@ -114,12 +114,12 @@ std::unique_ptr<wui::Node> buildCategoryPreview(wui::IconName icon)
             Icon(icon).size(wui::IconSize::Size20).color(wui::theme().colors.accent),
             Text("Category preview").size(12.0f).weight(600)
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildCategories(GalleryViewModel& gallery, const NavigateHandler& navigate)
 {
-    auto rows = std::make_unique<wui::Column>();
+    auto rows = std::make_unique<wui::ColumnNode>();
     rows->setGap(12.0f);
     rows->setAlign(wui::Alignment::Stretch);
 
@@ -176,7 +176,7 @@ std::unique_ptr<wui::Node> buildQaSummary(const ComponentCatalog& catalog, const
                     .onClick([navigate] { if (navigate) navigate(GalleryRoute::VisualQa); })
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -200,7 +200,7 @@ std::unique_ptr<wui::Node> buildOverviewPage(
                 buildQaSummary(catalog, navigate)
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::pages

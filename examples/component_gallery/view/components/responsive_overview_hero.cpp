@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::gallery::view::components {
 namespace {
@@ -52,7 +52,7 @@ private:
                                                         float titleLineHeight,
                                                         bool verticalActions)
     {
-        using namespace wui::ui;
+        using namespace wui;
         const auto& current = wui::theme();
         auto actions = verticalActions
             ? Column()
@@ -72,7 +72,7 @@ private:
                           .onClick([this] {
                               if (navigate_) navigate_(GalleryRoute::VisualQa);
                           }))
-                  .intoNode()
+                  .build()
             : Row()
                   .gap(8.0f)
                   .children(
@@ -89,7 +89,7 @@ private:
                           .onClick([this] {
                               if (navigate_) navigate_(GalleryRoute::VisualQa);
                           }))
-                  .intoNode();
+                  .build();
 
         return Column()
             .gap(14.0f)
@@ -110,12 +110,12 @@ private:
                     .wrap()
                     .color(current.colors.textMuted),
                 std::move(actions))
-            .intoNode();
+            .build();
     }
 
     [[nodiscard]] std::unique_ptr<wui::Node> buildContent(bool compact)
     {
-        using namespace wui::ui;
+        using namespace wui;
         const auto& current = wui::theme();
         const float padding = compact ? 16.0f : 32.0f;
         if (compact) {
@@ -124,7 +124,7 @@ private:
                 .radius(current.radius.xLarge)
                 .padding(padding)
                 .children(buildCopy(26.0f, 32.0f, true))
-                .intoNode();
+                .build();
         }
         return Box()
             .background(current.colors.surface)
@@ -156,7 +156,7 @@ private:
                                             .appearance(wui::BadgeAppearance::Tint)
                                             .color(wui::BadgeColor::Brand))))
             )
-            .intoNode();
+            .build();
     }
 
     void rebuild(bool compact)

@@ -58,7 +58,7 @@ void render(const std::string& output, float scale)
         paint.drawText("Fluent Persona", 28, 36, 22, current.colors.neutralForeground1, 600);
         paint.drawText("Avatar, presence, four text levels, and safe truncation", 28, 60, 13, current.colors.neutralForeground2, 400);
 
-        wui::Persona owner("Ada Lovelace", wui::PersonaSize::ExtraLarge);
+        wui::PersonaNode owner("Ada Lovelace", wui::PersonaSize::ExtraLarge);
         owner.setAvatarColor(wui::AvatarColor::Brand);
         owner.setPresence(wui::PresenceStatus::Available);
         owner.setSecondaryText("Task owner");
@@ -66,14 +66,14 @@ void render(const std::string& output, float scale)
         owner.layout({28, 92, 260, 72});
         owner.paint(paint);
 
-        wui::Persona compact("Grace Hopper", wui::PersonaSize::Small);
+        wui::PersonaNode compact("Grace Hopper", wui::PersonaSize::Small);
         compact.setAvatarColor(wui::AvatarColor::Cranberry);
         compact.setSecondaryText("Rear Admiral, US Navy");
         compact.setTextPosition(wui::PersonaTextPosition::Before);
         compact.layout({350, 96, 190, 40});
         compact.paint(paint);
 
-        wui::Persona below("Katherine Johnson", wui::PersonaSize::Large);
+        wui::PersonaNode below("Katherine Johnson", wui::PersonaSize::Large);
         below.setAvatarColor(wui::AvatarColor::Purple);
         below.setSecondaryText("Flight dynamics");
         below.setTextPosition(wui::PersonaTextPosition::Below);
@@ -81,14 +81,14 @@ void render(const std::string& output, float scale)
         below.layout({594, 82, 96, 160});
         below.paint(paint);
 
-        wui::Persona status({}, wui::PersonaSize::Huge);
+        wui::PersonaNode status({}, wui::PersonaSize::Huge);
         status.setPresence(wui::PresenceStatus::DoNotDisturb);
         status.setPresenceOnly(true);
         status.layout({350, 184, 64, 64});
         status.paint(paint);
         paint.drawText("Presence only", 330, 276, 12, current.colors.neutralForeground2, 400);
 
-        wui::Persona clipped("A very long display name that stays inside its column", wui::PersonaSize::Medium);
+        wui::PersonaNode clipped("A very long display name that stays inside its column", wui::PersonaSize::Medium);
         clipped.setSecondaryText("Long secondary information is also safely ellipsized");
         clipped.setAvatarColor(wui::AvatarColor::Teal);
         clipped.layout({28, 206, 250, 40});

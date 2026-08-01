@@ -16,6 +16,9 @@
 
 namespace wui {
 
+class Node;
+using NodePtr = std::unique_ptr<Node>;
+
 enum class ControlVisualState : std::uint32_t {
     None = 0,
     Hovered = 1u << 0,
@@ -49,17 +52,18 @@ public:
         return parent_;
     }
 
-    [[nodiscard]] const std::vector<std::unique_ptr<Node>>& children() const noexcept
+    [[nodiscard]] const std::vector<NodePtr>& children() const noexcept
     {
         return children_;
     }
 
-    void appendChild(std::unique_ptr<Node> child);
-    void insertChild(std::size_t index, std::unique_ptr<Node> child);
+    void appendChild(NodePtr child);
+    void appendChildren(std::vector<NodePtr> children);
+    void insertChild(std::size_t index, NodePtr child);
     // Reorders an existing child without detaching it.  This preserves focus,
     // state subscriptions, and native input ownership for keyed collections.
     void moveChild(std::size_t from, std::size_t to);
-    [[nodiscard]] std::unique_ptr<Node> removeChild(std::size_t index);
+    [[nodiscard]] NodePtr removeChild(std::size_t index);
     void clearChildren();
 
     // A node becomes attached when a UiRoot or OverlayHost adopts it.  Nodes
@@ -159,7 +163,7 @@ public:
         return bounds_;
     }
 
-    // Main-axis flex weight for Row/Column layout. 0 = fixed (measured) size;
+    // Main-axis flex weight for RowNode/ColumnNode layout. 0 = fixed (measured) size;
     // >0 = share of the remaining main-axis space, proportional to weight.
     [[nodiscard]] float flex() const noexcept
     {
@@ -194,7 +198,7 @@ private:
     void detachRecursively() noexcept;
 
     Node* parent_{nullptr};
-    std::vector<std::unique_ptr<Node>> children_;
+    std::vector<NodePtr> children_;
     std::vector<std::function<void()>> attachCallbacks_;
     std::vector<std::function<void()>> detachCallbacks_;
     std::vector<std::function<void()>> teardown_;

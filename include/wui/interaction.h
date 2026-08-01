@@ -3,13 +3,13 @@
 // InteractionArea — an attached component that turns any layout node into a
 // clickable, hoverable, focusable, keyboard-invocable surface without forcing
 // it to inherit from ControlNode. Owned lazily by the host node (see
-// Container::ensureInteraction()); when absent the host stays a pure layout
+// BoxNode::ensureInteraction()); when absent the host stays a pure layout
 // container with the exact behavior it had before this file existed.
 //
 // The struct is intentionally passive: it stores callbacks, optional visual
 // tokens, accessibility metadata, and the current ControlVisualStates bitmask.
 // The host node is responsible for wiring pointer/keyboard/a11y events into
-// this data (Container does so today; Row/Column/Image can adopt the same
+// this data (BoxNode does so today; RowNode/ColumnNode/ImageNode can adopt the same
 // pattern later without changing this contract).
 
 #include <functional>
@@ -51,7 +51,7 @@ struct InteractionArea {
     std::optional<Color> pressedBackground;
 
     // Accessibility. Roles other than Group let the platform bridge expose the
-    // node as a Button / ListItem / MenuItem to UIA. accessibleLabel provides
+    // node as a ButtonNode / ListItem / MenuItem to UIA. accessibleLabel provides
     // the accessible name for narration when the host has no visible text.
     AccessibilityRole accessibleRole{AccessibilityRole::Group};
     std::string accessibleLabel;

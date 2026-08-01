@@ -3,7 +3,7 @@
 
 #include "wui/accessibility.h"
 #include "wui/navigation.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/widgets.h"
 
 namespace {
@@ -15,7 +15,7 @@ void expect(bool condition, const char* message)
 void testToolbarAndLinkActivation()
 {
     int invoked = 0;
-    wui::Toolbar toolbar;
+    wui::ToolbarNode toolbar;
     toolbar.addItem("Cut").onInvoke([&] { ++invoked; });
     toolbar.addItem("Paste", wui::ToolbarItemAppearance::Primary).onInvoke([&] { invoked += 2; });
     toolbar.layout({0, 0, 240, 40});
@@ -24,7 +24,7 @@ void testToolbarAndLinkActivation()
     expect(toolbar.measure({0, 400, 0, 80}).height == 40.0f,
            "Fluent medium Toolbar surface must be 40 DIP high");
     expect(toolbar.children().size() == 2, "Toolbar must retain one real control per item");
-    auto* cut = dynamic_cast<wui::ToolbarItem*>(toolbar.children().front().get());
+    auto* cut = dynamic_cast<wui::ToolbarItemNode*>(toolbar.children().front().get());
     expect(cut != nullptr, "Toolbar items must expose their own control contract");
     expect(cut->performAccessibilityAction(wui::AccessibilityActionKind::Invoke, {}) ==
                wui::AccessibilityActionStatus::Succeeded && invoked == 1,
@@ -32,7 +32,7 @@ void testToolbarAndLinkActivation()
     expect(toolbar.onKeyEvent({0, wui::KeyAction::Down, 39}) && toolbar.focusedIndex() == 1,
            "Toolbar arrow navigation must move roving focus between items");
 
-    wui::Link link("Open docs");
+    wui::LinkNode link("Open docs");
     link.href("https://example.invalid").onInvoke([&] { ++invoked; });
     expect(link.performAccessibilityAction(wui::AccessibilityActionKind::Invoke, {}) ==
                wui::AccessibilityActionStatus::Succeeded && invoked == 2,
@@ -41,7 +41,7 @@ void testToolbarAndLinkActivation()
 
 void testToolbarOrientationAndOverflow()
 {
-    wui::Toolbar toolbar;
+    wui::ToolbarNode toolbar;
     toolbar.addItem("New"); toolbar.addItem("Open"); toolbar.addItem("Save"); toolbar.addItem("Export");
     toolbar.layout({0, 0, 108, 40});
     expect(toolbar.overflowedItems().size() >= 1 && toolbar.overflowedItems().back() == "Export",
@@ -60,20 +60,20 @@ void testToolbarOrientationAndOverflow()
 
 void testDeclarativeBuilders()
 {
-    auto toolbar = wui::ui::Toolbar().item("Save", wui::ToolbarItemAppearance::Primary)
+    auto toolbar = wui::Toolbar().item("Save", wui::ToolbarItemAppearance::Primary)
                                      .accessibleLabel("Document actions");
-    auto tabs = wui::ui::TabList().tab("files", "Files").tab("activity", "Activity").value("activity");
-    auto link = wui::ui::Link("Open guide").href("https://example.invalid");
-    auto breadcrumb = wui::ui::Breadcrumb().item("Home").item("Library", true).maxVisible(3);
-    expect(toolbar.intoNode() != nullptr && tabs.intoNode() != nullptr && link.intoNode() != nullptr &&
-               breadcrumb.intoNode() != nullptr,
+    auto tabs = wui::TabList().tab("files", "Files").tab("activity", "Activity").value("activity");
+    auto link = wui::Link("Open guide").href("https://example.invalid");
+    auto breadcrumb = wui::Breadcrumb().item("Home").item("Library", true).maxVisible(3);
+    expect(std::move(toolbar).build() != nullptr && std::move(tabs).build() != nullptr &&
+               std::move(link).build() != nullptr && std::move(breadcrumb).build() != nullptr,
            "Navigation controls must be available through the declarative builder API");
 }
 
 void testTabsKeyboardAndPanelIdentity()
 {
     int changes = 0;
-    wui::TabList tabs;
+    wui::TabListNode tabs;
     tabs.accessibleLabel("Settings sections");
     tabs.addTab("general", "General");
     tabs.addTab("appearance", "Appearance", false);
@@ -89,12 +89,12 @@ void testTabsKeyboardAndPanelIdentity()
            "Automatic TabList arrows must skip disabled tabs while selecting the next enabled tab");
     expect(tabs.onKeyEvent({0, wui::KeyAction::Down, 35}) && tabs.value() == "advanced",
            "TabList End must select the final enabled tab");
-    tabs.setActivationMode(wui::TabList::ActivationMode::Manual);
+    tabs.setActivationMode(wui::TabListNode::ActivationMode::Manual);
     expect(tabs.onKeyEvent({0, wui::KeyAction::Down, 37}) && tabs.value() == "advanced",
            "Manual TabList arrows must move focus without changing the active panel");
     expect(tabs.onKeyEvent({0, wui::KeyAction::Down, 13}) && tabs.value() == "general",
            "Manual TabList Enter must activate the focused tab");
-    wui::TabPanel panel("advanced");
+    wui::TabPanelNode panel("advanced");
     panel.accessibleLabel("Advanced settings").tabList(tabs);
     expect(panel.value() == "advanced" && panel.accessibleLabel() == "Advanced settings" && !panel.isActive() &&
                panel.measure({0, 100, 0, 100}).height == 0.0f,
@@ -106,7 +106,7 @@ void testTabsKeyboardAndPanelIdentity()
 void testBreadcrumbCollapseAndSemantics()
 {
     int invoked = 0;
-    wui::Breadcrumb breadcrumb;
+    wui::BreadcrumbNode breadcrumb;
     breadcrumb.maxVisible(3).accessibleLabel("Location");
     breadcrumb.addItem("Home").onInvoke([&] { ++invoked; });
     breadcrumb.addItem("Projects").onInvoke([&] { ++invoked; });
@@ -118,7 +118,7 @@ void testBreadcrumbCollapseAndSemantics()
     const auto hidden = breadcrumb.hiddenItems();
     expect(hidden.size() == 1 && hidden.front() == "Projects",
            "Breadcrumb must collapse middle destinations while retaining first and final context");
-    auto* first = dynamic_cast<wui::BreadcrumbItem*>(breadcrumb.children().front().get());
+    auto* first = dynamic_cast<wui::BreadcrumbItemNode*>(breadcrumb.children().front().get());
     expect(first && first->performAccessibilityAction(wui::AccessibilityActionKind::Invoke, {}) ==
                         wui::AccessibilityActionStatus::Succeeded && invoked == 1,
            "Visible breadcrumb destinations must remain independently invokable");
@@ -126,12 +126,12 @@ void testBreadcrumbCollapseAndSemantics()
 
 void testNavigationAccessibilitySnapshot()
 {
-    auto root = std::make_unique<wui::Container>();
-    auto tabs = std::make_unique<wui::TabList>();
+    auto root = std::make_unique<wui::BoxNode>();
+    auto tabs = std::make_unique<wui::TabListNode>();
     tabs->accessibleLabel("Demo tabs");
     tabs->addTab("one", "One");
     root->appendChild(std::move(tabs));
-    root->appendChild(std::make_unique<wui::Link>("Privacy"));
+    root->appendChild(std::make_unique<wui::LinkNode>("Privacy"));
     root->layout({0, 0, 400, 80});
     const auto snapshot = wui::snapshotAccessibilityTree(*root);
     bool sawTabList = false, sawTab = false, sawLink = false;

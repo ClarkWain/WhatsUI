@@ -1,8 +1,8 @@
 #pragma once
 
-// Fluent Popover and TeachingPopover surfaces.  Popover is deliberately a
-// real Popup so applications can use an arbitrary anchor/trigger, while
-// PopoverButton covers the common command-button trigger without requiring a
+// Fluent PopoverNode and TeachingPopoverNode surfaces.  PopoverNode is deliberately a
+// real PopupNode so applications can use an arbitrary anchor/trigger, while
+// PopoverButtonNode covers the common command-button trigger without requiring a
 // separate event router.
 
 #include <functional>
@@ -22,15 +22,15 @@ enum class PopoverAppearance {
     Brand,
 };
 
-class Popover : public Popup {
+class PopoverNode : public PopupNode {
 public:
-    Popover(std::string title = {}, std::string body = {});
+    PopoverNode(std::string title = {}, std::string body = {});
 
-    Popover& title(std::string value);
-    Popover& body(std::string value);
-    Popover& appearance(PopoverAppearance value) noexcept;
-    Popover& showArrow(bool value = true) noexcept;
-    Popover& accessibleLabel(std::string value);
+    PopoverNode& title(std::string value);
+    PopoverNode& body(std::string value);
+    PopoverNode& appearance(PopoverAppearance value) noexcept;
+    PopoverNode& showArrow(bool value = true) noexcept;
+    PopoverNode& accessibleLabel(std::string value);
 
     [[nodiscard]] const std::string& title() const noexcept;
     [[nodiscard]] const std::string& body() const noexcept;
@@ -63,17 +63,17 @@ private:
 };
 
 // Owns only the trigger state; OverlayHost continues to own the transient
-// Popover tree.  Factories make every open cycle a fresh node tree, avoiding
+// PopoverNode tree.  Factories make every open cycle a fresh node tree, avoiding
 // stale focus or state after close/reopen.
-class PopoverButton : public Button {
+class PopoverButtonNode : public ButtonNode {
 public:
-    using PopoverFactory = std::function<std::unique_ptr<Popover>()>;
+    using PopoverFactory = std::function<std::unique_ptr<PopoverNode>()>;
 
-    explicit PopoverButton(std::string label = {});
+    explicit PopoverButtonNode(std::string label = {});
 
-    PopoverButton& bindOverlayHost(OverlayHost& host) noexcept;
-    PopoverButton& popoverFactory(PopoverFactory factory);
-    PopoverButton& popover(std::string title, std::string body = {});
+    PopoverButtonNode& bindOverlayHost(OverlayHost& host) noexcept;
+    PopoverButtonNode& popoverFactory(PopoverFactory factory);
+    PopoverButtonNode& popover(std::string title, std::string body = {});
     [[nodiscard]] bool isOpen() const noexcept;
 
     [[nodiscard]] AccessibilityActionCapabilities accessibilityActions() const noexcept override;
@@ -99,18 +99,18 @@ enum class TeachingPopoverFocusPolicy {
     TrapFocus,
 };
 
-class TeachingPopover : public Popover {
+class TeachingPopoverNode : public PopoverNode {
 public:
     using ActionHandler = std::function<void()>;
 
-    TeachingPopover(std::string title = {}, std::string body = {});
+    TeachingPopoverNode(std::string title = {}, std::string body = {});
 
-    TeachingPopover& primaryAction(std::string label, ActionHandler handler = {});
-    TeachingPopover& secondaryAction(std::string label, ActionHandler handler = {});
-    TeachingPopover& dismissLabel(std::string label);
-    TeachingPopover& stepText(std::string value);
-    TeachingPopover& focusPolicy(TeachingPopoverFocusPolicy value) noexcept;
-    TeachingPopover& onDismiss(DismissHandler handler);
+    TeachingPopoverNode& primaryAction(std::string label, ActionHandler handler = {});
+    TeachingPopoverNode& secondaryAction(std::string label, ActionHandler handler = {});
+    TeachingPopoverNode& dismissLabel(std::string label);
+    TeachingPopoverNode& stepText(std::string value);
+    TeachingPopoverNode& focusPolicy(TeachingPopoverFocusPolicy value) noexcept;
+    TeachingPopoverNode& onDismiss(DismissHandler handler);
 
     [[nodiscard]] const std::string& primaryActionLabel() const noexcept;
     [[nodiscard]] const std::string& secondaryActionLabel() const noexcept;
