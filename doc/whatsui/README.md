@@ -42,7 +42,7 @@
 - `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`：记录 ADR-006 第一阶段后的风险分级、目标能力模型和后续独立优化切片。
 - `DECLARATIVE_COMPONENT_AUTHORING.md`：说明 `body()`、`ViewLike`、动态 `View`、Props/Callbacks、响应式数据和 `CallbackLifetime` 的安全边界。
 - `DECLARATIVE_MODIFIER_INVENTORY.md`：定义 fluent modifier 的左右值配对、共享实现和组合能力清单。
-- `RETIRED_EXAMPLES.md`：记录不再构建或维护的历史示例；当前 Todo App 已归档。
+- `RETIRED_EXAMPLES.md`：记录不再构建或维护的历史示例；Todo、Settings Panel 和独立 Command Palette App 已归档。
 - `REACTIVITY_AND_STRUCTURE.md`：说明响应式绑定（`Text().bind`、节点 teardown 生命周期）、结构控件 `If`/`ForEach`、可插拔文本测量与新控件。
 - `LAYOUT_MODEL.md`：细化约束布局模型、容器语义、逻辑单位与滚动边界。
 - `TEXT_INPUT_AND_IME.md`：细化文本输入、组合输入、光标、选区和平台 IME 会话边界。

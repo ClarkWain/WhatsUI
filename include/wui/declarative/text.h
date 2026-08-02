@@ -294,6 +294,11 @@ public:
     {
     }
 
+    explicit Image(wui::ImageSource source)
+        : BuilderBase(std::move(source))
+    {
+    }
+
     Image& source(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight) &
     {
         node_->setSource(std::move(rgbaPixels), pixelWidth, pixelHeight);
@@ -306,6 +311,18 @@ public:
         return std::move(self());
     }
 
+    Image& source(wui::ImageSource value) &
+    {
+        node_->setSource(std::move(value));
+        return self();
+    }
+
+    Image&& source(wui::ImageSource value) &&
+    {
+        node_->setSource(std::move(value));
+        return std::move(self());
+    }
+
     Image& fallback(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight) &
     {
         node_->fallback(std::move(rgbaPixels), pixelWidth, pixelHeight);
@@ -315,6 +332,18 @@ public:
     Image&& fallback(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight) &&
     {
         node_->fallback(std::move(rgbaPixels), pixelWidth, pixelHeight);
+        return std::move(self());
+    }
+
+    Image& fallback(wui::ImageSource value) &
+    {
+        node_->setFallback(std::move(value));
+        return self();
+    }
+
+    Image&& fallback(wui::ImageSource value) &&
+    {
+        node_->setFallback(std::move(value));
         return std::move(self());
     }
 

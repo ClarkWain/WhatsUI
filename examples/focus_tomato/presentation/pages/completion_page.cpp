@@ -72,14 +72,14 @@ wui::Row buildCompletionActions(
 
 } // namespace
 
-wui::Box buildCompletionPage(
-    FocusViewModel& viewModel,
-    const FocusAssets& assets,
-    float pageWidth,
-    float pageHeight,
-    CompletionPageActions actions)
+wui::Box CompletionPage::body()
 {
     using namespace wui;
+    FocusViewModel& viewModel = *viewModel_;
+    const FocusAssets& assets = *assets_;
+    const float pageWidth = pageWidth_;
+    const float pageHeight = pageHeight_;
+    CompletionPageActions actions = std::move(actions_);
     const float contentWidth = std::max(320.0f, pageWidth - 56.0f);
     auto content = Column()
         .gap(14.0f)

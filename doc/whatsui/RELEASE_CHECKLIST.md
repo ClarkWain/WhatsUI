@@ -50,8 +50,8 @@ the remaining manual/legal gates above are still required.
 - [ ] WhatsCanvas Software build and deterministic visual regression succeeds.
 - [ ] Focus Tomato and Component Gallery captures are reviewed by a human at
   supported desktop sizes; hashes are updated only for an intentional visual decision.
-- [ ] GLFW Focus Tomato, Component Gallery, Settings, and Command Palette reference applications launch on
-  the release Windows version.
+- [ ] GLFW Focus Tomato, Component Gallery, Inspector, and Hello Window reference
+  applications launch on the release Windows version.
 - [ ] Text input/IME manual matrix has evidence at 100%, 150%, and 200% DPI.
 - [ ] Windows UI Automation bridge plus a Narrator/screen-reader validation
   matrix has release-owner sign-off. A platform-neutral semantic snapshot is

@@ -163,14 +163,14 @@ wui::Box buildBreakFooter(
 
 } // namespace
 
-wui::Box buildShortBreakPage(
-    FocusViewModel& viewModel,
-    const FocusAssets& assets,
-    float pageWidth,
-    float pageHeight,
-    ShortBreakPageActions actions)
+wui::Box ShortBreakPage::body()
 {
     using namespace wui;
+    FocusViewModel& viewModel = *viewModel_;
+    const FocusAssets& assets = *assets_;
+    const float pageWidth = pageWidth_;
+    const float pageHeight = pageHeight_;
+    ShortBreakPageActions actions = std::move(actions_);
     const float contentWidth = std::min(424.0f, pageWidth - 56.0f);
     auto content = Column()
         .gap(12.0f)

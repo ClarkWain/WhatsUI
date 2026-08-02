@@ -1,15 +1,29 @@
 #include "application/focus_repository.h"
 #include "presentation/focus_view_model.h"
+#include "presentation/pages/completion_page.h"
+#include "presentation/pages/focus_timer_page.h"
+#include "presentation/pages/session_setup_page.h"
+#include "presentation/pages/short_break_page.h"
+#include "presentation/pages/task_list_page.h"
+#include "wui/view.h"
 
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace {
 
 using namespace whatsui::focus_tomato;
 using namespace whatsui::focus_tomato::presentation;
+
+static_assert(wui::isViewLikeV<TaskListPage>);
+static_assert(wui::isViewLikeV<SessionSetupPage>);
+static_assert(wui::isViewLikeV<FocusTimerPage>);
+static_assert(wui::isViewLikeV<CompletionPage>);
+static_assert(wui::isViewLikeV<ShortBreakPage>);
+static_assert(!std::is_base_of_v<wui::Node, TaskListPage>);
 
 void expect(bool condition, const std::string& message)
 {

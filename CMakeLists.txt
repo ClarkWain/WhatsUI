@@ -66,6 +66,7 @@ add_library(WhatsUI
     src/whatsui/core/thread_check.cpp
     src/whatsui/core/ui_dispatcher.cpp
     src/whatsui/core/ui_inspector.cpp
+    src/whatsui/core/ui_inspector_style.cpp
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
     src/whatsui/widgets/button.cpp

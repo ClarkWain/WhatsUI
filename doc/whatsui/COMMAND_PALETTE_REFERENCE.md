@@ -1,5 +1,10 @@
 # Command Palette reference
 
+状态：Retired（2026-08-02）
+
+独立 Command Palette App、CMake target 和捕获入口已删除，不再构建、发布或维护。
+下文仅保留为历史设计记录；当前命令面板控件场景由 Component Gallery 覆盖。
+
 `WhatsUICommandPaletteApp` and `WhatsUICommandPaletteGlfw` are one M2 source
 tree with two hosts: deterministic WhatsCanvas Software captures and the
 interactive Windows GLFW window.

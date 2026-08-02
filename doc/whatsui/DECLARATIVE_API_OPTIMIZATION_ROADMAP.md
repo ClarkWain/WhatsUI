@@ -78,3 +78,8 @@ Software/OpenGL 相关视觉门禁和人工截图比较。新增 Builder 或 cap
 后续作者体验验收（2026-08-01）：Focus Tomato presentation 已移除全部 `.build()` 与
 `asNode()`；静态辅助组件返回具体 `Box/Row/Column`，仅 Router 保留一个动态 `View`
 边界。迁移后的五张产品截图人工复核无布局、层级或裁切变化。
+
+产品组件验收（2026-08-02）：Focus Tomato 五个页面和新建任务 Dialog 已迁移为
+`body()` Component；图片与 Dialog 草稿使用声明式 `ImageSource`/`State`，Router 回调
+由 `CallbackLifetime` 保护。应用层不再手工构造运行时 Node，仅为首次聚焦保留一个
+短生命周期 `Node*`。全部 Focus Tomato 测试及五张产品截图复核通过。

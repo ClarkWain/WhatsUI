@@ -133,14 +133,14 @@ wui::Box buildEmptyTasks(std::function<void()> createTask)
 
 } // namespace
 
-wui::Box buildTaskListPage(
-    FocusViewModel& viewModel,
-    const FocusAssets& assets,
-    float pageWidth,
-    float pageHeight,
-    TaskListPageActions actions)
+wui::Box TaskListPage::body()
 {
     using namespace wui;
+    FocusViewModel& viewModel = *viewModel_;
+    const FocusAssets& assets = *assets_;
+    const float pageWidth = pageWidth_;
+    const float pageHeight = pageHeight_;
+    TaskListPageActions actions = std::move(actions_);
     const float contentWidth = std::max(320.0f, pageWidth - 64.0f);
     const float taskWidth = std::min(500.0f, contentWidth);
     const float statWidth = (contentWidth - 28.0f) / 3.0f;
@@ -189,6 +189,7 @@ wui::Box buildTaskListPage(
                     .color(style::textPrimary)
                     .flex(1.0f),
                 buildPrimaryTextButton("＋ 新建任务", actions.createTask)
+                    .automationId("focus.tasks.create")
             )
     );
     document.children(

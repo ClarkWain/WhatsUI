@@ -13,11 +13,14 @@
 //   return wui::runGlfwUiApp(app);
 //
 // 2. One-liner (for simple apps):
-//   return wui::runGlfwApp("Title", {800, 600}, std::move(rootNode));
+//   return wui::runGlfwApp("Title", {800, 600},
+//                          wui::Text("Hello"));
 
+#include <functional>
 #include <memory>
 #include <string>
-#include <functional>
+#include <type_traits>
+#include <utility>
 
 #include "wui/node.h"
 #include "wui/app.h"
@@ -47,5 +50,56 @@ int runGlfwApp(std::string title, SizeF size, std::unique_ptr<Node> root);
 // to present a modal confirmation dialog from a declarative control callback.
 using GlfwRootFactory = std::function<std::unique_ptr<Node>(UiWindow&)>;
 int runGlfwApp(std::string title, SizeF size, GlfwRootFactory rootFactory);
+
+namespace detail {
+
+template <class Factory, class = void>
+struct IsGlfwViewFactory : std::false_type {
+};
+
+template <class Factory>
+struct IsGlfwViewFactory<
+    Factory,
+    std::void_t<std::invoke_result_t<std::decay_t<Factory>&, UiWindow&>>>
+    : std::bool_constant<isViewLikeV<
+          std::invoke_result_t<std::decay_t<Factory>&, UiWindow&>>> {
+};
+
+} // namespace detail
+
+// Declarative root overload. Application code passes a Builder, Component,
+// View, or concrete unique_ptr<NodeT>; the platform boundary owns materialization.
+template <
+    class Content,
+    std::enable_if_t<isViewLikeV<Content>, int> = 0>
+int runGlfwApp(std::string title, SizeF size, Content&& content)
+{
+    return runGlfwApp(
+        std::move(title),
+        size,
+        detail::materialize(std::forward<Content>(content)));
+}
+
+// Window-aware declarative factory. A shared one-shot holder keeps even a
+// move-only factory compatible with the type-erased GlfwRootFactory boundary.
+template <
+    class Factory,
+    std::enable_if_t<
+        !isViewLikeV<Factory>
+        && detail::IsGlfwViewFactory<Factory>::value
+        && std::is_constructible_v<std::decay_t<Factory>, Factory&&>,
+        int> = 0>
+int runGlfwApp(std::string title, SizeF size, Factory&& factory)
+{
+    auto retained = std::make_shared<std::decay_t<Factory>>(
+        std::forward<Factory>(factory));
+    return runGlfwApp(
+        std::move(title),
+        size,
+        GlfwRootFactory(
+            [retained = std::move(retained)](UiWindow& window) mutable {
+                return detail::materialize(std::invoke(*retained, window));
+            }));
+}
 
 } // namespace wui

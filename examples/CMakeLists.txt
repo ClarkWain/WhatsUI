@@ -43,41 +43,28 @@ target_link_libraries(WhatsUIFocusTomatoCapture
     PRIVATE WhatsUIFocusTomatoCore WhatsCanvas::Software)
 target_compile_features(WhatsUIFocusTomatoCapture PRIVATE cxx_std_17)
 
-# The Settings reference is deliberately built from the same source for the
-# deterministic Software capture and the interactive GLFW host.
-add_executable(WhatsUISettingsApp
-    settings_panel/main.cpp
+set(WHATSUI_DEBUG_INSPECTOR_SOURCES
+    debug_inspector/inspector_components.cpp
+    debug_inspector/inspector_diagnostics.cpp
+    debug_inspector/inspector_page.cpp
+    debug_inspector/sample_tree.cpp
 )
 
-target_link_libraries(WhatsUISettingsApp
-    PRIVATE
-        WhatsUI::WhatsUI
-        WhatsCanvas::Software
+add_library(WhatsUIDebugInspectorCore STATIC
+    ${WHATSUI_DEBUG_INSPECTOR_SOURCES}
 )
-
-target_compile_features(WhatsUISettingsApp PRIVATE cxx_std_17)
-
-# Searchable command-palette reference: deterministic Software capture plus
-# an interactive GLFW target from one source tree.
-add_executable(WhatsUICommandPaletteApp
-    command_palette/main.cpp
-)
-
-target_link_libraries(WhatsUICommandPaletteApp
-    PRIVATE
-        WhatsUI::WhatsUI
-        WhatsCanvas::Software
-)
-
-target_compile_features(WhatsUICommandPaletteApp PRIVATE cxx_std_17)
+target_link_libraries(WhatsUIDebugInspectorCore PUBLIC WhatsUI::WhatsUI)
+target_include_directories(WhatsUIDebugInspectorCore
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(WhatsUIDebugInspectorCore PUBLIC cxx_std_17)
 
 add_executable(WhatsUIDebugInspectorApp
     debug_inspector/main.cpp
+    debug_inspector/software_capture.cpp
 )
-
 target_link_libraries(WhatsUIDebugInspectorApp
     PRIVATE
-        WhatsUI::WhatsUI
+        WhatsUIDebugInspectorCore
         WhatsCanvas::Software
 )
 
@@ -144,40 +131,16 @@ if(TARGET WhatsUI::Glfw)
         PRIVATE WhatsUIComponentGalleryCore WhatsUI::Glfw)
     target_compile_features(WhatsUIComponentGalleryGlfw PRIVATE cxx_std_17)
 
-    add_executable(WhatsUISettingsGlfw
-        settings_panel/main.cpp
-    )
-
-    target_link_libraries(WhatsUISettingsGlfw
-        PRIVATE
-            WhatsUI::Glfw
-    )
-
-    target_compile_definitions(WhatsUISettingsGlfw PRIVATE WUI_SETTINGS_INTERACTIVE=1)
-    target_compile_features(WhatsUISettingsGlfw PRIVATE cxx_std_17)
-
-    add_executable(WhatsUICommandPaletteGlfw
-        command_palette/main.cpp
-    )
-
-    target_link_libraries(WhatsUICommandPaletteGlfw
-        PRIVATE
-            WhatsUI::Glfw
-    )
-
-    target_compile_definitions(WhatsUICommandPaletteGlfw PRIVATE WUI_COMMAND_PALETTE_INTERACTIVE=1)
-    target_compile_features(WhatsUICommandPaletteGlfw PRIVATE cxx_std_17)
-
     add_executable(WhatsUIDebugInspectorGlfw
-        debug_inspector/main.cpp
+        debug_inspector/interactive_main.cpp
     )
 
     target_link_libraries(WhatsUIDebugInspectorGlfw
         PRIVATE
+            WhatsUIDebugInspectorCore
             WhatsUI::Glfw
     )
 
-    target_compile_definitions(WhatsUIDebugInspectorGlfw PRIVATE WUI_DEBUG_INSPECTOR_INTERACTIVE=1)
     target_compile_features(WhatsUIDebugInspectorGlfw PRIVATE cxx_std_17)
 
     add_executable(WhatsUIHelloWindow

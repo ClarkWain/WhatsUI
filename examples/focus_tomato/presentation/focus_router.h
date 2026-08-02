@@ -5,10 +5,10 @@
 
 #include "focus_assets.h"
 #include "focus_view_model.h"
+#include "wui/component.h"
 #include "wui/view.h"
 
 namespace wui {
-class Node;
 class UiWindow;
 }
 
@@ -57,6 +57,7 @@ private:
     float pageWidth_{0.0f};
     float pageHeight_{0.0f};
     FocusRoute currentRoute_{FocusRoute::Tasks};
+    wui::CallbackLifetime lifetime_;
 };
 
 [[nodiscard]] std::string_view focusRouteKey(FocusRoute route) noexcept;

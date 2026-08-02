@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <utility>
 
 #include "../focus_assets.h"
 #include "../focus_view_model.h"
@@ -14,11 +15,29 @@ struct ShortBreakPageActions {
     std::function<void()> skip;
 };
 
-[[nodiscard]] wui::Box buildShortBreakPage(
-    FocusViewModel& viewModel,
-    const FocusAssets& assets,
-    float pageWidth,
-    float pageHeight,
-    ShortBreakPageActions actions);
+class ShortBreakPage {
+public:
+    ShortBreakPage(FocusViewModel& viewModel,
+                   const FocusAssets& assets,
+                   float pageWidth,
+                   float pageHeight,
+                   ShortBreakPageActions actions)
+        : viewModel_(&viewModel)
+        , assets_(&assets)
+        , pageWidth_(pageWidth)
+        , pageHeight_(pageHeight)
+        , actions_(std::move(actions))
+    {
+    }
+
+    [[nodiscard]] wui::Box body();
+
+private:
+    FocusViewModel* viewModel_;
+    const FocusAssets* assets_;
+    float pageWidth_;
+    float pageHeight_;
+    ShortBreakPageActions actions_;
+};
 
 } // namespace whatsui::focus_tomato::presentation

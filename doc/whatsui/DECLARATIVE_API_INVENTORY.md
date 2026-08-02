@@ -18,6 +18,8 @@
 - 组合、窗口、导航、Dialog 和 Overlay 在内部统一物化；公开作者 API 不再提供 `asNode()`。
 - `View` 是 move-only、一次性动态类型擦除，只用于路由、跨模块工厂和异构运行时分支。
 - `ButtonVariant`、`variant()`、`setVariant()` 已删除，只保留 `ButtonAppearance`。
+- `Image` 可直接从不可变共享 `ImageSource` 构造，`source()` 与 `fallback()` 也接受
+  `ImageSource`，应用组件无需为复用图片资源手工创建 `ImageNode`。
 
 ## Builder / Node 映射
 

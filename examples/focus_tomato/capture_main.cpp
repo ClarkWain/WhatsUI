@@ -147,13 +147,13 @@ int main(int argc, char** argv)
             loadFocusAssets(std::filesystem::path(FOCUS_TOMATO_ASSET_DIR));
 
         capture(
-            buildTaskListPage(
+            TaskListPage(
                 viewModel, assets, 640.0f, 820.0f, {{}, {}}),
             640, 820, output / "01-task-list.ppm");
 
         viewModel.selectTask("task-design");
         capture(
-            buildSessionSetupPage(
+            SessionSetupPage(
                 viewModel, assets, 520.0f, 720.0f, {{}, {}}),
             520, 720, output / "02-session-setup.ppm");
 
@@ -163,7 +163,7 @@ int main(int argc, char** argv)
                 "could not seed active capture session: " + started.message);
         }
         capture(
-            buildFocusTimerPage(
+            FocusTimerPage(
                 viewModel, assets, 480.0f, 720.0f, {{}, {}, {}, {}}),
             480, 720, output / "03-focus-timer.ppm");
 
@@ -177,7 +177,7 @@ int main(int argc, char** argv)
                 "could not seed completed capture session");
         }
         capture(
-            buildCompletionPage(
+            CompletionPage(
                 viewModel, assets, 640.0f, 820.0f, {{}, {}}),
             640, 820, output / "04-completion.ppm");
 
@@ -188,7 +188,7 @@ int main(int argc, char** argv)
                 + breakStarted.message);
         }
         capture(
-            buildShortBreakPage(
+            ShortBreakPage(
                 viewModel, assets, 480.0f, 720.0f, {{}, {}, {}}),
             480, 720, output / "05-short-break.ppm");
         return 0;

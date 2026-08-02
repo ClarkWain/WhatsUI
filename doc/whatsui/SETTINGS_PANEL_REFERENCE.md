@@ -1,5 +1,10 @@
 # Settings Panel reference
 
+状态：Retired（2026-08-02）
+
+独立 Settings Panel App、CMake target 和视觉测试已删除，不再构建、发布或维护。
+下文仅保留为历史设计记录；当前设置类控件与布局场景由 Component Gallery 覆盖。
+
 The M1 Settings reference is a Windows-first Fluent light application used to
 exercise the input, focus, scroll, dialog, and overlay contracts together.
 The application has exactly one declarative tree shared by both targets:

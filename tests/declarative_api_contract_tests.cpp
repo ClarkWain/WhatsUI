@@ -4,6 +4,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "wui/glfw_platform.h"
 #include "wui/wui.h"
 
 namespace {
@@ -165,6 +166,13 @@ struct InvalidComponent {
     int body() { return 0; }
 };
 
+struct WindowAwareGreetingFactory {
+    auto operator()(wui::UiWindow&)
+    {
+        return GreetingComponent{};
+    }
+};
+
 static_assert(std::is_base_of_v<wui::Node, wui::ButtonNode>);
 static_assert(!std::is_base_of_v<wui::Node, wui::Button>);
 static_assert(!std::is_copy_constructible_v<wui::Button>);
@@ -206,6 +214,19 @@ static_assert(std::is_same_v<
 static_assert(std::is_same_v<
               decltype(wui::Dialog().build()),
               std::unique_ptr<wui::DialogNode>>);
+static_assert(std::is_constructible_v<wui::Image, wui::ImageSource>);
+static_assert(std::is_same_v<
+              decltype(wui::runGlfwApp(
+                  std::declval<std::string>(),
+                  std::declval<wui::SizeF>(),
+                  wui::Column())),
+              int>);
+static_assert(std::is_same_v<
+              decltype(wui::runGlfwApp(
+                  std::declval<std::string>(),
+                  std::declval<wui::SizeF>(),
+                  WindowAwareGreetingFactory{})),
+              int>);
 
 #define WUI_ASSERT_LEAF_BUILDER(Builder, RuntimeNode)                         \
     static_assert(std::is_same_v<typename wui::Builder::node_type,            \

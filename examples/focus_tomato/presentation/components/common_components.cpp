@@ -13,18 +13,20 @@ wui::Box buildFixedImage(
     bool circular,
     bool decorative)
 {
-    auto image = std::make_unique<wui::ImageNode>(source);
-    image->setFit(wui::ImageFit::Cover);
-    image->setBlock(true);
-    image->setShape(circular ? wui::ImageShape::Circular
-                             : wui::ImageShape::Square);
-    image->setAlt(std::move(alt));
-    image->setDecorative(decorative);
+    using namespace wui;
     return wui::Box()
         .width(width)
         .height(height)
         .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
-        .children(std::move(image));
+        .children(
+            Image(source)
+                .fit(wui::ImageFit::Cover)
+                .block()
+                .shape(circular ? wui::ImageShape::Circular
+                                : wui::ImageShape::Square)
+                .alt(std::move(alt))
+                .decorative(decorative)
+        );
 }
 
 wui::Box buildWindowBar(

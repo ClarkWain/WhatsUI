@@ -83,14 +83,14 @@ wui::Column buildSetupContent(
 
 } // namespace
 
-wui::Box buildSessionSetupPage(
-    FocusViewModel& viewModel,
-    const FocusAssets& assets,
-    float pageWidth,
-    float pageHeight,
-    SessionSetupPageActions actions)
+wui::Box SessionSetupPage::body()
 {
     using namespace wui;
+    FocusViewModel& viewModel = *viewModel_;
+    const FocusAssets& assets = *assets_;
+    const float pageWidth = pageWidth_;
+    const float pageHeight = pageHeight_;
+    SessionSetupPageActions actions = std::move(actions_);
     const TaskRecord* task = viewModel.selectedTask();
     const std::string title = task ? task->title : "选择一个任务";
     const int completed = task ? task->completedPomodoros : 0;

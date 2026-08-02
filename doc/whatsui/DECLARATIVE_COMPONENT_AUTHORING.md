@@ -78,6 +78,8 @@ window.content(
 
 `children()`、`content()`、具名槽位、`If/ForEach`、`UiRoot`、`UiWindow`、
 `Navigator`、`OverlayHost` 和 `showDialog()` 都直接接受这些值。
+GLFW 应用入口 `runGlfwApp()` 同样接受 `ViewLike`，包括直接根视图和接收
+`UiWindow&` 后返回根视图的工厂；应用代码不需要为平台入口调用 `.build()`。
 
 静态可知的辅助组件应返回具体 Builder：
 

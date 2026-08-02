@@ -83,7 +83,7 @@ headless build after enabling WhatsCanvas or sanitizers.
 | --- | --- | --- |
 | Runtime, node lifetime, state, input, focus, scrolling | Debug build, relevant focused tests, then full default CTest. | MSVC ASan for ownership/event/lifecycle work. |
 | TextInput, text measurement, composition, clipboard | Focused text/window tests plus full default CTest. | GLFW IME check with a real installed IME; 100%/150%/200% caret/candidate placement when the host boundary changes. |
-| Widget, layout, Fluent theme, Focus Tomato/Component Gallery/Settings/Command Palette UI | Focused tests and full default CTest. | WhatsCanvas Software build; run visual hash and responsive-review tests. A reviewer must inspect the generated images. |
+| Widget, layout, Fluent theme, Focus Tomato/Component Gallery UI | Focused tests and full default CTest. | WhatsCanvas Software build; run visual hash and responsive-review tests. A reviewer must inspect the generated images. |
 | WhatsCanvas/GLFW/backend wiring | Clean `WHATSUI_WITH_WHATSCANVAS=ON` configure/build. | Run the relevant interactive reference app, and state the GPU/driver/Windows version used for manual findings. |
 | Public header/API | Consumer-facing compile coverage and documentation update. | State whether the change is additive, source-breaking, or experimental; no ABI promise may be implied. |
 | Persistence/data format | Unit tests for round trip, malformed-input recovery, and version migration. | Verify the target LocalAppData or chosen injected path does not overwrite user data on failed saves. |

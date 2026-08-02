@@ -355,25 +355,6 @@ if(WHATSUI_ENABLE_SANITIZERS)
     endforeach()
 endif()
 
-# The Settings reference has a deliberately smaller contract than Focus Tomato's
-# scripted product walkthrough: prove that its shared Software tree captures
-# at the documented Windows desktop size. Human review owns visual direction;
-# this test prevents the reference target or capture entry point from silently
-# dropping out of the WhatsCanvas build.
-if(TARGET WhatsUISettingsApp)
-    add_test(
-        NAME whatsui_settings_reference_capture
-        COMMAND ${CMAKE_COMMAND}
-            -DWHATSUI_SETTINGS_EXECUTABLE=$<TARGET_FILE:WhatsUISettingsApp>
-            -DWHATSUI_SETTINGS_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/settings_reference_capture
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/VerifySettingsReference.cmake
-    )
-    set_tests_properties(whatsui_settings_reference_capture PROPERTIES
-        LABELS "visual;software;settings"
-        TIMEOUT 90
-    )
-endif()
-
 add_test(
     NAME whatsui_scroll_view_tests
     COMMAND WhatsUIScrollViewTests
@@ -1448,6 +1429,23 @@ add_test(
     COMMAND WhatsUIUiInspectorTests
 )
 set_tests_properties(whatsui_ui_inspector_tests PROPERTIES TIMEOUT 30)
+
+if(TARGET WhatsUIDebugInspectorCore)
+    add_executable(WhatsUIDebugInspectorArchitectureTests
+        debug_inspector_architecture_tests.cpp
+    )
+    target_link_libraries(WhatsUIDebugInspectorArchitectureTests
+        PRIVATE
+            WhatsUIDebugInspectorCore
+            WhatsCanvas::Software
+    )
+    target_compile_features(
+        WhatsUIDebugInspectorArchitectureTests PRIVATE cxx_std_17)
+    add_test(
+        NAME whatsui_debug_inspector_architecture_tests
+        COMMAND WhatsUIDebugInspectorArchitectureTests
+    )
+endif()
 
 add_executable(WhatsUIBenchmarks
     m4_benchmarks.cpp

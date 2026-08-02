@@ -35,7 +35,7 @@ window is visible, then record its repository-relative evidence path below.
 | Move the focused window between monitors with different scale values, then refocus and begin a new pre-edit phrase. | | |
 | Shift+Arrow and mouse selection retain logical text order after an IME commit. | | |
 | Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+Z, and Ctrl+Y operate on committed text after a commit and after a cancelled pre-edit. | | |
-| Todo composer and Settings reference input were each checked. | | |
+| Focus Tomato new-task input and Component Gallery input scenarios were each checked. | | |
 
 ## Sign-off
 

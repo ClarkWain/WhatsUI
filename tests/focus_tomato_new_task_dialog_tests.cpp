@@ -53,13 +53,13 @@ public:
     bool failNextSave{false};
 };
 
-wui::Node* findByAccessibilityId(
+wui::Node* findByAutomationId(
     wui::Node* node, const std::string& automationId)
 {
     if (node == nullptr) return nullptr;
     if (node->automationId() == automationId) return node;
     for (const auto& child : node->children()) {
-        if (auto* match = findByAccessibilityId(
+        if (auto* match = findByAutomationId(
                 child.get(), automationId)) {
             return match;
         }
@@ -99,15 +99,15 @@ void successfulSubmitRefreshesOnlyAfterDialogDismissal()
 
     bool refreshed = false;
     bool refreshSawDialog = false;
-    auto newTask = std::make_unique<wui::ButtonNode>("新建任务");
-    auto* newTaskRaw = newTask.get();
-    newTask->onClick([&] {
-        showNewTaskDialog(window, viewModel, [&] {
-            refreshed = true;
-            refreshSawDialog = window.hasDialog();
-            window.setRoot(wui::Text("已刷新任务列表").build());
+    auto newTask = wui::Button("新建任务")
+        .onClick([&] {
+            showNewTaskDialog(window, viewModel, [&] {
+                refreshed = true;
+                refreshSawDialog = window.hasDialog();
+                window.setRoot(wui::Text("已刷新任务列表"));
+            });
         });
-    });
+    auto* newTaskRaw = newTask.node();
     window.setRoot(std::move(newTask));
     window.layout();
 
@@ -128,7 +128,7 @@ void successfulSubmitRefreshesOnlyAfterDialogDismissal()
         window.dispatchTextInput({window.id(), "完成崩溃回归测试"}),
         "The focused dialog input should accept text");
     window.layout();
-    auto* saveButton = findByAccessibilityId(
+    auto* saveButton = findByAutomationId(
         window.overlayHost().top()->content.get(), "focus.new-task.save");
     expect(saveButton != nullptr,
            "The dialog should expose a stable Save automation target");
@@ -173,7 +173,7 @@ void rejectedSubmitsKeepTheDialogAndNeverRefreshThePage()
         wui::UiApp app(
             whatsui::gallery::capture::createHeadlessPlatformHost(1.0f));
         auto& window = app.openWindow("invalid task", {520.0f, 720.0f});
-        window.setRoot(wui::Text("任务列表").build());
+        window.setRoot(wui::Text("任务列表"));
         bool refreshed = false;
         showNewTaskDialog(
             window, viewModel, [&refreshed] { refreshed = true; });
@@ -204,7 +204,7 @@ void rejectedSubmitsKeepTheDialogAndNeverRefreshThePage()
         wui::UiApp app(
             whatsui::gallery::capture::createHeadlessPlatformHost(1.0f));
         auto& window = app.openWindow("failed save", {520.0f, 720.0f});
-        window.setRoot(wui::Text("任务列表").build());
+        window.setRoot(wui::Text("任务列表"));
         bool refreshed = false;
         showNewTaskDialog(
             window, viewModel, [&refreshed] { refreshed = true; });
@@ -248,6 +248,47 @@ void routerCanOutliveAClosedUiWindow()
            "Destroying an application-owned window before its router must be safe");
 }
 
+void renderedPageCallbacksExpireWithTheirRouter()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository);
+    std::int64_t now = 50'000;
+    FocusViewModel viewModel(
+        service,
+        [&now] { return now; },
+        [] { return std::string("expired-router"); });
+    FocusAssets assets;
+
+    wui::UiApp app(
+        whatsui::gallery::capture::createHeadlessPlatformHost(1.0f));
+    auto& window = app.openWindow(
+        "router callback lifetime", {520.0f, 720.0f});
+    auto router = std::make_unique<FocusRouter>(
+        window, viewModel, assets, 520.0f, 720.0f);
+    router->start();
+    window.layout();
+
+    auto* createTask = findByAutomationId(
+        window.uiRoot().content(), "focus.tasks.create");
+    expect(createTask != nullptr,
+           "The task page should expose its primary create action");
+    const auto bounds = createTask->bounds();
+    const wui::PointF center{
+        bounds.x + bounds.width * 0.5f,
+        bounds.y + bounds.height * 0.5f,
+    };
+
+    router.reset();
+    expect(
+        window.dispatchPointer(
+            pointer(window.id(), wui::PointerAction::Down, center))
+            && window.dispatchPointer(
+                pointer(window.id(), wui::PointerAction::Up, center)),
+        "The retained control should still complete input routing");
+    expect(!window.hasDialog(),
+           "A page action must become inert after its Router is destroyed");
+}
+
 } // namespace
 
 int main()
@@ -256,6 +297,7 @@ int main()
         successfulSubmitRefreshesOnlyAfterDialogDismissal();
         rejectedSubmitsKeepTheDialogAndNeverRefreshThePage();
         routerCanOutliveAClosedUiWindow();
+        renderedPageCallbacksExpireWithTheirRouter();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

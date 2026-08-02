@@ -201,7 +201,7 @@ jobs:
             configure_args: -DWHATSUI_WITH_WHATSCANVAS=ON -DWHATSUI_BUILD_TESTS=ON -DWHATSUI_BUILD_EXAMPLES=ON
             # Quote the alternation for PowerShell: an unquoted | becomes a
             # pipeline before CTest receives its regular expression.
-            test_regex: -R '^whatsui_(focus_tomato_visual_capture|settings_reference_capture)$'
+            test_regex: -R '^whatsui_focus_tomato_visual_capture$'
 
     steps:
       - name: Checkout

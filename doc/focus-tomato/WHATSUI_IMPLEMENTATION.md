@@ -28,10 +28,10 @@
 - `application/`：`FocusDataService` 是所有数据写操作的唯一入口；`FocusRepository` 是持久化边界。
 - `infrastructure/`：本地文件仓库负责原子替换、备份恢复和写入前二次校验。
 - `presentation/focus_view_model.*`：把页面意图转换为应用服务命令，并只暴露页面需要的状态。
-- `presentation/focus_router.*`：负责页面进入、退出和完成后的流程分支。
+- `presentation/focus_router.*`：负责页面进入、退出和完成后的流程分支；动态路由只在这里擦除为 `wui::View`，页面动作和延迟刷新使用 `CallbackLifetime` 防止 Router 销毁后的悬空回调。
 - `presentation/components/`：窗口栏、胶囊按钮、图标按钮和指标卡等可复用视觉组件。
-- `presentation/pages/`：每个页面由多个小型构建函数组成，不在单个函数里堆叠完整 UI。
-- `presentation/dialogs/`：独立管理输入草稿、提交、错误反馈与焦点恢复。
+- `presentation/pages/`：五个页面都是提供 `body()` 的 `ViewLike` Component；页面内部继续由有业务名称的小型 Builder 函数组成。
+- `presentation/dialogs/`：新建任务 Dialog 是 `body()` Component，输入草稿和错误反馈使用共享 `State`；只为首次聚焦保留一个最小范围的运行时 `Node*`。
 
 ## 数据错误如何被上层发现
 
@@ -51,6 +51,10 @@
 ## UI 声明约定
 
 多行 `.children(`、`.content(` 的闭合括号必须单独成行，并与对应调用对齐。页面优先拆分为有业务名称的局部组件，避免深层缩进和单函数承担整页布局。
+
+应用层不调用 `.build()`、`asNode()`，也不直接构造 `*Node`。静态辅助函数返回具体
+Builder，页面由 `body()` Component 表达，只有路由分支使用动态 `View`。图片通过
+`Image(ImageSource)` 声明，Node 物化统一留在 WhatsUI 所有权边界内部。
 
 核心计时动作使用 68px 纯图标主按钮；重置、跳过使用 40px 次级图标按钮。主次操作不使用同尺寸文字按钮。
 

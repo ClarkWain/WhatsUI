@@ -206,14 +206,14 @@ wui::Box buildMissingSessionPage(
 
 } // namespace
 
-wui::Box buildFocusTimerPage(
-    FocusViewModel& viewModel,
-    const FocusAssets& assets,
-    float pageWidth,
-    float pageHeight,
-    FocusTimerPageActions actions)
+wui::Box FocusTimerPage::body()
 {
     using namespace wui;
+    FocusViewModel& viewModel = *viewModel_;
+    const FocusAssets& assets = *assets_;
+    const float pageWidth = pageWidth_;
+    const float pageHeight = pageHeight_;
+    FocusTimerPageActions actions = std::move(actions_);
     const FocusSessionRecord* session = viewModel.activeSession();
     if (session == nullptr) {
         return buildMissingSessionPage(pageWidth, pageHeight);

@@ -57,22 +57,22 @@ C++。
 
 | 示例 | Software capture | GLFW/OpenGL 交互窗口 |
 | --- | --- | --- |
-| Todo | `WhatsUITodoApp` | `WhatsUITodoGlfw` |
-| Windows Settings | `WhatsUISettingsApp` | `WhatsUISettingsGlfw` |
-| Command Palette | `WhatsUICommandPaletteApp` | `WhatsUICommandPaletteGlfw` |
+| Focus Tomato | `WhatsUIFocusTomatoCapture` | `WhatsUIFocusTomatoApp` |
+| Component Gallery | `WhatsUIComponentGalleryApp` | `WhatsUIComponentGalleryGlfw` |
 | Debug Inspector | `WhatsUIDebugInspectorApp` | `WhatsUIDebugInspectorGlfw` |
 | Hello Window | — | `WhatsUIHelloWindow` |
 
-Todo 是端到端参考：本地持久化、添加/编辑/删除、完成状态、筛选/搜索、撤销、响应式
-布局和原生交互均有自动化覆盖。见 [Todo demo delivery](doc/whatsui/TODO_DEMO_DELIVERY.md)。
+Focus Tomato 是端到端产品参考；Component Gallery 承担控件、响应式布局和视觉覆盖。
+已删除的 Todo、Settings Panel 和 Command Palette 独立示例记录在
+[retired examples](doc/whatsui/RETIRED_EXAMPLES.md)。
 
-## 快速开始（Windows Todo）
+## 快速开始（Windows Focus Tomato）
 
 ```powershell
 git clone --recursive https://github.com/ClarkWain/WhatsUI.git
 cd WhatsUI
 
-# 默认构建并启动 Release Todo；也可传 Debug。
+# 默认构建并启动 Release Focus Tomato；也可传 Debug。
 .\build.bat
 ```
 
@@ -85,7 +85,7 @@ cmake -S . -B build-windows `
   -DWHATSUI_BUILD_TESTS=ON `
   -DWHATSUI_BUILD_EXAMPLES=ON
 cmake --build build-windows --config Release --parallel 4
-& .\build-windows\examples\Release\WhatsUITodoGlfw.exe
+& .\build-windows\examples\Release\WhatsUIFocusTomatoApp.exe
 ```
 
 ## 构建与测试
@@ -98,7 +98,7 @@ cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
-### 完整 Windows renderer / Fluent / Todo gate
+### 完整 Windows renderer / Fluent / Focus Tomato gate
 
 ```powershell
 cmake -S . -B build-release `
@@ -111,7 +111,7 @@ cmake --build build-release --config Release --parallel 1
 ctest --test-dir build-release -C Release --output-on-failure --parallel 1
 ```
 
-隔离 Release gate 的自动化证据（Fluent DPI、Todo、包消费、DirectWrite 与真实 Windows
+隔离 Release gate 的自动化证据（Fluent DPI、Focus Tomato、包消费、DirectWrite 与真实 Windows
 UIA）见 [release checklist](doc/whatsui/RELEASE_CHECKLIST.md)。
 
 ### Sanitizer
@@ -147,7 +147,7 @@ target_link_libraries(my_window PRIVATE WhatsUI::Glfw)
 ```text
 include/wui/          Public C++ API
 src/whatsui/          Runtime, widgets, platform backends
-examples/             Todo, Settings, Command Palette, Inspector, Hello Window
+examples/             Focus Tomato, Component Gallery, Inspector, Hello Window
 tests/                Unit, interaction, native UIA, DPI and visual regressions
 assets/fonts/         Reviewed Fluent System Icons font assets
 doc/whatsui/          ADRs, API contracts, platform and release documentation

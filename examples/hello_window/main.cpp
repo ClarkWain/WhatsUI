@@ -1,16 +1,15 @@
 // Hello Window - minimal WhatsUI interactive window using GLFW backend.
 
-#include <exception>
-#include <iostream>
+#include <string>
 
 #include "wui/wui.h"
 #include "wui/glfw_platform.h"
 
 using namespace wui;
 
-wui::State<int> clickCount{0};
-
-auto buildView() {
+auto helloView()
+{
+    State<int> count{0};
     return Column()
         .padding(24)
         .gap(16)
@@ -19,25 +18,29 @@ auto buildView() {
                 .size(24)
                 .weight(600)
                 .color({255, 255, 255, 255})
-                .bind(clickCount, [](const int& count) {
-                    return "Clicked: " + std::to_string(count) + " times";
+                .bind(count, [](const int& value) {
+                    return "Clicked: " + std::to_string(value) + " times";
                 }),
-
-            Row().gap(12).children(
-                Button("Click me!")
-                .appearance(wui::ButtonAppearance::Primary).onClick([] {
-                    clickCount.set(clickCount.get() + 1);
-                }),
-                Button("Reset").onClick([] {
-                    clickCount.set(0);
-                })
-            )
-        )
-        .build();
+            Row()
+                .gap(12)
+                .children(
+                    Button("Click me!")
+                        .appearance(ButtonAppearance::Primary)
+                        .onClick([count] {
+                            count.set(count.get() + 1);
+                        }),
+                    Button("Reset")
+                        .onClick([count] {
+                            count.set(0);
+                        })
+                )
+        );
 }
 
 int main()
 {
-    auto root = buildView();
-    return wui::runGlfwApp("WhatsUI - Hello Window", {400.0f, 300.0f}, std::move(root));
+    return runGlfwApp(
+        "WhatsUI - Hello Window",
+        {400.0f, 300.0f},
+        helloView());
 }

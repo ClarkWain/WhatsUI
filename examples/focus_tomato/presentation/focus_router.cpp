@@ -43,6 +43,7 @@ FocusRouter::~FocusRouter()
     // UiApp owns UiWindow and may release a closed native window before the
     // application-level router leaves scope. The window tears down its own
     // Navigator, so a router destructor must never dereference this observer.
+    // CallbackLifetime invalidates retained page actions automatically.
 }
 
 void FocusRouter::start()
@@ -111,6 +112,7 @@ void FocusRouter::updateClock()
 
 void FocusRouter::shutdown() noexcept
 {
+    lifetime_.invalidate();
     wui::UiWindow* const window = window_;
     window_ = nullptr;
     if (window != nullptr) window->navigator().clear();
@@ -125,76 +127,76 @@ wui::View FocusRouter::buildCurrentPage()
 {
     switch (currentRoute_) {
     case FocusRoute::Tasks:
-        return buildTaskListPage(
+        return TaskListPage(
             *viewModel_, *assets_, pageWidth_, pageHeight_,
             {
-                [this](std::string taskId) {
+                lifetime_.guard([this](std::string taskId) {
                     viewModel_->selectTask(std::move(taskId));
                     showSetup();
-                },
-                [this] { requestNewTask(); },
+                }),
+                lifetime_.guard([this] { requestNewTask(); }),
             });
     case FocusRoute::Setup:
-        return buildSessionSetupPage(
+        return SessionSetupPage(
             *viewModel_, *assets_, pageWidth_, pageHeight_,
             {
-                [this] {
+                lifetime_.guard([this] {
                     const auto result = viewModel_->startSelectedFocus();
                     if (result.succeeded()) showTimer();
-                },
-                [this] { showTasks(); },
+                }),
+                lifetime_.guard([this] { showTasks(); }),
             });
     case FocusRoute::Timer:
-        return buildFocusTimerPage(
+        return FocusTimerPage(
             *viewModel_, *assets_, pageWidth_, pageHeight_,
             {
-                [this] {
+                lifetime_.guard([this] {
                     (void)viewModel_->toggleActiveSession();
                     refresh();
-                },
-                [this] {
+                }),
+                lifetime_.guard([this] {
                     (void)viewModel_->resetActiveSession();
                     refresh();
-                },
-                [this] {
+                }),
+                lifetime_.guard([this] {
                     const auto result = viewModel_->abortActiveSession();
                     if (result.succeeded()) showTasks();
-                },
+                }),
                 [] {},
             });
     case FocusRoute::Completion:
-        return buildCompletionPage(
+        return CompletionPage(
             *viewModel_, *assets_, pageWidth_, pageHeight_,
             {
-                [this] {
+                lifetime_.guard([this] {
                     const auto result = viewModel_->startShortBreak();
                     if (result.succeeded()) showShortBreak();
-                },
-                [this] {
+                }),
+                lifetime_.guard([this] {
                     const auto result = viewModel_->startSelectedFocus();
                     if (result.succeeded()) {
                         showTimer();
                     } else {
                         showTasks();
                     }
-                },
+                }),
             });
     case FocusRoute::ShortBreak:
-        return buildShortBreakPage(
+        return ShortBreakPage(
             *viewModel_, *assets_, pageWidth_, pageHeight_,
             {
-                [this] {
+                lifetime_.guard([this] {
                     (void)viewModel_->toggleActiveSession();
                     refresh();
-                },
-                [this] {
+                }),
+                lifetime_.guard([this] {
                     (void)viewModel_->resetActiveSession();
                     refresh();
-                },
-                [this] {
+                }),
+                lifetime_.guard([this] {
                     const auto result = viewModel_->skipActiveBreak();
                     if (result.succeeded()) showTasks();
-                },
+                }),
             });
     }
     throw std::logic_error("unknown FocusTomato route");
@@ -206,15 +208,14 @@ void FocusRouter::install(FocusRoute route)
     window_->navigator().clear();
     window_->navigator().setRoot(
         std::string(focusRouteKey(route)),
-        [this] { return buildCurrentPage(); },
-        wui::PageRetention::DisposeOnHide);
+        buildCurrentPage());
 }
 
 void FocusRouter::requestNewTask()
 {
     showNewTaskDialog(
         *window_, *viewModel_,
-        [this] { refresh(); });
+        lifetime_.guard([this] { refresh(); }));
 }
 
 } // namespace whatsui::focus_tomato::presentation

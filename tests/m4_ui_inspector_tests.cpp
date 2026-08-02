@@ -193,6 +193,53 @@ void testResolvedCheckboxStyleMatchesFluentComposition()
            "Resolved mixed Checkbox must keep a transparent face and compound-brand border");
 }
 
+void testRemainingBuiltInStyleProjections()
+{
+    wui::ColumnNode root;
+
+    auto toggle = std::make_unique<wui::SwitchNode>("Enabled", true);
+    toggle->setVisualState(wui::ControlVisualState::Hovered, true);
+    auto slider = std::make_unique<wui::SliderNode>(0.0f, 100.0f, 50.0f);
+    slider->setVisualState(wui::ControlVisualState::Disabled, true);
+    auto progress = std::make_unique<wui::ProgressBarNode>(
+        0.0f, 1.0f, 0.5f);
+    auto divider = std::make_unique<wui::DividerNode>();
+    divider->setThickness(3.0f);
+
+    root.appendChild(std::move(toggle));
+    root.appendChild(std::move(slider));
+    root.appendChild(std::move(progress));
+    root.appendChild(std::move(divider));
+    root.layout({0.0f, 0.0f, 240.0f, 160.0f});
+
+    const auto snapshot = wui::inspectUiTree(root);
+    expect(snapshot.size() == 5,
+           "Inspector must retain every supported built-in style entry");
+    expect(snapshot[1].resolvedStyle
+               && snapshot[1].resolvedStyle->role == "Switch"
+               && snapshot[1].resolvedStyle->background
+               && sameColor(
+                   *snapshot[1].resolvedStyle->background,
+                   wui::theme().colors.brandBackground.hover),
+           "Resolved enabled Switch must use its live hover token");
+    expect(snapshot[2].resolvedStyle
+               && snapshot[2].resolvedStyle->role == "Slider"
+               && !snapshot[2].resolvedStyle->enabled
+               && snapshot[2].resolvedStyle->background
+               && sameColor(
+                   *snapshot[2].resolvedStyle->background,
+                   wui::theme().colors.neutralForegroundDisabled),
+           "Resolved disabled Slider must retain its disabled projection");
+    expect(snapshot[3].resolvedStyle
+               && snapshot[3].resolvedStyle->role == "ProgressBar"
+               && snapshot[3].resolvedStyle->controlExtent == 4.0f,
+           "Resolved ProgressBar must expose its semantic track extent");
+    expect(snapshot[4].resolvedStyle
+               && snapshot[4].resolvedStyle->role == "Divider"
+               && snapshot[4].resolvedStyle->controlExtent == 3.0f,
+           "Resolved Divider must expose its configured thickness");
+}
+
 void testRepaintOverlayRetainsIndependentParentAndChildDirtyRegions()
 {
     wui::UiInspectorSnapshot snapshot;
@@ -243,6 +290,7 @@ int main()
         testMeasuredConstraintsAndResolvedStyle();
         testResolvedRadioStyleMatchesFluentComposition();
         testResolvedCheckboxStyleMatchesFluentComposition();
+        testRemainingBuiltInStyleProjections();
         testRepaintOverlayRetainsIndependentParentAndChildDirtyRegions();
         testRepaintOverlayScalesLinearlyWithLargeFlatSnapshot();
         return 0;
