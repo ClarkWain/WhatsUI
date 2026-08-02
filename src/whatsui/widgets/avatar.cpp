@@ -14,8 +14,8 @@ float asFloat(AvatarSize size) noexcept { return static_cast<float>(static_cast<
 
 float activityRingInset(float extent) noexcept
 {
-    // Fluent's Avatar variants use a 2-DIP ring through 48 DIP and a 3-DIP
-    // ring from 56 DIP upward. The ring intentionally overflows the Avatar
+    // Fluent's AvatarNode variants use a 2-DIP ring through 48 DIP and a 3-DIP
+    // ring from 56 DIP upward. The ring intentionally overflows the AvatarNode
     // root; it is therefore painted before the fill rather than expanding
     // measure()/layout().
     return extent >= 56.0f ? 3.0f : 2.0f;
@@ -24,7 +24,7 @@ float activityRingInset(float extent) noexcept
 float personGlyphExtent(float extent) noexcept
 {
     // The design system uses a discrete optical scale rather than a fixed
-    // percentage. In particular, the 32-DIP default Avatar contains a
+    // percentage. In particular, the 32-DIP default AvatarNode contains a
     // 20-DIP person glyph, while the 64-DIP form contains 32 DIP.
     if (extent < 20.0f) return 12.0f;
     if (extent < 28.0f) return 16.0f;
@@ -142,9 +142,9 @@ std::string derivedInitials(const std::string& name)
 
 float centeredTextX(const std::string& text, const RectF& box, float textSize, int weight) noexcept
 {
-    // Text may be an UTF-8 initial (rather than one ASCII byte).  Use the
+    // TextNode may be an UTF-8 initial (rather than one ASCII byte).  Use the
     // active renderer's advance width whenever it is available so initials
-    // and the AvatarGroup overflow counter remain genuinely centred.
+    // and the AvatarGroupNode overflow counter remain genuinely centred.
     float width = textSize * 0.60f * static_cast<float>(text.size());
     if (const auto* measurer = textMeasurer()) {
         width = measurer->measureText(text, textSize, weight).width;
@@ -154,46 +154,46 @@ float centeredTextX(const std::string& text, const RectF& box, float textSize, i
 
 } // namespace
 
-Avatar::Avatar(std::string name, AvatarSize size) : name_(std::move(name)), size_(size) {}
-const std::string& Avatar::name() const noexcept { return name_; }
-Avatar& Avatar::name(std::string value) { setName(std::move(value)); return *this; }
-void Avatar::setName(std::string value) { if (name_ != value) { name_ = std::move(value); markDirty(DirtyFlag::Paint); } }
-const std::string& Avatar::initials() const noexcept { return initials_; }
-Avatar& Avatar::initials(std::string value) { setInitials(std::move(value)); return *this; }
-void Avatar::setInitials(std::string value) { if (initials_ != value) { initials_ = std::move(value); markDirty(DirtyFlag::Paint); } }
-std::string Avatar::displayedInitials() const { return initials_.empty() ? derivedInitials(name_) : initials_; }
-Avatar& Avatar::image(ImageSource source) { setImage(std::move(source)); return *this; }
-void Avatar::setImage(ImageSource source) { image_ = std::move(source); syncImageChild(); markDirty(DirtyFlag::Paint); }
-void Avatar::clearImage() noexcept { if (image_) { image_.reset(); clearChildren(); markDirty(DirtyFlag::Paint); } }
-bool Avatar::hasImage() const noexcept { return image_.has_value() && !image_->empty(); }
-Avatar& Avatar::size(AvatarSize value) noexcept { setSize(value); return *this; }
-void Avatar::setSize(AvatarSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
-AvatarSize Avatar::size() const noexcept { return size_; }
-Avatar& Avatar::shape(AvatarShape value) noexcept { setShape(value); return *this; }
-void Avatar::setShape(AvatarShape value) noexcept { if (shape_ != value) { shape_ = value; syncImageChild(); markDirty(DirtyFlag::Paint); } }
-AvatarShape Avatar::shape() const noexcept { return shape_; }
-Avatar& Avatar::color(AvatarColor value) noexcept { setColor(value); return *this; }
-void Avatar::setColor(AvatarColor value) noexcept { if (color_ != value) { color_ = value; markDirty(DirtyFlag::Paint); } }
-AvatarColor Avatar::color() const noexcept { return color_; }
-Avatar& Avatar::active(bool value) noexcept { setActive(value); return *this; }
-void Avatar::setActive(bool value) noexcept
+AvatarNode::AvatarNode(std::string name, AvatarSize size) : name_(std::move(name)), size_(size) {}
+const std::string& AvatarNode::name() const noexcept { return name_; }
+AvatarNode& AvatarNode::name(std::string value) { setName(std::move(value)); return *this; }
+void AvatarNode::setName(std::string value) { if (name_ != value) { name_ = std::move(value); markDirty(DirtyFlag::Paint); } }
+const std::string& AvatarNode::initials() const noexcept { return initials_; }
+AvatarNode& AvatarNode::initials(std::string value) { setInitials(std::move(value)); return *this; }
+void AvatarNode::setInitials(std::string value) { if (initials_ != value) { initials_ = std::move(value); markDirty(DirtyFlag::Paint); } }
+std::string AvatarNode::displayedInitials() const { return initials_.empty() ? derivedInitials(name_) : initials_; }
+AvatarNode& AvatarNode::image(ImageSource source) { setImage(std::move(source)); return *this; }
+void AvatarNode::setImage(ImageSource source) { image_ = std::move(source); syncImageChild(); markDirty(DirtyFlag::Paint); }
+void AvatarNode::clearImage() noexcept { if (image_) { image_.reset(); clearChildren(); markDirty(DirtyFlag::Paint); } }
+bool AvatarNode::hasImage() const noexcept { return image_.has_value() && !image_->empty(); }
+AvatarNode& AvatarNode::size(AvatarSize value) noexcept { setSize(value); return *this; }
+void AvatarNode::setSize(AvatarSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
+AvatarSize AvatarNode::size() const noexcept { return size_; }
+AvatarNode& AvatarNode::shape(AvatarShape value) noexcept { setShape(value); return *this; }
+void AvatarNode::setShape(AvatarShape value) noexcept { if (shape_ != value) { shape_ = value; syncImageChild(); markDirty(DirtyFlag::Paint); } }
+AvatarShape AvatarNode::shape() const noexcept { return shape_; }
+AvatarNode& AvatarNode::color(AvatarColor value) noexcept { setColor(value); return *this; }
+void AvatarNode::setColor(AvatarColor value) noexcept { if (color_ != value) { color_ = value; markDirty(DirtyFlag::Paint); } }
+AvatarColor AvatarNode::color() const noexcept { return color_; }
+AvatarNode& AvatarNode::active(bool value) noexcept { setActive(value); return *this; }
+void AvatarNode::setActive(bool value) noexcept
 {
     if (active_ != value) {
         active_ = value;
         markDirty(DirtyFlag::Paint);
     }
 }
-bool Avatar::isActive() const noexcept { return active_; }
-Avatar& Avatar::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void Avatar::setAccessibleLabel(std::string value) { if (accessibleLabel_ != value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); } }
-const std::string& Avatar::accessibleLabel() const noexcept { return accessibleLabel_; }
-SizeF Avatar::measure(const Constraints& constraints) const { const float extent = asFloat(size_); return constraints.clamp({extent, extent}); }
-void Avatar::layout(const RectF& bounds)
+bool AvatarNode::isActive() const noexcept { return active_; }
+AvatarNode& AvatarNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void AvatarNode::setAccessibleLabel(std::string value) { if (accessibleLabel_ != value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); } }
+const std::string& AvatarNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+SizeF AvatarNode::measure(const Constraints& constraints) const { const float extent = asFloat(size_); return constraints.clamp({extent, extent}); }
+void AvatarNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     for (const auto& child : children()) child->layout(bounds);
 }
-void Avatar::paint(PaintContext& context)
+void AvatarNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const float extent = std::min(bounds().width, bounds().height);
@@ -210,7 +210,7 @@ void Avatar::paint(PaintContext& context)
         const float ringRadius = extent * 0.5f + ringInset;
         // Figma's Activity ring has a white guard fill and a blue OUTSIDE
         // stroke. Painting it first leaves a 1/1.5-DIP white separator after
-        // the Avatar fill has covered its inner half.
+        // the AvatarNode fill has covered its inner half.
         context.fillCircle(center, ringRadius, current.colors.neutralBackground1.rest);
         context.strokeCircle(center, ringRadius, ringStroke,
                              current.colors.brandBackground.rest);
@@ -235,54 +235,54 @@ void Avatar::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-void Avatar::syncImageChild()
+void AvatarNode::syncImageChild()
 {
     clearChildren();
     if (!hasImage()) return;
-    auto child = std::make_unique<Image>(*image_);
+    auto child = std::make_unique<ImageNode>(*image_);
     child->setFit(ImageFit::Cover);
     child->setShape(shape_ == AvatarShape::Circular ? ImageShape::Circular : ImageShape::Rounded);
     appendChild(std::move(child));
 }
 
-Avatar& AvatarGroup::addAvatar(std::string name, AvatarSize size)
+AvatarNode& AvatarGroupNode::addAvatar(std::string name, AvatarSize size)
 {
-    // A Fluent AvatarGroup is deliberately homogeneous.  Preserve the
+    // A Fluent AvatarGroupNode is deliberately homogeneous.  Preserve the
     // convenient per-avatar size argument for an unconfigured group by
     // adopting it for the whole group before the first child is created.
     if (children().empty() && size_ == AvatarSize::Size32 && size != AvatarSize::Size32) size_ = size;
-    auto avatar = std::make_unique<Avatar>(std::move(name), size_);
+    auto avatar = std::make_unique<AvatarNode>(std::move(name), size_);
     auto* result = avatar.get();
     appendChild(std::move(avatar));
     return *result;
 }
-AvatarGroup& AvatarGroup::maxVisible(std::size_t value) noexcept { setMaxVisible(value); return *this; }
-void AvatarGroup::setMaxVisible(std::size_t value) noexcept { value = std::max<std::size_t>(1, value); if (maxVisible_ != value) { maxVisible_ = value; markDirty(DirtyFlag::Layout); } }
-std::size_t AvatarGroup::maxVisible() const noexcept { return maxVisible_; }
-AvatarGroup& AvatarGroup::groupLayout(AvatarGroupLayout value) noexcept { setGroupLayout(value); return *this; }
-void AvatarGroup::setGroupLayout(AvatarGroupLayout value) noexcept { if (layout_ != value) { layout_ = value; markDirty(DirtyFlag::Layout); } }
-AvatarGroupLayout AvatarGroup::groupLayout() const noexcept { return layout_; }
-AvatarGroup& AvatarGroup::size(AvatarSize value) noexcept { setSize(value); return *this; }
-void AvatarGroup::setSize(AvatarSize value) noexcept
+AvatarGroupNode& AvatarGroupNode::maxVisible(std::size_t value) noexcept { setMaxVisible(value); return *this; }
+void AvatarGroupNode::setMaxVisible(std::size_t value) noexcept { value = std::max<std::size_t>(1, value); if (maxVisible_ != value) { maxVisible_ = value; markDirty(DirtyFlag::Layout); } }
+std::size_t AvatarGroupNode::maxVisible() const noexcept { return maxVisible_; }
+AvatarGroupNode& AvatarGroupNode::groupLayout(AvatarGroupLayout value) noexcept { setGroupLayout(value); return *this; }
+void AvatarGroupNode::setGroupLayout(AvatarGroupLayout value) noexcept { if (layout_ != value) { layout_ = value; markDirty(DirtyFlag::Layout); } }
+AvatarGroupLayout AvatarGroupNode::groupLayout() const noexcept { return layout_; }
+AvatarGroupNode& AvatarGroupNode::size(AvatarSize value) noexcept { setSize(value); return *this; }
+void AvatarGroupNode::setSize(AvatarSize value) noexcept
 {
     if (size_ == value) return;
     size_ = value;
-    for (const auto& child : children()) if (auto* avatar = dynamic_cast<Avatar*>(child.get())) avatar->setSize(value);
+    for (const auto& child : children()) if (auto* avatar = dynamic_cast<AvatarNode*>(child.get())) avatar->setSize(value);
     markDirty(DirtyFlag::Layout);
 }
-AvatarSize AvatarGroup::size() const noexcept { return size_; }
-AvatarGroup& AvatarGroup::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void AvatarGroup::setAccessibleLabel(std::string value) { if (accessibleLabel_ != value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); } }
-const std::string& AvatarGroup::accessibleLabel() const noexcept { return accessibleLabel_; }
-std::size_t AvatarGroup::visibleCount() const noexcept { return std::min(maxVisible_, children().size()); }
-float AvatarGroup::avatarExtent() const noexcept { return asFloat(size_); }
-float AvatarGroup::overlap() const noexcept
+AvatarSize AvatarGroupNode::size() const noexcept { return size_; }
+AvatarGroupNode& AvatarGroupNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void AvatarGroupNode::setAccessibleLabel(std::string value) { if (accessibleLabel_ != value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); } }
+const std::string& AvatarGroupNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+std::size_t AvatarGroupNode::visibleCount() const noexcept { return std::min(maxVisible_, children().size()); }
+float AvatarGroupNode::avatarExtent() const noexcept { return asFloat(size_); }
+float AvatarGroupNode::overlap() const noexcept
 {
     return layout_ == AvatarGroupLayout::Stack
                ? groupSpacing(layout_, avatarExtent())
                : -groupSpacing(layout_, avatarExtent());
 }
-SizeF AvatarGroup::measure(const Constraints& constraints) const
+SizeF AvatarGroupNode::measure(const Constraints& constraints) const
 {
     const std::size_t shown = visibleCount();
     if (shown == 0) return constraints.clamp({0.0f, 0.0f});
@@ -292,7 +292,7 @@ SizeF AvatarGroup::measure(const Constraints& constraints) const
         + (children().size() > shown ? extent * 0.72f : 0.0f);
     return constraints.clamp({width, extent});
 }
-void AvatarGroup::layout(const RectF& bounds)
+void AvatarGroupNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     const float extent = avatarExtent();
@@ -302,7 +302,7 @@ void AvatarGroup::layout(const RectF& bounds)
         children()[index]->layout({bounds.x + step * static_cast<float>(index), bounds.y, extent, extent});
     }
 }
-void AvatarGroup::paint(PaintContext& context)
+void AvatarGroupNode::paint(PaintContext& context)
 {
     const std::size_t shown = visibleCount();
     const auto& current = theme();
@@ -334,6 +334,19 @@ void AvatarGroup::paint(PaintContext& context)
                          textSize, current.colors.neutralForeground1, current.typography.weightSemibold);
     }
     clearDirty(DirtyFlag::Paint);
+}
+
+void AvatarGroupNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const AvatarNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "AvatarGroupNode accepts only AvatarNode children");
+    }
 }
 
 } // namespace wui

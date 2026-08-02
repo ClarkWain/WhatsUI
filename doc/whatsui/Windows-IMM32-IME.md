@@ -25,19 +25,19 @@ editing model, and headless builds do not depend on Win32 headers or libraries.
 
 ## Manual Windows verification
 
-Build the interactive Todo or Settings sample with WhatsCanvas enabled, then
+Build the interactive Focus Tomato app with WhatsCanvas enabled, then
 verify the following with Microsoft Pinyin or another installed IMM32-backed
 IME:
 
 ```powershell
 cmake -S . -B build-wsc -DWHATSUI_WITH_WHATSCANVAS=ON -DWHATSUI_BUILD_EXAMPLES=ON
-cmake --build build-wsc --config Debug --target WhatsUITodoGlfw
-.\build-wsc\examples\Debug\WhatsUITodoGlfw.exe
+cmake --build build-wsc --config Debug --target WhatsUIFocusTomatoApp
+.\build-wsc\examples\Debug\WhatsUIFocusTomatoApp.exe
 ```
 
-Use this matrix for a Windows sign-off. Repeat it for Todo's composer and the
-Settings reference input; a pass in one sample is not evidence that the
-window/session boundary works in the other.
+Use this matrix for a Windows sign-off. Repeat it for Focus Tomato's new-task
+input and the Component Gallery input scenarios; a pass in one surface is not
+evidence that the window/session boundary works in the other.
 
 | Check | Steps | Required result |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ window/session boundary works in the other.
 | Commit / cancel | Select a candidate, then repeat and press Escape. | A commit appears exactly once and clears the composition treatment. Escape or loss of focus leaves no pre-edit text behind and does not commit it. |
 | Fractional DPI | At **100%, 150%, and 200%** Windows display scale, place the caret at the start, middle, and end of a longer line. Move the window to each monitor and refocus before typing. | Candidate and composition windows track the visible caret; they are not offset by the desktop position, by a factor of 1.5/2, or by one line height. |
 | Selection / clipboard | Select text with Shift+Arrow and mouse drag; run Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+Z, Ctrl+Y. Repeat immediately after committing a candidate. | Selection stays in logical text order. Clipboard commands operate on the selected committed range, never on a cancelled pre-edit range; undo/redo does not resurrect a stale composition decoration. |
-| Modal / activation | Start a pre-edit phrase, open Todo's confirmation dialog, then close it with Escape. Repeat by Alt+Tabbing away and back. | The native session deactivates/cancels composition, the dialog receives keyboard input, and restoring focus repositions candidate UI at the current caret. |
+| Modal / activation | Start a pre-edit phrase in Focus Tomato's new-task dialog, close it with Escape, then repeat by Alt+Tabbing away and back. | The native session deactivates/cancels composition, the dialog receives keyboard input, and restoring focus repositions candidate UI at the current caret. |
 
 Capture one screenshot or short recording per DPI value while the candidate UI
 is visible. Native IME chrome is owned by Windows and is therefore not part of

@@ -31,7 +31,7 @@ void testMenuButtonMovesAndRestoresFocus()
     wui::OverlayHost overlays;
     overlays.bindFocusManager(focus);
 
-    wui::MenuButton button("More");
+    wui::MenuButtonNode button("More");
     button.bindOverlayHost(overlays)
         .addItem({"Unavailable", {}, false, {}})
         .addItem({"Rename", {}, true, {}});
@@ -49,7 +49,7 @@ void testMenuButtonMovesAndRestoresFocus()
            "accessible Expand must open MenuButton");
     expect(button.isOpen() && overlays.size() == 1,
            "Expand must create one host-owned menu");
-    auto* menu = dynamic_cast<wui::Menu*>(overlays.top()->content.get());
+    auto* menu = dynamic_cast<wui::MenuNode*>(overlays.top()->content.get());
     expect(menu != nullptr && focus.focused() == menu,
            "opening MenuButton must move keyboard focus into its Menu");
     const auto menuSnapshot = wui::snapshotAccessibilityTree(*menu, menu);
@@ -82,7 +82,7 @@ void testSplitButtonKeepsInvokeAndDisclosureIndependent()
     int primaryInvocations = 0;
     int menuInvocations = 0;
 
-    wui::SplitButton button("Save");
+    wui::SplitButtonNode button("Save");
     button.bindOverlayHost(overlays)
         .onClick([&] { ++primaryInvocations; })
         .addItem({"Save as", {}, true, [&] { ++menuInvocations; }});
@@ -101,7 +101,7 @@ void testSplitButtonKeepsInvokeAndDisclosureIndependent()
                == wui::AccessibilityActionStatus::Succeeded,
            "SplitButton accessible Expand must operate only its disclosure");
     auto* menu = overlays.top() != nullptr
-        ? dynamic_cast<wui::Menu*>(overlays.top()->content.get()) : nullptr;
+        ? dynamic_cast<wui::MenuNode*>(overlays.top()->content.get()) : nullptr;
     expect(menu != nullptr && focus.focused() == menu && onlySemanticNode(button).expanded == true,
            "SplitButton disclosure must focus and publish its expanded menu");
     expect(menu->onKeyEvent({0, wui::KeyAction::Down, 13}),

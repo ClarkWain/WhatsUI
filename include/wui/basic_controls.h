@@ -14,32 +14,32 @@
 
 namespace wui {
 
-class RadioGroup;
+class RadioGroupNode;
 
 // A radio option represents a selected boolean.  A containing application
 // owns the group policy: radio options that are mutually exclusive should be
 // bound to a single selection State or updated together from onChange().
-class Radio : public ControlNode {
+class RadioNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(bool)>;
 
-    explicit Radio(std::string label = {}, bool selected = false);
+    explicit RadioNode(std::string label = {}, bool selected = false);
 
     [[nodiscard]] const std::string& label() const noexcept;
-    Radio& label(std::string value);
+    RadioNode& label(std::string value);
     void setLabel(std::string value);
 
-    // RadioGroup uses value as the stable selection identity.  Standalone
+    // RadioGroupNode uses value as the stable selection identity.  Standalone
     // radios default it to their label for source compatibility.
     [[nodiscard]] const std::string& value() const noexcept;
-    Radio& value(std::string value);
+    RadioNode& value(std::string value);
     void setValue(std::string value);
 
     [[nodiscard]] bool isSelected() const noexcept;
-    Radio& selected(bool value);
+    RadioNode& selected(bool value);
     void setSelected(bool value);
-    Radio& bind(State<bool>& state);
-    Radio& onChange(ChangeHandler handler);
+    RadioNode& bind(State<bool>& state);
+    RadioNode& onChange(ChangeHandler handler);
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
@@ -50,7 +50,7 @@ public:
         AccessibilityActionKind kind, std::string_view value) override;
 
 private:
-    friend class RadioGroup;
+    friend class RadioGroupNode;
     void select();
     void setSelectedFromGroup(bool value);
     void setStackedLabel(bool value) noexcept;
@@ -72,38 +72,38 @@ enum class RadioGroupLayout {
     HorizontalStacked,
 };
 
-// Owns the mutual-exclusion, value and arrow-key policy for a set of Radio
+// Owns the mutual-exclusion, value and arrow-key policy for a set of RadioNode
 // children. Options are exposed as real child controls so pointer routing,
 // focus and native accessibility retain one item per choice.
-class RadioGroup : public ControlNode {
+class RadioGroupNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(const std::string&)>;
 
-    RadioGroup() = default;
+    RadioGroupNode() = default;
 
-    Radio& addOption(std::string value, std::string label, bool enabled = true);
+    RadioNode& addOption(std::string value, std::string label, bool enabled = true);
     [[nodiscard]] const std::string& name() const noexcept;
-    RadioGroup& name(std::string value);
+    RadioGroupNode& name(std::string value);
     void setName(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    RadioGroup& accessibleLabel(std::string value);
+    RadioGroupNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] const std::string& value() const noexcept;
-    RadioGroup& value(std::string value);
+    RadioGroupNode& value(std::string value);
     void setValue(std::string value);
     // The selected child is exposed for host input routing. In particular,
     // Fluent's arrow-key radio policy moves both selection and keyboard focus
     // to the newly selected option.
-    [[nodiscard]] Radio* selectedRadio() noexcept;
-    [[nodiscard]] const Radio* selectedRadio() const noexcept;
-    RadioGroup& bind(State<std::string>& state);
-    RadioGroup& onChange(ChangeHandler handler);
+    [[nodiscard]] RadioNode* selectedRadio() noexcept;
+    [[nodiscard]] const RadioNode* selectedRadio() const noexcept;
+    RadioGroupNode& bind(State<std::string>& state);
+    RadioGroupNode& onChange(ChangeHandler handler);
 
     [[nodiscard]] RadioGroupLayout groupLayout() const noexcept;
-    RadioGroup& groupLayout(RadioGroupLayout value) noexcept;
+    RadioGroupNode& groupLayout(RadioGroupLayout value) noexcept;
     void setGroupLayout(RadioGroupLayout value) noexcept;
     [[nodiscard]] bool isRequired() const noexcept;
-    RadioGroup& required(bool value) noexcept;
+    RadioGroupNode& required(bool value) noexcept;
     void setRequired(bool value) noexcept;
     void setEnabled(bool enabled) noexcept;
 
@@ -111,10 +111,16 @@ public:
     void layout(const RectF& bounds) override;
     void paint(PaintContext& context) override;
 
+protected:
+    void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const override;
+
 private:
-    friend class Radio;
-    void selectRadio(Radio& radio);
-    bool moveSelection(Radio& from, int delta);
+    friend class RadioNode;
+    void selectRadio(RadioNode& radio);
+    bool moveSelection(RadioNode& from, int delta);
     void applyValue(const std::string& value, bool notify);
     void syncChildStates() noexcept;
 
@@ -142,29 +148,29 @@ enum class SwitchLabelPosition {
 
 // A two-state Fluent toggle.  It supports both direct ownership and a State
 // binding; bound state is always the source of truth for later UI updates.
-class Switch : public ControlNode {
+class SwitchNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(bool)>;
 
-    explicit Switch(std::string label = {}, bool on = false);
+    explicit SwitchNode(std::string label = {}, bool on = false);
 
     [[nodiscard]] const std::string& label() const noexcept;
-    Switch& label(std::string value);
+    SwitchNode& label(std::string value);
     void setLabel(std::string value);
 
     [[nodiscard]] bool isOn() const noexcept;
-    Switch& on(bool value);
+    SwitchNode& on(bool value);
     void setOn(bool value);
-    Switch& bind(State<bool>& state);
-    Switch& onChange(ChangeHandler handler);
+    SwitchNode& bind(State<bool>& state);
+    SwitchNode& onChange(ChangeHandler handler);
     [[nodiscard]] SwitchSize size() const noexcept;
-    Switch& size(SwitchSize value) noexcept;
+    SwitchNode& size(SwitchSize value) noexcept;
     void setSize(SwitchSize value) noexcept;
     [[nodiscard]] SwitchLabelPosition labelPosition() const noexcept;
-    Switch& labelPosition(SwitchLabelPosition value) noexcept;
+    SwitchNode& labelPosition(SwitchLabelPosition value) noexcept;
     void setLabelPosition(SwitchLabelPosition value) noexcept;
     [[nodiscard]] bool isRequired() const noexcept;
-    Switch& required(bool value) noexcept;
+    SwitchNode& required(bool value) noexcept;
     void setRequired(bool value) noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -201,31 +207,31 @@ enum class SliderOrientation {
 
 // A horizontal, keyboard-accessible numeric range.  Values are clamped to
 // [minimum, maximum] and optionally snapped to step increments from minimum.
-class Slider : public ControlNode {
+class SliderNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(float)>;
 
-    Slider(float minimum = 0.0f, float maximum = 100.0f, float value = 0.0f);
+    SliderNode(float minimum = 0.0f, float maximum = 100.0f, float value = 0.0f);
 
     [[nodiscard]] float minimum() const noexcept;
     [[nodiscard]] float maximum() const noexcept;
     void setRange(float minimum, float maximum);
     [[nodiscard]] float value() const noexcept;
-    Slider& value(float value);
+    SliderNode& value(float value);
     void setValue(float value);
     [[nodiscard]] float step() const noexcept;
-    Slider& step(float value);
+    SliderNode& step(float value);
     void setStep(float value);
-    Slider& bind(State<float>& state);
-    Slider& onChange(ChangeHandler handler);
+    SliderNode& bind(State<float>& state);
+    SliderNode& onChange(ChangeHandler handler);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    Slider& accessibleLabel(std::string value);
+    SliderNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] SliderSize size() const noexcept;
-    Slider& size(SliderSize value) noexcept;
+    SliderNode& size(SliderSize value) noexcept;
     void setSize(SliderSize value) noexcept;
     [[nodiscard]] SliderOrientation orientation() const noexcept;
-    Slider& orientation(SliderOrientation value) noexcept;
+    SliderNode& orientation(SliderOrientation value) noexcept;
     void setOrientation(SliderOrientation value) noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -273,39 +279,39 @@ enum class ProgressBarThickness {
 
 // A passive progress indicator.  With no value it represents an indeterminate
 // operation (the Fluent default); supplying a value makes it determinate.
-// Its determinate value uses the same clamped range semantics as Slider,
+// Its determinate value uses the same clamped range semantics as SliderNode,
 // while a zero-height range is displayed as empty.
-class ProgressBar : public Node {
+class ProgressBarNode : public Node {
 public:
-    ProgressBar(float minimum = 0.0f, float maximum = 1.0f,
+    ProgressBarNode(float minimum = 0.0f, float maximum = 1.0f,
                 std::optional<float> value = std::nullopt);
-    ~ProgressBar() override;
+    ~ProgressBarNode() override;
 
     [[nodiscard]] float minimum() const noexcept;
     [[nodiscard]] float maximum() const noexcept;
     void setRange(float minimum, float maximum);
     [[nodiscard]] float value() const noexcept;
-    ProgressBar& value(float value);
+    ProgressBarNode& value(float value);
     void setValue(float value);
-    ProgressBar& bind(State<float>& state);
+    ProgressBarNode& bind(State<float>& state);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    ProgressBar& accessibleLabel(std::string value);
+    ProgressBarNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] bool isIndeterminate() const noexcept;
     [[nodiscard]] std::optional<float> determinateValue() const noexcept;
-    ProgressBar& indeterminate(bool value) noexcept;
+    ProgressBarNode& indeterminate(bool value) noexcept;
     void setIndeterminate(bool value) noexcept;
     [[nodiscard]] ProgressBarColor color() const noexcept;
-    ProgressBar& color(ProgressBarColor value) noexcept;
+    ProgressBarNode& color(ProgressBarColor value) noexcept;
     void setColor(ProgressBarColor value) noexcept;
     [[nodiscard]] ProgressBarShape shape() const noexcept;
-    ProgressBar& shape(ProgressBarShape value) noexcept;
+    ProgressBarNode& shape(ProgressBarShape value) noexcept;
     void setShape(ProgressBarShape value) noexcept;
     [[nodiscard]] ProgressBarThickness thickness() const noexcept;
-    ProgressBar& thickness(ProgressBarThickness value) noexcept;
+    ProgressBarNode& thickness(ProgressBarThickness value) noexcept;
     void setThickness(ProgressBarThickness value) noexcept;
     [[nodiscard]] bool isMotionEnabled() const noexcept;
-    ProgressBar& motionEnabled(bool value) noexcept;
+    ProgressBarNode& motionEnabled(bool value) noexcept;
     void setMotionEnabled(bool value) noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -358,25 +364,25 @@ enum class DividerContentAlignment {
 
 // A low-emphasis separator.  Its cross-axis thickness is one logical pixel
 // by default, with an explicit setter for dense or high-contrast layouts.
-class Divider : public Node {
+class DividerNode : public Node {
 public:
-    explicit Divider(DividerOrientation orientation = DividerOrientation::Horizontal);
+    explicit DividerNode(DividerOrientation orientation = DividerOrientation::Horizontal);
 
     [[nodiscard]] DividerOrientation orientation() const noexcept;
     void setOrientation(DividerOrientation orientation) noexcept;
     [[nodiscard]] float thickness() const noexcept;
     void setThickness(float thickness) noexcept;
     [[nodiscard]] const std::string& content() const noexcept;
-    Divider& content(std::string value);
+    DividerNode& content(std::string value);
     void setContent(std::string value);
     [[nodiscard]] DividerAppearance appearance() const noexcept;
-    Divider& appearance(DividerAppearance value) noexcept;
+    DividerNode& appearance(DividerAppearance value) noexcept;
     void setAppearance(DividerAppearance value) noexcept;
     [[nodiscard]] DividerContentAlignment contentAlignment() const noexcept;
-    Divider& contentAlignment(DividerContentAlignment value) noexcept;
+    DividerNode& contentAlignment(DividerContentAlignment value) noexcept;
     void setContentAlignment(DividerContentAlignment value) noexcept;
     [[nodiscard]] bool isInset() const noexcept;
-    Divider& inset(bool value) noexcept;
+    DividerNode& inset(bool value) noexcept;
     void setInset(bool value) noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;

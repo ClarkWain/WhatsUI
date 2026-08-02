@@ -26,7 +26,7 @@ public:
 
 class ReentrantDetachRow final : public ProbeRow {
 public:
-    ReentrantDetachRow(std::string key, wui::VirtualList* owner, int* detached)
+    ReentrantDetachRow(std::string key, wui::VirtualListNode* owner, int* detached)
         : ProbeRow(std::move(key)), owner_(owner), detached_(detached) {}
 
 protected:
@@ -40,13 +40,13 @@ protected:
     }
 
 private:
-    wui::VirtualList* owner_{nullptr};
+    wui::VirtualListNode* owner_{nullptr};
     int* detached_{nullptr};
 };
 
 class ReentrantCountChangeRow final : public ProbeRow {
 public:
-    ReentrantCountChangeRow(std::string key, wui::VirtualList* owner, bool* changed)
+    ReentrantCountChangeRow(std::string key, wui::VirtualListNode* owner, bool* changed)
         : ProbeRow(std::move(key)), owner_(owner), changed_(changed) {}
 
 protected:
@@ -59,13 +59,13 @@ protected:
     }
 
 private:
-    wui::VirtualList* owner_{nullptr};
+    wui::VirtualListNode* owner_{nullptr};
     bool* changed_{nullptr};
 };
 
 class ReentrantBuilderResetRow final : public ProbeRow {
 public:
-    ReentrantBuilderResetRow(std::string key, wui::VirtualList* owner, bool* reset)
+    ReentrantBuilderResetRow(std::string key, wui::VirtualListNode* owner, bool* reset)
         : ProbeRow(std::move(key)), owner_(owner), reset_(reset) {}
 
 protected:
@@ -73,27 +73,27 @@ protected:
     {
         if (*reset_) return;
         *reset_ = true;
-        owner_->setItemBuilder([](wui::VirtualList::Index, const std::string& key) {
+        owner_->setItemBuilder([](wui::VirtualListNode::Index, const std::string& key) {
             return std::make_unique<ProbeRow>("reset-" + key);
         });
     }
 
 private:
-    wui::VirtualList* owner_{nullptr};
+    wui::VirtualListNode* owner_{nullptr};
     bool* reset_{nullptr};
 };
 
-void configureList(wui::VirtualList& list, std::vector<std::string>& keys)
+void configureList(wui::VirtualListNode& list, std::vector<std::string>& keys)
 {
-    list.setKeyProvider([&keys](wui::VirtualList::Index index) { return keys[index]; });
-    list.setItemBuilder([](wui::VirtualList::Index, const std::string& key) {
+    list.setKeyProvider([&keys](wui::VirtualListNode::Index index) { return keys[index]; });
+    list.setItemBuilder([](wui::VirtualListNode::Index, const std::string& key) {
         return std::make_unique<ProbeRow>(key);
     });
     list.setItemCount(keys.size());
     list.layout({0.0f, 0.0f, 240.0f, 180.0f});
 }
 
-ProbeRow* findRow(wui::VirtualList& list, const std::string& key)
+ProbeRow* findRow(wui::VirtualListNode& list, const std::string& key)
 {
     for (const auto& node : list.children()) {
         auto* row = dynamic_cast<ProbeRow*>(node.get());
@@ -107,7 +107,7 @@ void testLargeLogicalModelKeepsMountedRowsBounded()
     std::vector<std::string> keys;
     keys.reserve(100000);
     for (int index = 0; index < 100000; ++index) keys.push_back("row-" + std::to_string(index));
-    wui::VirtualList list;
+    wui::VirtualListNode list;
     configureList(list, keys);
     expect(list.visibleRange().first == 0 && list.visibleRange().last == 5,
            "Viewport range should cover only rows intersecting a 180px viewport");
@@ -121,7 +121,7 @@ void testLargeLogicalModelKeepsMountedRowsBounded()
 void testStableKeysPreserveMountedIdentityAfterInsertion()
 {
     std::vector<std::string> keys{"a", "b", "c", "d", "e", "f"};
-    wui::VirtualList list;
+    wui::VirtualListNode list;
     configureList(list, keys);
     ProbeRow* const bBefore = findRow(list, "b");
     expect(bBefore != nullptr, "Visible keyed row should be mounted");
@@ -141,10 +141,10 @@ void testPointerAndKeyboardSelectionScrollIntoView()
 {
     std::vector<std::string> keys;
     for (int index = 0; index < 100; ++index) keys.push_back(std::to_string(index));
-    wui::VirtualList list;
+    wui::VirtualListNode list;
     configureList(list, keys);
     int notified = -1;
-    list.onSelectionChanged([&](wui::VirtualList::Index index) { notified = static_cast<int>(index); });
+    list.onSelectionChanged([&](wui::VirtualListNode::Index index) { notified = static_cast<int>(index); });
     const wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down, wui::MouseButton::Left, {20.0f, 54.0f}};
     auto up = down;
     up.action = wui::PointerAction::Up;
@@ -164,7 +164,7 @@ void testRecyclePoolSurvivesHighChurnAndDestruction()
     std::vector<std::string> keys;
     for (int index = 0; index < 512; ++index) keys.push_back("key-" + std::to_string(index));
     {
-        wui::VirtualList list;
+        wui::VirtualListNode list;
         configureList(list, keys);
         for (int iteration = 0; iteration < 2000; ++iteration) {
             const int logicalRow = (iteration * 37) % static_cast<int>(keys.size());
@@ -187,10 +187,10 @@ void testDetachRefreshIsDeferredUntilUnmountPassCompletes()
     std::vector<std::string> keys;
     for (int index = 0; index < 80; ++index) keys.push_back("reentrant-" + std::to_string(index));
     int detached = 0;
-    auto list = std::make_unique<wui::VirtualList>();
+    auto list = std::make_unique<wui::VirtualListNode>();
     auto* raw = list.get();
-    raw->setKeyProvider([&keys](wui::VirtualList::Index index) { return keys[index]; });
-    raw->setItemBuilder([raw, &detached](wui::VirtualList::Index, const std::string& key) {
+    raw->setKeyProvider([&keys](wui::VirtualListNode::Index index) { return keys[index]; });
+    raw->setItemBuilder([raw, &detached](wui::VirtualListNode::Index, const std::string& key) {
         return std::make_unique<ReentrantDetachRow>(key, raw, &detached);
     });
     raw->setItemCount(keys.size());
@@ -211,10 +211,10 @@ void testDetachCountChangeUsesLatestRange()
     std::vector<std::string> keys;
     for (int index = 0; index < 80; ++index) keys.push_back("count-" + std::to_string(index));
     bool changed = false;
-    auto list = std::make_unique<wui::VirtualList>();
+    auto list = std::make_unique<wui::VirtualListNode>();
     auto* raw = list.get();
-    raw->setKeyProvider([&keys](wui::VirtualList::Index index) { return keys[index]; });
-    raw->setItemBuilder([raw, &changed](wui::VirtualList::Index, const std::string& key) {
+    raw->setKeyProvider([&keys](wui::VirtualListNode::Index index) { return keys[index]; });
+    raw->setItemBuilder([raw, &changed](wui::VirtualListNode::Index, const std::string& key) {
         return std::make_unique<ReentrantCountChangeRow>(key, raw, &changed);
     });
     raw->setItemCount(keys.size());
@@ -233,10 +233,10 @@ void testDetachBuilderResetIsDeferredUntilRemoveCompletes()
     std::vector<std::string> keys;
     for (int index = 0; index < 80; ++index) keys.push_back("builder-" + std::to_string(index));
     bool reset = false;
-    auto list = std::make_unique<wui::VirtualList>();
+    auto list = std::make_unique<wui::VirtualListNode>();
     auto* raw = list.get();
-    raw->setKeyProvider([&keys](wui::VirtualList::Index index) { return keys[index]; });
-    raw->setItemBuilder([raw, &reset](wui::VirtualList::Index, const std::string& key) {
+    raw->setKeyProvider([&keys](wui::VirtualListNode::Index index) { return keys[index]; });
+    raw->setItemBuilder([raw, &reset](wui::VirtualListNode::Index, const std::string& key) {
         return std::make_unique<ReentrantBuilderResetRow>(key, raw, &reset);
     });
 
@@ -253,7 +253,7 @@ void testDetachBuilderResetIsDeferredUntilRemoveCompletes()
     {
         std::vector<std::string> keys;
         for (int index = 0; index < 100; ++index) keys.push_back("public-" + std::to_string(index));
-        wui::VirtualList list;
+        wui::VirtualListNode list;
         configureList(list, keys);
         const auto mountedBeforeRemove = list.mountedCount();
         expect(mountedBeforeRemove > 0, "Public mutation regression needs mounted rows");

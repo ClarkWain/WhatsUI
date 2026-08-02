@@ -63,28 +63,28 @@ void render(const std::string& output, float scale)
         // Person icon, a status overlay aligned to the visual edge, then an
         // Initials avatar with an activity ring that overflows without
         // changing its 64-DIP layout footprint.
-        wui::Avatar fallback({}, wui::AvatarSize::Size64);
+        wui::AvatarNode fallback({}, wui::AvatarSize::Size64);
         fallback.layout({28, 82, 64, 64});
         fallback.paint(paint);
         paint.drawText("Icon", 28, 170, 13, current.colors.neutralForeground1, 600);
 
-        wui::Avatar online({}, wui::AvatarSize::Size64);
+        wui::AvatarNode online({}, wui::AvatarSize::Size64);
         online.layout({130, 82, 64, 64});
         online.paint(paint);
-        wui::PresenceBadge presence(wui::PresenceStatus::Available);
+        wui::PresenceBadgeNode presence(wui::PresenceStatus::Available);
         presence.setAvatarSize(64);
         presence.layout(presence.boundsForAvatar(online.bounds()));
         presence.paint(paint);
         paint.drawText("Online", 130, 170, 13, current.colors.neutralForeground1, 600);
 
-        wui::Avatar initials("Morgan Brown", wui::AvatarSize::Size64);
+        wui::AvatarNode initials("Morgan Brown", wui::AvatarSize::Size64);
         initials.setColor(wui::AvatarColor::Neutral);
         initials.setActive(true);
         initials.layout({232, 82, 64, 64});
         initials.paint(paint);
         paint.drawText("Activity", 232, 170, 13, current.colors.neutralForeground1, 600);
 
-        wui::AvatarGroup stack;
+        wui::AvatarGroupNode stack;
         stack.setSize(wui::AvatarSize::Size40);
         stack.setMaxVisible(3);
         stack.addAvatar("Ada Lovelace").setColor(wui::AvatarColor::Brand);
@@ -95,7 +95,7 @@ void render(const std::string& output, float scale)
         stack.paint(paint);
         paint.drawText("Stack", 336, 170, 13, current.colors.neutralForeground1, 600);
 
-        wui::AvatarGroup spread;
+        wui::AvatarGroupNode spread;
         spread.setGroupLayout(wui::AvatarGroupLayout::Spread);
         spread.setSize(wui::AvatarSize::Size32);
         spread.setMaxVisible(3);

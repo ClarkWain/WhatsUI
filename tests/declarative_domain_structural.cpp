@@ -1,0 +1,12 @@
+#include "wui/declarative/structural.h"
+
+bool declarativeStructuralCompilesIndependently()
+{
+    wui::State<std::vector<int>> items{{1}};
+    wui::View view = wui::ForEach<int>(
+        items,
+        [](const int&) {
+            return std::make_unique<wui::BoxNode>();
+        });
+    return !view.empty();
+}

@@ -65,8 +65,8 @@ private:
 void testFrameStatsCoverPipelineAndTree()
 {
     wui::UiWindow window(std::make_unique<TestWindow>());
-    auto root = std::make_unique<wui::Column>();
-    auto text = std::make_unique<wui::Text>("Frame stats");
+    auto root = std::make_unique<wui::ColumnNode>();
+    auto text = std::make_unique<wui::TextNode>("Frame stats");
     auto* const textRaw = text.get();
     root->appendChild(std::move(text));
     window.setRoot(std::move(root));
@@ -136,7 +136,7 @@ void testWhatsCanvasCompletedFrameCounters()
            "WhatsCanvas Software must initialize for completed-frame diagnostics");
 
     wui::UiWindow window(std::make_unique<TestWindow>());
-    auto root = std::make_unique<wui::Container>();
+    auto root = std::make_unique<wui::BoxNode>();
     root->setBackground({20, 30, 40, 255});
     window.setRoot(std::move(root));
 

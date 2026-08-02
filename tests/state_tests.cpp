@@ -1,14 +1,45 @@
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "wui/state.h"
 #include "wui/scheduler.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
+#include "wui/ui_context.h"
+#include "wui/ui_dispatcher.h"
 
 namespace {
+
+template <typename T, typename = void>
+struct HasLegacySetValue : std::false_type {
+};
+
+template <typename T>
+struct HasLegacySetValue<T,
+                         std::void_t<decltype(std::declval<const T&>().setValue(1))>>
+    : std::true_type {
+};
+
+template <typename T, typename = void>
+struct HasLegacyPostValue : std::false_type {
+};
+
+template <typename T>
+struct HasLegacyPostValue<T,
+                          std::void_t<decltype(std::declval<const T&>().postValue(1))>>
+    : std::true_type {
+};
+
+static_assert(!HasLegacySetValue<wui::State<int>>::value,
+              "State must expose set(), not the legacy setValue() alias");
+static_assert(!HasLegacyPostValue<wui::State<int>>::value,
+              "State must expose post(), not the legacy postValue() alias");
 
 void expect(bool condition, const std::string& message)
 {
@@ -35,7 +66,8 @@ void testStateSetReturnValue()
 {
     wui::State<int> state{5};
     expect(!state.set(5), "Setting same value should return false");
-    expect(state.set(10), "Setting different value should return true");
+    expect(state.set(10), "set should return true for a different value");
+    expect(!state.set(10), "set should return false for the current value");
     expect(state.get() == 10, "Value should be updated after set");
 }
 
@@ -97,6 +129,243 @@ void testStateMultipleSubscribers()
     state.unsubscribe(idB);
 }
 
+void testStateRejectsEmptyObserver()
+{
+    wui::State<int> state{0};
+    bool rejected = false;
+    try {
+        (void)state.subscribe({});
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    expect(rejected,
+           "State must reject an empty observer at the API boundary");
+}
+
+void testStatePostRunsOnUiThread()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    const std::thread::id uiThread = std::this_thread::get_id();
+    wui::State<int> state{dispatcher.context(), 0};
+    std::thread::id notificationThread;
+    int notifications = 0;
+    wui::StatePostResult postResult = wui::StatePostResult::ContextStopped;
+    (void)state.subscribe([&](const int&) {
+        notificationThread = std::this_thread::get_id();
+        ++notifications;
+    });
+
+    std::thread worker([&] {
+        postResult = state.post(42);
+    });
+    worker.join();
+
+    expect(postResult == wui::StatePostResult::Scheduled,
+           "The first pending value should schedule one UI task");
+    expect(state.get() == 0 && notifications == 0,
+           "post must not mutate State inline on a worker thread");
+    expect(dispatcher.drain() == 1,
+           "One posted State value should schedule one UI task");
+    expect(state.get() == 42 && notifications == 1
+               && notificationThread == uiThread,
+           "post must publish and notify on the owning UI thread");
+}
+
+void testStatePostCoalescesBeforeDrain()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    wui::State<int> state{dispatcher.context(), 0};
+    std::vector<int> observed;
+    std::vector<wui::StatePostResult> results;
+    (void)state.subscribe(
+        [&](const int& value) { observed.push_back(value); });
+
+    std::thread worker([&] {
+        results.push_back(state.post(1));
+        results.push_back(state.post(2));
+        results.push_back(state.post(3));
+    });
+    worker.join();
+
+    expect(results == std::vector<wui::StatePostResult>({
+                          wui::StatePostResult::Scheduled,
+                          wui::StatePostResult::Coalesced,
+                          wui::StatePostResult::Coalesced}),
+           "Only the first pending value should schedule a UI task");
+    expect(dispatcher.drain() == 1,
+           "Several pending values should coalesce into one UI task");
+    expect(state.get() == 3 && observed == std::vector<int>({3}),
+           "Coalesced post calls must publish only the latest value");
+}
+
+void testConcurrentPostProducersRemainCoalesced()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    wui::State<int> state{dispatcher.context(), 0};
+    std::vector<std::thread> workers;
+
+    for (int worker = 0; worker < 8; ++worker) {
+        workers.emplace_back([&, worker] {
+            for (int index = 0; index < 100; ++index) {
+                (void)state.post(worker * 100 + index + 1);
+            }
+        });
+    }
+    for (auto& worker : workers) {
+        worker.join();
+    }
+
+    expect(state.post(9999) == wui::StatePostResult::Coalesced,
+           "A deterministic final value should join the pending publication");
+    expect(dispatcher.drain() == 1 && state.get() == 9999,
+           "Concurrent producers must remain one coalesced UI publication");
+}
+
+void testDestroyedPostedStateIsSafe()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    {
+        auto state = std::make_unique<wui::State<std::string>>(
+            dispatcher.context(), "before");
+        (void)state->post("after");
+    }
+    expect(dispatcher.drain() == 1,
+           "A queued update may be drained after its State is destroyed");
+}
+
+void testNewerSynchronousValueSupersedesOlderPostedValue()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    wui::State<std::string> state{dispatcher.context(), "initial"};
+    std::vector<std::string> observed;
+    (void)state.subscribe(
+        [&](const std::string& value) { observed.push_back(value); });
+
+    expect(state.post("stale worker result")
+               == wui::StatePostResult::Scheduled,
+           "The worker result should initially be scheduled");
+    expect(state.set("new user value"),
+           "A newer synchronous value should be committed immediately");
+    expect(dispatcher.drain() == 1,
+           "The superseded posted task should still drain safely");
+    expect(state.get() == "new user value",
+           "An older posted value must not overwrite a newer UI value");
+    expect(observed == std::vector<std::string>({"new user value"}),
+           "Observers must not receive a superseded posted value");
+}
+
+void testPostReportsStoppedContext()
+{
+    auto dispatcher = std::make_unique<wui::UiDispatcher>();
+    dispatcher->bindToCurrentThread();
+    wui::State<int> state{dispatcher->context(), 0};
+    int notifications = 0;
+    (void)state.subscribe([&](const int&) { ++notifications; });
+    dispatcher.reset();
+
+    expect(state.post(1) == wui::StatePostResult::ContextStopped,
+           "Posting through a stopped UI context must be reported");
+    expect(notifications == 0,
+           "A stopped context must not notify State observers");
+}
+
+void testPostRequiresBoundContext()
+{
+    wui::State<int> state{0};
+    bool rejected = false;
+    try {
+        (void)state.post(1);
+    } catch (const std::logic_error&) {
+        rejected = true;
+    }
+    expect(rejected,
+           "post must reject State without an owning UiContext");
+}
+
+void testBoundStateRejectsWorkerSet()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    wui::State<int> state{dispatcher.context(), 0};
+    bool rejected = false;
+
+    std::thread worker([&] {
+        try {
+            state.set(1);
+        } catch (const std::logic_error&) {
+            rejected = true;
+        }
+    });
+    worker.join();
+
+    expect(rejected && state.get() == 0,
+           "A bound State must reject synchronous worker mutations");
+}
+
+void testObserverExceptionDoesNotPoisonState()
+{
+    wui::State<int> state{0};
+    int successfulCalls = 0;
+    bool throwOnce = true;
+    (void)state.subscribe([&](const int&) {
+        if (throwOnce) {
+            throwOnce = false;
+            throw std::runtime_error("observer failure");
+        }
+    });
+    (void)state.subscribe([&](const int&) { ++successfulCalls; });
+
+    bool propagated = false;
+    try {
+        state.set(1);
+    } catch (const std::runtime_error&) {
+        propagated = true;
+    }
+    expect(propagated && successfulCalls == 1,
+           "Observer failures should propagate after the remaining observers run");
+
+    expect(state.set(2),
+           "State must remain usable after an observer throws");
+    expect(successfulCalls == 2 && state.get() == 2,
+           "A prior observer failure must not poison later notifications");
+}
+
+void testSubscriptionCanOutliveState()
+{
+    auto subscription = std::make_unique<wui::StateSubscription<int>>();
+    {
+        auto state = std::make_unique<wui::State<int>>(0);
+        subscription->subscribe(*state, [](const int&) {});
+    }
+
+    subscription.reset();
+}
+
+void testBoundSubscriptionCanResetFromWorker()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    wui::State<int> state{dispatcher.context(), 0};
+    auto subscription = std::make_unique<wui::StateSubscription<int>>();
+    int notifications = 0;
+    subscription->subscribe(
+        state, [&](const int&) { ++notifications; });
+
+    std::thread worker([&] { subscription->reset(); });
+    worker.join();
+
+    state.set(1);
+    expect(notifications == 0,
+           "Reset must deactivate its observer before UI cleanup runs");
+    expect(dispatcher.drain() == 1,
+           "Worker reset should schedule one UI-side observer cleanup");
+}
+
 // --- Binding<T> tests ---
 
 void testBindingFromState()
@@ -119,6 +388,46 @@ void testBindingCustomGetterSetter()
     expect(binding.get() == 7, "Custom binding should read from getter");
     binding.set(5);
     expect(storage == 10, "Custom binding should write through setter");
+}
+
+void testStateCopiesShareReactiveIdentity()
+{
+    wui::State<int> original{1};
+    wui::State<int> copy = original;
+    int observed = 0;
+    (void)original.subscribe(
+        [&](const int& value) { observed = value; });
+
+    expect(copy.set(2),
+           "A copied State handle should update its shared reactive core");
+    expect(original.get() == 2 && observed == 2,
+           "All State handles must observe the same reactive identity");
+}
+
+void testBindingCanOutliveStateHandle()
+{
+    std::unique_ptr<wui::Binding<int>> binding;
+    {
+        wui::State<int> state{7};
+        binding = std::make_unique<wui::Binding<int>>(state);
+    }
+
+    expect(binding->get() == 7,
+           "Binding should retain StateCore after the original handle dies");
+    binding->set(9);
+    expect(binding->get() == 9,
+           "A retained Binding should remain writable");
+}
+
+void testBoundTextCanOutliveStateHandle()
+{
+    std::unique_ptr<wui::Node> text;
+    {
+        wui::State<std::string> state{"retained"};
+        text = wui::Text().bind(state).build();
+    }
+
+    text.reset();
 }
 
 // --- Computed<T> tests ---
@@ -309,7 +618,7 @@ void testStructuralUpdatesDrainReentrantWork()
 // allowed to outlive the tree node that originally queued it.
 void testDeterministicMutationStress()
 {
-    using namespace wui::ui;
+    using namespace wui;
 
     constexpr int kOperations = 1200;
     std::uint32_t random = 0xC0FFEEu;
@@ -321,7 +630,7 @@ void testDeterministicMutationStress()
     wui::State<bool> visible{true};
     wui::State<std::vector<int>> items{{1, 2, 3}};
     wui::State<int> value{0};
-    wui::Column root;
+    wui::ColumnNode root;
     int mountedBranches = 0;
     int generatedRows = 0;
 
@@ -356,7 +665,8 @@ void testDeterministicMutationStress()
                 Text().bind(value, [](const int& current) {
                     return std::string("value:") + std::to_string(current);
                 })
-            );
+            )
+            .build();
     };
 
     for (int operation = 0; operation < kOperations; ++operation) {
@@ -427,7 +737,7 @@ void testDeterministicMutationStress()
 
 } // namespace
 
-int main()
+int runTests()
 {
     testStateDefaultConstruct();
     testStateExplicitConstruct();
@@ -435,8 +745,23 @@ int main()
     testStateSubscribeAndNotify();
     testStateUnsubscribe();
     testStateMultipleSubscribers();
+    testStateRejectsEmptyObserver();
+    testStatePostRunsOnUiThread();
+    testStatePostCoalescesBeforeDrain();
+    testConcurrentPostProducersRemainCoalesced();
+    testDestroyedPostedStateIsSafe();
+    testNewerSynchronousValueSupersedesOlderPostedValue();
+    testPostReportsStoppedContext();
+    testPostRequiresBoundContext();
+    testBoundStateRejectsWorkerSet();
+    testObserverExceptionDoesNotPoisonState();
+    testSubscriptionCanOutliveState();
+    testBoundSubscriptionCanResetFromWorker();
     testBindingFromState();
     testBindingCustomGetterSetter();
+    testStateCopiesShareReactiveIdentity();
+    testBindingCanOutliveStateHandle();
+    testBoundTextCanOutliveStateHandle();
     testComputedInitialValue();
     testComputedRecomputes();
     testComputedNotifiesObservers();
@@ -451,4 +776,14 @@ int main()
     testStructuralUpdatesDrainReentrantWork();
     testDeterministicMutationStress();
     return 0;
+}
+
+int main()
+{
+    try {
+        return runTests();
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
 }

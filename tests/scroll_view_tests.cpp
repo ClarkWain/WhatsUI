@@ -54,8 +54,8 @@ wui::PointerEvent scroll(float y, float delta)
 
 void testViewportLayoutAndClamping()
 {
-    wui::ScrollView view;
-    view.child(std::make_unique<Probe>(wui::SizeF{80.0f, 300.0f}));
+    wui::ScrollViewNode view;
+    view.content(std::make_unique<Probe>(wui::SizeF{80.0f, 300.0f}));
     view.layout({0.0f, 0.0f, 100.0f, 100.0f});
     expect(view.contentSize().height == 300.0f, "ScrollView should retain unconstrained content height");
     expect(view.maxScrollOffset() == 200.0f, "ScrollView should expose document overflow");
@@ -65,12 +65,63 @@ void testViewportLayoutAndClamping()
     expect(view.scrollOffset() == 0.0f, "ScrollView should clamp offset at document start");
 }
 
+void testViewportRejectsMoreThanOneRuntimeChild()
+{
+    wui::ScrollViewNode view;
+    view.appendChild(std::make_unique<Probe>(wui::SizeF{80.0f, 100.0f}));
+
+    bool rejected = false;
+    try {
+        view.appendChild(
+            std::make_unique<Probe>(wui::SizeF{80.0f, 200.0f}));
+    } catch (const std::logic_error&) {
+        rejected = true;
+    }
+
+    expect(rejected,
+           "ScrollView runtime invariant should reject a second child");
+    expect(view.children().size() == 1,
+           "Rejecting a second ScrollView child must preserve existing content");
+}
+
+void testViewportRejectsInvalidContentTransactionally()
+{
+    wui::ScrollViewNode view;
+    view.content(std::make_unique<Probe>(wui::SizeF{80.0f, 100.0f}));
+    wui::Node* const original = view.content();
+
+    bool rejectedNull = false;
+    try {
+        view.content(nullptr);
+    } catch (const std::invalid_argument&) {
+        rejectedNull = true;
+    }
+    expect(rejectedNull && view.content() == original,
+           "Invalid replacement content must preserve the current ScrollView content");
+
+    wui::ScrollViewNode emptyView;
+    std::vector<wui::NodePtr> batch;
+    batch.push_back(
+        std::make_unique<Probe>(wui::SizeF{80.0f, 100.0f}));
+    batch.push_back(
+        std::make_unique<Probe>(wui::SizeF{80.0f, 200.0f}));
+
+    bool rejectedBatch = false;
+    try {
+        emptyView.appendChildren(std::move(batch));
+    } catch (const std::logic_error&) {
+        rejectedBatch = true;
+    }
+    expect(rejectedBatch && emptyView.children().empty(),
+           "A multi-child batch must not partially mutate ScrollView");
+}
+
 void testWheelBubblesFromContent()
 {
-    auto view = std::make_unique<wui::ScrollView>();
-    view->child(std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f}));
+    auto view = std::make_unique<wui::ScrollViewNode>();
+    view->content(std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f}));
     view->layout({0.0f, 0.0f, 100.0f, 100.0f});
-    wui::ScrollView* raw = view.get();
+    wui::ScrollViewNode* raw = view.get();
     wui::InputRouter router;
     router.setRoot(view.get());
     expect(router.dispatchPointer(scroll(10.0f, -60.0f)), "Wheel event should bubble from content to viewport");
@@ -82,12 +133,12 @@ void testWheelBubblesFromContent()
 
 void testHitTestingUsesDocumentCoordinates()
 {
-    wui::ScrollView view;
-    auto content = std::make_unique<wui::Container>();
+    wui::ScrollViewNode view;
+    auto content = std::make_unique<wui::BoxNode>();
     auto child = std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f});
     wui::Node* rawChild = child.get();
     content->child(std::move(child));
-    view.child(std::move(content));
+    view.content(std::move(content));
     view.layout({0.0f, 0.0f, 100.0f, 100.0f});
     view.setScrollOffset(80.0f);
     expect(view.hitTest({10.0f, 10.0f}) == rawChild, "Viewport hit testing should translate to document coordinates");
@@ -96,13 +147,13 @@ void testHitTestingUsesDocumentCoordinates()
 
 void testHorizontalViewportLayoutWheelAndHitTesting()
 {
-    auto view = std::make_unique<wui::ScrollView>();
+    auto view = std::make_unique<wui::ScrollViewNode>();
     view->setAxis(wui::ScrollAxis::Horizontal);
-    auto content = std::make_unique<wui::Container>();
+    auto content = std::make_unique<wui::BoxNode>();
     auto child = std::make_unique<Probe>(wui::SizeF{300.0f, 80.0f});
     wui::Node* rawChild = child.get();
     content->child(std::move(child));
-    view->child(std::move(content));
+    view->content(std::move(content));
     view->layout({0.0f, 0.0f, 100.0f, 100.0f});
 
     expect(view->contentSize().width == 300.0f, "Horizontal ScrollView should retain unconstrained content width");
@@ -139,12 +190,12 @@ void testLongTextPaintsOnlyViewportLines()
 
     CountingTextMeasurer measurer;
     wui::setTextMeasurer(&measurer);
-    auto text = std::make_unique<wui::Text>(std::move(document));
+    auto text = std::make_unique<wui::TextNode>(std::move(document));
     text->setLineHeight(20.0f);
     text->setFillAvailableWidth(true);
 
-    wui::ScrollView view;
-    view.child(std::move(text));
+    wui::ScrollViewNode view;
+    view.content(std::move(text));
     view.layout({0.0f, 0.0f, 320.0f, 100.0f});
     expect(measurer.calls == 0,
            "Fill-width long Text layout must not shape every line to resolve intrinsic width");
@@ -168,19 +219,19 @@ void testLongTextPaintsOnlyViewportLines()
 
 void testNestedViewportHandsOffOnlyRemainingWheelDelta()
 {
-    auto outer = std::make_unique<wui::ScrollView>();
-    auto column = std::make_unique<wui::Column>();
+    auto outer = std::make_unique<wui::ScrollViewNode>();
+    auto column = std::make_unique<wui::ColumnNode>();
 
-    auto innerHost = std::make_unique<wui::Container>();
+    auto innerHost = std::make_unique<wui::BoxNode>();
     innerHost->setHeight(100.0f);
-    auto inner = std::make_unique<wui::ScrollView>();
-    inner->child(std::make_unique<Probe>(wui::SizeF{100.0f, 200.0f}));
-    wui::ScrollView* rawInner = inner.get();
+    auto inner = std::make_unique<wui::ScrollViewNode>();
+    inner->content(std::make_unique<Probe>(wui::SizeF{100.0f, 200.0f}));
+    wui::ScrollViewNode* rawInner = inner.get();
     innerHost->child(std::move(inner));
     column->child(std::move(innerHost));
     column->child(std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f}));
-    outer->child(std::move(column));
-    wui::ScrollView* rawOuter = outer.get();
+    outer->content(std::move(column));
+    wui::ScrollViewNode* rawOuter = outer.get();
     outer->layout({0.0f, 0.0f, 100.0f, 100.0f});
 
     expect(rawInner->maxScrollOffsetY() == 100.0f && rawOuter->maxScrollOffsetY() == 300.0f,
@@ -202,22 +253,22 @@ void testNestedViewportHandsOffOnlyRemainingWheelDelta()
 
 void testNestedListViewHandsOffOnlyRemainingWheelDelta()
 {
-    auto outer = std::make_unique<wui::ScrollView>();
-    auto column = std::make_unique<wui::Column>();
+    auto outer = std::make_unique<wui::ScrollViewNode>();
+    auto column = std::make_unique<wui::ColumnNode>();
 
-    auto listHost = std::make_unique<wui::Container>();
+    auto listHost = std::make_unique<wui::BoxNode>();
     listHost->setHeight(100.0f);
-    std::vector<wui::ListView::Item> items;
+    std::vector<wui::ListViewNode::Item> items;
     for (int index = 0; index < 10; ++index) {
         items.push_back({"Row " + std::to_string(index)});
     }
-    auto list = std::make_unique<wui::ListView>(std::move(items));
-    wui::ListView* rawList = list.get();
+    auto list = std::make_unique<wui::ListViewNode>(std::move(items));
+    wui::ListViewNode* rawList = list.get();
     listHost->child(std::move(list));
     column->child(std::move(listHost));
     column->child(std::make_unique<Probe>(wui::SizeF{100.0f, 300.0f}));
-    outer->child(std::move(column));
-    wui::ScrollView* rawOuter = outer.get();
+    outer->content(std::move(column));
+    wui::ScrollViewNode* rawOuter = outer.get();
     outer->layout({0.0f, 0.0f, 100.0f, 100.0f});
 
     const float listMaximum = rawList->maximumScrollOffset();
@@ -245,6 +296,8 @@ void testNestedListViewHandsOffOnlyRemainingWheelDelta()
 int main()
 {
     testViewportLayoutAndClamping();
+    testViewportRejectsMoreThanOneRuntimeChild();
+    testViewportRejectsInvalidContentTransactionally();
     testWheelBubblesFromContent();
     testHitTestingUsesDocumentCoordinates();
     testHorizontalViewportLayoutWheelAndHitTesting();

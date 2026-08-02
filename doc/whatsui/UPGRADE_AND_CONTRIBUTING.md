@@ -46,8 +46,8 @@ object files or DLL/static-library consumers is unsupported.
    capture rather than accepting a new image hash without viewing it.
 
 6. Keep the application’s state/data migrations separate from a WhatsUI
-   runtime upgrade. For example, Todo’s versioned local store is application
-   data; it must retain its own migration and recovery policy.
+   runtime upgrade. Product data stores must retain their own migration and
+   recovery policies.
 
 ### Package/export boundary
 
@@ -83,7 +83,7 @@ headless build after enabling WhatsCanvas or sanitizers.
 | --- | --- | --- |
 | Runtime, node lifetime, state, input, focus, scrolling | Debug build, relevant focused tests, then full default CTest. | MSVC ASan for ownership/event/lifecycle work. |
 | TextInput, text measurement, composition, clipboard | Focused text/window tests plus full default CTest. | GLFW IME check with a real installed IME; 100%/150%/200% caret/candidate placement when the host boundary changes. |
-| Widget, layout, Fluent theme, Todo/Settings/Command Palette UI | Focused tests and full default CTest. | WhatsCanvas Software build; run visual hash and responsive-review tests. A reviewer must inspect the generated images. |
+| Widget, layout, Fluent theme, Focus Tomato/Component Gallery UI | Focused tests and full default CTest. | WhatsCanvas Software build; run visual hash and responsive-review tests. A reviewer must inspect the generated images. |
 | WhatsCanvas/GLFW/backend wiring | Clean `WHATSUI_WITH_WHATSCANVAS=ON` configure/build. | Run the relevant interactive reference app, and state the GPU/driver/Windows version used for manual findings. |
 | Public header/API | Consumer-facing compile coverage and documentation update. | State whether the change is additive, source-breaking, or experimental; no ABI promise may be implied. |
 | Persistence/data format | Unit tests for round trip, malformed-input recovery, and version migration. | Verify the target LocalAppData or chosen injected path does not overwrite user data on failed saves. |
@@ -99,8 +99,8 @@ before marking a Windows milestone/release task complete.
 - Add or update a focused regression test for each fixed bug. Tests must assert
   behavior, not merely that a process exits successfully.
 - For a visual change, include the before/after scenario, regenerated hashes
-  only after human image review, and the narrow/regular/wide captures when the
-  Todo layout changes.
+  only after human image review, and the compact/regular/wide captures when a
+  product layout changes.
 - Preserve ownership, attach/detach, deferred structural update, focus, and
   pointer-capture contracts. A UI sample that looks correct is not sufficient
   evidence when it changes these runtime boundaries.
@@ -128,7 +128,7 @@ ctest --test-dir build-asan -C Debug --output-on-failure
 cmake -S . -B build-wsc -DWHATSUI_WITH_WHATSCANVAS=ON -DWHATSUI_BUILD_TESTS=ON -DWHATSUI_BUILD_EXAMPLES=ON
 cmake --build build-wsc --config Debug
 ctest --test-dir build-wsc -C Debug --output-on-failure
-ctest --test-dir build-wsc -C Debug --output-on-failure -R ^whatsui_todo_visual_review$
+ctest --test-dir build-wsc -C Debug --output-on-failure -R "focus_tomato|component_gallery"
 ```
 
 Sanitizers intentionally cover the headless runtime. Do not claim that a clean

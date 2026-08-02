@@ -15,7 +15,7 @@
 
 namespace wui {
 
-class VirtualList : public ControlNode {
+class VirtualListNode : public ControlNode {
 public:
     using Index = std::size_t;
     using Key = std::string;
@@ -31,8 +31,8 @@ public:
         [[nodiscard]] bool empty() const noexcept { return first == last; }
     };
 
-    VirtualList();
-    ~VirtualList() override;
+    VirtualListNode();
+    ~VirtualListNode() override;
 
     void setItemCount(Index count);
     [[nodiscard]] Index itemCount() const noexcept;
@@ -55,7 +55,7 @@ public:
 
     [[nodiscard]] int selectedIndex() const noexcept;
     void setSelectedIndex(int index);
-    VirtualList& onSelectionChanged(SelectionHandler handler);
+    VirtualListNode& onSelectionChanged(SelectionHandler handler);
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void layout(const RectF& bounds) override;

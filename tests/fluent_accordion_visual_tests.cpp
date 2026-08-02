@@ -44,7 +44,7 @@ void render(const std::string& output, float scale)
         paint.fillRect({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)}, wui::theme().colors.neutralBackground2.rest);
         paint.drawText("Fluent Accordion", 36, 44, 24, wui::theme().colors.neutralForeground1, 600);
 
-        wui::Accordion accordion;
+        wui::AccordionNode accordion;
         accordion.accessibleLabel("Settings sections");
         auto& account = accordion.addItem("Account settings", "Manage your sign-in preferences and recovery information.");
         auto& appearance = accordion.addItem("Appearance", "Choose a theme and your preferred content density.");
@@ -55,7 +55,7 @@ void render(const std::string& output, float scale)
         appearance.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Enter, wui::MouseButton::None, {180, 186}});
         appearance.paint(paint);
 
-        wui::Accordion multiple;
+        wui::AccordionNode multiple;
         multiple.setExpandMode(wui::AccordionExpandMode::Multiple);
         auto& one = multiple.addItem("Notifications", "Control which status messages are surfaced.");
         auto& two = multiple.addItem("Privacy", "Review permissions available to this application.");

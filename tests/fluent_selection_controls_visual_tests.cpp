@@ -63,7 +63,7 @@ void render(const std::string& output, float scale)
         paint.fillRect({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)}, wui::theme().colors.neutralBackground2.rest);
         paint.drawText("Fluent selection controls", 28, 42, 24, wui::theme().colors.neutralForeground1, 600);
         paint.drawText("ListBox", 28, 82, 14, wui::theme().colors.neutralForeground1, 600);
-        wui::ListBox list(std::vector<wui::Option>{
+        wui::ListBoxNode list(std::vector<wui::Option>{
             wui::Option{"meeting", "Team meeting", std::string("Tomorrow, 10:00")},
             wui::Option{"review", "Design review", std::string("Friday, 14:30")},
             wui::Option{"archived", "Archived task", false},
@@ -71,26 +71,26 @@ void render(const std::string& output, float scale)
             wui::Option{"retro", "Retrospective", std::string("Friday")}});
         list.setSelectedIndex(3); list.setMaxVisibleOptions(2); list.layout({28, 98, 316, 120}); list.setScrollOffset(112); list.prepare(paint); list.paint(paint);
         paint.drawText("Dropdown", 402, 82, 14, wui::theme().colors.neutralForeground1, 600);
-        wui::Dropdown dropdown("Choose a project"); dropdown.addOption({"whatsui", "WhatsUI"}).addOption({"canvas", "WhatsCanvas"}); dropdown.setMultiselect(true); dropdown.setSelectedIndices({0, 1}); draw(dropdown, paint, {402, 98, 300, 32});
+        wui::DropdownNode dropdown("Choose a project"); dropdown.addOption({"whatsui", "WhatsUI"}).addOption({"canvas", "WhatsCanvas"}); dropdown.setMultiselect(true); dropdown.setSelectedIndices({0, 1}); draw(dropdown, paint, {402, 98, 300, 32});
         paint.drawText("Editable combobox", 402, 172, 14, wui::theme().colors.neutralForeground1, 600);
-        wui::Combobox combo("Search people"); combo.text("Ada");
+        wui::ComboboxNode combo("Search people"); combo.text("Ada");
         combo.setVisualState(wui::ControlVisualState::Focused, true);
         draw(combo, paint, {402, 188, 300, 32});
 
         paint.drawText("Dropdown states", 28, 246, 14,
                        wui::theme().colors.neutralForeground1, 600);
-        wui::Dropdown rest("Rest");
+        wui::DropdownNode rest("Rest");
         draw(rest, paint, {28, 258, 128, 32});
-        wui::Dropdown hover("Hover");
+        wui::DropdownNode hover("Hover");
         hover.setVisualState(wui::ControlVisualState::Hovered, true);
         draw(hover, paint, {168, 258, 128, 32});
-        wui::Dropdown pressed("Pressed");
+        wui::DropdownNode pressed("Pressed");
         pressed.setVisualState(wui::ControlVisualState::Pressed, true);
         draw(pressed, paint, {308, 258, 128, 32});
-        wui::Dropdown focused("Focus");
+        wui::DropdownNode focused("Focus");
         focused.setVisualState(wui::ControlVisualState::Focused, true);
         draw(focused, paint, {448, 258, 128, 32});
-        wui::Dropdown disabled("Disabled");
+        wui::DropdownNode disabled("Disabled");
         disabled.setEnabled(false);
         draw(disabled, paint, {588, 258, 128, 32});
 

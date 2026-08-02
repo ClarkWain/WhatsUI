@@ -4,9 +4,12 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
-#include "wui/node.h"
+#include "wui/view.h"
 
 namespace wui {
 
@@ -19,11 +22,19 @@ enum class PageRetention {
 
 class UiRoot {
 public:
+    explicit UiRoot(UiContext context = {});
     ~UiRoot();
 
     void setOnInvalidate(std::function<void()> handler);
-    void setContent(std::unique_ptr<Node> content) noexcept;
-    void setBorrowedContent(Node* content) noexcept;
+    void setContent(std::unique_ptr<Node> content);
+    template <
+        class Content,
+        std::enable_if_t<isViewLikeV<Content>, int> = 0>
+    void setContent(Content&& content)
+    {
+        setContent(detail::materialize(std::forward<Content>(content)));
+    }
+    void setBorrowedContent(Node* content);
     [[nodiscard]] Node* content() const noexcept;
 
     void layout(const RectF& bounds);
@@ -33,12 +44,15 @@ public:
     [[nodiscard]] const RectF& bounds() const noexcept;
 
 private:
+    void requireOwnerThread() const;
     void wireInvalidationHandler() noexcept;
 
     std::unique_ptr<Node> ownedContent_;
     Node* content_{nullptr};
     RectF bounds_{};
     std::function<void()> onInvalidate_;
+    UiContext context_;
+    std::thread::id ownerThread_;
 };
 
 struct PageEntry {
@@ -54,14 +68,103 @@ public:
     using BeforeChangeHandler = std::function<void()>;
     using PageFactory = std::function<std::unique_ptr<Node>()>;
 
+    explicit Navigator(UiContext context = {});
+
     void setOnChange(ChangeHandler handler);
     void setBeforeChange(BeforeChangeHandler handler);
     void setRoot(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
     void setRoot(std::string key, PageFactory factory, PageRetention retention);
+    template <
+        class Page,
+        std::enable_if_t<isViewLikeV<Page>, int> = 0>
+    void setRoot(
+        std::string key,
+        Page&& page,
+        PageRetention retention = PageRetention::KeepAlive)
+    {
+        setRoot(
+            std::move(key),
+            detail::materialize(std::forward<Page>(page)),
+            retention);
+    }
+    template <
+        class Factory,
+        std::enable_if_t<
+            !isViewLikeV<Factory>
+            && detail::IsViewFactory<Factory>::value,
+            int> = 0>
+    void setRoot(
+        std::string key,
+        Factory&& factory,
+        PageRetention retention)
+    {
+        setRoot(
+            std::move(key),
+            eraseFactory(std::forward<Factory>(factory)),
+            retention);
+    }
     void push(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
     void push(std::string key, PageFactory factory, PageRetention retention);
+    template <
+        class Page,
+        std::enable_if_t<isViewLikeV<Page>, int> = 0>
+    void push(
+        std::string key,
+        Page&& page,
+        PageRetention retention = PageRetention::KeepAlive)
+    {
+        push(
+            std::move(key),
+            detail::materialize(std::forward<Page>(page)),
+            retention);
+    }
+    template <
+        class Factory,
+        std::enable_if_t<
+            !isViewLikeV<Factory>
+            && detail::IsViewFactory<Factory>::value,
+            int> = 0>
+    void push(
+        std::string key,
+        Factory&& factory,
+        PageRetention retention)
+    {
+        push(
+            std::move(key),
+            eraseFactory(std::forward<Factory>(factory)),
+            retention);
+    }
     void replace(std::string key, std::unique_ptr<Node> page, PageRetention retention = PageRetention::KeepAlive);
     void replace(std::string key, PageFactory factory, PageRetention retention);
+    template <
+        class Page,
+        std::enable_if_t<isViewLikeV<Page>, int> = 0>
+    void replace(
+        std::string key,
+        Page&& page,
+        PageRetention retention = PageRetention::KeepAlive)
+    {
+        replace(
+            std::move(key),
+            detail::materialize(std::forward<Page>(page)),
+            retention);
+    }
+    template <
+        class Factory,
+        std::enable_if_t<
+            !isViewLikeV<Factory>
+            && detail::IsViewFactory<Factory>::value,
+            int> = 0>
+    void replace(
+        std::string key,
+        Factory&& factory,
+        PageRetention retention)
+    {
+        replace(
+            std::move(key),
+            eraseFactory(std::forward<Factory>(factory)),
+            retention);
+    }
     [[nodiscard]] std::unique_ptr<Node> pop();
     void popToRoot();
     void clear();
@@ -75,6 +178,18 @@ public:
     [[nodiscard]] const std::vector<PageEntry>& pages() const noexcept;
 
 private:
+    template <class Factory>
+    static PageFactory eraseFactory(Factory&& factory)
+    {
+        static_assert(
+            std::is_copy_constructible_v<std::decay_t<Factory>>,
+            "Navigator factories must be copy-constructible");
+        return [factory = std::forward<Factory>(factory)]() mutable {
+            return detail::materialize(std::invoke(factory));
+        };
+    }
+
+    void requireOwnerThread() const;
     void notifyWillChange();
     void hideCurrent();
     void activateCurrent();
@@ -83,6 +198,8 @@ private:
     std::vector<PageEntry> stack_;
     ChangeHandler onChange_;
     BeforeChangeHandler onBeforeChange_;
+    UiContext context_;
+    std::thread::id ownerThread_;
 };
 
 using OverlayId = std::size_t;
@@ -100,6 +217,8 @@ class OverlayHost {
 public:
     using ChangeHandler = std::function<void()>;
 
+    explicit OverlayHost(UiContext context = {});
+
     ~OverlayHost();
 
     // UiWindow binds its focus manager once. Standalone/headless hosts may
@@ -109,6 +228,13 @@ public:
     [[nodiscard]] Node* focused() const noexcept;
     void setOnChange(ChangeHandler handler);
     [[nodiscard]] OverlayId show(std::unique_ptr<Node> overlay);
+    template <
+        class Overlay,
+        std::enable_if_t<isViewLikeV<Overlay>, int> = 0>
+    [[nodiscard]] OverlayId show(Overlay&& overlay)
+    {
+        return show(detail::materialize(std::forward<Overlay>(overlay)));
+    }
     [[nodiscard]] std::unique_ptr<Node> dismiss(OverlayId id);
     [[nodiscard]] std::unique_ptr<Node> dismissTop();
     void clear() noexcept;
@@ -123,10 +249,13 @@ public:
     [[nodiscard]] const std::vector<OverlayEntry>& overlays() const noexcept;
 
 private:
+    void requireOwnerThread() const;
     OverlayId nextId_{1};
     std::vector<OverlayEntry> overlays_;
     ChangeHandler onChange_;
     FocusManager* focusManager_{nullptr};
+    UiContext context_;
+    std::thread::id ownerThread_;
 };
 
 } // namespace wui

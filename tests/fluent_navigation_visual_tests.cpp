@@ -58,50 +58,50 @@ void render(const std::string& output, float scale)
         paint.fillRect({0, 0, static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)}, wui::theme().colors.neutralBackground2.rest);
         paint.drawText("Fluent navigation", 28, 36, 20, wui::theme().colors.neutralForeground1, 600);
 
-        wui::Toolbar toolbar;
+        wui::ToolbarNode toolbar;
         toolbar.addItem("Cut");
         toolbar.addItem("Copy").setVisualState(wui::ControlVisualState::Hovered, true);
         toolbar.addItem("Paste", wui::ToolbarItemAppearance::Primary);
         toolbar.layout({28, 54, 260, 40}); toolbar.prepare(paint); toolbar.paint(paint);
-        auto* primary = dynamic_cast<wui::ToolbarItem*>(toolbar.children().back().get());
+        auto* primary = dynamic_cast<wui::ToolbarItemNode*>(toolbar.children().back().get());
         primary->onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Enter}); primary->paint(paint);
-        wui::Toolbar vertical;
+        wui::ToolbarNode vertical;
         vertical.setOrientation(wui::ToolbarOrientation::Vertical);
         vertical.addItem("New"); vertical.addItem("Open"); vertical.addItem("Save");
         vertical.layout({660, 42, 72, 112}); vertical.prepare(paint); vertical.paint(paint);
 
-        wui::TabList tabs;
+        wui::TabListNode tabs;
         tabs.addTab("overview", "Overview"); tabs.addTab("activity", "Activity"); tabs.addTab("settings", "Settings", false);
         tabs.setValue("activity");
-        dynamic_cast<wui::Tab*>(tabs.children().front().get())
+        dynamic_cast<wui::TabNode*>(tabs.children().front().get())
             ->setVisualState(wui::ControlVisualState::Hovered, true);
         tabs.layout({28, 108, 420, 44}); tabs.prepare(paint); tabs.paint(paint);
 
-        wui::Link link("View all activity");
+        wui::LinkNode link("View all activity");
         link.setVisualState(wui::ControlVisualState::Hovered, true);
         link.layout({490, 118, 120, 20}); link.paint(paint);
 
-        wui::Breadcrumb breadcrumb;
+        wui::BreadcrumbNode breadcrumb;
         breadcrumb.maxVisible(3); breadcrumb.addItem("Home"); breadcrumb.addItem("Projects"); breadcrumb.addItem("WhatsUI"); breadcrumb.addItem("Navigation", true);
-        dynamic_cast<wui::BreadcrumbItem*>(
+        dynamic_cast<wui::BreadcrumbItemNode*>(
             breadcrumb.children().front().get())
             ->setVisualState(wui::ControlVisualState::Hovered, true);
         breadcrumb.layout({28, 184, 520, 32}); breadcrumb.prepare(paint); breadcrumb.paint(paint);
 
-        paint.drawText("Tab states", 28, 262, 14,
+        paint.drawText("TabNode states", 28, 262, 14,
                        wui::theme().colors.neutralForeground1, 600);
-        wui::TabList stateTabs;
+        wui::TabListNode stateTabs;
         stateTabs.addTab("rest", "Rest");
         stateTabs.addTab("hover", "Hover");
         stateTabs.addTab("pressed", "Pressed");
         stateTabs.addTab("focus", "Focus");
         stateTabs.addTab("disabled", "Disabled", false);
         stateTabs.setValue("focus");
-        dynamic_cast<wui::Tab*>(stateTabs.children()[1].get())
+        dynamic_cast<wui::TabNode*>(stateTabs.children()[1].get())
             ->setVisualState(wui::ControlVisualState::Hovered, true);
-        dynamic_cast<wui::Tab*>(stateTabs.children()[2].get())
+        dynamic_cast<wui::TabNode*>(stateTabs.children()[2].get())
             ->setVisualState(wui::ControlVisualState::Pressed, true);
-        dynamic_cast<wui::Tab*>(stateTabs.children()[3].get())
+        dynamic_cast<wui::TabNode*>(stateTabs.children()[3].get())
             ->setVisualState(wui::ControlVisualState::Focused, true);
         stateTabs.layout({28, 272, 520, 44});
         stateTabs.prepare(paint);
@@ -109,18 +109,18 @@ void render(const std::string& output, float scale)
 
         paint.drawText("Link states", 28, 354, 14,
                        wui::theme().colors.neutralForeground1, 600);
-        wui::Link restLink("Rest");
+        wui::LinkNode restLink("Rest");
         restLink.layout({28, 364, 52, 20}); restLink.paint(paint);
-        wui::Link hoverLink("Hover");
+        wui::LinkNode hoverLink("Hover");
         hoverLink.setVisualState(wui::ControlVisualState::Hovered, true);
         hoverLink.layout({106, 364, 52, 20}); hoverLink.paint(paint);
-        wui::Link pressedLink("Pressed");
+        wui::LinkNode pressedLink("Pressed");
         pressedLink.setVisualState(wui::ControlVisualState::Pressed, true);
         pressedLink.layout({184, 364, 60, 20}); pressedLink.paint(paint);
-        wui::Link focusLink("Focus");
+        wui::LinkNode focusLink("Focus");
         focusLink.setVisualState(wui::ControlVisualState::Focused, true);
         focusLink.layout({270, 364, 52, 20}); focusLink.paint(paint);
-        wui::Link disabledLink("Disabled");
+        wui::LinkNode disabledLink("Disabled");
         disabledLink.setEnabled(false);
         disabledLink.layout({348, 364, 68, 20}); disabledLink.paint(paint);
         canvas->endFrame();
@@ -132,13 +132,13 @@ void render(const std::string& output, float scale)
                        selectedBounds.x + selectedBounds.width * 0.5f,
                        selectedBounds.y + selectedBounds.height - 1.5f,
                        wui::theme().colors.compoundBrandStroke.rest),
-               "Selected Tab must paint the exact 3-DIP brand indicator");
+               "Selected TabNode must paint the exact 3-DIP brand indicator");
         const auto hoveredBounds = tabs.children()[0]->bounds();
         expect(colorAt(pixels, width, scale,
                        hoveredBounds.x + hoveredBounds.width * 0.5f,
                        hoveredBounds.y + hoveredBounds.height - 1.5f,
                        wui::theme().colors.neutralStroke1Hover),
-               "Hovered unselected Tab must paint the neutral 3-DIP indicator");
+               "Hovered unselected TabNode must paint the neutral 3-DIP indicator");
         savePpm(output, pixels, width, height);
     } catch (...) { wui::setTextMeasurer(nullptr); throw; }
     wui::setTextMeasurer(nullptr);

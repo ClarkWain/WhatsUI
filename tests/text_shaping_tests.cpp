@@ -134,7 +134,7 @@ void testTextForwardsCustomFamilyToNativeContracts()
     FamilyTrackingTextProvider provider;
     wui::setTextMeasurer(&provider);
     try {
-        wui::Text text("family forwarding");
+        wui::TextNode text("family forwarding");
         text.setFontFamily("Test Face");
         text.setFontSize(20.0f);
         text.setFontWeight(600);
@@ -158,7 +158,7 @@ void testTextForwardsCustomFamilyToNativeContracts()
     LegacyTextMeasurer legacy;
     wui::setTextMeasurer(&legacy);
     try {
-        wui::Text text("legacy host");
+        wui::TextNode text("legacy host");
         text.setFontFamily("A custom family unsupported by this host");
         text.setFontSize(16.0f);
         const auto measured = text.measure({});
@@ -217,7 +217,7 @@ void testTextUsesBackendLineBreaking()
     (void)textMeasurer.installWindowsFallbackPolicy();
     wui::setTextMeasurer(&textMeasurer);
 
-    wui::Text label(utf8({0x4E2D, 0x6587, 0x6CA1, 0x6709, 0x7A7A, 0x683C, 0x4E5F,
+    wui::TextNode label(utf8({0x4E2D, 0x6587, 0x6CA1, 0x6709, 0x7A7A, 0x683C, 0x4E5F,
                           0x5FC5, 0x987B, 0x6309, 0x7167, 0x540E, 0x7AEF, 0x89C4,
                           0x5219, 0x6362, 0x884C}));
     label.setFontSize(18.0f);
@@ -296,7 +296,7 @@ void testCanvasDprOwnsNativeCoordinateScale()
 
     wui::setTextMeasurer(&measurer);
     try {
-        wui::Text monoText(customSample);
+        wui::TextNode monoText(customSample);
         monoText.setFontFamily(std::string(kPortableMono));
         monoText.setFontSize(16.0f);
         monoText.setFontWeight(400);

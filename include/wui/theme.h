@@ -32,7 +32,7 @@ struct ColorTokens {
     Interaction brandBackground{{15, 108, 189, 255}, {17, 94, 163, 255},
                                 {12, 59, 94, 255}, {15, 84, 140, 255}};
     // Compound brand aliases are used when a control combines a brand stroke
-    // and foreground mark (Radio, checked selection indicators). Their
+    // and foreground mark (RadioNode, checked selection indicators). Their
     // pressed value is intentionally brand[60], not the darker
     // colorBrandBackgroundPressed surface token.
     Interaction compoundBrandForeground1{{15, 108, 189, 255}, {17, 94, 163, 255},

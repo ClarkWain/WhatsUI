@@ -16,9 +16,9 @@ wui::PointerEvent pointer(wui::PointerAction action, float y)
     return {0, wui::PointerType::Mouse, action, wui::MouseButton::Left, {16.0f, y}};
 }
 
-wui::ListView makeList()
+wui::ListViewNode makeList()
 {
-    return wui::ListView({{"Inbox"}, {"Archived", false}, {"Later"}, {"Done"}}, -1);
+    return wui::ListViewNode({{"Inbox"}, {"Archived", false}, {"Later"}, {"Done"}}, -1);
 }
 
 void testKeyboardSkipsDisabledRows()
@@ -77,10 +77,10 @@ void testMeasurementTracksContentAndConstraints()
 
     void testLargeListExposesBoundedVisibleRange()
     {
-        std::vector<wui::ListView::Item> items;
+        std::vector<wui::ListViewNode::Item> items;
         items.reserve(100000);
         for (int index = 0; index < 100000; ++index) items.push_back({"Row " + std::to_string(index)});
-        wui::ListView list(std::move(items));
+        wui::ListViewNode list(std::move(items));
         list.layout({0, 0, 240, 182});
         auto visible = list.visibleRange();
         expect(visible.first == 0 && visible.size() <= 6,
@@ -94,11 +94,11 @@ void testMeasurementTracksContentAndConstraints()
 
     void testProviderBackedListRequestsOnlyVisibleRowsForPaint()
     {
-        wui::ListView list;
+        wui::ListViewNode list;
         int requests = 0;
         list.setItemProvider(100000, [&requests](std::size_t index) {
             ++requests;
-            return wui::ListView::Item{"Row " + std::to_string(index)};
+            return wui::ListViewNode::Item{"Row " + std::to_string(index)};
         });
         list.layout({0, 0, 240, 182});
         wui::PaintContext context;
@@ -113,13 +113,13 @@ void testMeasurementTracksContentAndConstraints()
 
     void testProviderBackedListKeyboardUsesSelectableMetadata()
     {
-        wui::ListView list;
+        wui::ListViewNode list;
         int itemRequests = 0;
         int selectableRequests = 0;
         list.setItemProvider(100000,
             [&itemRequests](std::size_t index) {
                 ++itemRequests;
-                return wui::ListView::Item{"Row " + std::to_string(index)};
+                return wui::ListViewNode::Item{"Row " + std::to_string(index)};
             },
             [&selectableRequests](std::size_t index) {
                 ++selectableRequests;
@@ -134,9 +134,9 @@ void testMeasurementTracksContentAndConstraints()
 
     void testProviderBackedListFallsBackToItemEnabled()
     {
-        wui::ListView list;
+        wui::ListViewNode list;
         list.setItemProvider(2, [](std::size_t index) {
-            return wui::ListView::Item{
+            return wui::ListViewNode::Item{
                 index == 0 ? "Disabled" : "Enabled",
                 index != 0};
         });
@@ -153,10 +153,10 @@ void testMeasurementTracksContentAndConstraints()
 
     void testSelectableProviderExceptionsFailClosed()
     {
-        wui::ListView list;
+        wui::ListViewNode list;
         list.setItemProvider(
             1,
-            [](std::size_t) { return wui::ListView::Item{"Row"}; },
+            [](std::size_t) { return wui::ListViewNode::Item{"Row"}; },
             [](std::size_t) -> bool { throw std::runtime_error("metadata unavailable"); });
         list.setSelectedIndex(0);
         expect(list.selectedIndex() == -1,

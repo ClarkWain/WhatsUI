@@ -9,7 +9,7 @@
 #include "view/components/preview_surface.h"
 #include "view/components/responsive_choice_group.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -36,7 +36,7 @@ wui::ButtonSize toSize(ButtonSizeSample value)
     return wui::ButtonSize::Medium;
 }
 
-void updatePreview(wui::Button& button, const ButtonDetailViewModel& viewModel)
+void updatePreview(wui::ButtonNode& button, const ButtonDetailViewModel& viewModel)
 {
     button.setAppearance(toAppearance(viewModel.appearance().get()));
     button.setSize(toSize(viewModel.size().get()));
@@ -46,7 +46,7 @@ void updatePreview(wui::Button& button, const ButtonDetailViewModel& viewModel)
     button.setEnabled(viewModel.enabled().get());
 }
 
-void bindPreview(wui::Node& owner, wui::Button& button, ButtonDetailViewModel& viewModel)
+void bindPreview(wui::Node& owner, wui::ButtonNode& button, ButtonDetailViewModel& viewModel)
 {
     updatePreview(button, viewModel);
     const auto appearanceId = viewModel.appearance().subscribe(
@@ -65,9 +65,9 @@ void bindPreview(wui::Node& owner, wui::Button& button, ButtonDetailViewModel& v
     });
 }
 
-std::unique_ptr<wui::Node> buildLivePreview(wui::Button*& previewOut)
+std::unique_ptr<wui::Node> buildLivePreview(wui::ButtonNode*& previewOut)
 {
-    auto button = std::make_unique<wui::Button>("Create project");
+    auto button = std::make_unique<wui::ButtonNode>("Create project");
     previewOut = button.get();
     return view::components::buildPreviewSurface(
         {"Preview", "Properties update this live control", "Interactive", 220.0f, true},
@@ -128,7 +128,7 @@ std::unique_ptr<wui::Node> buildSizeChoice(ButtonDetailViewModel& viewModel)
 
 std::unique_ptr<wui::Node> buildProperties(ButtonDetailViewModel& viewModel)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return Card()
         .appearance(wui::CardAppearance::Outline)
         .children(
@@ -147,12 +147,12 @@ std::unique_ptr<wui::Node> buildProperties(ButtonDetailViewModel& viewModel)
                     .onChange([&viewModel](bool value) { viewModel.setEnabled(value); })
             )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildStates()
 {
-    using namespace wui::ui;
+    using namespace wui;
     auto selected = std::make_shared<std::string>("rest");
     return Card()
         .appearance(wui::CardAppearance::Outline)
@@ -171,12 +171,12 @@ std::unique_ptr<wui::Node> buildStates()
                     "Button visual state")
             )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildTokens()
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& current = wui::theme();
     return Card()
         .appearance(wui::CardAppearance::Outline)
@@ -195,7 +195,7 @@ std::unique_ptr<wui::Node> buildTokens()
                 Row().children(Text("Focus width").size(12.0f), Spacer().flex(1.0f), Text(std::to_string(static_cast<int>(current.controls.focusWidth)) + " px").size(12.0f))
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -204,10 +204,10 @@ std::unique_ptr<wui::Node> buildButtonDetailPage(
     ButtonDetailViewModel& viewModel,
     std::function<void()> onBack)
 {
-    using namespace wui::ui;
-    wui::Button* preview = nullptr;
+    using namespace wui;
+    wui::ButtonNode* preview = nullptr;
     auto root = ScrollView()
-        .children(
+        .content(
             Column()
             .gap(20.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})
@@ -220,7 +220,7 @@ std::unique_ptr<wui::Node> buildButtonDetailPage(
                 buildTokens()
             )
         )
-        .intoNode();
+        .build();
         
     bindPreview(*root, *preview, viewModel);
     return root;

@@ -1,5 +1,4 @@
 #include "wui/scheduler.h"
-
 #include <utility>
 #include <vector>
 
@@ -14,7 +13,7 @@ struct Entry {
 
 std::vector<Entry>& queue()
 {
-    static std::vector<Entry> pending;
+    thread_local std::vector<Entry> pending;
     return pending;
 }
 

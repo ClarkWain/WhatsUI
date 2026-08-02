@@ -42,7 +42,7 @@
 #include <GLFW/glfw3native.h>
 
 #include "wui/glfw_platform.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace {
 
@@ -1087,9 +1087,9 @@ void exerciseNativeUiaEvents(wui::UiWindow& window, HWND hwnd)
 
     expect(window.root() != nullptr && window.root()->children().size() == 9,
            "The native UIA event fixture must retain its controls");
-    auto* checkbox = dynamic_cast<wui::Checkbox*>(window.root()->children()[2].get());
+    auto* checkbox = dynamic_cast<wui::CheckboxNode*>(window.root()->children()[2].get());
     expect(checkbox != nullptr, "The UIA property event fixture must be a Checkbox");
-    auto* textInput = dynamic_cast<wui::TextInput*>(window.root()->children()[3].get());
+    auto* textInput = dynamic_cast<wui::TextFieldNode*>(window.root()->children()[3].get());
     expect(textInput != nullptr, "The UIA value event fixture must be a TextInput");
     checkbox->setChecked(false);
     checkbox->setEnabled(false);
@@ -1097,9 +1097,9 @@ void exerciseNativeUiaEvents(wui::UiWindow& window, HWND hwnd)
     textInput->text("Event value");
     window.focusManager().setFocused(window.root()->children()[3].get());
     window.root()->appendChild(
-        wui::ui::Text("Native event child")
-            .accessibilityId("native.event.child")
-            .intoNode());
+        wui::Text("Native event child")
+            .automationId("native.event.child")
+            .build());
     window.update();
     window.layout();
 
@@ -1288,39 +1288,39 @@ void testNativeUiaRoot()
     wui::UiApp app(std::move(host));
     auto& window = app.openWindow("WhatsUI native UIA smoke", {560.0f, 600.0f});
     NativeActionState actionState;
-    window.setRoot(wui::ui::Column()
+    window.setRoot(wui::Column()
                        .padding(24)
                        .gap(12)
-                       .children(wui::ui::Text("Native accessibility boundary"),
-                                 wui::ui::Button("Native action").accessibilityId("native.action").onClick([&actionState] {
+                       .children(wui::Text("Native accessibility boundary"),
+                                 wui::Button("Native action").automationId("native.action").onClick([&actionState] {
                                      ++actionState.invokeCount;
                                      actionState.invokeThread = std::this_thread::get_id();
                                  }),
-                                 wui::ui::Checkbox("Native toggle").required().accessibilityId("native.toggle").onChange(
+                                 wui::Checkbox("Native toggle").required().automationId("native.toggle").onChange(
                                      [&actionState](bool checked) {
                                          actionState.checked = checked;
                                          actionState.toggleThread = std::this_thread::get_id();
                                      }),
-                                 wui::ui::TextField("Native value").accessibilityId("native.value").onChange(
+                                 wui::TextField("Native value").automationId("native.value").onChange(
                                      [&actionState](const std::string& value) {
                                          actionState.value = value;
                                          actionState.valueThread = std::this_thread::get_id();
                                      }),
-                                 wui::ui::RadioGroup()
+                                 wui::RadioGroup()
                                      .accessibleLabel("Native choices")
                                      .required()
                                      .value("first")
                                      .option("first", "First choice")
                                      .option("second", "Second choice"),
-                                 wui::ui::Switch("Native required switch").required(),
-                                 wui::ui::ProgressBar()
+                                 wui::Switch("Native required switch").required(),
+                                 wui::ProgressBar()
                                      .accessibleLabel("Native busy progress"),
-                                 wui::ui::Slider(10.0f, 90.0f, 40.0f)
+                                 wui::Slider(10.0f, 90.0f, 40.0f)
                                      .step(5.0f)
                                      .accessibleLabel("Native range slider"),
-                                 wui::ui::ProgressBar(0.0f, 100.0f, 60.0f)
+                                 wui::ProgressBar(0.0f, 100.0f, 60.0f)
                                      .accessibleLabel("Native determinate progress"))
-                       .intoNode());
+                       .build());
     window.update();
     window.layout();
     expect(window.root() != nullptr && window.root()->children().size() == 9,

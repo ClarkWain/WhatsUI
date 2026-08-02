@@ -73,15 +73,15 @@ struct IconFontStatus {
 // safely; WhatsCanvas treats equivalent face registration as idempotent.
 [[nodiscard]] IconFontStatus registerDefaultIconFonts(wsc::Canvas& canvas);
 
-class Icon : public Node {
+class IconNode : public Node {
 public:
-    explicit Icon(IconName name = IconName::Info);
+    explicit IconNode(IconName name = IconName::Info);
 
-    Icon& name(IconName value) noexcept;
-    Icon& size(IconSize value) noexcept;
-    Icon& style(IconStyle value) noexcept;
-    Icon& color(Color value) noexcept;
-    Icon& useThemeColor() noexcept;
+    IconNode& name(IconName value) noexcept;
+    IconNode& size(IconSize value) noexcept;
+    IconNode& style(IconStyle value) noexcept;
+    IconNode& color(Color value) noexcept;
+    IconNode& useThemeColor() noexcept;
 
     void setName(IconName value) noexcept;
     void setSize(IconSize value) noexcept;

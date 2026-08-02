@@ -83,10 +83,10 @@ void drawChevron(PaintContext& context, float cx, float cy, Color color, bool up
              IconSize::Size16);
 }
 
-[[nodiscard]] std::unique_ptr<Popup> makeListPopup(
-    const RectF& anchor, float width, std::unique_ptr<ListBox> list, Popup::DismissHandler dismiss)
+[[nodiscard]] std::unique_ptr<PopupNode> makeListPopup(
+    const RectF& anchor, float width, std::unique_ptr<ListBoxNode> list, PopupNode::DismissHandler dismiss)
 {
-    auto popup = std::make_unique<Popup>();
+    auto popup = std::make_unique<PopupNode>();
     popup->anchor(anchor)
         .placement(PopupPlacement::BelowStart)
         .preferredSize({width, 0.0f})
@@ -97,17 +97,17 @@ void drawChevron(PaintContext& context, float cx, float cy, Color color, bool up
 
 } // namespace
 
-struct ListBox::State {
+struct ListBoxNode::State {
     internal::ViewportModel viewport;
 };
 
-ListBox::ListBox()
+ListBoxNode::ListBoxNode()
     : state_(std::make_unique<State>())
 {
     syncViewport();
 }
 
-ListBox::ListBox(std::vector<Option> options)
+ListBoxNode::ListBoxNode(std::vector<Option> options)
     : options_(std::move(options))
     , state_(std::make_unique<State>())
 {
@@ -115,9 +115,9 @@ ListBox::ListBox(std::vector<Option> options)
     activeIndex_ = nextSelectable(-1, 1);
 }
 
-ListBox::~ListBox() = default;
+ListBoxNode::~ListBoxNode() = default;
 
-ListBox& ListBox::addOption(Option option)
+ListBoxNode& ListBoxNode::addOption(Option option)
 {
     options_.push_back(std::move(option));
     syncViewport();
@@ -126,7 +126,7 @@ ListBox& ListBox::addOption(Option option)
     return *this;
 }
 
-ListBox& ListBox::setOptions(std::vector<Option> options)
+ListBoxNode& ListBoxNode::setOptions(std::vector<Option> options)
 {
     options_ = std::move(options);
     selected_.erase(std::remove_if(selected_.begin(), selected_.end(), [this](int i) { return !selectable(i); }), selected_.end());
@@ -137,7 +137,7 @@ ListBox& ListBox::setOptions(std::vector<Option> options)
     return *this;
 }
 
-ListBox& ListBox::clearOptions()
+ListBoxNode& ListBoxNode::clearOptions()
 {
     options_.clear(); selected_.clear(); activeIndex_ = hoveredIndex_ = pressedIndex_ = -1;
     syncViewport();
@@ -146,27 +146,27 @@ ListBox& ListBox::clearOptions()
     return *this;
 }
 
-const std::vector<Option>& ListBox::options() const noexcept { return options_; }
-ListBox& ListBox::selectionMode(ListBoxSelectionMode value) noexcept { setSelectionMode(value); return *this; }
-void ListBox::setSelectionMode(ListBoxSelectionMode value) noexcept
+const std::vector<Option>& ListBoxNode::options() const noexcept { return options_; }
+ListBoxNode& ListBoxNode::selectionMode(ListBoxSelectionMode value) noexcept { setSelectionMode(value); return *this; }
+void ListBoxNode::setSelectionMode(ListBoxSelectionMode value) noexcept
 {
     if (selectionMode_ == value) return;
     selectionMode_ = value;
     if (selectionMode_ == ListBoxSelectionMode::Single && selected_.size() > 1) selected_.resize(1);
     markDirty(DirtyFlag::Paint);
 }
-ListBoxSelectionMode ListBox::selectionMode() const noexcept { return selectionMode_; }
-int ListBox::selectedIndex() const noexcept { return selected_.empty() ? -1 : selected_.front(); }
-const std::vector<int>& ListBox::selectedIndices() const noexcept { return selected_; }
-ListBox& ListBox::selectedIndex(int index) { setSelectedIndex(index); return *this; }
-void ListBox::setSelectedIndex(int index)
+ListBoxSelectionMode ListBoxNode::selectionMode() const noexcept { return selectionMode_; }
+int ListBoxNode::selectedIndex() const noexcept { return selected_.empty() ? -1 : selected_.front(); }
+const std::vector<int>& ListBoxNode::selectedIndices() const noexcept { return selected_; }
+ListBoxNode& ListBoxNode::selectedIndex(int index) { setSelectedIndex(index); return *this; }
+void ListBoxNode::setSelectedIndex(int index)
 {
     selected_.clear();
     if (selectable(index)) { selected_.push_back(index); activeIndex_ = index; }
     markDirty(DirtyFlag::Paint);
 }
-ListBox& ListBox::selectedIndices(std::vector<int> indices) { setSelectedIndices(std::move(indices)); return *this; }
-void ListBox::setSelectedIndices(std::vector<int> indices)
+ListBoxNode& ListBoxNode::selectedIndices(std::vector<int> indices) { setSelectedIndices(std::move(indices)); return *this; }
+void ListBoxNode::setSelectedIndices(std::vector<int> indices)
 {
     selected_.clear();
     for (const int index : indices) {
@@ -177,29 +177,29 @@ void ListBox::setSelectedIndices(std::vector<int> indices)
     if (!selected_.empty()) activeIndex_ = selected_.front();
     markDirty(DirtyFlag::Paint);
 }
-int ListBox::activeIndex() const noexcept { return activeIndex_; }
-void ListBox::setActiveIndex(int index) { activeIndex_ = selectable(index) ? index : -1; markDirty(DirtyFlag::Paint); }
-ListBox& ListBox::onSelectionChanged(SelectionHandler handler) { onSelectionChanged_ = std::move(handler); return *this; }
-ListBox& ListBox::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void ListBox::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Paint); }
-const std::string& ListBox::accessibleLabel() const noexcept { return accessibleLabel_; }
-ListBox& ListBox::maxVisibleOptions(std::size_t value) noexcept { setMaxVisibleOptions(value); return *this; }
-void ListBox::setMaxVisibleOptions(std::size_t value) noexcept { maxVisibleOptions_ = std::max<std::size_t>(1, value); syncViewport(); markDirty(DirtyFlag::Layout); }
-std::size_t ListBox::maxVisibleOptions() const noexcept { return maxVisibleOptions_; }
-float ListBox::scrollOffset() const noexcept { return state_->viewport.scrollOffset(); }
-void ListBox::setScrollOffset(float value) noexcept
+int ListBoxNode::activeIndex() const noexcept { return activeIndex_; }
+void ListBoxNode::setActiveIndex(int index) { activeIndex_ = selectable(index) ? index : -1; markDirty(DirtyFlag::Paint); }
+ListBoxNode& ListBoxNode::onSelectionChanged(SelectionHandler handler) { onSelectionChanged_ = std::move(handler); return *this; }
+ListBoxNode& ListBoxNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void ListBoxNode::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Paint); }
+const std::string& ListBoxNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+ListBoxNode& ListBoxNode::maxVisibleOptions(std::size_t value) noexcept { setMaxVisibleOptions(value); return *this; }
+void ListBoxNode::setMaxVisibleOptions(std::size_t value) noexcept { maxVisibleOptions_ = std::max<std::size_t>(1, value); syncViewport(); markDirty(DirtyFlag::Layout); }
+std::size_t ListBoxNode::maxVisibleOptions() const noexcept { return maxVisibleOptions_; }
+float ListBoxNode::scrollOffset() const noexcept { return state_->viewport.scrollOffset(); }
+void ListBoxNode::setScrollOffset(float value) noexcept
 {
     syncViewport();
     const float previous = state_->viewport.scrollOffset();
     state_->viewport.setScrollOffset(value);
     if (state_->viewport.scrollOffset() != previous) markDirty(DirtyFlag::Paint);
 }
-float ListBox::maximumScrollOffset() const noexcept
+float ListBoxNode::maximumScrollOffset() const noexcept
 {
     return state_->viewport.maxScrollOffset();
 }
 
-std::vector<ListBoxOptionAccessibility> ListBox::accessibilityOptions() const
+std::vector<ListBoxOptionAccessibility> ListBoxNode::accessibilityOptions() const
 {
     std::vector<ListBoxOptionAccessibility> result;
     result.reserve(options_.size());
@@ -220,7 +220,7 @@ std::vector<ListBoxOptionAccessibility> ListBox::accessibilityOptions() const
     return result;
 }
 
-float ListBox::rowHeight() const noexcept
+float ListBoxNode::rowHeight() const noexcept
 {
     const bool hasSecondary = std::any_of(options_.begin(), options_.end(), [](const Option& option) {
         return !option.secondaryText.empty();
@@ -229,7 +229,7 @@ float ListBox::rowHeight() const noexcept
     // height for the list so keyboard/pointer hit regions remain stable.
     return std::max(hasSecondary ? 56.0f : 32.0f, theme().controls.height);
 }
-float ListBox::preferredWidth() const noexcept
+float ListBoxNode::preferredWidth() const noexcept
 {
     float width = kMinimumListWidth;
     for (const auto& option : options_) {
@@ -238,24 +238,24 @@ float ListBox::preferredWidth() const noexcept
     }
     return width;
 }
-SizeF ListBox::measure(const Constraints& constraints) const
+SizeF ListBoxNode::measure(const Constraints& constraints) const
 {
     const std::size_t visible = std::min(options_.size(), maxVisibleOptions_);
     return constraints.clamp({preferredWidth(), kListPadding * 2.0f + rowHeight() * static_cast<float>(visible)});
 }
-void ListBox::layout(const RectF& bounds)
+void ListBoxNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     syncViewport();
     // A selected value must be discoverable the instant a popup opens.  The
     // viewport dimensions are only known after layout, so doing this here
-    // avoids Dropdown/TimePicker lists opening at 00:00 while their committed
+    // avoids DropdownNode/TimePickerNode lists opening at 00:00 while their committed
     // selection is several pages away.
     scrollActiveIntoView();
     clearLayoutDirtyRecursively();
 }
 
-void ListBox::paint(PaintContext& context)
+void ListBoxNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
@@ -344,7 +344,7 @@ void ListBox::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-bool ListBox::onPointerEvent(const PointerEvent& event)
+bool ListBoxNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     const int option = optionAt(event.position);
@@ -366,7 +366,7 @@ bool ListBox::onPointerEvent(const PointerEvent& event)
     }
 }
 
-bool ListBox::onKeyEvent(const KeyEvent& event)
+bool ListBoxNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || event.action != KeyAction::Down) return false;
     int next = -1;
@@ -389,11 +389,11 @@ bool ListBox::onKeyEvent(const KeyEvent& event)
     return true;
 }
 
-AccessibilityActionCapabilities ListBox::accessibilityActions() const noexcept
+AccessibilityActionCapabilities ListBoxNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions; actions.setValue = true; return actions;
 }
-AccessibilityActionStatus ListBox::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
+AccessibilityActionStatus ListBoxNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
 {
     if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
     if (kind != AccessibilityActionKind::SetValue &&
@@ -423,40 +423,40 @@ AccessibilityActionStatus ListBox::performAccessibilityAction(AccessibilityActio
     }
     return AccessibilityActionStatus::InvalidValue;
 }
-bool ListBox::selectable(int index) const noexcept { return index >= 0 && static_cast<std::size_t>(index) < options_.size() && options_[static_cast<std::size_t>(index)].enabled; }
-int ListBox::nextSelectable(int from, int delta) const noexcept
+bool ListBoxNode::selectable(int index) const noexcept { return index >= 0 && static_cast<std::size_t>(index) < options_.size() && options_[static_cast<std::size_t>(index)].enabled; }
+int ListBoxNode::nextSelectable(int from, int delta) const noexcept
 {
     for (int i = from + delta; i >= 0 && static_cast<std::size_t>(i) < options_.size(); i += delta) if (selectable(i)) return i;
     return -1;
 }
-int ListBox::optionAt(PointF point) const noexcept
+int ListBoxNode::optionAt(PointF point) const noexcept
 {
     if (!bounds().contains(point)) return -1;
     const int i = static_cast<int>((point.y - bounds().y - theme().stroke.thin - kListPadding + state_->viewport.scrollOffset()) / rowHeight());
     return selectable(i) ? i : -1;
 }
-bool ListBox::isSelected(int index) const noexcept { return std::find(selected_.begin(), selected_.end(), index) != selected_.end(); }
-RectF ListBox::optionBounds(int index) const noexcept
+bool ListBoxNode::isSelected(int index) const noexcept { return std::find(selected_.begin(), selected_.end(), index) != selected_.end(); }
+RectF ListBoxNode::optionBounds(int index) const noexcept
 {
     const float inset = theme().stroke.thin;
     return {bounds().x + inset + kListPadding,
             bounds().y + inset + kListPadding + rowHeight() * static_cast<float>(index) - state_->viewport.scrollOffset(),
             std::max(0.0f, bounds().width - inset * 2.0f - kListPadding * 2.0f), rowHeight()};
 }
-void ListBox::syncViewport() noexcept
+void ListBoxNode::syncViewport() noexcept
 {
     state_->viewport.setItemCount(options_.size());
     state_->viewport.setItemExtent(rowHeight());
     state_->viewport.setViewportExtent(std::max(0.0f, bounds().height - kListPadding * 2.0f - theme().stroke.thin * 2.0f));
 }
-void ListBox::scrollActiveIntoView() noexcept
+void ListBoxNode::scrollActiveIntoView() noexcept
 {
     if (!selectable(activeIndex_)) return;
     const float previous = state_->viewport.scrollOffset();
     state_->viewport.scrollToIndex(static_cast<std::size_t>(activeIndex_));
     if (state_->viewport.scrollOffset() != previous) markDirty(DirtyFlag::Paint);
 }
-void ListBox::updateTypeAhead(char character)
+void ListBoxNode::updateTypeAhead(char character)
 {
     const auto now = std::chrono::steady_clock::now();
     const char lower = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
@@ -474,7 +474,7 @@ void ListBox::updateTypeAhead(char character)
         }
     }
 }
-void ListBox::choose(int index, bool toggle)
+void ListBoxNode::choose(int index, bool toggle)
 {
     if (!selectable(index)) return;
     activeIndex_ = index;
@@ -487,24 +487,24 @@ void ListBox::choose(int index, bool toggle)
     if (onSelectionChanged_) onSelectionChanged_(index, options_[static_cast<std::size_t>(index)]);
 }
 
-Combobox::Combobox(std::string placeholder) : TextInput(std::move(placeholder))
+ComboboxNode::ComboboxNode(std::string placeholder) : TextFieldNode(std::move(placeholder))
 {
-    TextInput::onChange([this](const std::string& value) {
+    TextFieldNode::onChange([this](const std::string& value) {
         if (!updatingText_) refreshPopup();
         if (userOnChange_) userOnChange_(value);
     });
 }
-Combobox::~Combobox() { closePopup(); }
-Combobox& Combobox::addOption(Option option) { options_.push_back(std::move(option)); refreshPopup(); return *this; }
-Combobox& Combobox::setOptions(std::vector<Option> options) { options_ = std::move(options); selectedIndices_.erase(std::remove_if(selectedIndices_.begin(), selectedIndices_.end(), [this](int index) { return index < 0 || static_cast<std::size_t>(index) >= options_.size() || !options_[static_cast<std::size_t>(index)].enabled; }), selectedIndices_.end()); selectedIndex_ = selectedIndices_.empty() ? -1 : selectedIndices_.front(); refreshPopup(); return *this; }
-Combobox& Combobox::clearOptions() { options_.clear(); selectedIndex_ = -1; selectedIndices_.clear(); closePopup(); return *this; }
-const std::vector<Option>& Combobox::options() const noexcept { return options_; }
-int Combobox::selectedIndex() const noexcept { return selectedIndex_; }
-const std::vector<int>& Combobox::selectedIndices() const noexcept { return selectedIndices_; }
-Combobox& Combobox::selectedIndex(int index) { setSelectedIndex(index); return *this; }
-void Combobox::setSelectedIndex(int index) { if (index >= 0 && static_cast<std::size_t>(index) < options_.size() && options_[static_cast<std::size_t>(index)].enabled) commit(index); else if (index < 0) { selectedIndex_ = -1; selectedIndices_.clear(); } }
-Combobox& Combobox::multiselect(bool value) noexcept { setMultiselect(value); return *this; }
-void Combobox::setMultiselect(bool value) noexcept
+ComboboxNode::~ComboboxNode() { closePopup(); }
+ComboboxNode& ComboboxNode::addOption(Option option) { options_.push_back(std::move(option)); refreshPopup(); return *this; }
+ComboboxNode& ComboboxNode::setOptions(std::vector<Option> options) { options_ = std::move(options); selectedIndices_.erase(std::remove_if(selectedIndices_.begin(), selectedIndices_.end(), [this](int index) { return index < 0 || static_cast<std::size_t>(index) >= options_.size() || !options_[static_cast<std::size_t>(index)].enabled; }), selectedIndices_.end()); selectedIndex_ = selectedIndices_.empty() ? -1 : selectedIndices_.front(); refreshPopup(); return *this; }
+ComboboxNode& ComboboxNode::clearOptions() { options_.clear(); selectedIndex_ = -1; selectedIndices_.clear(); closePopup(); return *this; }
+const std::vector<Option>& ComboboxNode::options() const noexcept { return options_; }
+int ComboboxNode::selectedIndex() const noexcept { return selectedIndex_; }
+const std::vector<int>& ComboboxNode::selectedIndices() const noexcept { return selectedIndices_; }
+ComboboxNode& ComboboxNode::selectedIndex(int index) { setSelectedIndex(index); return *this; }
+void ComboboxNode::setSelectedIndex(int index) { if (index >= 0 && static_cast<std::size_t>(index) < options_.size() && options_[static_cast<std::size_t>(index)].enabled) commit(index); else if (index < 0) { selectedIndex_ = -1; selectedIndices_.clear(); } }
+ComboboxNode& ComboboxNode::multiselect(bool value) noexcept { setMultiselect(value); return *this; }
+void ComboboxNode::setMultiselect(bool value) noexcept
 {
     if (multiselect_ == value) return;
     multiselect_ = value;
@@ -512,9 +512,9 @@ void Combobox::setMultiselect(bool value) noexcept
     selectedIndex_ = selectedIndices_.empty() ? -1 : selectedIndices_.front();
     markDirty(DirtyFlag::Paint);
 }
-bool Combobox::isMultiselect() const noexcept { return multiselect_; }
-Combobox& Combobox::selectedIndices(std::vector<int> indices) { setSelectedIndices(std::move(indices)); return *this; }
-void Combobox::setSelectedIndices(std::vector<int> indices)
+bool ComboboxNode::isMultiselect() const noexcept { return multiselect_; }
+ComboboxNode& ComboboxNode::selectedIndices(std::vector<int> indices) { setSelectedIndices(std::move(indices)); return *this; }
+void ComboboxNode::setSelectedIndices(std::vector<int> indices)
 {
     std::vector<int> accepted;
     for (const int index : indices) {
@@ -524,33 +524,33 @@ void Combobox::setSelectedIndices(std::vector<int> indices)
     const int changed = accepted.empty() ? -1 : accepted.front();
     commitSelection(std::move(accepted), changed);
 }
-bool Combobox::isOpen() const noexcept { return open_; }
-Combobox& Combobox::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
-Combobox& Combobox::onSelectionChanged(SelectionHandler handler) { onSelectionChanged_ = std::move(handler); return *this; }
-Combobox& Combobox::onChange(ChangeHandler handler) { userOnChange_ = std::move(handler); return *this; }
-Combobox& Combobox::openOnFocus(bool value) noexcept { setOpenOnFocus(value); return *this; }
-void Combobox::setOpenOnFocus(bool value) noexcept { openOnFocus_ = value; }
-EventResult Combobox::onPointerEvent(const PointerEvent& event, EventContext& context)
+bool ComboboxNode::isOpen() const noexcept { return open_; }
+ComboboxNode& ComboboxNode::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
+ComboboxNode& ComboboxNode::onSelectionChanged(SelectionHandler handler) { onSelectionChanged_ = std::move(handler); return *this; }
+ComboboxNode& ComboboxNode::onChange(ChangeHandler handler) { userOnChange_ = std::move(handler); return *this; }
+ComboboxNode& ComboboxNode::openOnFocus(bool value) noexcept { setOpenOnFocus(value); return *this; }
+void ComboboxNode::setOpenOnFocus(bool value) noexcept { openOnFocus_ = value; }
+EventResult ComboboxNode::onPointerEvent(const PointerEvent& event, EventContext& context)
 {
-    const EventResult handled = TextInput::onPointerEvent(event, context);
+    const EventResult handled = TextFieldNode::onPointerEvent(event, context);
     if (event.action == PointerAction::Down && isPrimary(event) && bounds().contains(event.position)) openPopup();
     return handled;
 }
-bool Combobox::onKeyEvent(const KeyEvent& event)
+bool ComboboxNode::onKeyEvent(const KeyEvent& event)
 {
     if (isEscape(event) && open_) { closePopup(); return true; }
     if (event.action == KeyAction::Down && (event.keyCode == 40 || event.keyCode == 264 || event.keyCode == 38 || event.keyCode == 265)) { openPopup(); return true; }
-    return TextInput::onKeyEvent(event);
+    return TextFieldNode::onKeyEvent(event);
 }
-bool Combobox::onTextInput(const TextInputEvent& event) { const bool result = TextInput::onTextInput(event); if (result) refreshPopup(); return result; }
-AccessibilityActionCapabilities Combobox::accessibilityActions() const noexcept { auto actions = TextInput::accessibilityActions(); actions.expandCollapse = overlayHost_ != nullptr && !options_.empty(); return actions; }
-AccessibilityActionStatus Combobox::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
+bool ComboboxNode::onTextInput(const TextInputEvent& event) { const bool result = TextFieldNode::onTextInput(event); if (result) refreshPopup(); return result; }
+AccessibilityActionCapabilities ComboboxNode::accessibilityActions() const noexcept { auto actions = TextFieldNode::accessibilityActions(); actions.expandCollapse = overlayHost_ != nullptr && !options_.empty(); return actions; }
+AccessibilityActionStatus ComboboxNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
 {
     if (kind == AccessibilityActionKind::Expand) { openPopup(); return open_ ? AccessibilityActionStatus::Succeeded : AccessibilityActionStatus::Failed; }
     if (kind == AccessibilityActionKind::Collapse) { closePopup(); return AccessibilityActionStatus::Succeeded; }
-    return TextInput::performAccessibilityAction(kind, value);
+    return TextFieldNode::performAccessibilityAction(kind, value);
 }
-std::vector<int> Combobox::filteredIndices() const
+std::vector<int> ComboboxNode::filteredIndices() const
 {
     const std::string filter = lowerAscii(controller().text()); std::vector<int> result;
     for (std::size_t i = 0; i < options_.size(); ++i) {
@@ -560,12 +560,12 @@ std::vector<int> Combobox::filteredIndices() const
     }
     return result;
 }
-int Combobox::sourceIndexForVisible(int visibleIndex) const noexcept { return visibleIndex >= 0 && static_cast<std::size_t>(visibleIndex) < visibleIndices_.size() ? visibleIndices_[static_cast<std::size_t>(visibleIndex)] : -1; }
-void Combobox::openPopup()
+int ComboboxNode::sourceIndexForVisible(int visibleIndex) const noexcept { return visibleIndex >= 0 && static_cast<std::size_t>(visibleIndex) < visibleIndices_.size() ? visibleIndices_[static_cast<std::size_t>(visibleIndex)] : -1; }
+void ComboboxNode::openPopup()
 {
     if (open_ || overlayHost_ == nullptr || options_.empty()) return;
     visibleIndices_ = filteredIndices();
-    auto list = std::make_unique<ListBox>(); ListBox* raw = list.get();
+    auto list = std::make_unique<ListBoxNode>(); ListBoxNode* raw = list.get();
     for (const int index : visibleIndices_) list->addOption(options_[static_cast<std::size_t>(index)]);
     const auto selected = std::find(visibleIndices_.begin(), visibleIndices_.end(), selectedIndex_);
     list->setSelectionMode(multiselect_ ? ListBoxSelectionMode::Multiple : ListBoxSelectionMode::Single);
@@ -586,66 +586,66 @@ void Combobox::openPopup()
     open_ = true; overlayId_ = overlayHost_->show(makeListPopup(bounds(), std::max(bounds().width, kMinimumListWidth), std::move(list), [this] { closePopup(); }));
     overlayHost_->focus(raw); markDirty(DirtyFlag::Paint);
 }
-void Combobox::closePopup()
+void ComboboxNode::closePopup()
 {
     if (!open_) return; OverlayHost* host = overlayHost_; const auto id = overlayId_; open_ = false; overlayId_ = 0;
     if (host && id) { (void)host->dismiss(id); host->focus(this); } markDirty(DirtyFlag::Paint);
 }
-void Combobox::refreshPopup() { if (open_) { closePopup(); openPopup(); } }
-void Combobox::commit(int sourceIndex)
+void ComboboxNode::refreshPopup() { if (open_) { closePopup(); openPopup(); } }
+void ComboboxNode::commit(int sourceIndex)
 {
     if (sourceIndex < 0 || static_cast<std::size_t>(sourceIndex) >= options_.size() || !options_[static_cast<std::size_t>(sourceIndex)].enabled) return;
     commitSelection({sourceIndex}, sourceIndex);
 }
-void Combobox::commitSelection(std::vector<int> sourceIndices, int changedSourceIndex)
+void ComboboxNode::commitSelection(std::vector<int> sourceIndices, int changedSourceIndex)
 {
     selectedIndices_ = std::move(sourceIndices);
     if (!multiselect_ && selectedIndices_.size() > 1) selectedIndices_.resize(1);
     selectedIndex_ = selectedIndices_.empty() ? -1 : selectedIndices_.front();
     updatingText_ = true;
-    if (!multiselect_ && selectedIndex_ >= 0) TextInput::text(options_[static_cast<std::size_t>(selectedIndex_)].text);
-    else if (multiselect_) TextInput::text({});
+    if (!multiselect_ && selectedIndex_ >= 0) TextFieldNode::text(options_[static_cast<std::size_t>(selectedIndex_)].text);
+    else if (multiselect_) TextFieldNode::text({});
     updatingText_ = false;
     if (changedSourceIndex >= 0 && static_cast<std::size_t>(changedSourceIndex) < options_.size() && onSelectionChanged_)
         onSelectionChanged_(changedSourceIndex, options_[static_cast<std::size_t>(changedSourceIndex)]);
     markDirty(DirtyFlag::Paint);
 }
-Dropdown::Dropdown(std::string placeholder) : placeholder_(std::move(placeholder)) {}
-Dropdown::~Dropdown() { closePopup(); }
-Dropdown& Dropdown::addOption(Option option) { options_.push_back(std::move(option)); markDirty(DirtyFlag::Layout); return *this; }
-Dropdown& Dropdown::setOptions(std::vector<Option> options) { options_ = std::move(options); selectedIndices_.erase(std::remove_if(selectedIndices_.begin(), selectedIndices_.end(), [this](int index) { return !selectable(index); }), selectedIndices_.end()); selectedIndex_ = selectedIndices_.empty() ? -1 : selectedIndices_.front(); markDirty(DirtyFlag::Layout); return *this; }
-Dropdown& Dropdown::clearOptions() { options_.clear(); selectedIndex_ = -1; selectedIndices_.clear(); closePopup(); markDirty(DirtyFlag::Layout); return *this; }
-const std::vector<Option>& Dropdown::options() const noexcept { return options_; }
-int Dropdown::selectedIndex() const noexcept { return selectedIndex_; }
-const std::vector<int>& Dropdown::selectedIndices() const noexcept { return selectedIndices_; }
-Dropdown& Dropdown::selectedIndex(int index) { setSelectedIndex(index); return *this; }
-void Dropdown::setSelectedIndex(int index) { if (selectable(index)) commit(index); else if (index < 0) { selectedIndex_ = -1; selectedIndices_.clear(); markDirty(DirtyFlag::Paint); } }
-Dropdown& Dropdown::multiselect(bool value) noexcept { setMultiselect(value); return *this; }
-void Dropdown::setMultiselect(bool value) noexcept { if (multiselect_ == value) return; multiselect_ = value; if (!multiselect_ && selectedIndices_.size() > 1) selectedIndices_.resize(1); selectedIndex_ = selectedIndices_.empty() ? -1 : selectedIndices_.front(); markDirty(DirtyFlag::Paint); }
-bool Dropdown::isMultiselect() const noexcept { return multiselect_; }
-Dropdown& Dropdown::selectedIndices(std::vector<int> indices) { setSelectedIndices(std::move(indices)); return *this; }
-void Dropdown::setSelectedIndices(std::vector<int> indices)
+DropdownNode::DropdownNode(std::string placeholder) : placeholder_(std::move(placeholder)) {}
+DropdownNode::~DropdownNode() { closePopup(); }
+DropdownNode& DropdownNode::addOption(Option option) { options_.push_back(std::move(option)); markDirty(DirtyFlag::Layout); return *this; }
+DropdownNode& DropdownNode::setOptions(std::vector<Option> options) { options_ = std::move(options); selectedIndices_.erase(std::remove_if(selectedIndices_.begin(), selectedIndices_.end(), [this](int index) { return !selectable(index); }), selectedIndices_.end()); selectedIndex_ = selectedIndices_.empty() ? -1 : selectedIndices_.front(); markDirty(DirtyFlag::Layout); return *this; }
+DropdownNode& DropdownNode::clearOptions() { options_.clear(); selectedIndex_ = -1; selectedIndices_.clear(); closePopup(); markDirty(DirtyFlag::Layout); return *this; }
+const std::vector<Option>& DropdownNode::options() const noexcept { return options_; }
+int DropdownNode::selectedIndex() const noexcept { return selectedIndex_; }
+const std::vector<int>& DropdownNode::selectedIndices() const noexcept { return selectedIndices_; }
+DropdownNode& DropdownNode::selectedIndex(int index) { setSelectedIndex(index); return *this; }
+void DropdownNode::setSelectedIndex(int index) { if (selectable(index)) commit(index); else if (index < 0) { selectedIndex_ = -1; selectedIndices_.clear(); markDirty(DirtyFlag::Paint); } }
+DropdownNode& DropdownNode::multiselect(bool value) noexcept { setMultiselect(value); return *this; }
+void DropdownNode::setMultiselect(bool value) noexcept { if (multiselect_ == value) return; multiselect_ = value; if (!multiselect_ && selectedIndices_.size() > 1) selectedIndices_.resize(1); selectedIndex_ = selectedIndices_.empty() ? -1 : selectedIndices_.front(); markDirty(DirtyFlag::Paint); }
+bool DropdownNode::isMultiselect() const noexcept { return multiselect_; }
+DropdownNode& DropdownNode::selectedIndices(std::vector<int> indices) { setSelectedIndices(std::move(indices)); return *this; }
+void DropdownNode::setSelectedIndices(std::vector<int> indices)
 {
     std::vector<int> accepted;
     for (const int index : indices) { if (!selectable(index) || std::find(accepted.begin(), accepted.end(), index) != accepted.end()) continue; accepted.push_back(index); if (!multiselect_) break; }
     commitSelection(std::move(accepted), -1);
 }
-const std::string& Dropdown::value() const noexcept { return selectable(selectedIndex_) ? options_[static_cast<std::size_t>(selectedIndex_)].value : placeholder_; }
-const std::string& Dropdown::placeholder() const noexcept { return placeholder_; }
-bool Dropdown::isOpen() const noexcept { return open_; }
-Dropdown& Dropdown::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
-Dropdown& Dropdown::onSelectionChanged(SelectionHandler handler) { onSelectionChanged_ = std::move(handler); return *this; }
-Dropdown& Dropdown::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void Dropdown::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); }
-const std::string& Dropdown::accessibleLabel() const noexcept { return accessibleLabel_; }
-SizeF Dropdown::measure(const Constraints& constraints) const
+const std::string& DropdownNode::value() const noexcept { return selectable(selectedIndex_) ? options_[static_cast<std::size_t>(selectedIndex_)].value : placeholder_; }
+const std::string& DropdownNode::placeholder() const noexcept { return placeholder_; }
+bool DropdownNode::isOpen() const noexcept { return open_; }
+DropdownNode& DropdownNode::bindOverlayHost(OverlayHost& host) noexcept { overlayHost_ = &host; return *this; }
+DropdownNode& DropdownNode::onSelectionChanged(SelectionHandler handler) { onSelectionChanged_ = std::move(handler); return *this; }
+DropdownNode& DropdownNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void DropdownNode::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); }
+const std::string& DropdownNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+SizeF DropdownNode::measure(const Constraints& constraints) const
 {
     const float width = std::max(
         160.0f,
         textWidth(value(), theme().typography.body1.size) + 48.0f);
     return constraints.clamp({width, theme().controls.height});
 }
-void Dropdown::paint(PaintContext& context)
+void DropdownNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const bool focused =
@@ -703,7 +703,7 @@ void Dropdown::paint(PaintContext& context)
                 frame.y + frame.height * .5f, fg, open_);
     clearDirty(DirtyFlag::Paint);
 }
-bool Dropdown::onPointerEvent(const PointerEvent& event)
+bool DropdownNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     if (event.action == PointerAction::Enter) { setVisualState(ControlVisualState::Hovered, true); markDirty(DirtyFlag::Paint); return true; }
@@ -713,7 +713,7 @@ bool Dropdown::onPointerEvent(const PointerEvent& event)
     if (event.action == PointerAction::Cancel) { setVisualState(ControlVisualState::Pressed, false); markDirty(DirtyFlag::Paint); return true; }
     return false;
 }
-bool Dropdown::onKeyEvent(const KeyEvent& event)
+bool DropdownNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled()) return false;
     if (isEscape(event) && open_) { closePopup(); return true; }
@@ -721,8 +721,8 @@ bool Dropdown::onKeyEvent(const KeyEvent& event)
     if (event.action == KeyAction::Down && (event.keyCode == 38 || event.keyCode == 265)) { const int next = nextSelectable(selectedIndex_ < 0 ? static_cast<int>(options_.size()) : selectedIndex_, -1); if (next >= 0) commit(next); return true; }
     return false;
 }
-AccessibilityActionCapabilities Dropdown::accessibilityActions() const noexcept { AccessibilityActionCapabilities actions; actions.expandCollapse = overlayHost_ != nullptr && !options_.empty(); return actions; }
-AccessibilityActionStatus Dropdown::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
+AccessibilityActionCapabilities DropdownNode::accessibilityActions() const noexcept { AccessibilityActionCapabilities actions; actions.expandCollapse = overlayHost_ != nullptr && !options_.empty(); return actions; }
+AccessibilityActionStatus DropdownNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
 {
     if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
     if (kind == AccessibilityActionKind::Expand) { openPopup(); return open_ ? AccessibilityActionStatus::Succeeded : AccessibilityActionStatus::Failed; }
@@ -730,30 +730,30 @@ AccessibilityActionStatus Dropdown::performAccessibilityAction(AccessibilityActi
     if (kind == AccessibilityActionKind::SetValue) { for (std::size_t i = 0; i < options_.size(); ++i) if (options_[i].value == value) { commit(static_cast<int>(i)); return AccessibilityActionStatus::Succeeded; } return AccessibilityActionStatus::InvalidValue; }
     return AccessibilityActionStatus::NotSupported;
 }
-void Dropdown::openPopup()
+void DropdownNode::openPopup()
 {
     if (open_ || overlayHost_ == nullptr || options_.empty()) return;
-    auto list = std::make_unique<ListBox>(options_); ListBox* raw = list.get(); list->setSelectionMode(multiselect_ ? ListBoxSelectionMode::Multiple : ListBoxSelectionMode::Single); if (multiselect_) list->setSelectedIndices(selectedIndices_); else list->setSelectedIndex(selectedIndex_); list->setAccessibleLabel(accessibleLabel_);
+    auto list = std::make_unique<ListBoxNode>(options_); ListBoxNode* raw = list.get(); list->setSelectionMode(multiselect_ ? ListBoxSelectionMode::Multiple : ListBoxSelectionMode::Single); if (multiselect_) list->setSelectedIndices(selectedIndices_); else list->setSelectedIndex(selectedIndex_); list->setAccessibleLabel(accessibleLabel_);
     list->onSelectionChanged([this, raw](int index, const Option&) { if (multiselect_) commitSelection(raw->selectedIndices(), index); else { commit(index); closePopup(); } });
     open_ = true; setVisualState(ControlVisualState::Pressed, true);
     overlayId_ = overlayHost_->show(makeListPopup(bounds(), std::max(bounds().width, kMinimumListWidth), std::move(list), [this] { closePopup(); })); overlayHost_->focus(raw); markDirty(DirtyFlag::Paint);
 }
-void Dropdown::closePopup()
+void DropdownNode::closePopup()
 {
     if (!open_) return; OverlayHost* host = overlayHost_; const auto id = overlayId_; open_ = false; overlayId_ = 0; setVisualState(ControlVisualState::Pressed, false); if (host && id) { (void)host->dismiss(id); host->focus(this); } markDirty(DirtyFlag::Paint);
 }
-void Dropdown::commit(int index)
+void DropdownNode::commit(int index)
 {
     if (!selectable(index)) return; commitSelection({index}, index);
 }
-void Dropdown::commitSelection(std::vector<int> indices, int changedIndex)
+void DropdownNode::commitSelection(std::vector<int> indices, int changedIndex)
 {
     selectedIndices_ = std::move(indices); if (!multiselect_ && selectedIndices_.size() > 1) selectedIndices_.resize(1);
     selectedIndex_ = selectedIndices_.empty() ? -1 : selectedIndices_.front();
     if (changedIndex >= 0 && static_cast<std::size_t>(changedIndex) < options_.size() && onSelectionChanged_) onSelectionChanged_(changedIndex, options_[static_cast<std::size_t>(changedIndex)]);
     markDirty(DirtyFlag::Paint);
 }
-bool Dropdown::selectable(int index) const noexcept { return index >= 0 && static_cast<std::size_t>(index) < options_.size() && options_[static_cast<std::size_t>(index)].enabled; }
-int Dropdown::nextSelectable(int from, int delta) const noexcept { for (int i = from + delta; i >= 0 && static_cast<std::size_t>(i) < options_.size(); i += delta) if (selectable(i)) return i; return -1; }
+bool DropdownNode::selectable(int index) const noexcept { return index >= 0 && static_cast<std::size_t>(index) < options_.size() && options_[static_cast<std::size_t>(index)].enabled; }
+int DropdownNode::nextSelectable(int from, int delta) const noexcept { for (int i = from + delta; i >= 0 && static_cast<std::size_t>(i) < options_.size(); i += delta) if (selectable(i)) return i; return -1; }
 
 } // namespace wui

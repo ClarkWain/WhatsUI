@@ -14,7 +14,7 @@ void expect(bool condition, const char* message)
 
 void testSingleAndMultipleExpansion()
 {
-    wui::Accordion accordion;
+    wui::AccordionNode accordion;
     int changes = 0;
     auto& first = accordion.addItem("Account", "Update your profile.");
     auto& second = accordion.addItem("Appearance", "Choose a theme.");
@@ -33,7 +33,7 @@ void testSingleAndMultipleExpansion()
 
 void testInputAndFocus()
 {
-    wui::Accordion accordion;
+    wui::AccordionNode accordion;
     auto& first = accordion.addItem("First", "Body");
     auto& disabled = accordion.addItem("Unavailable", "Disabled body");
     auto& third = accordion.addItem("Third", "Body");
@@ -62,9 +62,9 @@ void testInputAndFocus()
 
 void testRetainedBodyContent()
 {
-    wui::Accordion accordion;
+    wui::AccordionNode accordion;
     auto& item = accordion.addItem("Advanced", "");
-    auto retained = std::make_unique<wui::Spacer>(wui::SizeF{12, 36});
+    auto retained = std::make_unique<wui::SpacerNode>(wui::SizeF{12, 36});
     auto* identity = retained.get();
     item.setContent(std::move(retained));
     item.setExpanded(true);
@@ -79,9 +79,9 @@ void testRetainedBodyContent()
 
 void testCollapsedBodyIsAbsentFromAccessibilityTree()
 {
-    wui::Accordion accordion;
+    wui::AccordionNode accordion;
     auto& item = accordion.addItem("Advanced", "");
-    item.setContent(std::make_unique<wui::Text>("Hidden diagnostics"));
+    item.setContent(std::make_unique<wui::TextNode>("Hidden diagnostics"));
     item.setExpanded(false);
     const auto collapsed = wui::snapshotAccessibilityTree(accordion);
     bool sawHiddenText = false;

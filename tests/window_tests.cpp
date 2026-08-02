@@ -164,10 +164,10 @@ public:
     }
 };
 
-class DestructionProbeButton final : public wui::Button {
+class DestructionProbeButton final : public wui::ButtonNode {
 public:
     explicit DestructionProbeButton(int& destructions)
-        : wui::Button("ownership probe")
+        : wui::ButtonNode("ownership probe")
         , destructions_(destructions)
     {
     }
@@ -190,7 +190,7 @@ void testButtonPolymorphicOwnershipDestroysDynamicType()
         // by roots, overlays and declarative builders; ASan must therefore
         // see the derived allocation and virtual deleting destructor agree.
         std::unique_ptr<wui::Node> retained = std::make_unique<DestructionProbeButton>(destructions);
-        expect(dynamic_cast<wui::Button*>(retained.get()) != nullptr,
+        expect(dynamic_cast<wui::ButtonNode*>(retained.get()) != nullptr,
                "Retained base ownership must preserve the concrete Button type");
     }
     expect(destructions == 1,
@@ -219,7 +219,7 @@ void testPointerCaptureCancelsForWindowOverlayAndDetach()
            "Native focus loss must cancel and release the active gesture exactly once");
 
     expect(window.dispatchPointer(pointer(wui::PointerAction::Down)), "A new gesture should start after focus cancellation");
-    const auto overlay = window.overlayHost().show(std::make_unique<wui::Button>("Overlay"));
+    const auto overlay = window.overlayHost().show(std::make_unique<wui::ButtonNode>("Overlay"));
     expect(probeRaw->cancels == 2 && window.inputRouter().capturedPointer() == nullptr,
            "Overlay mutations must cancel page capture before changing the input layer");
     (void)window.overlayHost().dismiss(overlay);
@@ -238,7 +238,7 @@ void testPointerCaptureCancelsForWindowOverlayAndDetach()
     expect(childRaw->cancels == 1 && window.inputRouter().capturedPointer() == nullptr,
            "Detaching a captured node must synchronously cancel and release it");
 
-    auto button = std::make_unique<wui::Button>("No drag-out activation");
+    auto button = std::make_unique<wui::ButtonNode>("No drag-out activation");
     int clicks = 0;
     button->onClick([&] { ++clicks; });
     window.setRoot(std::move(button));
@@ -259,7 +259,7 @@ void testWindowRoutesTopOverlayAndRequestsRedraw()
     expect(app.findWindow(window.id()) == &window, "UiApp should retain the window created by its host");
 
     int pageClicks = 0;
-    auto page = std::make_unique<wui::Button>("Page");
+    auto page = std::make_unique<wui::ButtonNode>("Page");
     page->onClick([&] { ++pageClicks; });
     window.navigator().setRoot("page", std::move(page));
     expect(platform.redraws > 0, "Navigator activation should request a redraw");
@@ -268,20 +268,20 @@ void testWindowRoutesTopOverlayAndRequestsRedraw()
     expect(window.root()->bounds().width == 320.0f, "Window layout should use logical platform dimensions");
 
     const int redrawsBeforeStateChange = platform.redraws;
-    auto* pageButton = dynamic_cast<wui::Button*>(window.root());
+    auto* pageButton = dynamic_cast<wui::ButtonNode*>(window.root());
     expect(pageButton != nullptr, "The page root should be the configured button");
     pageButton->setLabel("Changed outside event dispatch");
     expect(platform.redraws > redrawsBeforeStateChange,
            "Retained-node invalidation should request a redraw without a new input event");
 
     int overlayClicks = 0;
-    auto overlay = std::make_unique<wui::Button>("Overlay");
+    auto overlay = std::make_unique<wui::ButtonNode>("Overlay");
     overlay->onClick([&] { ++overlayClicks; });
     const auto overlayId = window.overlayHost().show(std::move(overlay));
     const int redrawsAfterShow = platform.redraws;
     window.layout();
 
-    auto* overlayButton = dynamic_cast<wui::Button*>(window.overlayHost().top()->content.get());
+    auto* overlayButton = dynamic_cast<wui::ButtonNode*>(window.overlayHost().top()->content.get());
     expect(overlayButton != nullptr, "The overlay should retain the configured button");
     overlayButton->setLabel("Overlay changed outside event dispatch");
     expect(platform.redraws > redrawsAfterShow,
@@ -303,7 +303,7 @@ void testWindowCoordinatesTextInputSession()
     wui::UiApp app(std::make_unique<FakeHost>());
     auto& window = app.openWindow("input", {320.0f, 180.0f});
     auto& platform = static_cast<FakeWindow&>(window.platformWindow());
-    auto input = std::make_unique<wui::TextInput>("Type here");
+    auto input = std::make_unique<wui::TextFieldNode>("Type here");
     auto* inputPtr = input.get();
     window.setRoot(std::move(input));
     window.layout();
@@ -324,7 +324,7 @@ void testWindowCoordinatesTextInputSession()
            "Composition end should route to the focused TextInput");
     expect(inputPtr->model().composition().empty(), "Only explicit composition end should clear pre-edit state");
 
-    window.setRoot(std::make_unique<wui::Button>("Not text"));
+    window.setRoot(std::make_unique<wui::ButtonNode>("Not text"));
     expect(session.deactivations == 1, "Replacing a focused text root should deactivate the session");
 }
 
@@ -337,7 +337,7 @@ void testHighDpiImeCaretCompositionAndClipboardContract()
     auto& window = app.openWindow("high dpi input", metrics.logicalSize);
     auto& platform = static_cast<FakeWindow&>(window.platformWindow());
 
-    auto input = std::make_unique<wui::TextInput>();
+    auto input = std::make_unique<wui::TextFieldNode>();
     input->text("abcdef");
     auto* inputPtr = input.get();
     window.setRoot(std::move(input));
@@ -418,7 +418,7 @@ void testWindowSuspendsAndRestoresTextInputOnPlatformFocusChange()
     wui::UiApp app(std::make_unique<FakeHost>());
     auto& window = app.openWindow("focus", {320.0f, 180.0f});
     auto& platform = static_cast<FakeWindow&>(window.platformWindow());
-    auto input = std::make_unique<wui::TextInput>("Type here");
+    auto input = std::make_unique<wui::TextFieldNode>("Type here");
     auto* inputPtr = input.get();
     window.setRoot(std::move(input));
     window.layout();
@@ -441,7 +441,7 @@ void testWindowRoutesClipboardShortcutsToFocusedTextInput()
 {
     wui::UiApp app(std::make_unique<FakeHost>());
     auto& window = app.openWindow("clipboard", {320.0f, 180.0f});
-    auto input = std::make_unique<wui::TextInput>();
+    auto input = std::make_unique<wui::TextFieldNode>();
     input->text("alpha");
     auto* inputPtr = input.get();
     window.setRoot(std::move(input));
@@ -468,7 +468,7 @@ void testTextInputCallbacksSupportPaletteFilteringAndKeyboardCompletion()
     std::string lastQuery;
     int submits = 0;
     int cancels = 0;
-    auto input = std::make_unique<wui::TextInput>("Search commands");
+    auto input = std::make_unique<wui::TextFieldNode>("Search commands");
     input->onChange([&](const std::string& value) { lastQuery = value; });
     input->onSubmit([&] { ++submits; });
     input->onCancel([&] { ++cancels; });
@@ -491,7 +491,7 @@ void testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus()
     wui::UiApp app(std::make_unique<FakeHost>());
     auto& window = app.openWindow("dialog", {320.0f, 180.0f});
     int pageClicks = 0;
-    auto page = std::make_unique<wui::Button>("Page");
+    auto page = std::make_unique<wui::ButtonNode>("Page");
     auto* pageButton = page.get();
     page->onClick([&] { ++pageClicks; });
     window.setRoot(std::move(page));
@@ -500,8 +500,8 @@ void testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus()
     expect(window.focusManager().focused() == pageButton, "The page control should be focused before opening a dialog");
 
     int dialogKeyboardActivations = 0;
-    auto dialog = std::make_unique<wui::Dialog>();
-    auto confirm = std::make_unique<wui::Button>("Confirm");
+    auto dialog = std::make_unique<wui::DialogNode>();
+    auto confirm = std::make_unique<wui::ButtonNode>("Confirm");
     auto* confirmButton = confirm.get();
     confirm->onClick([&] { ++dialogKeyboardActivations; });
     dialog->content(std::move(confirm));
@@ -537,7 +537,7 @@ void testDialogConfirmationDismissalIsDeferredUntilPointerDispatchCompletes()
     wui::UiApp app(std::make_unique<FakeHost>());
     auto& window = app.openWindow("deferred dialog dismissal", {320.0f, 180.0f});
 
-    auto page = std::make_unique<wui::Button>("Page action");
+    auto page = std::make_unique<wui::ButtonNode>("Page action");
     auto* pageButton = page.get();
     window.setRoot(std::move(page));
     window.layout();
@@ -548,8 +548,8 @@ void testDialogConfirmationDismissalIsDeferredUntilPointerDispatchCompletes()
     expect(window.focusManager().focused() == pageButton,
            "The page action must be the focus restoration target for the outer dialog");
 
-    auto outer = std::make_unique<wui::Dialog>();
-    auto outerConfirm = std::make_unique<wui::Button>("Outer confirm");
+    auto outer = std::make_unique<wui::DialogNode>();
+    auto outerConfirm = std::make_unique<wui::ButtonNode>("Outer confirm");
     auto* outerConfirmRaw = outerConfirm.get();
     outer->content(std::move(outerConfirm));
     (void)window.showDialog(std::move(outer));
@@ -563,7 +563,7 @@ void testDialogConfirmationDismissalIsDeferredUntilPointerDispatchCompletes()
     bool confirmRan = false;
     bool dismissalWasDeferred = false;
     bool innerStillTopDuringCallback = false;
-    auto inner = std::make_unique<wui::Dialog>();
+    auto inner = std::make_unique<wui::DialogNode>();
     auto* innerRaw = inner.get();
     auto innerConfirm = std::make_unique<DestructionProbeButton>(innerButtonDestructions);
     auto* innerConfirmRaw = innerConfirm.get();
@@ -608,15 +608,15 @@ void testDeferredNestedDialogDismissalsAreAlwaysTopDown()
     wui::UiApp app(std::make_unique<FakeHost>());
     auto& window = app.openWindow("top-down dialog dismissal", {320.0f, 180.0f});
 
-    auto page = std::make_unique<wui::Button>("Page");
+    auto page = std::make_unique<wui::ButtonNode>("Page");
     auto* pageButton = page.get();
     window.setRoot(std::move(page));
     window.layout();
     expect(window.dispatchPointer(pointer(wui::PointerAction::Down)),
            "Page must receive focus before nested modal dismissal test");
 
-    auto outer = std::make_unique<wui::Dialog>();
-    auto outerAction = std::make_unique<wui::Button>("Outer");
+    auto outer = std::make_unique<wui::DialogNode>();
+    auto outerAction = std::make_unique<wui::ButtonNode>("Outer");
     outer->content(std::move(outerAction));
     const auto outerId = window.showDialog(std::move(outer));
     window.layout();
@@ -625,8 +625,8 @@ void testDeferredNestedDialogDismissalsAreAlwaysTopDown()
 
     bool callbackRan = false;
     bool requestsWereDeferred = false;
-    auto inner = std::make_unique<wui::Dialog>();
-    auto innerAction = std::make_unique<wui::Button>("Close both");
+    auto inner = std::make_unique<wui::DialogNode>();
+    auto innerAction = std::make_unique<wui::ButtonNode>("Close both");
     auto* innerActionRaw = innerAction.get();
     innerAction->onClick([&] {
         callbackRan = true;
@@ -658,14 +658,101 @@ void testDeferredNestedDialogDismissalsAreAlwaysTopDown()
            "Top-down nested dismissal must restore the original page focus");
 }
 
+void testDialogDismissalDropsFocusWhenUnderlyingPageWasReplaced()
+{
+    wui::UiApp app(std::make_unique<FakeHost>());
+    auto& window = app.openWindow(
+        "dialog replacement focus defense", {320.0f, 180.0f});
+
+    auto page = std::make_unique<wui::ButtonNode>("Original page action");
+    auto* pageAction = page.get();
+    window.setRoot(std::move(page));
+    window.layout();
+    const auto& pageBounds = pageAction->bounds();
+    const wui::PointF pageCenter{
+        pageBounds.x + pageBounds.width * 0.5f,
+        pageBounds.y + pageBounds.height * 0.5f,
+    };
+    wui::PointerEvent pageDown{
+        window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+        wui::MouseButton::Left, pageCenter, 0};
+    auto pageUp = pageDown;
+    pageUp.action = wui::PointerAction::Up;
+    expect(window.dispatchPointer(pageDown) && window.dispatchPointer(pageUp),
+           "The original page action should own focus before the dialog opens");
+
+    bool callbackRan = false;
+    bool dismissalWasDeferred = false;
+    auto dialog = std::make_unique<wui::DialogNode>();
+    auto replace = std::make_unique<wui::ButtonNode>("Save and replace page");
+    auto* replaceRaw = replace.get();
+    replace->onClick([&] {
+        callbackRan = true;
+        dismissalWasDeferred = window.dismissTopDialog() == nullptr;
+        window.setRoot(std::make_unique<wui::TextNode>("Replacement page"));
+    });
+    dialog->content(std::move(replace));
+    (void)window.showDialog(std::move(dialog));
+    window.layout();
+
+    const auto& replaceBounds = replaceRaw->bounds();
+    const wui::PointF replaceCenter{
+        replaceBounds.x + replaceBounds.width * 0.5f,
+        replaceBounds.y + replaceBounds.height * 0.5f,
+    };
+    wui::PointerEvent replaceDown{
+        window.id(), wui::PointerType::Mouse, wui::PointerAction::Down,
+        wui::MouseButton::Left, replaceCenter, 0};
+    auto replaceUp = replaceDown;
+    replaceUp.action = wui::PointerAction::Up;
+    expect(window.dispatchPointer(replaceDown)
+               && window.dispatchPointer(replaceUp),
+           "Replacing the underlying page during a dialog callback must not crash");
+    expect(callbackRan && dismissalWasDeferred && !window.hasDialog(),
+           "The deferred dialog should still finish dismissal after page replacement");
+    expect(window.focusManager().focused() == nullptr,
+           "A replaced page must invalidate the dialog's saved focus target");
+}
+
 void testDeclarativeDialogBuilderProducesConcreteModal()
 {
-    auto dialog = wui::ui::Dialog().maxWidth(300.0f).dismissOnBackdrop().content(
-        wui::ui::Text("Dialog content"))
-                      .intoDialog();
+    auto dialog = wui::Dialog().maxWidth(300.0f).dismissOnBackdrop().content(
+        wui::Text("Dialog content"))
+                      .build();
     expect(dialog->maxWidth() == 300.0f, "Dialog builder should configure max width");
     expect(dialog->backdropDismissEnabled(), "Dialog builder should configure backdrop dismissal");
     expect(dialog->children().size() == 1, "Dialog builder should transfer its content subtree");
+}
+
+void testWindowMaterializesAuthorViewsAtEveryBoundary()
+{
+    wui::UiApp app(std::make_unique<FakeHost>());
+    auto& window = app.openWindow("author views", {320.0f, 180.0f});
+
+    window.content(
+        wui::Column().children(
+            wui::Text("Page"),
+            wui::Button("Continue")
+        )
+    );
+    expect(dynamic_cast<wui::ColumnNode*>(window.root()) != nullptr,
+           "UiWindow::content should accept a declarative view directly");
+
+    const auto overlayId = window.overlayHost().show(
+        wui::Text("Transient overlay"));
+    expect(window.overlayHost().top() != nullptr
+               && dynamic_cast<wui::TextNode*>(
+                      window.overlayHost().top()->content.get()) != nullptr,
+           "OverlayHost::show should materialize a declarative view");
+    (void)window.overlayHost().dismiss(overlayId);
+
+    const auto dialogId = window.showDialog(
+        wui::Dialog().content(wui::Text("Dialog content")));
+    expect(window.hasDialog()
+               && dynamic_cast<wui::DialogNode*>(
+                      window.overlayHost().top()->content.get()) != nullptr,
+           "UiWindow::showDialog should materialize a Dialog view");
+    (void)window.dismissDialog(dialogId);
 }
 
 void testAppReleasesClosedWindows()
@@ -681,6 +768,14 @@ void testAppReleasesClosedWindows()
     expect(app.findWindow(closedId) == nullptr, "Closed window must no longer be discoverable");
     expect(app.findWindow(openId) == &second, "Open windows must remain managed after closed peers are removed");
     expect(app.removeClosedWindows() == 0, "Collecting an already-clean app should be a no-op");
+}
+
+void testAppContextIsReadyDuringInitialComposition()
+{
+    wui::UiApp app;
+    const auto context = app.uiContext();
+    expect(context.isAlive() && context.isCurrentThread(),
+           "UiApp must expose a bound context before initial UI composition");
 }
 
 } // namespace
@@ -700,8 +795,11 @@ int main()
         testModalDialogBlocksPointerClosesOnEscapeAndRestoresFocus();
         testDialogConfirmationDismissalIsDeferredUntilPointerDispatchCompletes();
         testDeferredNestedDialogDismissalsAreAlwaysTopDown();
+        testDialogDismissalDropsFocusWhenUnderlyingPageWasReplaced();
         testDeclarativeDialogBuilderProducesConcreteModal();
+        testWindowMaterializesAuthorViewsAtEveryBoundary();
         testAppReleasesClosedWindows();
+        testAppContextIsReadyDuringInitialComposition();
         return 0;
     } catch (const std::exception& error) {
         std::fputs(error.what(), stderr);

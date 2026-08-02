@@ -13,6 +13,7 @@
 #include <string_view>
 
 #include "wui/wui.h"
+#include "wui/virtual_list.h"
 
 namespace {
 
@@ -114,10 +115,10 @@ void emitFrame(std::string_view benchmark, const wui::FrameStats& stats)
 
 void benchmarkThousandControls()
 {
-    auto root = std::make_unique<wui::Column>();
+    auto root = std::make_unique<wui::ColumnNode>();
     root->gap(2.0f);
     for (int index = 0; index < 1000; ++index) {
-        root->appendChild(std::make_unique<wui::Button>("Control " + std::to_string(index)));
+        root->appendChild(std::make_unique<wui::ButtonNode>("Control " + std::to_string(index)));
     }
     const auto stats = renderOneFrame(std::move(root));
     requireValidFrame(stats, 1001);
@@ -126,10 +127,10 @@ void benchmarkThousandControls()
 
 void benchmarkHundredThousandLogicalRows()
 {
-    wui::VirtualList list;
-    list.setKeyProvider([](wui::VirtualList::Index index) { return "row-" + std::to_string(index); });
-    list.setItemBuilder([](wui::VirtualList::Index, const std::string& key) {
-        return std::make_unique<wui::Text>(key);
+    wui::VirtualListNode list;
+    list.setKeyProvider([](wui::VirtualListNode::Index index) { return "row-" + std::to_string(index); });
+    list.setItemBuilder([](wui::VirtualListNode::Index, const std::string& key) {
+        return std::make_unique<wui::TextNode>(key);
     });
     list.setItemCount(100000);
     list.layout({0.0f, 0.0f, 320.0f, 360.0f});
@@ -149,9 +150,9 @@ void benchmarkHundredThousandLogicalRows()
 
 void benchmarkTenThousandTextNodes()
 {
-    auto root = std::make_unique<wui::Column>();
+    auto root = std::make_unique<wui::ColumnNode>();
     for (int index = 0; index < 10000; ++index) {
-        root->appendChild(std::make_unique<wui::Text>("Text node " + std::to_string(index)));
+        root->appendChild(std::make_unique<wui::TextNode>("Text node " + std::to_string(index)));
     }
     const auto stats = renderOneFrame(std::move(root));
     requireValidFrame(stats, 10001);
@@ -160,7 +161,7 @@ void benchmarkTenThousandTextNodes()
 
 void benchmarkMutationStorm()
 {
-    wui::Column root;
+    wui::ColumnNode root;
     constexpr std::size_t kCeiling = 64;
     constexpr int kOperations = 10000;
     for (int operation = 0; operation < kOperations; ++operation) {
@@ -168,7 +169,7 @@ void benchmarkMutationStorm()
             const auto removeIndex = static_cast<std::size_t>(operation) % root.children().size();
             (void)root.removeChild(removeIndex);
         }
-        root.appendChild(std::make_unique<wui::Text>("mutation " + std::to_string(operation)));
+        root.appendChild(std::make_unique<wui::TextNode>("mutation " + std::to_string(operation)));
         require(root.children().size() <= kCeiling, "Mutation storm must keep its bounded tree invariant");
     }
     root.clearChildren();
@@ -182,7 +183,7 @@ void benchmarkOverlayLikeTreeStress()
     wui::OverlayHost host;
     constexpr std::size_t kOverlayCount = 256;
     for (std::size_t index = 0; index < kOverlayCount; ++index) {
-        auto popup = std::make_unique<wui::Popup>();
+        auto popup = std::make_unique<wui::PopupNode>();
         popup->anchor({static_cast<float>((index % 12) * 24), static_cast<float>((index % 8) * 18), 20.0f, 18.0f})
             .preferredSize({160.0f, 72.0f});
         const auto id = host.show(std::move(popup));

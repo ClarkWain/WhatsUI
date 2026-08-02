@@ -6,7 +6,7 @@
 #include "wui/overlays.h"
 #include "wui/paint_context.h"
 #include "wui/runtime.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace {
 
@@ -22,7 +22,7 @@ wui::PointerEvent pointer(wui::PointerAction action, float x = 4.0f)
 
 void testRadioSelectsWithoutTogglingOff()
 {
-    wui::Radio radio("Daily");
+    wui::RadioNode radio("Daily");
     radio.layout({0, 0, 120, 24});
     int notifications = 0;
     radio.onChange([&](bool selected) { expect(selected, "Radio must notify true when selected"); ++notifications; });
@@ -37,7 +37,7 @@ void testRadioSelectsWithoutTogglingOff()
 void testSwitchBindingAndKeyboard()
 {
     wui::State<bool> enabled{false};
-    wui::Switch toggle("Notifications");
+    wui::SwitchNode toggle("Notifications");
     toggle.bind(enabled);
     int notifications = 0;
     toggle.onChange([&](bool value) { expect(value, "Space should turn switch on"); ++notifications; });
@@ -49,7 +49,7 @@ void testSwitchBindingAndKeyboard()
 
 void testSliderClampsSnapsAndSupportsKeys()
 {
-    wui::Slider slider(0.0f, 10.0f, 0.0f);
+    wui::SliderNode slider(0.0f, 10.0f, 0.0f);
     slider.step(2.0f);
     slider.layout({0, 0, 116, 32});
     slider.setValue(3.1f);
@@ -68,30 +68,30 @@ void testSliderClampsSnapsAndSupportsKeys()
 
 void testProgressAndDividerRanges()
 {
-    wui::ProgressBar progress(0.0f, 1.0f, 3.0f);
+    wui::ProgressBarNode progress(0.0f, 1.0f, 3.0f);
     expect(progress.value() == 1.0f, "Progress should clamp initial value");
     progress.setValue(-2.0f);
     expect(progress.value() == 0.0f, "Progress should clamp updates");
-    wui::Divider horizontal;
-    wui::Divider vertical(wui::DividerOrientation::Vertical);
+    wui::DividerNode horizontal;
+    wui::DividerNode vertical(wui::DividerOrientation::Vertical);
     expect(horizontal.measure({}).height == 1.0f, "Horizontal divider should reserve thickness vertically");
     expect(vertical.measure({}).width == 1.0f, "Vertical divider should reserve thickness horizontally");
 }
 
 void testDeclarativeBuildersRemainMoveOnly()
 {
-    auto root = wui::ui::Column().children(
-        wui::ui::Radio("Today").selected(true),
-        wui::ui::Switch("Remind me").on(true),
-        wui::ui::Slider(0.0f, 10.0f, 3.0f).step(1.0f),
-        wui::ui::ProgressBar(0.0f, 1.0f, 0.5f),
-        wui::ui::Divider());
-    expect(root.get() != nullptr, "Fluent controls must participate in the declarative builder API");
+    auto root = wui::Column().children(
+        wui::Radio("Today").selected(true),
+        wui::Switch("Remind me").on(true),
+        wui::Slider(0.0f, 10.0f, 3.0f).step(1.0f),
+        wui::ProgressBar(0.0f, 1.0f, 0.5f),
+        wui::Divider());
+    expect(root.node() != nullptr, "Fluent controls must participate in the declarative builder API");
 }
 
 void testFluentButtonAppearanceSizeAndShape()
 {
-    wui::Button button("Save");
+    wui::ButtonNode button("Save");
     button.setAppearance(wui::ButtonAppearance::Outline);
     button.setSize(wui::ButtonSize::Small);
     button.setShape(wui::ButtonShape::Square);
@@ -107,15 +107,15 @@ void testFluentButtonAppearanceSizeAndShape()
     button.setSize(wui::ButtonSize::Large);
     expect(button.measure({}).height == 40.0f,
            "Fluent large buttons must reserve a 40 DIP hit target");
-    button.setVariant(wui::ButtonVariant::Ghost);
+    button.setAppearance(wui::ButtonAppearance::Outline);
     expect(button.appearance() == wui::ButtonAppearance::Outline,
            "Legacy Ghost must retain its bordered visual contract through Outline");
 }
 
 void testFluentLabelAssociatesInputAndUsesOfficialScale()
 {
-    wui::TextInput input("Placeholder only");
-    wui::Label label("Task title");
+    wui::TextFieldNode input("Placeholder only");
+    wui::LabelNode label("Task title");
     label.setForControl(&input);
     expect(input.accessibleLabel() == "Task title" && label.forControl() == &input,
            "A Fluent Label must provide the input's accessible name instead of relying on placeholder text");
@@ -129,10 +129,10 @@ void testFluentLabelAssociatesInputAndUsesOfficialScale()
 
 void testFluentCardSizingAndAppearance()
 {
-    wui::Card card;
+    wui::CardNode card;
     card.setAppearance(wui::CardAppearance::Outline);
     card.setSize(wui::CardSize::Large);
-    card.child(std::make_unique<wui::Spacer>(wui::SizeF{40.0f, 20.0f}));
+    card.child(std::make_unique<wui::SpacerNode>(wui::SizeF{40.0f, 20.0f}));
     const auto size = card.measure({});
     expect(card.appearance() == wui::CardAppearance::Outline && card.size() == wui::CardSize::Large,
            "Card must retain its Fluent appearance and size");
@@ -142,18 +142,18 @@ void testFluentCardSizingAndAppearance()
 
 void testFluentCardSlotsLayOutContentAndActions()
 {
-    wui::CardHeader header("Task summary", "Three items due today");
-    header.media(std::make_unique<wui::Spacer>(wui::SizeF{24.0f, 24.0f}));
-    header.action(std::make_unique<wui::Button>("More"));
+    wui::CardHeaderNode header("Task summary", "Three items due today");
+    header.media(std::make_unique<wui::SpacerNode>(wui::SizeF{24.0f, 24.0f}));
+    header.action(std::make_unique<wui::ButtonNode>("More"));
     const auto headerSize = header.measure({0.0f, 240.0f, 0.0f, 100.0f});
     expect(headerSize.height >= 32.0f && headerSize.width > 100.0f,
            "CardHeader must reserve two text rows and its trailing action slot");
     header.layout({0.0f, 0.0f, 240.0f, headerSize.height});
     expect(header.children().size() == 2 && header.children()[0]->bounds().x < header.children()[1]->bounds().x,
            "CardHeader media and trailing action must occupy independent slots");
-    wui::CardFooter footer;
-    footer.child(std::make_unique<wui::Text>("Updated now"));
-    footer.child(std::make_unique<wui::Button>("Open"));
+    wui::CardFooterNode footer;
+    footer.child(std::make_unique<wui::TextNode>("Updated now"));
+    footer.child(std::make_unique<wui::ButtonNode>("Open"));
     footer.layout({0.0f, 0.0f, 240.0f, 32.0f});
     expect(footer.children().size() == 2 && footer.children()[1]->bounds().x > footer.children()[0]->bounds().x,
            "CardFooter must lay out its action slots in stable left-to-right order");
@@ -161,11 +161,11 @@ void testFluentCardSlotsLayOutContentAndActions()
 
 void testFluentCardOrientationAndSelection()
 {
-    wui::Card card;
+    wui::CardNode card;
     card.setOrientation(wui::CardOrientation::Horizontal);
     card.selectable();
-    card.child(std::make_unique<wui::Spacer>(wui::SizeF{20.0f, 12.0f}));
-    card.child(std::make_unique<wui::Spacer>(wui::SizeF{30.0f, 12.0f}));
+    card.child(std::make_unique<wui::SpacerNode>(wui::SizeF{20.0f, 12.0f}));
+    card.child(std::make_unique<wui::SpacerNode>(wui::SizeF{30.0f, 12.0f}));
     card.layout({0.0f, 0.0f, 100.0f, 40.0f});
     expect(card.children()[1]->bounds().x > card.children()[0]->bounds().x,
            "Horizontal Card must lay out children side-by-side rather than overlap them");
@@ -175,9 +175,9 @@ void testFluentCardOrientationAndSelection()
 
 void testCardPreviewUsesGeometricRoundedClip()
 {
-    wui::CardPreview preview;
+    wui::CardPreviewNode preview;
     preview.setHeight(48.0f);
-    preview.child(std::make_unique<wui::Spacer>(wui::SizeF{80.0f, 48.0f}));
+    preview.child(std::make_unique<wui::SpacerNode>(wui::SizeF{80.0f, 48.0f}));
     preview.layout({0.0f, 0.0f, 80.0f, 48.0f});
     wui::PaintContext context;
     preview.paint(context);
@@ -187,7 +187,7 @@ void testCardPreviewUsesGeometricRoundedClip()
 
 void testFluentTextAreaUsesEditingControllerAndVisualLines()
 {
-    wui::TextArea area("Describe the task");
+    wui::TextAreaNode area("Describe the task");
     area.setRows(3);
     area.layout({0.0f, 0.0f, 180.0f, 80.0f});
     expect(area.isMultiline() && area.rows() == 3 && area.measure({}).height >= 60.0f,
@@ -204,7 +204,7 @@ void testFluentTextAreaUsesEditingControllerAndVisualLines()
 void testFluentToggleButtonOwnsButtonStyleToggleState()
 {
     wui::State<bool> pressed{false};
-    wui::ToggleButton toggle("Bold");
+    wui::ToggleButtonNode toggle("Bold");
     toggle.bind(pressed);
     toggle.setSize(wui::ButtonSize::Small);
     toggle.setShape(wui::ButtonShape::Rounded);
@@ -224,7 +224,7 @@ void testFluentToggleButtonOwnsButtonStyleToggleState()
 
 void testFluentCompoundButtonUsesOneCommandSurface()
 {
-    wui::CompoundButton button("Create list", "Organize related tasks");
+    wui::CompoundButtonNode button("Create list", "Organize related tasks");
     button.setSize(wui::ButtonSize::Medium);
     int invoked = 0;
     button.onClick([&] { ++invoked; });
@@ -240,14 +240,14 @@ void testFluentCompoundButtonUsesOneCommandSurface()
 void testFluentMenuButtonOpensExistingMenuOverlay()
 {
     wui::OverlayHost overlays;
-    wui::MenuButton button("More");
+    wui::MenuButtonNode button("More");
     button.bindOverlayHost(overlays).addItem({"Rename", "", true, {}});
     button.layout({0.0f, 0.0f, 80.0f, 32.0f});
     expect(button.onPointerEvent(pointer(wui::PointerAction::Down)) && button.onPointerEvent(pointer(wui::PointerAction::Up)),
            "MenuButton must use its primary surface to open a menu");
     expect(button.isOpen() && overlays.size() == 1,
            "MenuButton must delegate transient menu ownership to OverlayHost");
-    auto* menu = dynamic_cast<wui::Menu*>(overlays.top()->content.get());
+    auto* menu = dynamic_cast<wui::MenuNode*>(overlays.top()->content.get());
     expect(menu != nullptr && menu->onKeyEvent({0, wui::KeyAction::Down, 27}),
            "The hosted Fluent menu must retain its Escape dismissal contract");
     expect(!button.isOpen() && overlays.empty(),
@@ -257,7 +257,7 @@ void testFluentMenuButtonOpensExistingMenuOverlay()
 void testFluentSplitButtonSeparatesPrimaryAndMenuActions()
 {
     wui::OverlayHost overlays;
-    wui::SplitButton button("Save");
+    wui::SplitButtonNode button("Save");
     int primary = 0;
     button.bindOverlayHost(overlays).addItem({"Save as", "", true, {}}).onClick([&] { ++primary; });
     button.layout({0.0f, 0.0f, 100.0f, 32.0f});

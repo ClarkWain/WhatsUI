@@ -1,12 +1,16 @@
+#include <atomic>
 #include <memory>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "wui/runtime.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/widgets.h"
+#include "wui/ui_dispatcher.h"
+#include "wui/component.h"
 
 namespace {
 
@@ -108,7 +112,7 @@ void testParentReleaseDetachesEveryAttachedDescendantExactlyOnce()
     // Replacing the parent destroys the old subtree.  The explicit detach
     // phase must happen before destruction, in descendant-first order, and
     // Node's destructor fallback must not notify a second time.
-    root.setContent(std::make_unique<wui::Container>());
+    root.setContent(std::make_unique<wui::BoxNode>());
     expect(parentAttaches == 1 && childAttaches == 1,
            "Each node must receive one attach callback for one UiRoot adoption");
     expect(parentDetaches == 1 && childDetaches == 1,
@@ -121,9 +125,9 @@ void testParentReleaseDetachesEveryAttachedDescendantExactlyOnce()
 void testDetachedReactiveNodeStopsReceivingStateAndSelfRemovalIsSafe()
 {
     wui::State<std::string> value{"before"};
-    auto textNode = wui::ui::asNode(wui::ui::Text{}.bind(value));
-    auto* text = static_cast<wui::Text*>(textNode.get());
-    auto parent = std::make_unique<wui::Container>();
+    auto textNode = wui::Text{}.bind(value).build();
+    auto* text = static_cast<wui::TextNode*>(textNode.get());
+    auto parent = std::make_unique<wui::BoxNode>();
     auto* parentRaw = parent.get();
     parent->appendChild(std::move(textNode));
 
@@ -155,9 +159,9 @@ void testDetachedReactiveNodeStopsReceivingStateAndSelfRemovalIsSafe()
 
 void testDetachingFocusedNodeClearsFocusBeforeDestruction()
 {
-    auto content = std::make_unique<wui::Container>();
-    auto focusedButton = std::make_unique<wui::Button>("Removed");
-    auto nextButton = std::make_unique<wui::Button>("Next");
+    auto content = std::make_unique<wui::BoxNode>();
+    auto focusedButton = std::make_unique<wui::ButtonNode>("Removed");
+    auto nextButton = std::make_unique<wui::ButtonNode>("Next");
     auto* contentRaw = content.get();
     auto* focusedRaw = focusedButton.get();
     auto* nextRaw = nextButton.get();
@@ -197,8 +201,8 @@ void testDetachingFocusedNodeClearsFocusBeforeDestruction()
 
 void testFocusDetachCallbackDoesNotOutliveFocusManager()
 {
-    auto content = std::make_unique<wui::Container>();
-    auto button = std::make_unique<wui::Button>("Temporary manager");
+    auto content = std::make_unique<wui::BoxNode>();
+    auto button = std::make_unique<wui::ButtonNode>("Temporary manager");
     auto* contentRaw = content.get();
     auto* buttonRaw = button.get();
     content->appendChild(std::move(button));
@@ -225,7 +229,7 @@ void testDetachingHoveredNodeClearsRouterBeforeDestruction()
     int survivorLeaves = 0;
     int survivorDowns = 0;
 
-    auto content = std::make_unique<wui::Container>();
+    auto content = std::make_unique<wui::BoxNode>();
     auto removed = std::make_unique<PointerProbe>(removedEnters, removedLeaves, removedDowns);
     auto survivor = std::make_unique<PointerProbe>(survivorEnters, survivorLeaves, survivorDowns);
     auto* contentRaw = content.get();
@@ -266,9 +270,9 @@ void testDetachingHoveredNodeClearsRouterBeforeDestruction()
 
 void testDetachCallbackMayClearSameParentDuringRemove()
 {
-    auto content = std::make_unique<wui::Container>();
-    auto removed = std::make_unique<wui::Container>();
-    auto survivor = std::make_unique<wui::Container>();
+    auto content = std::make_unique<wui::BoxNode>();
+    auto removed = std::make_unique<wui::BoxNode>();
+    auto survivor = std::make_unique<wui::BoxNode>();
     auto* contentRaw = content.get();
     auto* removedRaw = removed.get();
     int survivorDetaches = 0;
@@ -288,9 +292,9 @@ void testDetachCallbackMayClearSameParentDuringRemove()
 
 void testDetachCallbackMayClearSameParentDuringClear()
 {
-    auto content = std::make_unique<wui::Container>();
-    auto first = std::make_unique<wui::Container>();
-    auto second = std::make_unique<wui::Container>();
+    auto content = std::make_unique<wui::BoxNode>();
+    auto first = std::make_unique<wui::BoxNode>();
+    auto second = std::make_unique<wui::BoxNode>();
     auto* contentRaw = content.get();
     int firstDetaches = 0;
     int secondDetaches = 0;
@@ -307,6 +311,119 @@ void testDetachCallbackMayClearSameParentDuringClear()
            "clearChildren must tolerate a detach callback that clears the same parent again");
 }
 
+void testAttachedTreeRejectsWorkerMutationButDetachedTreeAllowsIt()
+{
+    auto detached = std::make_unique<wui::BoxNode>();
+    std::thread builder([&detached] {
+        detached->appendChild(
+            std::make_unique<wui::TextNode>("background"));
+    });
+    builder.join();
+    expect(detached->children().size() == 1,
+           "Detached nodes should support background construction");
+
+    auto* attached = detached.get();
+    wui::UiRoot root;
+    root.setContent(std::move(detached));
+    std::atomic<bool> structuralMutationRejected{false};
+    std::atomic<bool> metadataMutationRejected{false};
+    std::atomic<bool> callbackMutationRejected{false};
+    std::thread worker([&] {
+        try {
+            attached->appendChild(
+                std::make_unique<wui::TextNode>("invalid"));
+        } catch (const std::logic_error&) {
+            structuralMutationRejected = true;
+        }
+        try {
+            attached->setDebugName("invalid");
+        } catch (const std::logic_error&) {
+            metadataMutationRejected = true;
+        }
+        try {
+            attached->addDetachCallback([] {});
+        } catch (const std::logic_error&) {
+            callbackMutationRejected = true;
+        }
+    });
+    worker.join();
+    expect(structuralMutationRejected && metadataMutationRejected
+               && callbackMutationRejected
+               && attached->children().size() == 1,
+           "An attached tree must reject worker-thread structural, metadata, and callback mutation in every build type");
+}
+
+void testLifecycleCallbackExceptionsBecomeDiagnostics()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    std::vector<wui::UiDiagnostic> diagnostics;
+    dispatcher.setDiagnosticHandler(
+        [&diagnostics](const wui::UiDiagnostic& value) {
+            diagnostics.push_back(value);
+        });
+
+    auto node = std::make_unique<wui::BoxNode>();
+    node->addAttachCallback(
+        [] { throw std::runtime_error("attach failed"); });
+    node->addDetachCallback(
+        [] { throw std::runtime_error("detach failed"); });
+    node->addTeardown(
+        [] { throw std::runtime_error("teardown failed"); });
+
+    wui::UiRoot root(dispatcher.context());
+    root.setContent(std::move(node));
+    root.setContent(nullptr);
+    expect(diagnostics.size() == 3,
+           "Attach, detach, and teardown callback failures must all be isolated and diagnosed");
+}
+
+void testDuplicateAutomationIdsAreDiagnosedWithoutChangingTheTree()
+{
+    wui::UiDispatcher dispatcher;
+    dispatcher.bindToCurrentThread();
+    std::vector<wui::UiDiagnostic> diagnostics;
+    dispatcher.setDiagnosticHandler(
+        [&diagnostics](const wui::UiDiagnostic& value) {
+            diagnostics.push_back(value);
+        });
+
+    auto content = std::make_unique<wui::BoxNode>();
+    auto first = std::make_unique<wui::ButtonNode>("First");
+    auto second = std::make_unique<wui::ButtonNode>("Second");
+    first->setAutomationId("duplicate");
+    second->setAutomationId("duplicate");
+    second->setDebugName("SecondButton");
+    content->appendChild(std::move(first));
+    content->appendChild(std::move(second));
+
+    wui::UiRoot root(dispatcher.context());
+    root.setContent(std::move(content));
+    expect(root.content()->children().size() == 2,
+           "Identity diagnostics must not change retained tree ownership");
+    expect(diagnostics.size() == 1
+               && diagnostics.front().code
+                   == wui::UiDiagnosticCode::DuplicateAutomationId
+               && diagnostics.front().debugName == "SecondButton",
+           "Duplicate automation IDs must report the offending debug name");
+}
+
+void testGuardedComponentCallbacksExpireWithTheirOwner()
+{
+    int calls = 0;
+    std::function<void(int)> callback;
+    {
+        wui::CallbackLifetime lifetime;
+        callback = lifetime.guard([&calls](int value) { calls += value; });
+        callback(2);
+        expect(calls == 2,
+               "A guarded callback should run while its component owner is alive");
+    }
+    callback(3);
+    expect(calls == 2,
+           "A guarded callback should become a no-op after owner destruction");
+}
+
 } // namespace
 
 int main()
@@ -319,6 +436,10 @@ int main()
         testDetachingHoveredNodeClearsRouterBeforeDestruction();
         testDetachCallbackMayClearSameParentDuringRemove();
         testDetachCallbackMayClearSameParentDuringClear();
+        testAttachedTreeRejectsWorkerMutationButDetachedTreeAllowsIt();
+        testLifecycleCallbackExceptionsBecomeDiagnostics();
+        testDuplicateAutomationIdsAreDiagnosedWithoutChangingTheTree();
+        testGuardedComponentCallbacksExpireWithTheirOwner();
     } catch (const std::exception& error) {
         // Test executables must fail normally on Windows instead of surfacing
         // an uncaught exception as an application-crash dialog.

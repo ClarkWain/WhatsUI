@@ -110,9 +110,9 @@ void ResponsiveGalleryShell::applyPageInsets()
     // the shell so page view code remains about content rather than window
     // metrics. A 16 DIP inset preserves a useful content viewport at 267 DIP.
     if (pageColumn_ == nullptr) {
-        auto* scroll = dynamic_cast<wui::ScrollView*>(pageContent_);
+        auto* scroll = dynamic_cast<wui::ScrollViewNode*>(pageContent_);
         if (scroll == nullptr || scroll->children().empty()) return;
-        pageColumn_ = dynamic_cast<wui::Column*>(scroll->children().front().get());
+        pageColumn_ = dynamic_cast<wui::ColumnNode*>(scroll->children().front().get());
         if (pageColumn_ == nullptr) return;
         desktopPageInsets_ = pageColumn_->padding();
     }

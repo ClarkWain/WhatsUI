@@ -17,13 +17,20 @@ bool ownsFocus(const Node* root, const Node* focused) noexcept
 }
 } // namespace
 
+UiRoot::UiRoot(UiContext context)
+    : context_(std::move(context)),
+      ownerThread_(std::this_thread::get_id())
+{
+}
+
 UiRoot::~UiRoot()
 {
     setContent(nullptr);
 }
 
-void UiRoot::setContent(std::unique_ptr<Node> content) noexcept
+void UiRoot::setContent(std::unique_ptr<Node> content)
 {
+    requireOwnerThread();
     if (content_ != nullptr) {
         content_->detachRecursively();
         content_->setInvalidationHandler({});
@@ -32,12 +39,13 @@ void UiRoot::setContent(std::unique_ptr<Node> content) noexcept
     content_ = ownedContent_.get();
     wireInvalidationHandler();
     if (content_ != nullptr) {
-        content_->attachRecursively();
+        content_->attachRecursively(context_);
     }
 }
 
-void UiRoot::setBorrowedContent(Node* content) noexcept
+void UiRoot::setBorrowedContent(Node* content)
 {
+    requireOwnerThread();
     if (content_ != nullptr && content_ != content) {
         content_->detachRecursively();
         content_->setInvalidationHandler({});
@@ -46,7 +54,17 @@ void UiRoot::setBorrowedContent(Node* content) noexcept
     content_ = content;
     wireInvalidationHandler();
     if (content_ != nullptr) {
-        content_->attachRecursively();
+        content_->attachRecursively(context_);
+    }
+}
+
+void UiRoot::requireOwnerThread() const
+{
+    if (context_.isValid()) {
+        context_.requireCurrentThread();
+    } else if (ownerThread_ != std::this_thread::get_id()) {
+        throw std::logic_error(
+            "UiRoot mutation must run on its owning UI thread");
     }
 }
 
@@ -95,14 +113,32 @@ void UiRoot::prepare(PaintContext& context)
     }
 }
 
+Navigator::Navigator(UiContext context)
+    : context_(std::move(context)),
+      ownerThread_(std::this_thread::get_id())
+{
+}
+
+void Navigator::requireOwnerThread() const
+{
+    if (context_.isValid()) {
+        context_.requireCurrentThread();
+    } else if (ownerThread_ != std::this_thread::get_id()) {
+        throw std::logic_error(
+            "Navigator mutation must run on its owning UI thread");
+    }
+}
+
 void Navigator::setOnChange(ChangeHandler handler)
 {
+    requireOwnerThread();
     onChange_ = std::move(handler);
     notifyChanged();
 }
 
 void Navigator::setBeforeChange(BeforeChangeHandler handler)
 {
+    requireOwnerThread();
     onBeforeChange_ = std::move(handler);
 }
 
@@ -122,6 +158,7 @@ void Navigator::notifyChanged()
 
 void Navigator::setRoot(std::string key, std::unique_ptr<Node> page, PageRetention retention)
 {
+    requireOwnerThread();
     if (retention == PageRetention::DisposeOnHide) {
         throw std::invalid_argument("DisposeOnHide pages require a PageFactory");
     }
@@ -131,12 +168,14 @@ void Navigator::setRoot(std::string key, std::unique_ptr<Node> page, PageRetenti
 
 void Navigator::setRoot(std::string key, PageFactory factory, PageRetention retention)
 {
+    requireOwnerThread();
     clear();
     push(std::move(key), std::move(factory), retention);
 }
 
 void Navigator::push(std::string key, std::unique_ptr<Node> page, PageRetention retention)
 {
+    requireOwnerThread();
     if (!page) {
         throw std::invalid_argument("page must not be null");
     }
@@ -151,6 +190,7 @@ void Navigator::push(std::string key, std::unique_ptr<Node> page, PageRetention 
 
 void Navigator::push(std::string key, PageFactory factory, PageRetention retention)
 {
+    requireOwnerThread();
     if (!factory) {
         throw std::invalid_argument("page factory must not be empty");
     }
@@ -166,6 +206,7 @@ void Navigator::push(std::string key, PageFactory factory, PageRetention retenti
 
 void Navigator::replace(std::string key, std::unique_ptr<Node> page, PageRetention retention)
 {
+    requireOwnerThread();
     if (!page) {
         throw std::invalid_argument("page must not be null");
     }
@@ -183,6 +224,7 @@ void Navigator::replace(std::string key, std::unique_ptr<Node> page, PageRetenti
 
 void Navigator::replace(std::string key, PageFactory factory, PageRetention retention)
 {
+    requireOwnerThread();
     if (!factory) {
         throw std::invalid_argument("page factory must not be empty");
     }
@@ -201,6 +243,7 @@ void Navigator::replace(std::string key, PageFactory factory, PageRetention rete
 
 std::unique_ptr<Node> Navigator::pop()
 {
+    requireOwnerThread();
     if (!canPop()) {
         return nullptr;
     }
@@ -215,6 +258,7 @@ std::unique_ptr<Node> Navigator::pop()
 
 void Navigator::popToRoot()
 {
+    requireOwnerThread();
     if (canPop()) {
         notifyWillChange();
     }
@@ -227,6 +271,7 @@ void Navigator::popToRoot()
 
 void Navigator::clear()
 {
+    requireOwnerThread();
     if (!stack_.empty()) {
         notifyWillChange();
     }
@@ -273,21 +318,38 @@ const std::vector<PageEntry>& Navigator::pages() const noexcept
     return stack_;
 }
 
+OverlayHost::OverlayHost(UiContext context)
+    : context_(std::move(context)),
+      ownerThread_(std::this_thread::get_id())
+{
+}
+
+void OverlayHost::requireOwnerThread() const
+{
+    if (context_.isValid()) {
+        context_.requireCurrentThread();
+    } else if (ownerThread_ != std::this_thread::get_id()) {
+        throw std::logic_error(
+            "OverlayHost mutation must run on its owning UI thread");
+    }
+}
+
 OverlayId OverlayHost::show(std::unique_ptr<Node> overlay)
 {
+    requireOwnerThread();
     if (!overlay) {
         throw std::invalid_argument("overlay must not be null");
     }
 
     const auto id = nextId_++;
-    Drawer* drawer = dynamic_cast<Drawer*>(overlay.get());
+    DrawerNode* drawer = dynamic_cast<DrawerNode*>(overlay.get());
     const bool modalDrawer = drawer != nullptr && drawer->trapsFocus();
     Node* const restoreFocus = modalDrawer && focusManager_ != nullptr ? focusManager_->focused() : nullptr;
     overlays_.push_back(OverlayEntry{id, std::move(overlay), restoreFocus});
-    overlays_.back().content->attachRecursively();
+    overlays_.back().content->attachRecursively(context_);
     if (modalDrawer) {
         // This callback is separate from the author hook. Escape, close and
-        // backdrop dismissal all use Drawer::dismiss(), which now reliably
+        // backdrop dismissal all use DrawerNode::dismiss(), which now reliably
         // returns ownership to OverlayHost without caller boilerplate.
         drawer->setOverlayDismissHandler([this, id] { (void)dismiss(id); });
     }
@@ -295,7 +357,7 @@ OverlayId OverlayHost::show(std::unique_ptr<Node> overlay)
         onChange_();
     }
     // The window's overlay-change hook clears stale focus/capture pointers.
-    // Focus only after it has completed, otherwise a just-opened Drawer
+    // Focus only after it has completed, otherwise a just-opened DrawerNode
     // would immediately lose its modal keyboard owner.
     if (modalDrawer) focus(drawer);
     return id;
@@ -328,11 +390,13 @@ Node* OverlayHost::focused() const noexcept
 
 void OverlayHost::setOnChange(ChangeHandler handler)
 {
+    requireOwnerThread();
     onChange_ = std::move(handler);
 }
 
 std::unique_ptr<Node> OverlayHost::dismiss(OverlayId id)
 {
+    requireOwnerThread();
     for (auto it = overlays_.begin(); it != overlays_.end(); ++it) {
         if (it->id == id) {
             auto overlay = std::move(it->content);
@@ -353,6 +417,7 @@ std::unique_ptr<Node> OverlayHost::dismiss(OverlayId id)
 
 std::unique_ptr<Node> OverlayHost::dismissTop()
 {
+    requireOwnerThread();
     if (overlays_.empty()) {
         return nullptr;
     }
@@ -372,6 +437,11 @@ std::unique_ptr<Node> OverlayHost::dismissTop()
 
 void OverlayHost::clear() noexcept
 {
+    try {
+        requireOwnerThread();
+    } catch (...) {
+        std::terminate();
+    }
     if (overlays_.empty()) {
         return;
     }
@@ -394,7 +464,22 @@ void OverlayHost::clear() noexcept
     }
     overlays_.clear();
     if (onChange_) {
-        onChange_();
+        try {
+            onChange_();
+        } catch (const std::exception& error) {
+            context_.reportDiagnostic({
+                UiDiagnosticCode::LifecycleCallbackException,
+                std::string("OverlayHost clear callback threw: ")
+                    + error.what(),
+                {},
+            });
+        } catch (...) {
+            context_.reportDiagnostic({
+                UiDiagnosticCode::LifecycleCallbackException,
+                "OverlayHost clear callback threw",
+                {},
+            });
+        }
     }
     if (focusedOverlay) focus(restoreFocus);
 }

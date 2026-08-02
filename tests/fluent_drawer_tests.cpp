@@ -47,7 +47,7 @@ private: TestSurface surface_; TestClipboard clipboard_; TestCursor cursor_; Tes
 void testOverlayGeometryAndModalDismissal()
 {
     int dismissed = 0;
-    wui::Drawer drawer("Account settings", "Manage your profile");
+    wui::DrawerNode drawer("Account settings", "Manage your profile");
     drawer.size(wui::DrawerSize::Small).position(wui::DrawerPosition::End).onDismiss([&] { ++dismissed; });
     drawer.layout({0, 0, 1000, 700});
     expect(drawer.panelBounds().x == 680 && drawer.panelBounds().width == 320 && drawer.trapsFocus(),
@@ -57,11 +57,11 @@ void testOverlayGeometryAndModalDismissal()
     expect(drawer.onKeyEvent({0, wui::KeyAction::Down, 27}) && dismissed == 2,
            "Drawer Escape must dismiss without relying on a platform-specific dialog path");
 
-    wui::Drawer medium("Medium");
+    wui::DrawerNode medium("Medium");
     medium.size(wui::DrawerSize::Medium).layout({0, 0, 1200, 700});
     expect(medium.panelBounds().width == 592,
            "Medium Drawer must match the Fluent 592-DIP surface width");
-    wui::Drawer large("Large");
+    wui::DrawerNode large("Large");
     large.size(wui::DrawerSize::Large).layout({0, 0, 1200, 700});
     expect(large.panelBounds().width == 940,
            "Large Drawer must match the Fluent 940-DIP surface width");
@@ -69,7 +69,7 @@ void testOverlayGeometryAndModalDismissal()
 
 void testInlineAndNonModalPolicies()
 {
-    wui::Drawer drawer("Details");
+    wui::DrawerNode drawer("Details");
     drawer.type(wui::DrawerType::Inline).position(wui::DrawerPosition::Start).width(288).modal(false);
     drawer.layout({12, 20, 288, 500});
     expect(drawer.panelBounds().x == 12 && drawer.panelBounds().width == 288 && !drawer.trapsFocus(),
@@ -81,8 +81,8 @@ void testInlineAndNonModalPolicies()
 void testBodyScrollAndActions()
 {
     int primary = 0, secondary = 0, dismissed = 0;
-    auto content = std::make_unique<wui::Spacer>(wui::SizeF{240, 2000});
-    wui::Drawer drawer("Long content");
+    auto content = std::make_unique<wui::SpacerNode>(wui::SizeF{240, 2000});
+    wui::DrawerNode drawer("Long content");
     drawer.content(std::move(content)).primaryAction("Save", [&] { ++primary; }).secondaryAction("Cancel", [&] { ++secondary; })
         .onDismiss([&] { ++dismissed; });
     drawer.layout({0, 0, 800, 600});
@@ -105,25 +105,25 @@ void testOverlayHostFocusLifecycle()
     wui::FocusManager focus;
     wui::OverlayHost host;
     host.bindFocusManager(focus);
-    wui::Button trigger("Open drawer");
+    wui::ButtonNode trigger("Open drawer");
     focus.setFocused(&trigger);
 
-    auto drawer = std::make_unique<wui::Drawer>("Settings");
-    wui::Drawer* raw = drawer.get();
+    auto drawer = std::make_unique<wui::DrawerNode>("Settings");
+    wui::DrawerNode* raw = drawer.get();
     const auto id = host.show(std::move(drawer));
     expect(id != 0 && host.focused() == raw,
            "OverlayHost must move focus into a modal Drawer as it is shown");
     expect(raw->onKeyEvent({0, wui::KeyAction::Down, 27}) && host.empty() && host.focused() == &trigger,
            "Drawer Escape must remove its hosted overlay and restore trigger focus safely");
 
-    auto nonModal = std::make_unique<wui::Drawer>("Preview");
+    auto nonModal = std::make_unique<wui::DrawerNode>("Preview");
     nonModal->modal(false);
     (void)host.show(std::move(nonModal));
     expect(host.focused() == &trigger,
            "Non-modal Drawer must not steal keyboard focus from the invoking control");
     (void)host.dismissTop();
 
-    auto disposable = std::make_unique<wui::Drawer>("Disposable");
+    auto disposable = std::make_unique<wui::DrawerNode>("Disposable");
     (void)host.show(std::move(disposable));
     expect(host.focused() != &trigger, "Modal Drawer must own focus before host-wide clear");
     host.clear();
@@ -132,8 +132,8 @@ void testOverlayHostFocusLifecycle()
 
 void testAccessibilityDialogSemantics()
 {
-    auto root = std::make_unique<wui::Container>();
-    auto drawer = std::make_unique<wui::Drawer>("Notifications", "Manage alert delivery");
+    auto root = std::make_unique<wui::BoxNode>();
+    auto drawer = std::make_unique<wui::DrawerNode>("Notifications", "Manage alert delivery");
     drawer->type(wui::DrawerType::Inline);
     root->appendChild(std::move(drawer));
     root->layout({0, 0, 360, 400});
@@ -150,15 +150,15 @@ void testAccessibilityDialogSemantics()
 void testUiWindowModalIsolation()
 {
     wui::UiWindow window(std::make_unique<TestWindow>());
-    auto page = std::make_unique<wui::Container>();
-    auto trigger = std::make_unique<wui::Button>("Page action");
-    wui::Button* triggerRaw = trigger.get(); page->appendChild(std::move(trigger)); window.setRoot(std::move(page));
+    auto page = std::make_unique<wui::BoxNode>();
+    auto trigger = std::make_unique<wui::ButtonNode>("Page action");
+    wui::ButtonNode* triggerRaw = trigger.get(); page->appendChild(std::move(trigger)); window.setRoot(std::move(page));
     window.focusManager().setFocused(triggerRaw);
-    auto drawer = std::make_unique<wui::Drawer>("Secure settings");
-    auto drawerChild = std::make_unique<wui::Button>("Apply changes");
-    wui::Button* drawerChildRaw = drawerChild.get();
+    auto drawer = std::make_unique<wui::DrawerNode>("Secure settings");
+    auto drawerChild = std::make_unique<wui::ButtonNode>("Apply changes");
+    wui::ButtonNode* drawerChildRaw = drawerChild.get();
     drawer->content(std::move(drawerChild));
-    wui::Drawer* drawerRaw = drawer.get(); (void)window.overlayHost().show(std::move(drawer));
+    wui::DrawerNode* drawerRaw = drawer.get(); (void)window.overlayHost().show(std::move(drawer));
     expect(window.focusManager().focused() == drawerRaw, "UiWindow must receive Drawer focus after OverlayHost adoption");
     const auto snapshot = window.accessibilitySnapshot();
     bool drawerVisible = false, pageVisible = false;

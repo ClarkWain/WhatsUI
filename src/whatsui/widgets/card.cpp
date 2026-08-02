@@ -84,16 +84,16 @@ void drawFocusRing(PaintContext& context, const RectF& bounds, float radius,
 
 } // namespace
 
-Card& Card::child(std::unique_ptr<Node> child) { appendChild(std::move(child)); return *this; }
-void Card::setAppearance(CardAppearance appearance) noexcept { if (appearance_ != appearance) { appearance_ = appearance; markDirty(DirtyFlag::Paint); } }
-CardAppearance Card::appearance() const noexcept { return appearance_; }
-void Card::setSize(CardSize size) noexcept { if (size_ != size) { size_ = size; markDirty(DirtyFlag::Layout); } }
-CardSize Card::size() const noexcept { return size_; }
-void Card::setOrientation(CardOrientation orientation) noexcept { if (orientation_ != orientation) { orientation_ = orientation; markDirty(DirtyFlag::Layout); } }
-CardOrientation Card::orientation() const noexcept { return orientation_; }
-void Card::setSelected(bool selected) noexcept { if (selected_ != selected) { selected_ = selected; markDirty(DirtyFlag::Paint); } }
-bool Card::isSelected() const noexcept { return selected_; }
-Card& Card::selectable(bool value) noexcept
+CardNode& CardNode::child(std::unique_ptr<Node> child) { appendChild(std::move(child)); return *this; }
+void CardNode::setAppearance(CardAppearance appearance) noexcept { if (appearance_ != appearance) { appearance_ = appearance; markDirty(DirtyFlag::Paint); } }
+CardAppearance CardNode::appearance() const noexcept { return appearance_; }
+void CardNode::setSize(CardSize size) noexcept { if (size_ != size) { size_ = size; markDirty(DirtyFlag::Layout); } }
+CardSize CardNode::size() const noexcept { return size_; }
+void CardNode::setOrientation(CardOrientation orientation) noexcept { if (orientation_ != orientation) { orientation_ = orientation; markDirty(DirtyFlag::Layout); } }
+CardOrientation CardNode::orientation() const noexcept { return orientation_; }
+void CardNode::setSelected(bool selected) noexcept { if (selected_ != selected) { selected_ = selected; markDirty(DirtyFlag::Paint); } }
+bool CardNode::isSelected() const noexcept { return selected_; }
+CardNode& CardNode::selectable(bool value) noexcept
 {
     if (selectable_ != value) {
         selectable_ = value;
@@ -102,16 +102,16 @@ Card& Card::selectable(bool value) noexcept
     }
     return *this;
 }
-bool Card::isSelectable() const noexcept { return selectable_; }
-Card& Card::onSelectionChange(ChangeHandler handler) { onSelectionChange_ = std::move(handler); return *this; }
+bool CardNode::isSelectable() const noexcept { return selectable_; }
+CardNode& CardNode::onSelectionChange(ChangeHandler handler) { onSelectionChange_ = std::move(handler); return *this; }
 
-InsetsF Card::padding() const noexcept
+InsetsF CardNode::padding() const noexcept
 {
     const float value = size_ == CardSize::Small ? 8.0f : size_ == CardSize::Large ? 16.0f : 12.0f;
     return {value, value, value, value};
 }
 
-SizeF Card::measure(const Constraints& constraints) const
+SizeF CardNode::measure(const Constraints& constraints) const
 {
     const InsetsF insets = padding();
     const Constraints inner = constraints.deflate(insets);
@@ -125,7 +125,7 @@ SizeF Card::measure(const Constraints& constraints) const
     return constraints.clamp({content.width + insets.horizontal(), content.height + insets.vertical()});
 }
 
-void Card::layout(const RectF& bounds)
+void CardNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     const InsetsF insets = padding();
@@ -142,7 +142,7 @@ void Card::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-void Card::paint(PaintContext& context)
+void CardNode::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const RectF renderedBounds = context.snapRectEdges(bounds());
@@ -187,7 +187,7 @@ void Card::paint(PaintContext& context)
             : nullptr;
     } else if (selected_) {
         // Fluent selection keeps the content neutral and uses the selected
-        // neutral stroke. Selection must not turn arbitrary Card content into
+        // neutral stroke. Selection must not turn arbitrary CardNode content into
         // an on-brand foreground treatment.
         fill = ramp->selected;
         stroke = true;
@@ -231,7 +231,7 @@ void Card::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-bool Card::onPointerEvent(const PointerEvent& event)
+bool CardNode::onPointerEvent(const PointerEvent& event)
 {
     if (!selectable_ || !isEnabled()) return false;
     switch (event.action) {
@@ -266,15 +266,15 @@ bool Card::onPointerEvent(const PointerEvent& event)
     }
     return false;
 }
-bool Card::onKeyEvent(const KeyEvent& event)
+bool CardNode::onKeyEvent(const KeyEvent& event)
 { if (!selectable_ || !isEnabled() || event.action != KeyAction::Down || (event.keyCode != 13 && event.keyCode != 32)) return false; setSelected(!selected_); if (onSelectionChange_) onSelectionChange_(selected_); return true; }
-AccessibilityActionCapabilities Card::accessibilityActions() const noexcept
+AccessibilityActionCapabilities CardNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.toggle = selectable_;
     return actions;
 }
-AccessibilityActionStatus Card::performAccessibilityAction(
+AccessibilityActionStatus CardNode::performAccessibilityAction(
     AccessibilityActionKind kind, std::string_view value)
 {
     (void)value;
@@ -286,17 +286,22 @@ AccessibilityActionStatus Card::performAccessibilityAction(
     return AccessibilityActionStatus::Succeeded;
 }
 
-CardHeader::CardHeader(std::string title, std::string description)
+CardHeaderNode::CardHeaderNode(std::string title, std::string description)
     : title_(std::move(title)), description_(std::move(description)) {}
-void CardHeader::setTitle(std::string title) { title_ = std::move(title); markDirty(DirtyFlag::Layout); }
-void CardHeader::setDescription(std::string description) { description_ = std::move(description); markDirty(DirtyFlag::Layout); }
-const std::string& CardHeader::title() const noexcept { return title_; }
-const std::string& CardHeader::description() const noexcept { return description_; }
-CardHeader& CardHeader::media(std::unique_ptr<Node> media) { setMedia(std::move(media)); return *this; }
-CardHeader& CardHeader::action(std::unique_ptr<Node> action) { setAction(std::move(action)); return *this; }
-std::size_t CardHeader::actionIndex() const noexcept { return hasMedia_ ? 1u : 0u; }
-void CardHeader::setMedia(std::unique_ptr<Node> media)
+void CardHeaderNode::setTitle(std::string title) { title_ = std::move(title); markDirty(DirtyFlag::Layout); }
+void CardHeaderNode::setDescription(std::string description) { description_ = std::move(description); markDirty(DirtyFlag::Layout); }
+const std::string& CardHeaderNode::title() const noexcept { return title_; }
+const std::string& CardHeaderNode::description() const noexcept { return description_; }
+CardHeaderNode& CardHeaderNode::media(std::unique_ptr<Node> media) { setMedia(std::move(media)); return *this; }
+CardHeaderNode& CardHeaderNode::action(std::unique_ptr<Node> action) { setAction(std::move(action)); return *this; }
+std::size_t CardHeaderNode::actionIndex() const noexcept { return hasMedia_ ? 1u : 0u; }
+void CardHeaderNode::setMedia(std::unique_ptr<Node> media)
 {
+    acceptingSlotMutation_ = true;
+    struct ResetFlag {
+        bool& value;
+        ~ResetFlag() { value = false; }
+    } reset{acceptingSlotMutation_};
     if (hasMedia_) {
         static_cast<void>(removeChild(0));
         hasMedia_ = false;
@@ -308,8 +313,13 @@ void CardHeader::setMedia(std::unique_ptr<Node> media)
         hasMedia_ = true;
     }
 }
-void CardHeader::setAction(std::unique_ptr<Node> action)
+void CardHeaderNode::setAction(std::unique_ptr<Node> action)
 {
+    acceptingSlotMutation_ = true;
+    struct ResetFlag {
+        bool& value;
+        ~ResetFlag() { value = false; }
+    } reset{acceptingSlotMutation_};
     if (hasAction_) {
         static_cast<void>(removeChild(actionIndex()));
         hasAction_ = false;
@@ -320,17 +330,29 @@ void CardHeader::setAction(std::unique_ptr<Node> action)
         hasAction_ = true;
     }
 }
-Node* CardHeader::media() const noexcept
+void CardHeaderNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)child;
+    (void)index;
+    if (!acceptingSlotMutation_ || resultingCount > 2) {
+        throw std::logic_error(
+            "CardHeaderNode children must be configured through media() and action() slots");
+    }
+}
+Node* CardHeaderNode::media() const noexcept
 {
     return hasMedia_ && !children().empty() ? children().front().get() : nullptr;
 }
-Node* CardHeader::action() const noexcept
+Node* CardHeaderNode::action() const noexcept
 {
     const std::size_t index = actionIndex();
     return hasAction_ && index < children().size() ? children()[index].get() : nullptr;
 }
 
-SizeF CardHeader::measure(const Constraints& constraints) const
+SizeF CardHeaderNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const float titleHeight = title_.empty() ? 0.0f : current.typography.body1Strong.lineHeight;
@@ -348,7 +370,7 @@ SizeF CardHeader::measure(const Constraints& constraints) const
     return constraints.clamp({desiredTextWidth + mediaWidth + actionWidth, std::max({titleHeight + descriptionHeight, actionHeight, mediaHeight})});
 }
 
-void CardHeader::layout(const RectF& bounds)
+void CardHeaderNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     if (Node* mediaNode = media()) { const SizeF mediaSize = mediaNode->measureWithConstraints({0,bounds.width,0,bounds.height}); mediaNode->layout({bounds.x,bounds.y + std::max(0.0f,(bounds.height-mediaSize.height)*0.5f),mediaSize.width,mediaSize.height}); }
@@ -356,7 +378,7 @@ void CardHeader::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-void CardHeader::paint(PaintContext& context)
+void CardHeaderNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const Node* mediaNode = media();
@@ -390,23 +412,23 @@ void CardHeader::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-CardPreview& CardPreview::child(std::unique_ptr<Node> child) { appendChild(std::move(child)); return *this; }
-void CardPreview::setHeight(float value) noexcept { const float normalized = std::max(0.0f, value); if (height_ != normalized) { height_ = normalized; markDirty(DirtyFlag::Layout); } }
-float CardPreview::height() const noexcept { return height_; }
-SizeF CardPreview::measure(const Constraints& constraints) const
+CardPreviewNode& CardPreviewNode::child(std::unique_ptr<Node> child) { appendChild(std::move(child)); return *this; }
+void CardPreviewNode::setHeight(float value) noexcept { const float normalized = std::max(0.0f, value); if (height_ != normalized) { height_ = normalized; markDirty(DirtyFlag::Layout); } }
+float CardPreviewNode::height() const noexcept { return height_; }
+SizeF CardPreviewNode::measure(const Constraints& constraints) const
 {
     SizeF result{};
     for (const auto& child : children()) result = child->measureWithConstraints(constraints);
     if (height_ > 0.0f) result.height = height_;
     return constraints.clamp(result);
 }
-void CardPreview::layout(const RectF& bounds)
+void CardPreviewNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     for (const auto& child : children()) child->layout(bounds);
     clearLayoutDirtyRecursively();
 }
-void CardPreview::paint(PaintContext& context)
+void CardPreviewNode::paint(PaintContext& context)
 {
     const int checkpoint = context.save();
     context.clipRoundRect(context.snapRectEdges(bounds()),
@@ -416,8 +438,8 @@ void CardPreview::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-CardFooter& CardFooter::child(std::unique_ptr<Node> child) { appendChild(std::move(child)); return *this; }
-SizeF CardFooter::measure(const Constraints& constraints) const
+CardFooterNode& CardFooterNode::child(std::unique_ptr<Node> child) { appendChild(std::move(child)); return *this; }
+SizeF CardFooterNode::measure(const Constraints& constraints) const
 {
     float width = 0.0f, height = 0.0f;
     for (const auto& child : children()) {
@@ -428,7 +450,7 @@ SizeF CardFooter::measure(const Constraints& constraints) const
     if (children().size() > 1) width += theme().spacing.horizontal.m * static_cast<float>(children().size() - 1);
     return constraints.clamp({width, height});
 }
-void CardFooter::layout(const RectF& bounds)
+void CardFooterNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     if (children().empty()) {

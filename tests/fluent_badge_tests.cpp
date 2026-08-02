@@ -13,7 +13,7 @@ void expect(bool condition, const char* message)
 
 void testBadgeVariantsAndSizing()
 {
-    wui::Badge badge("New");
+    wui::BadgeNode badge("New");
     const auto medium = badge.measure({0, 1000, 0, 1000});
     badge.setSize(wui::BadgeSize::ExtraLarge);
     const auto large = badge.measure({0, 1000, 0, 1000});
@@ -32,7 +32,7 @@ void testBadgeVariantsAndSizing()
 
 void testCounterOverflowAndAccessibility()
 {
-    wui::CounterBadge counter(0);
+    wui::CounterBadgeNode counter(0);
     expect(counter.text().empty() && counter.measure({0, 100, 0, 100}).width == 0.0f,
            "CounterBadge must hide an empty zero count by default");
     counter.setShowZero(true);
@@ -49,7 +49,7 @@ void testCounterOverflowAndAccessibility()
 
 void testPresenceGeometryAndSemantics()
 {
-    wui::PresenceBadge presence(wui::PresenceStatus::DoNotDisturb);
+    wui::PresenceBadgeNode presence(wui::PresenceStatus::DoNotDisturb);
     presence.setAvatarSize(64.0f);
     const auto extent = presence.measure({0, 100, 0, 100});
     expect(extent.width == 20.0f && extent.height == 20.0f,
@@ -77,13 +77,13 @@ void testPresenceGeometryAndSemantics()
 
 void testAccessibilitySnapshot()
 {
-    auto root = std::make_unique<wui::Container>();
-    auto badge = std::make_unique<wui::Badge>("Beta");
+    auto root = std::make_unique<wui::BoxNode>();
+    auto badge = std::make_unique<wui::BadgeNode>("Beta");
     badge->setAccessibleLabel("Beta feature");
     root->appendChild(std::move(badge));
-    auto counter = std::make_unique<wui::CounterBadge>(101);
+    auto counter = std::make_unique<wui::CounterBadgeNode>(101);
     root->appendChild(std::move(counter));
-    auto presence = std::make_unique<wui::PresenceBadge>(wui::PresenceStatus::Away);
+    auto presence = std::make_unique<wui::PresenceBadgeNode>(wui::PresenceStatus::Away);
     root->appendChild(std::move(presence));
     root->layout({0, 0, 240, 40});
     const auto snapshot = wui::snapshotAccessibilityTree(*root);

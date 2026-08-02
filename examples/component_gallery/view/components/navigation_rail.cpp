@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/widgets.h"
 
 namespace whatsui::gallery::view::components {
@@ -12,7 +12,7 @@ namespace {
 
 std::unique_ptr<wui::Node> buildBrand(const NavigationRailConfig& config)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& colors = wui::theme().colors;
 
     return Row()
@@ -37,7 +37,7 @@ std::unique_ptr<wui::Node> buildBrand(const NavigationRailConfig& config)
                 Text(config.productCaption).size(11.0f).color(colors.textMuted)
             )
         )
-        .intoNode();
+        .build();
 }
 
 // Sidebar rows are Box surfaces with an InteractionArea attached: Column
@@ -49,7 +49,7 @@ std::unique_ptr<wui::Node> buildRailItem(
     bool selected,
     const NavigationRailSelectHandler& onSelect)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& colors = wui::theme().colors;
 
     const auto withAlpha = [](wui::Color color, std::uint8_t alpha) noexcept {
@@ -97,14 +97,14 @@ std::unique_ptr<wui::Node> buildRailItem(
         const std::string id = std::move(item.id);
         box = std::move(box).onClick([onSelect, id] { onSelect(id); });
     }
-    return std::move(box).intoNode();
+    return std::move(box).build();
 }
 
 std::unique_ptr<wui::Node> buildItems(
     const NavigationRailConfig& config,
     const NavigationRailSelectHandler& onSelect)
 {
-    auto items = std::make_unique<wui::Column>();
+    auto items = std::make_unique<wui::ColumnNode>();
     items->setGap(4.0f);
     items->setAlign(wui::Alignment::Stretch);
 
@@ -120,7 +120,7 @@ std::unique_ptr<wui::Node> buildNavigationRail(
     NavigationRailConfig config,
     NavigationRailSelectHandler onSelect)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& current = wui::theme();
 
     return Box()
@@ -138,7 +138,7 @@ std::unique_ptr<wui::Node> buildNavigationRail(
                     Text("Built with WhatsUI")
                         .size(10.0f)
                         .color(current.colors.textMuted)))
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::components

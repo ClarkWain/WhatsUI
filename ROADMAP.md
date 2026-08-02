@@ -46,8 +46,8 @@ all be true.
 - [x] Pointer capture API and cancellation semantics.
 - [x] Capture/target/bubble routing contract with typed event result/context.
 - [x] Nested scrolling handoff and horizontal scrolling.
-- [x] Settings Panel reference example: controls, scrolling, tab navigation,
-  dialog, and popup menu.
+- [x] Focus Tomato and Component Gallery cover controls, scrolling, tab
+  navigation, dialog, and popup-menu composition.
 
 ### M2 — Windows Text and IME (`v0.3-text-preview`)
 
@@ -58,7 +58,8 @@ all be true.
 - [x] Text editing controller: selection by pointer/Shift, Home/End, word
   deletion, clipboard, undo/redo, and composition underline.
 - [x] Shaping/fallback policy for CJK, emoji, bidi, and deterministic text cache.
-- [x] Searchable command palette and editable Settings form reference examples.
+- [x] Search, editable input, and dialog integration are covered by Focus
+  Tomato and Component Gallery.
 
 ### M3 — Components and Themes (`v0.4-components-preview`)
 
@@ -100,13 +101,13 @@ all be true.
   transitive-license approval remains an RC gate.
 - [x] Windows support matrix, known limitations, upgrade guide, and contributor
   documentation.
-- [x] Three maintained reference applications: Todo, Settings, and Debug
-  Inspector.
+- [x] Maintained reference applications: Focus Tomato, Component Gallery,
+  Debug Inspector, and Hello Window.
 - [ ] Release-candidate approval: tagged clean checkout, native application and
   IME/DPI matrix, artifact review, and third-party legal/SBOM sign-off. These
   are deliberately kept outside automated completion claims.
 
-### M6 — Todo reference product completion
+### M6 — Todo reference product completion（historical, retired）
 
 - [x] Important and optional ISO due-date metadata are available in the task
   rows and the edit dialog, with persistent storage and filtering retention.
@@ -121,7 +122,7 @@ all be true.
 
 ## Current active focus
 
-The Todo reference-product work is complete. Automated release work now covers
+Focus Tomato is the maintained reference product. Automated release work covers
 fresh Core/GLFW installs and consumers, package legal-material presence, and
 the real GLFW resize callback chain. A native Windows UI Automation
 tree is now verified against a real GLFW HWND. Invoke/Toggle/Value/focus actions

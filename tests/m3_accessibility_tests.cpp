@@ -76,14 +76,14 @@ void testSnapshotTraversal()
 
 void testVisualControlSnapshot()
 {
-    auto root = std::make_unique<wui::Column>();
-    auto task = std::make_unique<wui::Checkbox>("Buy groceries", false);
+    auto root = std::make_unique<wui::ColumnNode>();
+    auto task = std::make_unique<wui::CheckboxNode>("Buy groceries", false);
     auto* taskRaw = task.get();
-    auto input = std::make_unique<wui::TextInput>("Add a task");
+    auto input = std::make_unique<wui::TextFieldNode>("Add a task");
     input->text("Milk");
-    auto action = std::make_unique<wui::Button>("Add");
+    auto action = std::make_unique<wui::ButtonNode>("Add");
     action->setEnabled(false);
-    auto important = std::make_unique<wui::IconButton>("*", "Mark task important");
+    auto important = std::make_unique<wui::IconButtonNode>("*", "Mark task important");
     important->setChecked(false);
     root->child(std::move(task));
     root->child(std::move(input));
@@ -115,7 +115,7 @@ void testVisualControlSnapshot()
 void testControlAccessibilityActions()
 {
     int invocations = 0;
-    wui::Button button{"Run"};
+    wui::ButtonNode button{"Run"};
     button.onClick([&] { ++invocations; });
     expect(button.accessibilityActions().invoke,
            "Button must advertise its direct Invoke capability");
@@ -125,7 +125,7 @@ void testControlAccessibilityActions()
            "Button accessibility Invoke must reuse the real click handler");
 
     bool changed = false;
-    wui::Checkbox checkbox{"Done", false};
+    wui::CheckboxNode checkbox{"Done", false};
     checkbox.onChange([&](bool value) { changed = value; });
     expect(checkbox.accessibilityActions().toggle
                && checkbox.performAccessibilityAction(
@@ -135,7 +135,7 @@ void testControlAccessibilityActions()
            "Checkbox accessibility Toggle must reuse binding/change semantics");
 
     std::string edited;
-    wui::TextInput input{"Title"};
+    wui::TextFieldNode input{"Title"};
     input.onChange([&](const std::string& value) { edited = value; });
     expect(input.accessibilityActions().setValue
                && input.performAccessibilityAction(
@@ -147,10 +147,10 @@ void testControlAccessibilityActions()
 
 void testTextHeadingAndExplicitInputLabel()
 {
-    auto root = std::make_unique<wui::Column>();
-    auto heading = std::make_unique<wui::Text>("My day");
+    auto root = std::make_unique<wui::ColumnNode>();
+    auto heading = std::make_unique<wui::TextNode>("My day");
     heading->setRole(wui::TextRole::Heading);
-    auto input = std::make_unique<wui::TextInput>("Placeholder");
+    auto input = std::make_unique<wui::TextFieldNode>("Placeholder");
     input->setAccessibleLabel("Task title");
     root->child(std::move(heading));
     root->child(std::move(input));
@@ -167,8 +167,8 @@ void testTextHeadingAndExplicitInputLabel()
 
 void testToggleButtonKeepsButtonRoleAndTogglePattern()
 {
-    wui::Container root;
-    auto toggle = std::make_unique<wui::ToggleButton>("Bold", true);
+    wui::BoxNode root;
+    auto toggle = std::make_unique<wui::ToggleButtonNode>("Bold", true);
     toggle->layout({0.0f, 0.0f, 80.0f, 32.0f});
     root.child(std::move(toggle));
     const auto snapshot = wui::snapshotAccessibilityTree(root);

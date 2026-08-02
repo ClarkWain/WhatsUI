@@ -3,14 +3,14 @@
 #include <utility>
 
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::gallery::view::components {
 namespace {
 
 std::unique_ptr<wui::Node> buildHeaderMedia(wui::IconName icon)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& colors = wui::theme().colors;
     return Box()
         .width(32.0f)
@@ -19,12 +19,12 @@ std::unique_ptr<wui::Node> buildHeaderMedia(wui::IconName icon)
         .background(colors.surfaceAlt)
         .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
         .children(Icon(icon).size(wui::IconSize::Size20).color(colors.accent))
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildCategoryBadge(std::string category)
 {
-    using namespace wui::ui;
+    using namespace wui;
     if (category.empty()) {
         return nullptr;
     }
@@ -32,14 +32,14 @@ std::unique_ptr<wui::Node> buildCategoryBadge(std::string category)
         .appearance(wui::BadgeAppearance::Tint)
         .color(wui::BadgeColor::Brand)
         .size(wui::BadgeSize::Small)
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildPreview(
     float height,
     std::unique_ptr<wui::Node> content)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const auto& current = wui::theme();
     auto surface = Box()
         .background(current.colors.surfaceAlt)
@@ -51,18 +51,18 @@ std::unique_ptr<wui::Node> buildPreview(
     return CardPreview()
         .height(height)
         .children(std::move(surface))
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildFooter(ComponentCardConfig config)
 {
-    using namespace wui::ui;
+    using namespace wui;
     if (!config.onOpen) {
         return CardFooter()
             .children(Text("Preview only - detail coming")
                 .size(11.0f)
                 .color(wui::theme().colors.textMuted))
-            .intoNode();
+            .build();
     }
     return CardFooter()
         .children(
@@ -75,7 +75,7 @@ std::unique_ptr<wui::Node> buildFooter(ComponentCardConfig config)
                         .icon(wui::IconName::ChevronRight)
                         .iconPosition(wui::ButtonIconPosition::After)
                         .onClick(std::move(config.onOpen))))
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -84,7 +84,7 @@ std::unique_ptr<wui::Node> buildComponentCard(
     ComponentCardConfig config,
     std::unique_ptr<wui::Node> preview)
 {
-    using namespace wui::ui;
+    using namespace wui;
     const float previewHeight = config.previewHeight;
     auto header = CardHeader(config.title, config.description)
         .media(buildHeaderMedia(config.icon));
@@ -100,7 +100,7 @@ std::unique_ptr<wui::Node> buildComponentCard(
             std::move(header),
             buildPreview(previewHeight, std::move(preview)),
             buildFooter(std::move(config)))
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::components

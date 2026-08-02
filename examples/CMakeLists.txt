@@ -10,56 +10,61 @@ target_link_libraries(WhatsUIRenderToImage
 
 target_compile_features(WhatsUIRenderToImage PRIVATE cxx_std_17)
 
-add_executable(WhatsUITodoApp
-    todo_app/main.cpp
-    todo_app/todo_controller.cpp
-    todo_app/todo_interaction.cpp
-    todo_app/todo_storage.cpp
+set(WHATSUI_FOCUS_TOMATO_SOURCES
+    focus_tomato/application/focus_data_service.cpp
+    focus_tomato/domain/clock_drift.cpp
+    focus_tomato/domain/focus_data.cpp
+    focus_tomato/domain/focus_data_validator.cpp
+    focus_tomato/domain/focus_statistics.cpp
+    focus_tomato/infrastructure/file_focus_repository.cpp
+    focus_tomato/presentation/focus_assets.cpp
+    focus_tomato/presentation/focus_router.cpp
+    focus_tomato/presentation/focus_view_model.cpp
+    focus_tomato/presentation/components/common_components.cpp
+    focus_tomato/presentation/dialogs/new_task_dialog.cpp
+    focus_tomato/presentation/pages/completion_page.cpp
+    focus_tomato/presentation/pages/focus_timer_page.cpp
+    focus_tomato/presentation/pages/session_setup_page.cpp
+    focus_tomato/presentation/pages/short_break_page.cpp
+    focus_tomato/presentation/pages/task_list_page.cpp
 )
 
-target_link_libraries(WhatsUITodoApp
-    PRIVATE
-        WhatsUI::WhatsUI
-        WhatsCanvas::Software
+add_library(WhatsUIFocusTomatoCore STATIC ${WHATSUI_FOCUS_TOMATO_SOURCES})
+target_link_libraries(WhatsUIFocusTomatoCore PUBLIC WhatsUI::WhatsUI)
+target_include_directories(WhatsUIFocusTomatoCore
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/focus_tomato
+    PRIVATE ${CMAKE_SOURCE_DIR}/third_party/WhatsCanvas/third_party/stb)
+target_compile_definitions(WhatsUIFocusTomatoCore
+    PUBLIC FOCUS_TOMATO_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets/focus_tomato")
+target_compile_features(WhatsUIFocusTomatoCore PUBLIC cxx_std_17)
+
+add_executable(WhatsUIFocusTomatoCapture focus_tomato/capture_main.cpp)
+target_link_libraries(WhatsUIFocusTomatoCapture
+    PRIVATE WhatsUIFocusTomatoCore WhatsCanvas::Software)
+target_compile_features(WhatsUIFocusTomatoCapture PRIVATE cxx_std_17)
+
+set(WHATSUI_DEBUG_INSPECTOR_SOURCES
+    debug_inspector/inspector_components.cpp
+    debug_inspector/inspector_diagnostics.cpp
+    debug_inspector/inspector_page.cpp
+    debug_inspector/sample_tree.cpp
 )
 
-target_compile_features(WhatsUITodoApp PRIVATE cxx_std_17)
-
-# The Settings reference is deliberately built from the same source for the
-# deterministic Software capture and the interactive GLFW host.
-add_executable(WhatsUISettingsApp
-    settings_panel/main.cpp
+add_library(WhatsUIDebugInspectorCore STATIC
+    ${WHATSUI_DEBUG_INSPECTOR_SOURCES}
 )
-
-target_link_libraries(WhatsUISettingsApp
-    PRIVATE
-        WhatsUI::WhatsUI
-        WhatsCanvas::Software
-)
-
-target_compile_features(WhatsUISettingsApp PRIVATE cxx_std_17)
-
-# Searchable command-palette reference: deterministic Software capture plus
-# an interactive GLFW target from one source tree.
-add_executable(WhatsUICommandPaletteApp
-    command_palette/main.cpp
-)
-
-target_link_libraries(WhatsUICommandPaletteApp
-    PRIVATE
-        WhatsUI::WhatsUI
-        WhatsCanvas::Software
-)
-
-target_compile_features(WhatsUICommandPaletteApp PRIVATE cxx_std_17)
+target_link_libraries(WhatsUIDebugInspectorCore PUBLIC WhatsUI::WhatsUI)
+target_include_directories(WhatsUIDebugInspectorCore
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(WhatsUIDebugInspectorCore PUBLIC cxx_std_17)
 
 add_executable(WhatsUIDebugInspectorApp
     debug_inspector/main.cpp
+    debug_inspector/software_capture.cpp
 )
-
 target_link_libraries(WhatsUIDebugInspectorApp
     PRIVATE
-        WhatsUI::WhatsUI
+        WhatsUIDebugInspectorCore
         WhatsCanvas::Software
 )
 
@@ -116,62 +121,26 @@ target_compile_features(WhatsUIComponentGalleryApp PRIVATE cxx_std_17)
 
 # --- Interactive window example (GLFW + OpenGL) ---
 if(TARGET WhatsUI::Glfw)
+    add_executable(WhatsUIFocusTomatoApp focus_tomato/main.cpp)
+    target_link_libraries(WhatsUIFocusTomatoApp
+        PRIVATE WhatsUIFocusTomatoCore WhatsUI::Glfw)
+    target_compile_features(WhatsUIFocusTomatoApp PRIVATE cxx_std_17)
+
     add_executable(WhatsUIComponentGalleryGlfw component_gallery/main.cpp)
     target_link_libraries(WhatsUIComponentGalleryGlfw
         PRIVATE WhatsUIComponentGalleryCore WhatsUI::Glfw)
     target_compile_features(WhatsUIComponentGalleryGlfw PRIVATE cxx_std_17)
 
-    # Same declarative Todo tree as WhatsUITodoApp, presented by the GLFW host.
-    # The compile definition only selects its interactive entry point.
-    add_executable(WhatsUITodoGlfw
-        todo_app/main.cpp
-        todo_app/todo_controller.cpp
-        todo_app/todo_interaction.cpp
-        todo_app/todo_storage.cpp
-    )
-
-    target_link_libraries(WhatsUITodoGlfw
-        PRIVATE
-            WhatsUI::Glfw
-    )
-
-    target_compile_definitions(WhatsUITodoGlfw PRIVATE WUI_TODO_INTERACTIVE=1)
-    target_compile_features(WhatsUITodoGlfw PRIVATE cxx_std_17)
-
-    add_executable(WhatsUISettingsGlfw
-        settings_panel/main.cpp
-    )
-
-    target_link_libraries(WhatsUISettingsGlfw
-        PRIVATE
-            WhatsUI::Glfw
-    )
-
-    target_compile_definitions(WhatsUISettingsGlfw PRIVATE WUI_SETTINGS_INTERACTIVE=1)
-    target_compile_features(WhatsUISettingsGlfw PRIVATE cxx_std_17)
-
-    add_executable(WhatsUICommandPaletteGlfw
-        command_palette/main.cpp
-    )
-
-    target_link_libraries(WhatsUICommandPaletteGlfw
-        PRIVATE
-            WhatsUI::Glfw
-    )
-
-    target_compile_definitions(WhatsUICommandPaletteGlfw PRIVATE WUI_COMMAND_PALETTE_INTERACTIVE=1)
-    target_compile_features(WhatsUICommandPaletteGlfw PRIVATE cxx_std_17)
-
     add_executable(WhatsUIDebugInspectorGlfw
-        debug_inspector/main.cpp
+        debug_inspector/interactive_main.cpp
     )
 
     target_link_libraries(WhatsUIDebugInspectorGlfw
         PRIVATE
+            WhatsUIDebugInspectorCore
             WhatsUI::Glfw
     )
 
-    target_compile_definitions(WhatsUIDebugInspectorGlfw PRIVATE WUI_DEBUG_INSPECTOR_INTERACTIVE=1)
     target_compile_features(WhatsUIDebugInspectorGlfw PRIVATE cxx_std_17)
 
     add_executable(WhatsUIHelloWindow

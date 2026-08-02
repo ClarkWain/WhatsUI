@@ -119,11 +119,11 @@ int main(int argc, char** argv)
         paint.drawText("Fluent component state matrix", 28, 42, 24, wui::theme().colors.neutralForeground1, 600);
 
         label(paint, "BUTTONS", 28, 60);
-        std::vector<std::unique_ptr<wui::Button>> buttons;
+        std::vector<std::unique_ptr<wui::ButtonNode>> buttons;
         for (auto appearance : {wui::ButtonAppearance::Secondary, wui::ButtonAppearance::Primary,
                                 wui::ButtonAppearance::Outline, wui::ButtonAppearance::Subtle,
                                 wui::ButtonAppearance::Danger}) {
-            auto button = std::make_unique<wui::Button>("Action");
+            auto button = std::make_unique<wui::ButtonNode>("Action");
             button->setAppearance(appearance);
             buttons.push_back(std::move(button));
         }
@@ -133,65 +133,65 @@ int main(int argc, char** argv)
         buttons[3]->setVisualState(wui::ControlVisualState::FocusVisible, true);
         buttons[4]->setEnabled(false);
         for (std::size_t i = 0; i < buttons.size(); ++i) draw(*buttons[i], paint, {28.0f + i * 128.0f, 86, 110, 32});
-        wui::ToggleButton toggle("Pinned", true); draw(toggle, paint, {676, 86, 110, 32});
-        wui::CompoundButton compound("Create list", "Organize tasks"); draw(compound, paint, {804, 76, 136, 52});
+        wui::ToggleButtonNode toggle("Pinned", true); draw(toggle, paint, {676, 86, 110, 32});
+        wui::CompoundButtonNode compound("Create list", "Organize tasks"); draw(compound, paint, {804, 76, 136, 52});
 
         label(paint, "SELECTION CONTROLS", 28, 142);
-        wui::Checkbox checkRest("Rest", false), checkHover("Hover", false), checkOn("Checked", true), checkOff("Disabled", false);
+        wui::CheckboxNode checkRest("Rest", false), checkHover("Hover", false), checkOn("Checked", true), checkOff("Disabled", false);
         checkHover.setVisualState(wui::ControlVisualState::Hovered, true); checkOff.setEnabled(false);
         draw(checkRest, paint, {28, 168, 120, 32}); draw(checkHover, paint, {158, 168, 120, 32});
         draw(checkOn, paint, {288, 168, 130, 32}); draw(checkOff, paint, {428, 168, 130, 32});
-        wui::Radio radio("Selected", true); draw(radio, paint, {580, 168, 130, 32});
-        wui::Switch switchOn("On", true); draw(switchOn, paint, {730, 168, 110, 32});
+        wui::RadioNode radio("Selected", true); draw(radio, paint, {580, 168, 130, 32});
+        wui::SwitchNode switchOn("On", true); draw(switchOn, paint, {730, 168, 110, 32});
 
         label(paint, "TEXT FIELDS", 28, 218);
-        wui::TextInput placeholder("Placeholder"), focused("Focused"), invalid("Invalid"), disabled("Disabled");
+        wui::TextFieldNode placeholder("Placeholder"), focused("Focused"), invalid("Invalid"), disabled("Disabled");
         focused.text("Editing text");
         focused.setMotionEnabled(false);
         focused.setVisualState(wui::ControlVisualState::Focused, true);
         invalid.setInvalid(true); disabled.setEnabled(false);
         draw(placeholder, paint, {28, 244, 210, 32}); draw(focused, paint, {254, 244, 210, 32});
         draw(invalid, paint, {480, 244, 210, 32}); draw(disabled, paint, {706, 244, 210, 32});
-        wui::TextArea area("Multi-line placeholder"); area.text("First line\nSecond line\nThird line\nFourth line");
+        wui::TextAreaNode area("Multi-line placeholder"); area.text("First line\nSecond line\nThird line\nFourth line");
         area.setMotionEnabled(false);
         area.layout({28, 294, 438, 84}); area.setVisualState(wui::ControlVisualState::Focused, true); area.prepare(paint); area.paint(paint);
-        wui::TextArea areaInvalid("Required notes"); areaInvalid.setInvalid(true); draw(areaInvalid, paint, {480, 294, 436, 84});
+        wui::TextAreaNode areaInvalid("Required notes"); areaInvalid.setInvalid(true); draw(areaInvalid, paint, {480, 294, 436, 84});
 
         label(paint, "PROGRESS AND RANGE", 28, 396);
-        wui::ProgressBar empty(0.0f, 1.0f, 0.0f), progress(0.0f, 1.0f, .62f),
+        wui::ProgressBarNode empty(0.0f, 1.0f, 0.0f), progress(0.0f, 1.0f, .62f),
             full(0.0f, 1.0f, 1.0f);
         draw(empty, paint, {28, 426, 270, 12}); draw(progress, paint, {330, 426, 270, 12}); draw(full, paint, {632, 426, 284, 12});
-        wui::Slider slider(0, 100, 44); draw(slider, paint, {28, 454, 438, 32});
-        wui::Slider sliderDisabled(0, 100, 70); sliderDisabled.setEnabled(false); draw(sliderDisabled, paint, {480, 454, 436, 32});
+        wui::SliderNode slider(0, 100, 44); draw(slider, paint, {28, 454, 438, 32});
+        wui::SliderNode sliderDisabled(0, 100, 70); sliderDisabled.setEnabled(false); draw(sliderDisabled, paint, {480, 454, 436, 32});
 
         label(paint, "CARDS", 28, 510);
-        wui::Card card; card.setAppearance(wui::CardAppearance::Filled); card.child(std::make_unique<wui::CardHeader>("Filled card", "Header description"));
+        wui::CardNode card; card.setAppearance(wui::CardAppearance::Filled); card.child(std::make_unique<wui::CardHeaderNode>("Filled card", "Header description"));
         draw(card, paint, {28, 540, 276, 100});
-        wui::Card selected; selected.setAppearance(wui::CardAppearance::Outline); selected.setSelected(true); selected.child(std::make_unique<wui::CardHeader>("Selected card", "Brand selection state"));
+        wui::CardNode selected; selected.setAppearance(wui::CardAppearance::Outline); selected.setSelected(true); selected.child(std::make_unique<wui::CardHeaderNode>("Selected card", "Brand selection state"));
         draw(selected, paint, {328, 540, 276, 100});
-        wui::Card disabledCard; disabledCard.setEnabled(false); disabledCard.child(std::make_unique<wui::CardHeader>("Disabled card", "Non-interactive state"));
+        wui::CardNode disabledCard; disabledCard.setEnabled(false); disabledCard.child(std::make_unique<wui::CardHeaderNode>("Disabled card", "Non-interactive state"));
         draw(disabledCard, paint, {628, 540, 288, 100});
 
         label(paint, "BUTTON SIZES AND SHAPES", 28, 662);
-        wui::Button small("Small"); small.setSize(wui::ButtonSize::Small); draw(small, paint, {28, 690, 82, 24});
-        wui::Button large("Large"); large.setSize(wui::ButtonSize::Large); draw(large, paint, {128, 682, 112, 40});
-        wui::Button square("Square"); square.setShape(wui::ButtonShape::Square); draw(square, paint, {260, 686, 100, 32});
-        wui::Button circular("+"); circular.setShape(wui::ButtonShape::Circular); draw(circular, paint, {380, 686, 32, 32});
-        wui::ToggleButton toggleOff("Toggle", false); toggleOff.setVisualState(wui::ControlVisualState::Hovered, true); draw(toggleOff, paint, {438, 686, 100, 32});
+        wui::ButtonNode small("Small"); small.setSize(wui::ButtonSize::Small); draw(small, paint, {28, 690, 82, 24});
+        wui::ButtonNode large("Large"); large.setSize(wui::ButtonSize::Large); draw(large, paint, {128, 682, 112, 40});
+        wui::ButtonNode square("Square"); square.setShape(wui::ButtonShape::Square); draw(square, paint, {260, 686, 100, 32});
+        wui::ButtonNode circular("+"); circular.setShape(wui::ButtonShape::Circular); draw(circular, paint, {380, 686, 32, 32});
+        wui::ToggleButtonNode toggleOff("Toggle", false); toggleOff.setVisualState(wui::ControlVisualState::Hovered, true); draw(toggleOff, paint, {438, 686, 100, 32});
 
         label(paint, "LABEL, SEARCH AND DIVIDER", 28, 742);
-        wui::TextInput labelled("Search by title");
-        wui::Label fieldLabel("Task search"); fieldLabel.setForControl(&labelled); fieldLabel.setRequired(true);
+        wui::TextFieldNode labelled("Search by title");
+        wui::LabelNode fieldLabel("Task search"); fieldLabel.setForControl(&labelled); fieldLabel.setRequired(true);
         draw(fieldLabel, paint, {28, 768, 140, 20}); draw(labelled, paint, {180, 760, 260, 32});
-        wui::SearchField search("Search tasks"); search.query("Fluent"); draw(search, paint, {468, 760, 260, 32});
-        wui::Divider divider; draw(divider, paint, {28, 814, 888, 1});
+        wui::SearchFieldNode search("Search tasks"); search.query("Fluent"); draw(search, paint, {468, 760, 260, 32});
+        wui::DividerNode divider; draw(divider, paint, {28, 814, 888, 1});
 
         label(paint, "COMPOUND BUTTON STATES", 28, 846);
-        wui::CompoundButton compoundRest("Rest", "Description");
-        wui::CompoundButton compoundHover("Hover", "Description");
-        wui::CompoundButton compoundPressed("Pressed", "Description");
-        wui::CompoundButton compoundFocused("Focused", "Description");
-        wui::CompoundButton compoundDisabled("Disabled", "Description");
+        wui::CompoundButtonNode compoundRest("Rest", "Description");
+        wui::CompoundButtonNode compoundHover("Hover", "Description");
+        wui::CompoundButtonNode compoundPressed("Pressed", "Description");
+        wui::CompoundButtonNode compoundFocused("Focused", "Description");
+        wui::CompoundButtonNode compoundDisabled("Disabled", "Description");
         compoundHover.setVisualState(wui::ControlVisualState::Hovered, true);
         compoundPressed.setVisualState(wui::ControlVisualState::Pressed, true);
         compoundFocused.setVisualState(wui::ControlVisualState::Focused, true);
@@ -204,7 +204,7 @@ int main(int argc, char** argv)
         draw(compoundDisabled, paint, {740, 872, 176, 52});
 
         label(paint, "TOGGLE BUTTON STATES", 28, 946);
-        wui::ToggleButton toggleRest("Rest", false), toggleHover("Hover", false),
+        wui::ToggleButtonNode toggleRest("Rest", false), toggleHover("Hover", false),
             togglePressed("Pressed", false), toggleFocused("Selected", true),
             toggleDisabled("Disabled", true);
         toggleHover.setVisualState(wui::ControlVisualState::Hovered, true);
@@ -219,14 +219,14 @@ int main(int argc, char** argv)
         draw(toggleDisabled, paint, {718, 972, 198, 32});
 
         label(paint, "CHECKBOX, RADIO AND SWITCH STATES", 28, 1026);
-        wui::Checkbox checkboxPressed("Pressed", false), checkboxFocused("Focused", true);
+        wui::CheckboxNode checkboxPressed("Pressed", false), checkboxFocused("Focused", true);
         checkboxPressed.setVisualState(wui::ControlVisualState::Pressed, true);
         checkboxFocused.setVisualState(wui::ControlVisualState::Focused, true);
         checkboxFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
         draw(checkboxPressed, paint, {28, 1052, 146, 32});
         draw(checkboxFocused, paint, {190, 1052, 146, 32});
 
-        wui::Radio radioRest("Rest", false), radioHover("Hover", false),
+        wui::RadioNode radioRest("Rest", false), radioHover("Hover", false),
             radioPressed("Pressed", false), radioFocused("Focused", true),
             radioDisabled("Disabled", true);
         radioHover.setVisualState(wui::ControlVisualState::Hovered, true);
@@ -240,7 +240,7 @@ int main(int argc, char** argv)
         draw(radioFocused, paint, {698, 1052, 112, 32});
         draw(radioDisabled, paint, {820, 1052, 120, 32});
 
-        wui::Switch switchRest("Off", false), switchHover("Hover", false),
+        wui::SwitchNode switchRest("Off", false), switchHover("Hover", false),
             switchPressed("Pressed", false), switchFocused("Focused", true),
             switchDisabled("Disabled", true);
         switchHover.setVisualState(wui::ControlVisualState::Hovered, true);
@@ -255,7 +255,7 @@ int main(int argc, char** argv)
         draw(switchDisabled, paint, {638, 1096, 160, 32});
 
         label(paint, "SEARCH FIELD STATES AND RANGE EXTREMES", 28, 1152);
-        wui::SearchField searchRest("Search"), searchFocused("Focused search"),
+        wui::SearchFieldNode searchRest("Search"), searchFocused("Focused search"),
             searchDisabled("Disabled search");
         searchFocused.query("Task");
         searchFocused.setVisualState(wui::ControlVisualState::Focused, true);
@@ -264,12 +264,12 @@ int main(int argc, char** argv)
         draw(searchFocused, paint, {316, 1178, 270, 32});
         draw(searchDisabled, paint, {604, 1178, 312, 32});
 
-        wui::Slider sliderMinimum(0, 100, 0), sliderMaximum(0, 100, 100);
+        wui::SliderNode sliderMinimum(0, 100, 0), sliderMaximum(0, 100, 100);
         draw(sliderMinimum, paint, {28, 1230, 420, 32});
         draw(sliderMaximum, paint, {496, 1230, 420, 32});
-        wui::ProgressBar progressQuarter(0, 1, .25f);
+        wui::ProgressBarNode progressQuarter(0, 1, .25f);
         draw(progressQuarter, paint, {28, 1282, 888, 12});
-        wui::Divider verticalDivider(wui::DividerOrientation::Vertical);
+        wui::DividerNode verticalDivider(wui::DividerOrientation::Vertical);
         draw(verticalDivider, paint, {478, 1314, 1, 42});
 
         canvas->endFrame();

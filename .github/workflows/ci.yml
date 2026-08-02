@@ -14,7 +14,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Configure default build
         run: cmake -S . -B build
@@ -35,7 +41,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Configure MSVC AddressSanitizer build
         run: cmake -S . -B build-asan -DWHATSUI_ENABLE_SANITIZERS=ON
@@ -65,7 +77,13 @@ jobs:
           clean: true
           fetch-depth: 0
           persist-credentials: false
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Verify clean recursive checkout
         shell: pwsh
@@ -176,7 +194,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Configure Clang ASan and UBSan build
         run: cmake -S . -B build-sanitizers -DCMAKE_BUILD_TYPE=Debug -DWHATSUI_ENABLE_SANITIZERS=ON
@@ -201,13 +225,19 @@ jobs:
             configure_args: -DWHATSUI_WITH_WHATSCANVAS=ON -DWHATSUI_BUILD_TESTS=ON -DWHATSUI_BUILD_EXAMPLES=ON
             # Quote the alternation for PowerShell: an unquoted | becomes a
             # pipeline before CTest receives its regular expression.
-            test_regex: -R '^whatsui_(todo_visual_regression|settings_reference_capture)$'
+            test_regex: -R '^whatsui_focus_tomato_visual_capture$'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Configure WhatsCanvas-enabled build (${{ matrix.name }})
         run: cmake -S . -B build-wsc ${{ matrix.configure_args }}
@@ -221,20 +251,20 @@ jobs:
 
       - name: Run Windows native interaction and DPI smoke
         if: matrix.name == 'software-visual-regression' && always()
-        run: ctest --test-dir build-wsc -C Debug --output-on-failure -R '^whatsui_(glfw_resize_tests|todo_native_perf_smoke|todo_ui_interaction_smoke_tests|text_shaping_tests)$'
+        run: ctest --test-dir build-wsc -C Debug --output-on-failure -R '^whatsui_(glfw_resize_tests|focus_tomato_product_flow_tests|focus_tomato_new_task_dialog_tests|text_shaping_tests)$'
 
       # Same-run image invariants catch broken state transitions without
       # treating machine-specific ClearType pixels as portable goldens.
       # Preserve the responsive screenshots so a reviewer can also judge
       # composition, hierarchy, and clipping in the actual output.
-      - name: Capture responsive Todo review set
+      - name: Capture Focus Tomato visual review set
         if: matrix.name == 'software-visual-regression' && always()
-        run: ctest --test-dir build-wsc -C Debug --output-on-failure -R ^whatsui_todo_visual_review$
+        run: ctest --test-dir build-wsc -C Debug --output-on-failure -R ^whatsui_focus_tomato_visual_capture$
 
-      - name: Upload Todo visual review
+      - name: Upload Focus Tomato visual review
         if: matrix.name == 'software-visual-regression' && always()
         uses: actions/upload-artifact@v4
         with:
-          name: todo-visual-review
-          path: build-wsc/tests/todo_visual_review
+          name: focus-tomato-visual-review
+          path: build-wsc/tests/focus_tomato_visual_review
           if-no-files-found: warn

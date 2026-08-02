@@ -103,7 +103,17 @@ wui::PointerEvent pointer(wui::PointerAction action, wui::PointF position,
 
 void testHeaderSlotsAreStableAndReplaceable()
 {
-    wui::CardHeader header("Task plan", "Three actions due today");
+    wui::CardHeaderNode header("Task plan", "Three actions due today");
+    bool rejectedDirectChild = false;
+    try {
+        header.appendChild(
+            std::make_unique<FixedNode>(wui::SizeF{12.0f, 12.0f}));
+    } catch (const std::logic_error&) {
+        rejectedDirectChild = true;
+    }
+    expect(rejectedDirectChild && header.children().empty(),
+           "CardHeader must reject child insertion outside its named slots");
+
     auto firstAction = std::make_unique<FixedNode>(wui::SizeF{32.0f, 24.0f});
     wui::Node* const firstActionRaw = firstAction.get();
     header.action(std::move(firstAction));
@@ -131,7 +141,7 @@ void testHeaderSlotsAreStableAndReplaceable()
     expect(header.action()->bounds().x >= 200.0f,
            "CardHeader trailing action must remain right aligned after media replacement");
 
-    wui::CardHeader narrow(
+    wui::CardHeaderNode narrow(
         "A long title that must never enter the trailing action",
         "Metadata is ellipsized inside the text column");
     narrow.media(
@@ -145,7 +155,7 @@ void testHeaderSlotsAreStableAndReplaceable()
                    wui::theme().spacing.horizontal.m,
            "A narrow CardHeader must preserve distinct media, text and trailing-action columns");
 
-    wui::CardFooter footer;
+    wui::CardFooterNode footer;
     footer.child(
         std::make_unique<FixedNode>(wui::SizeF{44.0f, 20.0f}));
     footer.child(
@@ -159,7 +169,7 @@ void testHeaderSlotsAreStableAndReplaceable()
 
 void testSelectableCardStatesAndAccessibility()
 {
-    wui::Card card;
+    wui::CardNode card;
     card.selectable();
     card.setAppearance(wui::CardAppearance::Outline);
     card.child(std::make_unique<FixedNode>(wui::SizeF{160.0f, 72.0f}));
@@ -195,24 +205,24 @@ void testSelectableCardStatesAndAccessibility()
            "Disabled Card must reject pointer and accessibility selection actions");
 }
 
-std::unique_ptr<wui::Card> makeCard(wui::CardAppearance appearance, bool selectable, bool selected)
+std::unique_ptr<wui::CardNode> makeCard(wui::CardAppearance appearance, bool selectable, bool selected)
 {
-    auto card = std::make_unique<wui::Card>();
+    auto card = std::make_unique<wui::CardNode>();
     card->setAppearance(appearance);
     card->selectable(selectable);
     card->setSelected(selected);
 
-    auto header = std::make_unique<wui::CardHeader>("Today", "Review the next important task");
+    auto header = std::make_unique<wui::CardHeaderNode>("Today", "Review the next important task");
     header->action(std::make_unique<FixedNode>(wui::SizeF{28.0f, 24.0f}, wui::theme().colors.brandBackground.rest));
     header->media(std::make_unique<FixedNode>(wui::SizeF{24.0f, 24.0f}, wui::theme().colors.statusInfo));
     card->child(std::move(header));
 
-    auto preview = std::make_unique<wui::CardPreview>();
+    auto preview = std::make_unique<wui::CardPreviewNode>();
     preview->setHeight(44.0f);
     preview->child(std::make_unique<FixedNode>(wui::SizeF{200.0f, 44.0f}, wui::theme().colors.brandBackground.hover));
     card->child(std::move(preview));
 
-    auto footer = std::make_unique<wui::CardFooter>();
+    auto footer = std::make_unique<wui::CardFooterNode>();
     footer->child(std::make_unique<FixedNode>(wui::SizeF{44.0f, 20.0f}, wui::theme().colors.statusSuccess));
     footer->child(std::make_unique<FixedNode>(wui::SizeF{32.0f, 20.0f}, wui::theme().colors.statusWarning));
     card->child(std::move(footer));
@@ -245,7 +255,7 @@ void testSoftwareCompositionAndWriteReviewImage(const std::string& output,
                        wui::theme().colors.neutralBackground2.rest);
         paint.drawText("Fluent Card state matrix", 24.0f, 34.0f, 20.0f,
                        wui::theme().colors.neutralForeground1, 600);
-        const std::vector<std::pair<wui::Card*, wui::RectF>> cards{
+        const std::vector<std::pair<wui::CardNode*, wui::RectF>> cards{
             {filled.get(), {24.0f, 56.0f, 340.0f, 136.0f}},
             {alternative.get(), {396.0f, 56.0f, 340.0f, 136.0f}},
             {outline.get(), {24.0f, 216.0f, 340.0f, 136.0f}},

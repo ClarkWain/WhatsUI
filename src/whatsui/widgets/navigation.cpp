@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <utility>
 
 #include "wui/icons.h"
@@ -76,21 +77,21 @@ void focusRing(PaintContext& context, const RectF& rect, float radius,
 
 } // namespace
 
-ToolbarItem::ToolbarItem(std::string label) : label_(std::move(label)) {}
-const std::string& ToolbarItem::label() const noexcept { return label_; }
-ToolbarItem& ToolbarItem::label(std::string value) { setLabel(std::move(value)); return *this; }
-void ToolbarItem::setLabel(std::string value) { if (label_ != value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); } }
-ToolbarItemAppearance ToolbarItem::appearance() const noexcept { return appearance_; }
-ToolbarItem& ToolbarItem::appearance(ToolbarItemAppearance value) noexcept { setAppearance(value); return *this; }
-void ToolbarItem::setAppearance(ToolbarItemAppearance value) noexcept { if (appearance_ != value) { appearance_ = value; markDirty(DirtyFlag::Paint); } }
-ToolbarItem& ToolbarItem::onInvoke(InvokeHandler handler) { onInvoke_ = std::move(handler); return *this; }
-SizeF ToolbarItem::measure(const Constraints& constraints) const
+ToolbarItemNode::ToolbarItemNode(std::string label) : label_(std::move(label)) {}
+const std::string& ToolbarItemNode::label() const noexcept { return label_; }
+ToolbarItemNode& ToolbarItemNode::label(std::string value) { setLabel(std::move(value)); return *this; }
+void ToolbarItemNode::setLabel(std::string value) { if (label_ != value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); } }
+ToolbarItemAppearance ToolbarItemNode::appearance() const noexcept { return appearance_; }
+ToolbarItemNode& ToolbarItemNode::appearance(ToolbarItemAppearance value) noexcept { setAppearance(value); return *this; }
+void ToolbarItemNode::setAppearance(ToolbarItemAppearance value) noexcept { if (appearance_ != value) { appearance_ = value; markDirty(DirtyFlag::Paint); } }
+ToolbarItemNode& ToolbarItemNode::onInvoke(InvokeHandler handler) { onInvoke_ = std::move(handler); return *this; }
+SizeF ToolbarItemNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     return constraints.clamp({textWidth(label_, current.typography.body1) + current.spacing.horizontal.m * 2,
                               kToolbarItemHeight});
 }
-void ToolbarItem::paint(PaintContext& context)
+void ToolbarItemNode::paint(PaintContext& context)
 {
     const auto& current = theme(); const RectF rect = context.snapRectEdges(bounds());
     if (rect.width <= 0.0f || rect.height <= 0.0f) { clearDirty(DirtyFlag::Paint); return; }
@@ -110,7 +111,7 @@ void ToolbarItem::paint(PaintContext& context)
                      foreground, style.weight, style.family);
     clearDirty(DirtyFlag::Paint);
 }
-bool ToolbarItem::onPointerEvent(const PointerEvent& event)
+bool ToolbarItemNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     switch (event.action) {
@@ -123,31 +124,44 @@ bool ToolbarItem::onPointerEvent(const PointerEvent& event)
     }
     return false;
 }
-bool ToolbarItem::onKeyEvent(const KeyEvent& event)
+bool ToolbarItemNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || event.action != KeyAction::Down) return false;
     if (event.keyCode == kEnter || event.keyCode == kSpace) { invoke(); return true; }
     if ((event.keyCode == kLeft || event.keyCode == kRight || event.keyCode == kHome || event.keyCode == kEnd) && parent()) return parent()->onKeyEvent(event);
     return false;
 }
-AccessibilityActionCapabilities ToolbarItem::accessibilityActions() const noexcept { AccessibilityActionCapabilities result; result.invoke = true; return result; }
-AccessibilityActionStatus ToolbarItem::performAccessibilityAction(AccessibilityActionKind kind, std::string_view) { if (kind != AccessibilityActionKind::Invoke) return AccessibilityActionStatus::NotSupported; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; invoke(); return AccessibilityActionStatus::Succeeded; }
-void ToolbarItem::invoke() { if (isEnabled() && onInvoke_) onInvoke_(); }
+AccessibilityActionCapabilities ToolbarItemNode::accessibilityActions() const noexcept { AccessibilityActionCapabilities result; result.invoke = true; return result; }
+AccessibilityActionStatus ToolbarItemNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view) { if (kind != AccessibilityActionKind::Invoke) return AccessibilityActionStatus::NotSupported; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; invoke(); return AccessibilityActionStatus::Succeeded; }
+void ToolbarItemNode::invoke() { if (isEnabled() && onInvoke_) onInvoke_(); }
 
-ToolbarItem& Toolbar::addItem(std::string label, ToolbarItemAppearance appearance)
+ToolbarItemNode& ToolbarNode::addItem(std::string label, ToolbarItemAppearance appearance)
 {
-    auto item = std::make_unique<ToolbarItem>(std::move(label)); item->setAppearance(appearance); auto* raw = item.get(); appendChild(std::move(item)); return *raw;
+    auto item = std::make_unique<ToolbarItemNode>(std::move(label)); item->setAppearance(appearance); auto* raw = item.get(); appendChild(std::move(item)); return *raw;
 }
-Toolbar& Toolbar::orientation(ToolbarOrientation value) noexcept { setOrientation(value); return *this; }
-void Toolbar::setOrientation(ToolbarOrientation value) noexcept { if (orientation_ != value) { orientation_ = value; markDirty(DirtyFlag::Layout); } }
-ToolbarOrientation Toolbar::orientation() const noexcept { return orientation_; }
-const std::vector<std::string>& Toolbar::overflowedItems() const noexcept { return overflowedItems_; }
-Toolbar& Toolbar::onOverflow(OverflowHandler handler) { onOverflow_ = std::move(handler); return *this; }
-Toolbar& Toolbar::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void Toolbar::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
-const std::string& Toolbar::accessibleLabel() const noexcept { return accessibleLabel_; }
-std::size_t Toolbar::focusedIndex() const noexcept { return focusedIndex_; }
-SizeF Toolbar::measure(const Constraints& constraints) const
+
+void ToolbarNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const ToolbarItemNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "ToolbarNode accepts only ToolbarItemNode children");
+    }
+}
+ToolbarNode& ToolbarNode::orientation(ToolbarOrientation value) noexcept { setOrientation(value); return *this; }
+void ToolbarNode::setOrientation(ToolbarOrientation value) noexcept { if (orientation_ != value) { orientation_ = value; markDirty(DirtyFlag::Layout); } }
+ToolbarOrientation ToolbarNode::orientation() const noexcept { return orientation_; }
+const std::vector<std::string>& ToolbarNode::overflowedItems() const noexcept { return overflowedItems_; }
+ToolbarNode& ToolbarNode::onOverflow(OverflowHandler handler) { onOverflow_ = std::move(handler); return *this; }
+ToolbarNode& ToolbarNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void ToolbarNode::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
+const std::string& ToolbarNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+std::size_t ToolbarNode::focusedIndex() const noexcept { return focusedIndex_; }
+SizeF ToolbarNode::measure(const Constraints& constraints) const
 {
     float width = 0, height = 0; const float gap = theme().spacing.horizontal.xs;
     for (const auto& child : children()) {
@@ -169,7 +183,7 @@ SizeF Toolbar::measure(const Constraints& constraints) const
     }
     return constraints.clamp({width, height});
 }
-void Toolbar::layout(const RectF& rect)
+void ToolbarNode::layout(const RectF& rect)
 {
     Node::layout(rect);
     const float gap = theme().spacing.horizontal.xs;
@@ -201,7 +215,7 @@ void Toolbar::layout(const RectF& rect)
         if (needsOverflow && (hidden || next > itemLimit + 0.01f)) {
             hidden = true;
             children()[i]->layout({0, 0, 0, 0});
-            if (const auto* item = dynamic_cast<const ToolbarItem*>(children()[i].get())) overflowedItems_.push_back(item->label());
+            if (const auto* item = dynamic_cast<const ToolbarItemNode*>(children()[i].get())) overflowedItems_.push_back(item->label());
             continue;
         }
         if (i != 0) cursor += gap;
@@ -216,8 +230,8 @@ void Toolbar::layout(const RectF& rect)
     }
     clearLayoutDirtyRecursively();
 }
-RectF Toolbar::overflowBounds() const noexcept { return overflowBounds_; }
-void Toolbar::paint(PaintContext& context)
+RectF ToolbarNode::overflowBounds() const noexcept { return overflowBounds_; }
+void ToolbarNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     context.fillRoundRect(context.snapRectEdges(bounds()),
@@ -237,7 +251,7 @@ void Toolbar::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-bool Toolbar::onPointerEvent(const PointerEvent& event)
+bool ToolbarNode::onPointerEvent(const PointerEvent& event)
 {
     if (overflowedItems_.empty()) return false;
     const bool inside = overflowBounds_.contains(event.position);
@@ -272,17 +286,17 @@ bool Toolbar::onPointerEvent(const PointerEvent& event)
     }
     return false;
 }
-bool Toolbar::moveFocus(int delta)
+bool ToolbarNode::moveFocus(int delta)
 {
     if (children().empty()) return false;
     std::size_t next = focusedIndex_;
     for (std::size_t attempts = 0; attempts < children().size(); ++attempts) {
         next = static_cast<std::size_t>((static_cast<int>(next) + delta + static_cast<int>(children().size())) % static_cast<int>(children().size()));
-        auto* item = dynamic_cast<ToolbarItem*>(children()[next].get()); if (item && item->isEnabled() && item->bounds().width > 0.0f && item->bounds().height > 0.0f) { focusedIndex_ = next; for (std::size_t i = 0; i < children().size(); ++i) if (auto* candidate = dynamic_cast<ToolbarItem*>(children()[i].get())) candidate->setVisualState(ControlVisualState::Focused, i == next); return true; }
+        auto* item = dynamic_cast<ToolbarItemNode*>(children()[next].get()); if (item && item->isEnabled() && item->bounds().width > 0.0f && item->bounds().height > 0.0f) { focusedIndex_ = next; for (std::size_t i = 0; i < children().size(); ++i) if (auto* candidate = dynamic_cast<ToolbarItemNode*>(children()[i].get())) candidate->setVisualState(ControlVisualState::Focused, i == next); return true; }
     }
     return false;
 }
-bool Toolbar::onKeyEvent(const KeyEvent& event)
+bool ToolbarNode::onKeyEvent(const KeyEvent& event)
 {
     if (event.action != KeyAction::Down) return false;
     if (event.keyCode == kHome) { focusedIndex_ = 0; return moveFocus(0) || moveFocus(1); }
@@ -292,15 +306,15 @@ bool Toolbar::onKeyEvent(const KeyEvent& event)
     return false;
 }
 
-Tab::Tab(std::string value, std::string label) : value_(std::move(value)), label_(std::move(label)) { if (value_.empty()) value_ = label_; }
-const std::string& Tab::value() const noexcept { return value_; }
-Tab& Tab::value(std::string value) { setValue(std::move(value)); return *this; }
-void Tab::setValue(std::string value) { if (value_ != value) { value_ = std::move(value); markDirty(DirtyFlag::Layout); } }
-const std::string& Tab::label() const noexcept { return label_; }
-Tab& Tab::label(std::string value) { setLabel(std::move(value)); return *this; }
-void Tab::setLabel(std::string value) { if (label_ != value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); } }
-bool Tab::isSelected() const noexcept { return selected_; }
-SizeF Tab::measure(const Constraints& constraints) const
+TabNode::TabNode(std::string value, std::string label) : value_(std::move(value)), label_(std::move(label)) { if (value_.empty()) value_ = label_; }
+const std::string& TabNode::value() const noexcept { return value_; }
+TabNode& TabNode::value(std::string value) { setValue(std::move(value)); return *this; }
+void TabNode::setValue(std::string value) { if (value_ != value) { value_ = std::move(value); markDirty(DirtyFlag::Layout); } }
+const std::string& TabNode::label() const noexcept { return label_; }
+TabNode& TabNode::label(std::string value) { setLabel(std::move(value)); return *this; }
+void TabNode::setLabel(std::string value) { if (label_ != value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); } }
+bool TabNode::isSelected() const noexcept { return selected_; }
+SizeF TabNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     return constraints.clamp(
@@ -308,7 +322,7 @@ SizeF Tab::measure(const Constraints& constraints) const
              kTabHorizontalPadding * 2.0f,
          kTabHeight});
 }
-void Tab::paint(PaintContext& context)
+void TabNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const RectF rect = context.snapRectEdges(bounds());
@@ -347,7 +361,7 @@ void Tab::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-bool Tab::onPointerEvent(const PointerEvent& event)
+bool TabNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     if (event.action == PointerAction::Enter) { setVisualState(ControlVisualState::Hovered,true); return true; }
@@ -357,56 +371,69 @@ bool Tab::onPointerEvent(const PointerEvent& event)
     if (event.action == PointerAction::Cancel) { setVisualState(ControlVisualState::Pressed,false); return true; }
     return false;
 }
-bool Tab::onKeyEvent(const KeyEvent& event)
+bool TabNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || event.action != KeyAction::Down) return false;
     if (event.keyCode == kEnter || event.keyCode == kSpace) { select(); return true; }
     if (parent()) return parent()->onKeyEvent(event);
     return false;
 }
-AccessibilityActionCapabilities Tab::accessibilityActions() const noexcept { AccessibilityActionCapabilities result; result.invoke = true; result.toggle = true; return result; }
-AccessibilityActionStatus Tab::performAccessibilityAction(AccessibilityActionKind kind, std::string_view) { if (kind != AccessibilityActionKind::Invoke && kind != AccessibilityActionKind::Toggle) return AccessibilityActionStatus::NotSupported; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; select(); return AccessibilityActionStatus::Succeeded; }
-void Tab::setSelectedFromList(bool value) noexcept { if (selected_ != value) { selected_ = value; markDirty(DirtyFlag::Paint); } }
-void Tab::select() { if (auto* list = dynamic_cast<TabList*>(parent())) list->selectTab(*this); }
+AccessibilityActionCapabilities TabNode::accessibilityActions() const noexcept { AccessibilityActionCapabilities result; result.invoke = true; result.toggle = true; return result; }
+AccessibilityActionStatus TabNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view) { if (kind != AccessibilityActionKind::Invoke && kind != AccessibilityActionKind::Toggle) return AccessibilityActionStatus::NotSupported; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; select(); return AccessibilityActionStatus::Succeeded; }
+void TabNode::setSelectedFromList(bool value) noexcept { if (selected_ != value) { selected_ = value; markDirty(DirtyFlag::Paint); } }
+void TabNode::select() { if (auto* list = dynamic_cast<TabListNode*>(parent())) list->selectTab(*this); }
 
-Tab& TabList::addTab(std::string value, std::string label, bool enabled)
+TabNode& TabListNode::addTab(std::string value, std::string label, bool enabled)
 {
-    auto tab = std::make_unique<Tab>(std::move(value), std::move(label));
+    auto tab = std::make_unique<TabNode>(std::move(value), std::move(label));
     tab->setEnabled(enabled);
     auto* raw = tab.get(); appendChild(std::move(tab));
     if (value_.empty() && enabled) selectTab(*raw, false);
     return *raw;
 }
-const std::string& TabList::value() const noexcept { return value_; }
-TabList& TabList::value(std::string value) { setValue(std::move(value)); return *this; }
-void TabList::setValue(std::string value)
+
+void TabListNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
 {
-    // A TabList never exposes a selected value that has no matching Tab.
-    // This is important to UIA clients, which read value and selected Tab from
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const TabNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "TabListNode accepts only TabNode children");
+    }
+}
+const std::string& TabListNode::value() const noexcept { return value_; }
+TabListNode& TabListNode::value(std::string value) { setValue(std::move(value)); return *this; }
+void TabListNode::setValue(std::string value)
+{
+    // A TabListNode never exposes a selected value that has no matching TabNode.
+    // This is important to UIA clients, which read value and selected TabNode from
     // the same snapshot and expect them to agree.
     for (const auto& child : children()) {
-        if (auto* tab = dynamic_cast<Tab*>(child.get()); tab && tab->value() == value) {
+        if (auto* tab = dynamic_cast<TabNode*>(child.get()); tab && tab->value() == value) {
             selectTab(*tab);
             return;
         }
     }
 }
-TabList& TabList::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
-TabList::ActivationMode TabList::activationMode() const noexcept { return activationMode_; }
-TabList& TabList::activationMode(ActivationMode value) noexcept { setActivationMode(value); return *this; }
-void TabList::setActivationMode(ActivationMode value) noexcept { activationMode_ = value; }
-std::size_t TabList::focusedIndex() const noexcept { return focusedIndex_; }
-TabList& TabList::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void TabList::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
-const std::string& TabList::accessibleLabel() const noexcept { return accessibleLabel_; }
-SizeF TabList::measure(const Constraints& constraints) const
+TabListNode& TabListNode::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
+TabListNode::ActivationMode TabListNode::activationMode() const noexcept { return activationMode_; }
+TabListNode& TabListNode::activationMode(ActivationMode value) noexcept { setActivationMode(value); return *this; }
+void TabListNode::setActivationMode(ActivationMode value) noexcept { activationMode_ = value; }
+std::size_t TabListNode::focusedIndex() const noexcept { return focusedIndex_; }
+TabListNode& TabListNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void TabListNode::setAccessibleLabel(std::string value) { accessibleLabel_ = std::move(value); markDirty(DirtyFlag::Style); }
+const std::string& TabListNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+SizeF TabListNode::measure(const Constraints& constraints) const
 {
     float width = 0.0f;
     for (const auto& child : children())
         width += child->measureWithConstraints(constraints).width;
     return constraints.clamp({width, kTabHeight});
 }
-void TabList::layout(const RectF& rect)
+void TabListNode::layout(const RectF& rect)
 {
     Node::layout(rect);
     float cursor = rect.x;
@@ -420,7 +447,7 @@ void TabList::layout(const RectF& rect)
     }
     clearLayoutDirtyRecursively();
 }
-void TabList::paint(PaintContext& context)
+void TabListNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const float stroke = context.snapStrokeWidth(current.stroke.thin);
@@ -431,55 +458,55 @@ void TabList::paint(PaintContext& context)
     ContainerNode::paint(context);
     clearDirty(DirtyFlag::Paint);
 }
-void TabList::selectTab(Tab& tab, bool notify)
+void TabListNode::selectTab(TabNode& tab, bool notify)
 {
     if (!tab.isEnabled()) return;
     const bool changed = value_ != tab.value();
     value_ = tab.value();
     for (const auto& child : children()) {
-        if (auto* candidate = dynamic_cast<Tab*>(child.get())) candidate->setSelectedFromList(candidate == &tab);
+        if (auto* candidate = dynamic_cast<TabNode*>(child.get())) candidate->setSelectedFromList(candidate == &tab);
     }
     markDirty(DirtyFlag::Paint);
     if (changed && notify && onChange_) onChange_(value_);
 }
-bool TabList::moveSelection(int delta)
+bool TabListNode::moveSelection(int delta)
 {
     if (children().empty()) return false;
     std::size_t start = 0;
     for (std::size_t i = 0; i < children().size(); ++i)
-        if (auto* tab = dynamic_cast<Tab*>(children()[i].get()); tab && tab->isSelected()) { start = i; break; }
+        if (auto* tab = dynamic_cast<TabNode*>(children()[i].get()); tab && tab->isSelected()) { start = i; break; }
     for (std::size_t i = 0; i < children().size(); ++i) {
         start = static_cast<std::size_t>((static_cast<int>(start) + delta + static_cast<int>(children().size())) % static_cast<int>(children().size()));
-        if (auto* tab = dynamic_cast<Tab*>(children()[start].get()); tab && tab->isEnabled()) {
+        if (auto* tab = dynamic_cast<TabNode*>(children()[start].get()); tab && tab->isEnabled()) {
             selectTab(*tab);
             focusedIndex_ = start;
-            for (const auto& child : children()) if (auto* candidate = dynamic_cast<Tab*>(child.get())) candidate->setVisualState(ControlVisualState::Focused, candidate == tab);
+            for (const auto& child : children()) if (auto* candidate = dynamic_cast<TabNode*>(child.get())) candidate->setVisualState(ControlVisualState::Focused, candidate == tab);
             return true;
         }
     }
     return false;
 }
-bool TabList::moveFocus(int delta)
+bool TabListNode::moveFocus(int delta)
 {
     if (children().empty()) return false;
     std::size_t next = focusedIndex_;
     for (std::size_t attempt = 0; attempt < children().size(); ++attempt) {
         next = static_cast<std::size_t>((static_cast<int>(next) + delta + static_cast<int>(children().size())) % static_cast<int>(children().size()));
-        if (auto* tab = dynamic_cast<Tab*>(children()[next].get()); tab && tab->isEnabled()) {
+        if (auto* tab = dynamic_cast<TabNode*>(children()[next].get()); tab && tab->isEnabled()) {
             focusedIndex_ = next;
-            for (const auto& child : children()) if (auto* candidate = dynamic_cast<Tab*>(child.get())) candidate->setVisualState(ControlVisualState::Focused, candidate == tab);
+            for (const auto& child : children()) if (auto* candidate = dynamic_cast<TabNode*>(child.get())) candidate->setVisualState(ControlVisualState::Focused, candidate == tab);
             return true;
         }
     }
     return false;
 }
-bool TabList::selectFocused()
+bool TabListNode::selectFocused()
 {
     if (focusedIndex_ >= children().size()) return false;
-    if (auto* tab = dynamic_cast<Tab*>(children()[focusedIndex_].get()); tab && tab->isEnabled()) { selectTab(*tab); return true; }
+    if (auto* tab = dynamic_cast<TabNode*>(children()[focusedIndex_].get()); tab && tab->isEnabled()) { selectTab(*tab); return true; }
     return false;
 }
-bool TabList::onKeyEvent(const KeyEvent& event)
+bool TabListNode::onKeyEvent(const KeyEvent& event)
 {
     if (event.action != KeyAction::Down) return false;
     if (event.keyCode == kEnter || event.keyCode == kSpace) return selectFocused();
@@ -488,50 +515,50 @@ bool TabList::onKeyEvent(const KeyEvent& event)
     const bool first = event.keyCode == kHome;
     if (first || event.keyCode == kEnd) {
         if (first) {
-            for (std::size_t i = 0; i < children().size(); ++i) if (auto* tab = dynamic_cast<Tab*>(children()[i].get()); tab && tab->isEnabled()) { focusedIndex_ = i; if (activationMode_ == ActivationMode::Automatic) selectTab(*tab); for (const auto& item : children()) if (auto* candidate = dynamic_cast<Tab*>(item.get())) candidate->setVisualState(ControlVisualState::Focused, candidate == tab); return true; }
+            for (std::size_t i = 0; i < children().size(); ++i) if (auto* tab = dynamic_cast<TabNode*>(children()[i].get()); tab && tab->isEnabled()) { focusedIndex_ = i; if (activationMode_ == ActivationMode::Automatic) selectTab(*tab); for (const auto& item : children()) if (auto* candidate = dynamic_cast<TabNode*>(item.get())) candidate->setVisualState(ControlVisualState::Focused, candidate == tab); return true; }
         } else {
-            for (std::size_t i = children().size(); i-- > 0;) if (auto* tab = dynamic_cast<Tab*>(children()[i].get()); tab && tab->isEnabled()) { focusedIndex_ = i; if (activationMode_ == ActivationMode::Automatic) selectTab(*tab); for (const auto& item : children()) if (auto* candidate = dynamic_cast<Tab*>(item.get())) candidate->setVisualState(ControlVisualState::Focused, candidate == tab); return true; }
+            for (std::size_t i = children().size(); i-- > 0;) if (auto* tab = dynamic_cast<TabNode*>(children()[i].get()); tab && tab->isEnabled()) { focusedIndex_ = i; if (activationMode_ == ActivationMode::Automatic) selectTab(*tab); for (const auto& item : children()) if (auto* candidate = dynamic_cast<TabNode*>(item.get())) candidate->setVisualState(ControlVisualState::Focused, candidate == tab); return true; }
         }
     }
     return false;
 }
 
-TabPanel::TabPanel(std::string value) : value_(std::move(value)) {}
-const std::string& TabPanel::value() const noexcept { return value_; }
-TabPanel& TabPanel::value(std::string value) { setValue(std::move(value)); return *this; }
-void TabPanel::setValue(std::string value) { if(value_!=value){value_=std::move(value);markDirty(DirtyFlag::Style);} }
-TabPanel& TabPanel::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
-void TabPanel::setAccessibleLabel(std::string value) { accessibleLabel_=std::move(value);markDirty(DirtyFlag::Style); }
-const std::string& TabPanel::accessibleLabel() const noexcept { return accessibleLabel_; }
-TabPanel& TabPanel::tabList(TabList& value) noexcept { setTabList(&value); return *this; }
-void TabPanel::setTabList(TabList* value) noexcept { if (tabList_ != value) { tabList_ = value; markDirty(DirtyFlag::Layout); } }
-const TabList* TabPanel::tabList() const noexcept { return tabList_; }
-bool TabPanel::isActive() const noexcept { return active_ && (!tabList_ || tabList_->value() == value_); }
-TabPanel& TabPanel::active(bool value) noexcept { setActive(value); return *this; }
-void TabPanel::setActive(bool value) noexcept { if (active_ != value) { active_ = value; markDirty(DirtyFlag::Layout); } }
-SizeF TabPanel::measure(const Constraints& constraints) const
+TabPanelNode::TabPanelNode(std::string value) : value_(std::move(value)) {}
+const std::string& TabPanelNode::value() const noexcept { return value_; }
+TabPanelNode& TabPanelNode::value(std::string value) { setValue(std::move(value)); return *this; }
+void TabPanelNode::setValue(std::string value) { if(value_!=value){value_=std::move(value);markDirty(DirtyFlag::Style);} }
+TabPanelNode& TabPanelNode::accessibleLabel(std::string value) { setAccessibleLabel(std::move(value)); return *this; }
+void TabPanelNode::setAccessibleLabel(std::string value) { accessibleLabel_=std::move(value);markDirty(DirtyFlag::Style); }
+const std::string& TabPanelNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+TabPanelNode& TabPanelNode::tabList(TabListNode& value) noexcept { setTabList(&value); return *this; }
+void TabPanelNode::setTabList(TabListNode* value) noexcept { if (tabList_ != value) { tabList_ = value; markDirty(DirtyFlag::Layout); } }
+const TabListNode* TabPanelNode::tabList() const noexcept { return tabList_; }
+bool TabPanelNode::isActive() const noexcept { return active_ && (!tabList_ || tabList_->value() == value_); }
+TabPanelNode& TabPanelNode::active(bool value) noexcept { setActive(value); return *this; }
+void TabPanelNode::setActive(bool value) noexcept { if (active_ != value) { active_ = value; markDirty(DirtyFlag::Layout); } }
+SizeF TabPanelNode::measure(const Constraints& constraints) const
 {
     if (!isActive()) return constraints.clamp({0, 0});
     float w=0,h=0;for(const auto&child:children()){auto s=child->measureWithConstraints(constraints);w=std::max(w,s.width);h+=s.height;}return constraints.clamp({w,h});
 }
-void TabPanel::layout(const RectF& rect)
+void TabPanelNode::layout(const RectF& rect)
 {
     if (!isActive()) { Node::layout({rect.x, rect.y, 0, 0}); for (const auto& child : children()) child->layout({0, 0, 0, 0}); clearLayoutDirtyRecursively(); return; }
     Node::layout(rect);float y=rect.y;for(const auto&child:children()){auto s=child->measureWithConstraints({0,rect.width,0,std::max(0.f,rect.y+rect.height-y)});child->layout({rect.x,y,rect.width,s.height});y+=s.height;}clearLayoutDirtyRecursively();
 }
-void TabPanel::paint(PaintContext& context) { if (!isActive()) { clearDirty(DirtyFlag::Paint); return; } ContainerNode::paint(context); clearDirty(DirtyFlag::Paint); }
-Node* TabPanel::hitTest(PointF point) { return isActive() ? ContainerNode::hitTest(point) : nullptr; }
+void TabPanelNode::paint(PaintContext& context) { if (!isActive()) { clearDirty(DirtyFlag::Paint); return; } ContainerNode::paint(context); clearDirty(DirtyFlag::Paint); }
+Node* TabPanelNode::hitTest(PointF point) { return isActive() ? ContainerNode::hitTest(point) : nullptr; }
 
-Link::Link(std::string label) : label_(std::move(label)) {}
-const std::string& Link::label() const noexcept { return label_; }
-Link& Link::label(std::string value) { setLabel(std::move(value)); return *this; }
-void Link::setLabel(std::string value) { if(label_!=value){label_=std::move(value);markDirty(DirtyFlag::Layout);} }
-const std::string& Link::href() const noexcept { return href_; }
-Link& Link::href(std::string value) { setHref(std::move(value)); return *this; }
-void Link::setHref(std::string value) { href_=std::move(value);markDirty(DirtyFlag::Style); }
-Link& Link::onInvoke(InvokeHandler handler) { onInvoke_=std::move(handler);return *this; }
-SizeF Link::measure(const Constraints& constraints) const { const auto& style=theme().typography.body1;return constraints.clamp({textWidth(label_,style),style.lineHeight}); }
-void Link::paint(PaintContext& context)
+LinkNode::LinkNode(std::string label) : label_(std::move(label)) {}
+const std::string& LinkNode::label() const noexcept { return label_; }
+LinkNode& LinkNode::label(std::string value) { setLabel(std::move(value)); return *this; }
+void LinkNode::setLabel(std::string value) { if(label_!=value){label_=std::move(value);markDirty(DirtyFlag::Layout);} }
+const std::string& LinkNode::href() const noexcept { return href_; }
+LinkNode& LinkNode::href(std::string value) { setHref(std::move(value)); return *this; }
+void LinkNode::setHref(std::string value) { href_=std::move(value);markDirty(DirtyFlag::Style); }
+LinkNode& LinkNode::onInvoke(InvokeHandler handler) { onInvoke_=std::move(handler);return *this; }
+SizeF LinkNode::measure(const Constraints& constraints) const { const auto& style=theme().typography.body1;return constraints.clamp({textWidth(label_,style),style.lineHeight}); }
+void LinkNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const auto& style = current.typography.body1;
@@ -549,7 +576,7 @@ void Link::paint(PaintContext& context)
                      context.centeredTextBottom(label_, rect, style.size,
                                                 style.weight, style.family),
                      style.size, fg, style.weight, style.family);
-    // Fluent's non-inline Link is unadorned at rest. Hover and pressed add a
+    // Fluent's non-inline LinkNode is unadorned at rest. Hover and pressed add a
     // single underline; keyboard focus uses the paired black/white underline
     // treatment instead of a rectangular control ring.
     if (!disabled && (hovered || pressed || focused)) {
@@ -567,20 +594,20 @@ void Link::paint(PaintContext& context)
     }
     clearDirty(DirtyFlag::Paint);
 }
-bool Link::onPointerEvent(const PointerEvent&e){if(!isEnabled())return false;if(e.action==PointerAction::Enter){setVisualState(ControlVisualState::Hovered,true);return true;}if(e.action==PointerAction::Leave){setVisualState(ControlVisualState::Hovered,false);setVisualState(ControlVisualState::Pressed,false);return true;}if(e.action==PointerAction::Down&&e.button==MouseButton::Left){setVisualState(ControlVisualState::Pressed,true);setVisualState(ControlVisualState::Focused,true);return true;}if(e.action==PointerAction::Up&&e.button==MouseButton::Left){const bool activate=hasState(*this,ControlVisualState::Pressed)&&bounds().contains(e.position);setVisualState(ControlVisualState::Pressed,false);if(activate)invoke();return true;}if(e.action==PointerAction::Cancel){setVisualState(ControlVisualState::Pressed,false);return true;}return false;}
-bool Link::onKeyEvent(const KeyEvent&e){if(!isEnabled()||e.action!=KeyAction::Down)return false;if(e.keyCode==kEnter||e.keyCode==kSpace){invoke();return true;}return false;}
-AccessibilityActionCapabilities Link::accessibilityActions()const noexcept{AccessibilityActionCapabilities a;a.invoke=true;return a;} AccessibilityActionStatus Link::performAccessibilityAction(AccessibilityActionKind k,std::string_view){if(k!=AccessibilityActionKind::Invoke)return AccessibilityActionStatus::NotSupported;if(!isEnabled())return AccessibilityActionStatus::ElementNotEnabled;invoke();return AccessibilityActionStatus::Succeeded;}void Link::invoke(){if(isEnabled()&&onInvoke_)onInvoke_();}
+bool LinkNode::onPointerEvent(const PointerEvent&e){if(!isEnabled())return false;if(e.action==PointerAction::Enter){setVisualState(ControlVisualState::Hovered,true);return true;}if(e.action==PointerAction::Leave){setVisualState(ControlVisualState::Hovered,false);setVisualState(ControlVisualState::Pressed,false);return true;}if(e.action==PointerAction::Down&&e.button==MouseButton::Left){setVisualState(ControlVisualState::Pressed,true);setVisualState(ControlVisualState::Focused,true);return true;}if(e.action==PointerAction::Up&&e.button==MouseButton::Left){const bool activate=hasState(*this,ControlVisualState::Pressed)&&bounds().contains(e.position);setVisualState(ControlVisualState::Pressed,false);if(activate)invoke();return true;}if(e.action==PointerAction::Cancel){setVisualState(ControlVisualState::Pressed,false);return true;}return false;}
+bool LinkNode::onKeyEvent(const KeyEvent&e){if(!isEnabled()||e.action!=KeyAction::Down)return false;if(e.keyCode==kEnter||e.keyCode==kSpace){invoke();return true;}return false;}
+AccessibilityActionCapabilities LinkNode::accessibilityActions()const noexcept{AccessibilityActionCapabilities a;a.invoke=true;return a;} AccessibilityActionStatus LinkNode::performAccessibilityAction(AccessibilityActionKind k,std::string_view){if(k!=AccessibilityActionKind::Invoke)return AccessibilityActionStatus::NotSupported;if(!isEnabled())return AccessibilityActionStatus::ElementNotEnabled;invoke();return AccessibilityActionStatus::Succeeded;}void LinkNode::invoke(){if(isEnabled()&&onInvoke_)onInvoke_();}
 
-BreadcrumbItem::BreadcrumbItem(std::string label,bool current):label_(std::move(label)),current_(current){}
-const std::string& BreadcrumbItem::label()const noexcept{return label_;}BreadcrumbItem& BreadcrumbItem::label(std::string value){setLabel(std::move(value));return *this;}void BreadcrumbItem::setLabel(std::string value){if(label_!=value){label_=std::move(value);markDirty(DirtyFlag::Layout);}}bool BreadcrumbItem::isCurrent()const noexcept{return current_;}BreadcrumbItem& BreadcrumbItem::current(bool value)noexcept{setCurrent(value);return *this;}void BreadcrumbItem::setCurrent(bool value)noexcept{if(current_!=value){current_=value;markDirty(DirtyFlag::Paint);}}BreadcrumbItem& BreadcrumbItem::onInvoke(InvokeHandler handler){onInvoke_=std::move(handler);return *this;}
-SizeF BreadcrumbItem::measure(const Constraints& constraints) const
+BreadcrumbItemNode::BreadcrumbItemNode(std::string label,bool current):label_(std::move(label)),current_(current){}
+const std::string& BreadcrumbItemNode::label()const noexcept{return label_;}BreadcrumbItemNode& BreadcrumbItemNode::label(std::string value){setLabel(std::move(value));return *this;}void BreadcrumbItemNode::setLabel(std::string value){if(label_!=value){label_=std::move(value);markDirty(DirtyFlag::Layout);}}bool BreadcrumbItemNode::isCurrent()const noexcept{return current_;}BreadcrumbItemNode& BreadcrumbItemNode::current(bool value)noexcept{setCurrent(value);return *this;}void BreadcrumbItemNode::setCurrent(bool value)noexcept{if(current_!=value){current_=value;markDirty(DirtyFlag::Paint);}}BreadcrumbItemNode& BreadcrumbItemNode::onInvoke(InvokeHandler handler){onInvoke_=std::move(handler);return *this;}
+SizeF BreadcrumbItemNode::measure(const Constraints& constraints) const
 {
     const auto& style = theme().typography.body1Strong;
     return constraints.clamp(
         {textWidth(label_, style) + kBreadcrumbItemPadding * 2.0f,
          kBreadcrumbHeight});
 }
-void BreadcrumbItem::paint(PaintContext& context)
+void BreadcrumbItemNode::paint(PaintContext& context)
 {
     // Collapsed middle items retain their Node identity for a future overflow
     // menu, but must not paint at the default origin while hidden.
@@ -608,13 +635,26 @@ void BreadcrumbItem::paint(PaintContext& context)
                      style.size, fg, style.weight, style.family);
     clearDirty(DirtyFlag::Paint);
 }
-bool BreadcrumbItem::onPointerEvent(const PointerEvent&e){if(current_||!isEnabled())return false;if(e.action==PointerAction::Enter){setVisualState(ControlVisualState::Hovered,true);return true;}if(e.action==PointerAction::Leave){setVisualState(ControlVisualState::Hovered,false);setVisualState(ControlVisualState::Pressed,false);return true;}if(e.action==PointerAction::Down&&e.button==MouseButton::Left){setVisualState(ControlVisualState::Pressed,true);setVisualState(ControlVisualState::Focused,true);return true;}if(e.action==PointerAction::Up&&e.button==MouseButton::Left){const bool activate=hasState(*this,ControlVisualState::Pressed)&&bounds().contains(e.position);setVisualState(ControlVisualState::Pressed,false);if(activate)invoke();return true;}if(e.action==PointerAction::Cancel){setVisualState(ControlVisualState::Pressed,false);return true;}return false;}
-bool BreadcrumbItem::onKeyEvent(const KeyEvent&e){if(current_||!isEnabled()||e.action!=KeyAction::Down)return false;if(e.keyCode==kEnter||e.keyCode==kSpace){invoke();return true;}return false;}AccessibilityActionCapabilities BreadcrumbItem::accessibilityActions()const noexcept{AccessibilityActionCapabilities a;a.invoke=!current_;return a;}AccessibilityActionStatus BreadcrumbItem::performAccessibilityAction(AccessibilityActionKind k,std::string_view){if(k!=AccessibilityActionKind::Invoke||current_)return AccessibilityActionStatus::NotSupported;if(!isEnabled())return AccessibilityActionStatus::ElementNotEnabled;invoke();return AccessibilityActionStatus::Succeeded;}void BreadcrumbItem::invoke(){if(!current_&&isEnabled()&&onInvoke_)onInvoke_();}
+bool BreadcrumbItemNode::onPointerEvent(const PointerEvent&e){if(current_||!isEnabled())return false;if(e.action==PointerAction::Enter){setVisualState(ControlVisualState::Hovered,true);return true;}if(e.action==PointerAction::Leave){setVisualState(ControlVisualState::Hovered,false);setVisualState(ControlVisualState::Pressed,false);return true;}if(e.action==PointerAction::Down&&e.button==MouseButton::Left){setVisualState(ControlVisualState::Pressed,true);setVisualState(ControlVisualState::Focused,true);return true;}if(e.action==PointerAction::Up&&e.button==MouseButton::Left){const bool activate=hasState(*this,ControlVisualState::Pressed)&&bounds().contains(e.position);setVisualState(ControlVisualState::Pressed,false);if(activate)invoke();return true;}if(e.action==PointerAction::Cancel){setVisualState(ControlVisualState::Pressed,false);return true;}return false;}
+bool BreadcrumbItemNode::onKeyEvent(const KeyEvent&e){if(current_||!isEnabled()||e.action!=KeyAction::Down)return false;if(e.keyCode==kEnter||e.keyCode==kSpace){invoke();return true;}return false;}AccessibilityActionCapabilities BreadcrumbItemNode::accessibilityActions()const noexcept{AccessibilityActionCapabilities a;a.invoke=!current_;return a;}AccessibilityActionStatus BreadcrumbItemNode::performAccessibilityAction(AccessibilityActionKind k,std::string_view){if(k!=AccessibilityActionKind::Invoke||current_)return AccessibilityActionStatus::NotSupported;if(!isEnabled())return AccessibilityActionStatus::ElementNotEnabled;invoke();return AccessibilityActionStatus::Succeeded;}void BreadcrumbItemNode::invoke(){if(!current_&&isEnabled()&&onInvoke_)onInvoke_();}
 
-BreadcrumbItem& Breadcrumb::addItem(std::string label,bool current){auto item=std::make_unique<BreadcrumbItem>(std::move(label),current);auto*raw=item.get();appendChild(std::move(item));return *raw;}Breadcrumb& Breadcrumb::maxVisible(std::size_t value)noexcept{setMaxVisible(value);return *this;}void Breadcrumb::setMaxVisible(std::size_t value)noexcept{value=std::max<std::size_t>(2,value);if(maxVisible_!=value){maxVisible_=value;markDirty(DirtyFlag::Layout);}}std::size_t Breadcrumb::maxVisible()const noexcept{return maxVisible_;}Breadcrumb& Breadcrumb::accessibleLabel(std::string value){setAccessibleLabel(std::move(value));return *this;}void Breadcrumb::setAccessibleLabel(std::string value){accessibleLabel_=std::move(value);markDirty(DirtyFlag::Style);}const std::string&Breadcrumb::accessibleLabel()const noexcept{return accessibleLabel_;}
-std::vector<std::size_t> Breadcrumb::visibleIndices()const{std::vector<std::size_t> result;const auto count=children().size();if(count<=maxVisible_){for(std::size_t i=0;i<count;++i)result.push_back(i);return result;}result.push_back(0);const std::size_t tail=std::max<std::size_t>(1,maxVisible_-1);for(std::size_t i=count-tail;i<count;++i)result.push_back(i);return result;}
-std::vector<std::string> Breadcrumb::hiddenItems()const{std::vector<std::string> hidden;const auto visible=visibleIndices();for(std::size_t i=0;i<children().size();++i)if(std::find(visible.begin(),visible.end(),i)==visible.end())if(auto*item=dynamic_cast<BreadcrumbItem*>(children()[i].get()))hidden.push_back(item->label());return hidden;}
-SizeF Breadcrumb::measure(const Constraints& constraints) const
+BreadcrumbItemNode& BreadcrumbNode::addItem(std::string label,bool current){auto item=std::make_unique<BreadcrumbItemNode>(std::move(label),current);auto*raw=item.get();appendChild(std::move(item));return *raw;}BreadcrumbNode& BreadcrumbNode::maxVisible(std::size_t value)noexcept{setMaxVisible(value);return *this;}void BreadcrumbNode::setMaxVisible(std::size_t value)noexcept{value=std::max<std::size_t>(2,value);if(maxVisible_!=value){maxVisible_=value;markDirty(DirtyFlag::Layout);}}std::size_t BreadcrumbNode::maxVisible()const noexcept{return maxVisible_;}BreadcrumbNode& BreadcrumbNode::accessibleLabel(std::string value){setAccessibleLabel(std::move(value));return *this;}void BreadcrumbNode::setAccessibleLabel(std::string value){accessibleLabel_=std::move(value);markDirty(DirtyFlag::Style);}const std::string&BreadcrumbNode::accessibleLabel()const noexcept{return accessibleLabel_;}
+
+void BreadcrumbNode::validateChildInsertion(
+    const Node& child,
+    std::size_t index,
+    std::size_t resultingCount) const
+{
+    (void)index;
+    (void)resultingCount;
+    if (dynamic_cast<const BreadcrumbItemNode*>(&child) == nullptr) {
+        throw std::invalid_argument(
+            "BreadcrumbNode accepts only BreadcrumbItemNode children");
+    }
+}
+std::vector<std::size_t> BreadcrumbNode::visibleIndices()const{std::vector<std::size_t> result;const auto count=children().size();if(count<=maxVisible_){for(std::size_t i=0;i<count;++i)result.push_back(i);return result;}result.push_back(0);const std::size_t tail=std::max<std::size_t>(1,maxVisible_-1);for(std::size_t i=count-tail;i<count;++i)result.push_back(i);return result;}
+std::vector<std::string> BreadcrumbNode::hiddenItems()const{std::vector<std::string> hidden;const auto visible=visibleIndices();for(std::size_t i=0;i<children().size();++i)if(std::find(visible.begin(),visible.end(),i)==visible.end())if(auto*item=dynamic_cast<BreadcrumbItemNode*>(children()[i].get()))hidden.push_back(item->label());return hidden;}
+SizeF BreadcrumbNode::measure(const Constraints& constraints) const
 {
     const auto visible = visibleIndices();
     if (visible.empty()) return constraints.clamp({0, 0});
@@ -630,7 +670,7 @@ SizeF Breadcrumb::measure(const Constraints& constraints) const
     return constraints.clamp({width, kBreadcrumbHeight});
 }
 
-void Breadcrumb::layout(const RectF& rect)
+void BreadcrumbNode::layout(const RectF& rect)
 {
     Node::layout(rect);
     const auto visible = visibleIndices();
@@ -653,7 +693,7 @@ void Breadcrumb::layout(const RectF& rect)
     clearLayoutDirtyRecursively();
 }
 
-void Breadcrumb::paint(PaintContext& context)
+void BreadcrumbNode::paint(PaintContext& context)
 {
     const auto visible = visibleIndices();
     const auto& current = theme();

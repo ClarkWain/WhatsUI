@@ -47,7 +47,7 @@ void render(const std::string& output, float scale)
         paint.fillRect({0, 0, static_cast<float>(kWidth), static_cast<float>(kHeight)}, theme.colors.neutralBackground2.rest);
         paint.drawText("Project explorer", 28, 38, 22, theme.colors.neutralForeground1, 600);
         paint.drawText("Keyboard tree navigation with selected and disabled items", 28, 61, 13, theme.colors.neutralForeground2, 400);
-        wui::Tree tree; tree.setMaxVisibleItems(6);
+        wui::TreeNode tree; tree.setMaxVisibleItems(6);
         auto& project = tree.addItem("project", "WhatsUI");
         project.addItem("readme", "README.md"); auto& src = project.addItem("src", "src"); src.addItem("widgets", "widgets"); src.addItem("tree", "tree.cpp");
         auto& packages = tree.addItem("packages", "packages"); packages.setExpanded(false);
@@ -56,7 +56,7 @@ void render(const std::string& output, float scale)
         if (auto* selected = tree.selectedItem()) selected->setVisualState(wui::ControlVisualState::Focused, true);
         tree.paint(paint);
         paint.drawText("Collapsed branch", 390, 112, 14, theme.colors.neutralForeground2, 600);
-        wui::Tree compact; compact.rowHeight(24); auto& archive = compact.addItem("archive", "Archive"); archive.addItem("2025", "2025"); archive.setExpanded(false); auto& notes = compact.addItem("notes", "Notes");
+        wui::TreeNode compact; compact.rowHeight(24); auto& archive = compact.addItem("archive", "Archive"); archive.addItem("2025", "2025"); archive.setExpanded(false); auto& notes = compact.addItem("notes", "Notes");
         notes.setVisualState(wui::ControlVisualState::Hovered, true);
         compact.layout({390, 132, 230, 72}); compact.paint(paint);
         canvas->endFrame(); const auto pixels = canvas->readPixelsRGBA();

@@ -17,29 +17,29 @@ enum class BadgeColor { Neutral, Brand, Danger, Important, Informative, Success,
 enum class BadgeSize { Small, Medium, Large, ExtraLarge };
 enum class BadgeShape { Rounded, Circular, Square };
 
-class Badge : public Node {
+class BadgeNode : public Node {
 public:
-    explicit Badge(std::string text = {});
+    explicit BadgeNode(std::string text = {});
 
     [[nodiscard]] const std::string& text() const noexcept;
-    Badge& text(std::string value);
+    BadgeNode& text(std::string value);
     void setText(std::string value);
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    Badge& accessibleLabel(std::string value);
+    BadgeNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] std::string generatedAccessibleLabel() const;
 
     [[nodiscard]] BadgeAppearance appearance() const noexcept;
-    Badge& appearance(BadgeAppearance value) noexcept;
+    BadgeNode& appearance(BadgeAppearance value) noexcept;
     void setAppearance(BadgeAppearance value) noexcept;
     [[nodiscard]] BadgeColor color() const noexcept;
-    Badge& color(BadgeColor value) noexcept;
+    BadgeNode& color(BadgeColor value) noexcept;
     void setColor(BadgeColor value) noexcept;
     [[nodiscard]] BadgeSize size() const noexcept;
-    Badge& size(BadgeSize value) noexcept;
+    BadgeNode& size(BadgeSize value) noexcept;
     void setSize(BadgeSize value) noexcept;
     [[nodiscard]] BadgeShape shape() const noexcept;
-    Badge& shape(BadgeShape value) noexcept;
+    BadgeNode& shape(BadgeShape value) noexcept;
     void setShape(BadgeShape value) noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -54,29 +54,29 @@ private:
     BadgeShape shape_{BadgeShape::Rounded};
 };
 
-// CounterBadge preserves its numeric value independently from its rendered
+// CounterBadgeNode preserves its numeric value independently from its rendered
 // text.  `max` controls Fluent's overflow presentation, e.g. 100 with max 99
 // renders "99+" while accessibility receives "100 notifications".
-class CounterBadge : public Node {
+class CounterBadgeNode : public Node {
 public:
-    explicit CounterBadge(std::uint64_t count = 0);
+    explicit CounterBadgeNode(std::uint64_t count = 0);
 
     [[nodiscard]] std::uint64_t count() const noexcept;
-    CounterBadge& count(std::uint64_t value) noexcept;
+    CounterBadgeNode& count(std::uint64_t value) noexcept;
     void setCount(std::uint64_t value) noexcept;
     [[nodiscard]] std::uint64_t max() const noexcept;
-    CounterBadge& max(std::uint64_t value) noexcept;
+    CounterBadgeNode& max(std::uint64_t value) noexcept;
     void setMax(std::uint64_t value) noexcept;
     [[nodiscard]] bool showZero() const noexcept;
-    CounterBadge& showZero(bool value = true) noexcept;
+    CounterBadgeNode& showZero(bool value = true) noexcept;
     void setShowZero(bool value = true) noexcept;
     [[nodiscard]] std::string text() const;
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    CounterBadge& accessibleLabel(std::string value);
+    CounterBadgeNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] std::string generatedAccessibleLabel() const;
     [[nodiscard]] BadgeSize size() const noexcept;
-    CounterBadge& size(BadgeSize value) noexcept;
+    CounterBadgeNode& size(BadgeSize value) noexcept;
     void setSize(BadgeSize value) noexcept;
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
@@ -93,25 +93,25 @@ private:
 enum class PresenceStatus { Available, Away, Busy, DoNotDisturb, Offline, OutOfOffice, Unknown };
 enum class PresenceBadgePosition { TopRight, BottomRight, BottomLeft, TopLeft };
 
-// PresenceBadge can be laid out independently or anchored over an Avatar by
-// calling boundsForAvatar().  This keeps Avatar free to choose its own image
+// PresenceBadgeNode can be laid out independently or anchored over an AvatarNode by
+// calling boundsForAvatar().  This keeps AvatarNode free to choose its own image
 // source while giving consumers stable, DPI-safe overlay geometry.
-class PresenceBadge : public Node {
+class PresenceBadgeNode : public Node {
 public:
-    explicit PresenceBadge(PresenceStatus status = PresenceStatus::Available);
+    explicit PresenceBadgeNode(PresenceStatus status = PresenceStatus::Available);
 
     [[nodiscard]] PresenceStatus status() const noexcept;
-    PresenceBadge& status(PresenceStatus value) noexcept;
+    PresenceBadgeNode& status(PresenceStatus value) noexcept;
     void setStatus(PresenceStatus value) noexcept;
     [[nodiscard]] PresenceBadgePosition position() const noexcept;
-    PresenceBadge& position(PresenceBadgePosition value) noexcept;
+    PresenceBadgeNode& position(PresenceBadgePosition value) noexcept;
     void setPosition(PresenceBadgePosition value) noexcept;
     [[nodiscard]] float avatarSize() const noexcept;
-    PresenceBadge& avatarSize(float value) noexcept;
+    PresenceBadgeNode& avatarSize(float value) noexcept;
     void setAvatarSize(float value) noexcept;
     [[nodiscard]] RectF boundsForAvatar(const RectF& avatarBounds) const noexcept;
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
-    PresenceBadge& accessibleLabel(std::string value);
+    PresenceBadgeNode& accessibleLabel(std::string value);
     void setAccessibleLabel(std::string value);
     [[nodiscard]] std::string generatedAccessibleLabel() const;
 

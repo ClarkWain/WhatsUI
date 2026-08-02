@@ -10,10 +10,10 @@
 #include "view/components/preview_surface.h"
 #include "view/components/responsive_layouts.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 #include "wui/ui_inspector.h"
 
-using namespace wui::ui;
+using namespace wui;
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -48,7 +48,7 @@ private:
     VisualQaViewModel* viewModel_;
 };
 
-void setInteractionState(wui::Button& button, InteractionPreview interaction)
+void setInteractionState(wui::ButtonNode& button, InteractionPreview interaction)
 {
     for (const auto state : {wui::ControlVisualState::Hovered,
                              wui::ControlVisualState::Pressed,
@@ -67,7 +67,7 @@ void setInteractionState(wui::Button& button, InteractionPreview interaction)
     }
 }
 
-void bindInteraction(wui::Node& owner, wui::Button& button, VisualQaViewModel& viewModel)
+void bindInteraction(wui::Node& owner, wui::ButtonNode& button, VisualQaViewModel& viewModel)
 {
     setInteractionState(button, viewModel.selectedInteraction().get());
     const auto id = viewModel.selectedInteraction().subscribe(
@@ -84,10 +84,10 @@ std::unique_ptr<wui::Node> buildProfileControls(VisualQaViewModel& viewModel)
         {"200%", DpiProfile::Dpi200},
     }};
     auto row = std::make_unique<view::components::ResponsiveFlow>();
-    auto buttons = std::make_shared<std::vector<std::pair<DpiProfile, wui::ToggleButton*>>>();
+    auto buttons = std::make_shared<std::vector<std::pair<DpiProfile, wui::ToggleButtonNode*>>>();
     row->gap(6.0f);
     for (const auto& [label, profile] : profiles) {
-        auto button = std::make_unique<wui::ToggleButton>(
+        auto button = std::make_unique<wui::ToggleButtonNode>(
             label, profile == viewModel.selectedDpi().get());
         button->setAppearance(wui::ButtonAppearance::Subtle);
         auto* raw = button.get();
@@ -119,12 +119,12 @@ std::unique_ptr<wui::Node> buildActiveDpi(VisualQaViewModel& viewModel)
                 [] {
                     auto heading = std::make_unique<view::components::ResponsiveRow>();
                     heading->align(wui::Alignment::Center);
-                    heading->appendChild(Text("DPI profile").size(16.0f).weight(600).intoNode());
-                    heading->appendChild(Spacer().flex(1.0f).intoNode());
+                    heading->appendChild(Text("DPI profile").size(16.0f).weight(600).build());
+                    heading->appendChild(Spacer().flex(1.0f).build());
                     heading->appendChild(Badge("LIVE WINDOW VALUE")
                         .appearance(wui::BadgeAppearance::Tint)
                         .color(wui::BadgeColor::Brand)
-                        .intoNode());
+                        .build());
                     return heading;
                 }(),
                 Text().bind(viewModel.actualScaleFactor(), scaleLabel)
@@ -137,7 +137,7 @@ std::unique_ptr<wui::Node> buildActiveDpi(VisualQaViewModel& viewModel)
                 buildProfileControls(viewModel)
             )
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildThemeControls(
@@ -148,7 +148,7 @@ std::unique_ptr<wui::Node> buildThemeControls(
     row->gap(6.0f);
     for (const auto& [label, theme] : std::array<std::pair<const char*, ThemePreview>, 2>{{
              {"Light preview", ThemePreview::Light}, {"Dark preview", ThemePreview::Dark}}}) {
-        auto button = std::make_unique<wui::ToggleButton>(
+        auto button = std::make_unique<wui::ToggleButtonNode>(
             label, theme == viewModel.selectedTheme().get());
         button->setAppearance(wui::ButtonAppearance::Subtle);
         auto* raw = button.get();
@@ -174,10 +174,10 @@ std::unique_ptr<wui::Node> buildInteractionControls(VisualQaViewModel& viewModel
     }};
     auto row = std::make_unique<view::components::ResponsiveFlow>();
     auto buttons = std::make_shared<
-        std::vector<std::pair<InteractionPreview, wui::ToggleButton*>>>();
+        std::vector<std::pair<InteractionPreview, wui::ToggleButtonNode*>>>();
     row->gap(6.0f);
     for (const auto& [label, state] : states) {
-        auto button = std::make_unique<wui::ToggleButton>(
+        auto button = std::make_unique<wui::ToggleButtonNode>(
             label, state == viewModel.selectedInteraction().get());
         button->setAppearance(wui::ButtonAppearance::Subtle);
         auto* raw = button.get();
@@ -197,9 +197,9 @@ std::unique_ptr<wui::Node> buildInteractionControls(VisualQaViewModel& viewModel
     return row;
 }
 
-std::unique_ptr<wui::Node> buildStateMatrix(VisualQaViewModel& viewModel, wui::Button*& preview)
+std::unique_ptr<wui::Node> buildStateMatrix(VisualQaViewModel& viewModel, wui::ButtonNode*& preview)
 {
-    auto button = std::make_unique<wui::Button>("Review state");
+    auto button = std::make_unique<wui::ButtonNode>("Review state");
     button->setAppearance(wui::ButtonAppearance::Primary);
     preview = button.get();
     return view::components::buildPreviewSurface(
@@ -208,10 +208,10 @@ std::unique_ptr<wui::Node> buildStateMatrix(VisualQaViewModel& viewModel, wui::B
         .gap(18.0f)
         .align(wui::Alignment::Center)
         .children(std::move(button), buildInteractionControls(viewModel))
-        .intoNode());
+        .build());
 }
 
-std::unique_ptr<wui::Dialog> buildInspectorDialog(wui::UiWindow& window)
+std::unique_ptr<wui::DialogNode> buildInspectorDialog(wui::UiWindow& window)
 {
     std::size_t nodeCount = 0;
     std::size_t dirtyCount = 0;
@@ -230,7 +230,7 @@ std::unique_ptr<wui::Dialog> buildInspectorDialog(wui::UiWindow& window)
                 Button("Close").onClick([&window] { (void)window.dismissTopDialog(); }))
             )
         )
-        .intoDialog();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildInspectorEntry(wui::UiWindow& window)
@@ -242,18 +242,18 @@ std::unique_ptr<wui::Node> buildInspectorEntry(wui::UiWindow& window)
                 auto entry = std::make_unique<view::components::ResponsiveRow>();
                 entry->gap(14.0f).align(wui::Alignment::Center);
                 entry->appendChild(Icon(wui::IconName::TaskList)
-                    .color(wui::theme().colors.accent).intoNode());
+                    .color(wui::theme().colors.accent).build());
                 entry->appendChild(Column().gap(3.0f).children(
                     Text("Inspector snapshot").size(15.0f).weight(600),
                     Text("Capture the currently installed Visual QA tree on demand.")
-                        .size(11.0f).color(wui::theme().colors.textMuted)).intoNode());
-                entry->appendChild(Spacer().flex(1.0f).intoNode());
+                        .size(11.0f).color(wui::theme().colors.textMuted)).build());
+                entry->appendChild(Spacer().flex(1.0f).build());
                 entry->appendChild(Button("Inspect now").onClick([&window] {
                     (void)window.showDialog(buildInspectorDialog(window));
-                }).intoNode());
+                }).build());
                 return entry;
             }()
-        ).intoNode();
+        ).build();
 }
 
 std::unique_ptr<wui::Node> buildSampleRuns()
@@ -262,13 +262,13 @@ std::unique_ptr<wui::Node> buildSampleRuns()
         auto item = std::make_unique<view::components::ResponsiveRow>();
         item->gap(12.0f).align(wui::Alignment::Center);
         item->appendChild(Icon(wui::IconName::CheckmarkCircle)
-            .color(wui::theme().colors.success).intoNode());
+            .color(wui::theme().colors.success).build());
         item->appendChild(Column().gap(2.0f).children(
             Text(std::move(name)).size(13.0f).weight(600),
-            Text(std::move(detail)).size(10.0f).color(wui::theme().colors.textMuted)).intoNode());
-        item->appendChild(Spacer().flex(1.0f).intoNode());
+            Text(std::move(detail)).size(10.0f).color(wui::theme().colors.textMuted)).build());
+        item->appendChild(Spacer().flex(1.0f).build());
         item->appendChild(Badge("SAMPLE").appearance(wui::BadgeAppearance::Outline)
-            .color(wui::BadgeColor::Neutral).intoNode());
+            .color(wui::BadgeColor::Neutral).build());
         return item;
     };
     return Card()
@@ -281,10 +281,10 @@ std::unique_ptr<wui::Node> buildSampleRuns()
                 [] {
                     auto heading = std::make_unique<view::components::ResponsiveRow>();
                     heading->align(wui::Alignment::Center);
-                    heading->appendChild(Text("Recent runs").size(16.0f).weight(600).intoNode());
-                    heading->appendChild(Spacer().flex(1.0f).intoNode());
+                    heading->appendChild(Text("Recent runs").size(16.0f).weight(600).build());
+                    heading->appendChild(Spacer().flex(1.0f).build());
                     heading->appendChild(Badge("DEMO DATA").appearance(wui::BadgeAppearance::Tint)
-                        .color(wui::BadgeColor::Warning).intoNode());
+                        .color(wui::BadgeColor::Warning).build());
                     return heading;
                 }(),
                 Text("Illustrative local snapshots only; this page is not connected to CI or CTest history.")
@@ -296,7 +296,7 @@ std::unique_ptr<wui::Node> buildSampleRuns()
                 run("Text baseline acceptance", "Software · fractional DPI")
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -306,9 +306,9 @@ std::unique_ptr<wui::Node> buildVisualQaPage(
     wui::UiWindow& window,
     ApplyVisualQaThemeHandler applyTheme)
 {
-    wui::Button* preview = nullptr;
+    wui::ButtonNode* preview = nullptr;
     auto root = ScrollView()
-        .children(
+        .content(
             Column()
             .gap(20.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})
@@ -323,7 +323,7 @@ std::unique_ptr<wui::Node> buildVisualQaPage(
                 std::make_unique<WindowScaleProbe>(window, viewModel)
             )
         )
-        .intoNode();
+        .build();
     bindInteraction(*root, *preview, viewModel);
     return root;
 }

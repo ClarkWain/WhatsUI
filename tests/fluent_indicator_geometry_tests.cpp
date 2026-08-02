@@ -336,9 +336,9 @@ int main(int argc, char** argv)
             canvas->beginFrame();
             paint.fillRect({0, 0, static_cast<float>(kLogicalWidth), static_cast<float>(kLogicalHeight)},
                            wui::theme().colors.neutralBackground2.rest);
-            wui::Radio radio({}, false);
-            wui::Radio selectedRadio({}, true);
-            wui::Checkbox checkbox({}, false);
+            wui::RadioNode radio({}, false);
+            wui::RadioNode selectedRadio({}, true);
+            wui::CheckboxNode checkbox({}, false);
             draw(radio, paint, {20, 20, 32, 32});
             draw(checkbox, paint, {60, 20, 32, 32});
             draw(selectedRadio, paint, {20, 60, 32, 32});

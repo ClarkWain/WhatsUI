@@ -16,7 +16,7 @@ void expect(bool condition, const char* message)
 void popupPlacementAndDismiss()
 {
     bool dismissed = false;
-    wui::Popup popup;
+    wui::PopupNode popup;
     popup.anchor({90.0f, 95.0f, 40.0f, 24.0f})
          .preferredSize({140.0f, 80.0f})
          .onDismiss([&] { dismissed = true; });
@@ -38,7 +38,7 @@ void menuNavigationAndInvocation()
 {
     int invoked = 0;
     int dismissed = 0;
-    wui::Menu menu;
+    wui::MenuNode menu;
     menu.anchor({12.0f, 12.0f, 32.0f, 24.0f});
     menu.addItem({"Disabled", {}, false, [&] { invoked += 100; }})
         .addItem({"Open", "Enter", true, [&] { ++invoked; }})
@@ -61,7 +61,7 @@ void menuNavigationAndInvocation()
 
 void tooltipDelayAndSearchEscape()
 {
-    wui::Tooltip tooltip;
+    wui::TooltipNode tooltip;
     tooltip.text("Copy").delay(std::chrono::milliseconds{500}).showAfter(std::chrono::milliseconds{499});
     expect(!tooltip.isVisible(), "tooltip must not show before its delay");
     tooltip.showAfter(std::chrono::milliseconds{500});
@@ -77,7 +77,7 @@ void tooltipDelayAndSearchEscape()
     expect(!tooltip.isVisible(), "tooltip hide should be immediate");
 
     int changes = 0;
-    wui::SearchField field;
+    wui::SearchFieldNode field;
     field.onQueryChange([&](const std::string&) { ++changes; }).query("today");
     expect(field.query() == "today", "search query should delegate to TextInput");
     expect(field.onKeyEvent({0, wui::KeyAction::Down, 27}), "escape should clear a non-empty search field");
@@ -87,7 +87,7 @@ void tooltipDelayAndSearchEscape()
 void iconButtonClick()
 {
     int clicks = 0;
-    wui::IconButton icon("+");
+    wui::IconButtonNode icon("+");
     icon.onClick([&] { ++clicks; });
     icon.layout({10.0f, 10.0f, 32.0f, 32.0f});
     wui::PointerEvent down{0, wui::PointerType::Mouse, wui::PointerAction::Down, wui::MouseButton::Left, {20.0f, 20.0f}};

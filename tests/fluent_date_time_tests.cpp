@@ -15,7 +15,7 @@ void testCivilValues()
 }
 void testCalendarKeyboardAndPolicies()
 {
-    wui::Calendar calendar;
+    wui::CalendarNode calendar;
     const auto natural = calendar.measureWithConstraints({});
     expect(natural.width == 248.0f && natural.height == 272.0f,
            "Calendar must use seven 32-DIP rows inside its 12-DIP Fluent panel inset");
@@ -58,12 +58,12 @@ void testCalendarKeyboardAndPolicies()
 }
 void testPickersValidateAndStep()
 {
-    wui::DatePicker date;
+    wui::DatePickerNode date;
     expect(date.measureWithConstraints({}).height == 32.0f,
            "DatePicker must retain the Fluent medium 32-DIP input height");
     date.text("2024-02-31"); expect(!date.isValid(), "DatePicker invalid text must be observable without locale parsing");
     date.text("2024-02-29"); expect(date.isValid() && date.value().has_value(), "DatePicker canonical ISO input must commit");
-    wui::TimePicker time;
+    wui::TimePickerNode time;
     expect(time.measureWithConstraints({}).height == 32.0f,
            "TimePicker must retain the Fluent medium 32-DIP input height");
     time.minuteStep(15); time.text("09:07"); expect(!time.isValid(), "TimePicker must reject values off its minute step");
@@ -73,7 +73,7 @@ void testPickersValidateAndStep()
 void testPickerAccessibilityAndPopupContracts()
 {
     wui::OverlayHost overlays;
-    wui::DatePicker date; date.bindOverlayHost(overlays);
+    wui::DatePickerNode date; date.bindOverlayHost(overlays);
     expect(date.accessibilityActions().expandCollapse && date.accessibilityActions().setValue,
            "DatePicker must expose its popup and canonical value to accessibility");
     expect(date.performAccessibilityAction(wui::AccessibilityActionKind::SetValue, "2024-02-29") ==
@@ -89,7 +89,7 @@ void testPickerAccessibilityAndPopupContracts()
                wui::AccessibilityActionStatus::Succeeded && !date.isOpen() && overlays.empty(),
            "DatePicker collapse must remove the popup deterministically");
 
-    wui::TimePicker time; time.minuteStep(15).bindOverlayHost(overlays);
+    wui::TimePickerNode time; time.minuteStep(15).bindOverlayHost(overlays);
     expect(time.performAccessibilityAction(wui::AccessibilityActionKind::SetValue, "09:30") ==
                wui::AccessibilityActionStatus::Succeeded && time.value() == wui::CivilTime{9, 30, 0},
            "TimePicker must accept a canonical stepped UIA value");

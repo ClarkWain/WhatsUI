@@ -17,7 +17,7 @@ struct NodeTreeStats {
     std::size_t layoutDirty{0};
     std::size_t paintDirty{0};
     std::size_t compositingDirty{0};
-    // Tree-level diagnostics can identify Text nodes without asking a
+    // TreeNode-level diagnostics can identify TextNode nodes without asking a
     // renderer to rasterize or inspect glyphs.
     std::size_t textNodes{0};
 };

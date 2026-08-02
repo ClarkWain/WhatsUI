@@ -23,21 +23,21 @@ constexpr float kDefaultViewportRows = 8.0f;
 
 } // namespace
 
-struct VirtualList::State {
+struct VirtualListNode::State {
     internal::ViewportModel viewport;
     internal::KeyedRecycler recycler;
 };
 
-VirtualList::VirtualList()
+VirtualListNode::VirtualListNode()
     : state_(std::make_unique<State>())
 {
     state_->viewport.setItemExtent(36.0f);
     state_->viewport.setOverscanItems(2);
 }
 
-VirtualList::~VirtualList() = default;
+VirtualListNode::~VirtualListNode() = default;
 
-void VirtualList::setItemCount(Index count)
+void VirtualListNode::setItemCount(Index count)
 {
     if (state_->viewport.itemCount() == count) return;
     state_->viewport.setItemCount(count);
@@ -47,18 +47,18 @@ void VirtualList::setItemCount(Index count)
     markDirty(DirtyFlag::Layout);
 }
 
-VirtualList::Index VirtualList::itemCount() const noexcept
+VirtualListNode::Index VirtualListNode::itemCount() const noexcept
 {
     return state_->viewport.itemCount();
 }
 
-void VirtualList::setKeyProvider(KeyProvider provider)
+void VirtualListNode::setKeyProvider(KeyProvider provider)
 {
     state_->recycler.setKeyProvider(std::move(provider));
     refresh();
 }
 
-void VirtualList::setItemBuilder(ItemBuilder builder)
+void VirtualListNode::setItemBuilder(ItemBuilder builder)
 {
     state_->recycler.setBuilder(std::move(builder));
     // A new builder represents a new row rendering contract. Existing row
@@ -70,19 +70,19 @@ void VirtualList::setItemBuilder(ItemBuilder builder)
     markDirty(DirtyFlag::Layout);
 }
 
-void VirtualList::refresh()
+void VirtualListNode::refresh()
 {
     reconcile();
     layoutMountedChildren();
     markDirty(DirtyFlag::Layout);
 }
 
-float VirtualList::rowExtent() const noexcept
+float VirtualListNode::rowExtent() const noexcept
 {
     return state_->viewport.itemExtent();
 }
 
-void VirtualList::setRowExtent(float extent) noexcept
+void VirtualListNode::setRowExtent(float extent) noexcept
 {
     const float next = std::isfinite(extent) ? std::max(1.0f, extent) : 36.0f;
     if (state_->viewport.itemExtent() == next) return;
@@ -92,12 +92,12 @@ void VirtualList::setRowExtent(float extent) noexcept
     markDirty(DirtyFlag::Layout);
 }
 
-float VirtualList::scrollOffset() const noexcept
+float VirtualListNode::scrollOffset() const noexcept
 {
     return state_->viewport.scrollOffset();
 }
 
-void VirtualList::setScrollOffset(float offset) noexcept
+void VirtualListNode::setScrollOffset(float offset) noexcept
 {
     const float previous = state_->viewport.scrollOffset();
     state_->viewport.setScrollOffset(offset);
@@ -107,12 +107,12 @@ void VirtualList::setScrollOffset(float offset) noexcept
     markDirty(DirtyFlag::Paint);
 }
 
-float VirtualList::maxScrollOffset() const noexcept
+float VirtualListNode::maxScrollOffset() const noexcept
 {
     return state_->viewport.maxScrollOffset();
 }
 
-void VirtualList::scrollToIndex(Index index)
+void VirtualListNode::scrollToIndex(Index index)
 {
     const float previous = state_->viewport.scrollOffset();
     state_->viewport.scrollToIndex(index);
@@ -122,40 +122,40 @@ void VirtualList::scrollToIndex(Index index)
     markDirty(DirtyFlag::Paint);
 }
 
-VirtualList::Range VirtualList::visibleRange() const noexcept
+VirtualListNode::Range VirtualListNode::visibleRange() const noexcept
 {
     const auto range = state_->viewport.visibleRange();
     return {range.first, range.last};
 }
 
-VirtualList::Index VirtualList::mountedCount() const noexcept
+VirtualListNode::Index VirtualListNode::mountedCount() const noexcept
 {
     return state_->recycler.mountedCount();
 }
 
-VirtualList::Index VirtualList::pooledCount() const noexcept
+VirtualListNode::Index VirtualListNode::pooledCount() const noexcept
 {
     return state_->recycler.pooledCount();
 }
 
-std::unique_ptr<Node> VirtualList::removeChild(std::size_t index)
+std::unique_ptr<Node> VirtualListNode::removeChild(std::size_t index)
 {
     auto child = ControlNode::removeChild(index);
     state_->recycler.forget(child.get());
     return child;
 }
 
-void VirtualList::clearChildren()
+void VirtualListNode::clearChildren()
 {
     state_->recycler.clear(*this);
 }
 
-int VirtualList::selectedIndex() const noexcept
+int VirtualListNode::selectedIndex() const noexcept
 {
     return selectedIndex_;
 }
 
-void VirtualList::setSelectedIndex(int index)
+void VirtualListNode::setSelectedIndex(int index)
 {
     const int next = normalizedSelection(index);
     if (selectedIndex_ == next) return;
@@ -164,19 +164,19 @@ void VirtualList::setSelectedIndex(int index)
     markDirty(DirtyFlag::Paint);
 }
 
-VirtualList& VirtualList::onSelectionChanged(SelectionHandler handler)
+VirtualListNode& VirtualListNode::onSelectionChanged(SelectionHandler handler)
 {
     onSelectionChanged_ = std::move(handler);
     return *this;
 }
 
-SizeF VirtualList::measure(const Constraints& constraints) const
+SizeF VirtualListNode::measure(const Constraints& constraints) const
 {
     const float preferredHeight = std::min(static_cast<float>(state_->viewport.itemCount()) * state_->viewport.itemExtent(), state_->viewport.itemExtent() * kDefaultViewportRows);
     return constraints.clamp({kDefaultWidth, preferredHeight});
 }
 
-void VirtualList::layout(const RectF& bounds)
+void VirtualListNode::layout(const RectF& bounds)
 {
     setBounds(bounds);
     state_->viewport.setViewportExtent(bounds.height);
@@ -185,7 +185,7 @@ void VirtualList::layout(const RectF& bounds)
     clearDirty(DirtyFlag::Layout);
 }
 
-void VirtualList::paint(PaintContext& context)
+void VirtualListNode::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
@@ -221,7 +221,7 @@ void VirtualList::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-Node* VirtualList::hitTest(PointF point)
+Node* VirtualListNode::hitTest(PointF point)
 {
     // Rows are supplied by the application and may be purely visual. Routing
     // to the list makes selection deterministic and avoids stale child input
@@ -229,7 +229,7 @@ Node* VirtualList::hitTest(PointF point)
     return bounds().contains(point) ? this : nullptr;
 }
 
-bool VirtualList::onPointerEvent(const PointerEvent& event)
+bool VirtualListNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     switch (event.action) {
@@ -262,7 +262,7 @@ bool VirtualList::onPointerEvent(const PointerEvent& event)
     return false;
 }
 
-bool VirtualList::onKeyEvent(const KeyEvent& event)
+bool VirtualListNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || event.action != KeyAction::Down || state_->viewport.itemCount() == 0) return false;
     int next = selectedIndex_;
@@ -286,13 +286,13 @@ bool VirtualList::onKeyEvent(const KeyEvent& event)
     return true;
 }
 
-VirtualList::Range VirtualList::mountedRange() const noexcept
+VirtualListNode::Range VirtualListNode::mountedRange() const noexcept
 {
     const auto range = state_->viewport.overscanRange();
     return {range.first, range.last};
 }
 
-int VirtualList::rowAt(PointF point) const noexcept
+int VirtualListNode::rowAt(PointF point) const noexcept
 {
     if (!bounds().contains(point) || state_->viewport.itemExtent() <= 0.0f) return -1;
     const float contentY = point.y - bounds().y + state_->viewport.scrollOffset();
@@ -301,18 +301,18 @@ int VirtualList::rowAt(PointF point) const noexcept
     return index < state_->viewport.itemCount() && index <= static_cast<Index>(std::numeric_limits<int>::max()) ? static_cast<int>(index) : -1;
 }
 
-int VirtualList::normalizedSelection(int index) const noexcept
+int VirtualListNode::normalizedSelection(int index) const noexcept
 {
     return index >= 0 && static_cast<Index>(index) < state_->viewport.itemCount() ? index : -1;
 }
 
-void VirtualList::reconcile()
+void VirtualListNode::reconcile()
 {
     const Range range = mountedRange();
     state_->recycler.reconcile(*this, {range.first, range.last});
 }
 
-void VirtualList::layoutMountedChildren()
+void VirtualListNode::layoutMountedChildren()
 {
     for (const auto& mounted : state_->recycler.mounted()) {
         mounted.node->layout({bounds().x + 1.0f,
@@ -321,7 +321,7 @@ void VirtualList::layoutMountedChildren()
     }
 }
 
-void VirtualList::select(int index)
+void VirtualListNode::select(int index)
 {
     if (index < 0 || static_cast<Index>(index) >= state_->viewport.itemCount() || index == selectedIndex_) return;
     selectedIndex_ = index;

@@ -230,7 +230,7 @@ void verifyTextGeometry(const std::vector<std::uint8_t>& pixels, int width, int 
 void verifyInputPaddingGeometry()
 {
     const wui::RectF bounds{24.0f, 84.0f, 240.0f, 32.0f};
-    wui::TextInput input;
+    wui::TextFieldNode input;
     input.layout(bounds);
     const float padding = wui::theme().controls.horizontalPadding;
     expect(std::fabs(input.caretRect().x - (bounds.x + padding)) <= 0.01f,
@@ -345,29 +345,29 @@ int main(int argc, char** argv)
             paint.fillRect({0, 0, static_cast<float>(kLogicalWidth), static_cast<float>(kLogicalHeight)},
                            wui::theme().colors.neutralBackground2.rest);
 
-            wui::Button button("Action");
+            wui::ButtonNode button("Action");
             button.setAppearance(wui::ButtonAppearance::Primary);
             draw(button, paint, {24, 28, 120, 32});
-            wui::Button circular("+");
+            wui::ButtonNode circular("+");
             circular.setAppearance(wui::ButtonAppearance::Primary);
             circular.setShape(wui::ButtonShape::Circular);
             draw(circular, paint, {168, 28, 32, 32});
 
-            wui::TextInput input("Placeholder");
+            wui::TextFieldNode input("Placeholder");
             draw(input, paint, {24, 84, 240, 32});
-            wui::Label label("Task label");
+            wui::LabelNode label("Task label");
             draw(label, paint, {292, 90, 160, 20});
 
-            wui::CompoundButton rest("Rest", "Description");
-            wui::CompoundButton hover("Hover", "Description");
-            wui::CompoundButton pressed("Pressed", "Description");
+            wui::CompoundButtonNode rest("Rest", "Description");
+            wui::CompoundButtonNode hover("Hover", "Description");
+            wui::CompoundButtonNode pressed("Pressed", "Description");
             hover.setVisualState(wui::ControlVisualState::Hovered, true);
             pressed.setVisualState(wui::ControlVisualState::Pressed, true);
             draw(rest, paint, {24, 132, 140, 52});
             draw(hover, paint, {184, 132, 140, 52});
             draw(pressed, paint, {344, 132, 140, 52});
 
-            wui::Radio radioRest("Rest", false), radioHover("Hover", false),
+            wui::RadioNode radioRest("Rest", false), radioHover("Hover", false),
                 radioPressed("Pressed", false), radioSelected("Selected", true);
             radioHover.setVisualState(wui::ControlVisualState::Hovered, true);
             radioPressed.setVisualState(wui::ControlVisualState::Pressed, true);
@@ -376,7 +376,7 @@ int main(int argc, char** argv)
             draw(radioPressed, paint, {276, 210, 100, 32});
             draw(radioSelected, paint, {402, 210, 120, 32});
 
-            wui::ProgressBar progress(0.0f, 1.0f, 0.25f);
+            wui::ProgressBarNode progress(0.0f, 1.0f, 0.25f);
             draw(progress, paint, {24, 270, 540, 12});
             canvas->endFrame();
 

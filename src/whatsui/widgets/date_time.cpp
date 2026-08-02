@@ -19,7 +19,7 @@ namespace {
 constexpr int kEnter = 13, kSpace = 32, kEsc = 27, kLeft = 37, kUp = 38,
               kRight = 39, kDown = 40, kHome = 36, kEnd = 35, kPageUp = 33,
               kPageDown = 34;
-// Fluent compat Calendar uses a compact 12-DIP panel inset. WhatsUI keeps the
+// Fluent compat CalendarNode uses a compact 12-DIP panel inset. WhatsUI keeps the
 // newer 32-DIP row rhythm requested by the native design system while the
 // visible date affordance remains the Fluent 24-DIP button.
 constexpr float kHeader = 32.0f, kWeek = 24.0f, kCell = 32.0f, kPad = 12.0f;
@@ -143,11 +143,11 @@ void paintPickerChrome(PaintContext &c, const ControlNode &node, RectF bounds,
               underlineWidth},
              underline);
 }
-class CalendarPopup final : public Popup {
+class CalendarPopupNode final : public PopupNode {
 public:
-  CalendarPopup(Calendar *owner, std::function<void(CivilDate)> commit)
+  CalendarPopupNode(CalendarNode *owner, std::function<void(CivilDate)> commit)
       : owner_(owner), commit_(std::move(commit)) {}
-  Calendar *owner_;
+  CalendarNode *owner_;
   std::function<void(CivilDate)> commit_;
 };
 } // namespace
@@ -247,27 +247,27 @@ std::string formatTime(CivilTime t, bool seconds) {
   return b;
 }
 
-Calendar::Calendar() {
+CalendarNode::CalendarNode() {
   displayed_ = {2026, 1, 1};
   focused_ = displayed_;
 }
-Calendar &Calendar::displayedMonth(CivilDate v) {
+CalendarNode &CalendarNode::displayedMonth(CivilDate v) {
   setDisplayedMonth(v);
   return *this;
 }
-void Calendar::setDisplayedMonth(CivilDate v) {
+void CalendarNode::setDisplayedMonth(CivilDate v) {
   v.day = 1;
   if (!isValidDate(v))
     return;
   displayed_ = v;
   markDirty(DirtyFlag::Paint);
 }
-CivilDate Calendar::displayedMonth() const noexcept { return displayed_; }
-Calendar &Calendar::selectedDate(std::optional<CivilDate> v) {
+CivilDate CalendarNode::displayedMonth() const noexcept { return displayed_; }
+CalendarNode &CalendarNode::selectedDate(std::optional<CivilDate> v) {
   setSelectedDate(v);
   return *this;
 }
-void Calendar::setSelectedDate(std::optional<CivilDate> v) {
+void CalendarNode::setSelectedDate(std::optional<CivilDate> v) {
   if (v && !isValidDate(*v))
     v.reset();
   selected_ = v;
@@ -278,15 +278,15 @@ void Calendar::setSelectedDate(std::optional<CivilDate> v) {
   }
   markDirty(DirtyFlag::Paint);
 }
-std::optional<CivilDate> Calendar::selectedDate() const noexcept {
+std::optional<CivilDate> CalendarNode::selectedDate() const noexcept {
   return selected_;
 }
-Calendar &Calendar::selectedRange(std::optional<CivilDate> a,
+CalendarNode &CalendarNode::selectedRange(std::optional<CivilDate> a,
                                   std::optional<CivilDate> b) {
   setSelectedRange(a, b);
   return *this;
 }
-void Calendar::setSelectedRange(std::optional<CivilDate> a,
+void CalendarNode::setSelectedRange(std::optional<CivilDate> a,
                                 std::optional<CivilDate> b) {
   if (a && !isValidDate(*a))
     a.reset();
@@ -303,57 +303,57 @@ void Calendar::setSelectedRange(std::optional<CivilDate> a,
   }
   markDirty(DirtyFlag::Paint);
 }
-std::optional<CivilDate> Calendar::rangeStart() const noexcept {
+std::optional<CivilDate> CalendarNode::rangeStart() const noexcept {
   return rangeStart_;
 }
-std::optional<CivilDate> Calendar::rangeEnd() const noexcept {
+std::optional<CivilDate> CalendarNode::rangeEnd() const noexcept {
   return rangeEnd_;
 }
-Calendar &Calendar::selectionMode(CalendarSelectionMode v) {
+CalendarNode &CalendarNode::selectionMode(CalendarSelectionMode v) {
   setSelectionMode(v);
   return *this;
 }
-void Calendar::setSelectionMode(CalendarSelectionMode v) {
+void CalendarNode::setSelectionMode(CalendarSelectionMode v) {
   mode_ = v;
   markDirty(DirtyFlag::Paint);
 }
-Calendar &Calendar::minimumDate(std::optional<CivilDate> v) {
+CalendarNode &CalendarNode::minimumDate(std::optional<CivilDate> v) {
   minimum_ = v;
   return *this;
 }
-Calendar &Calendar::maximumDate(std::optional<CivilDate> v) {
+CalendarNode &CalendarNode::maximumDate(std::optional<CivilDate> v) {
   maximum_ = v;
   return *this;
 }
-Calendar &Calendar::isDateDisabled(DisablePredicate p) {
+CalendarNode &CalendarNode::isDateDisabled(DisablePredicate p) {
   disabled_ = std::move(p);
   return *this;
 }
-Calendar &Calendar::onSelect(SelectHandler h) {
+CalendarNode &CalendarNode::onSelect(SelectHandler h) {
   onSelect_ = std::move(h);
   return *this;
 }
-CivilDate Calendar::focusedDate() const noexcept { return focused_; }
-bool Calendar::isDateEnabled(CivilDate v) const {
+CivilDate CalendarNode::focusedDate() const noexcept { return focused_; }
+bool CalendarNode::isDateEnabled(CivilDate v) const {
   return isValidDate(v) && (!minimum_ || compare(v, *minimum_) >= 0) &&
          (!maximum_ || compare(v, *maximum_) <= 0) &&
          (!disabled_ || !disabled_(v));
 }
-SizeF Calendar::measure(const Constraints &c) const {
+SizeF CalendarNode::measure(const Constraints &c) const {
   return c.clamp({kCalendarWidth, kCalendarHeight});
 }
-void Calendar::layout(const RectF &r) {
+void CalendarNode::layout(const RectF &r) {
   Node::layout(r);
   clearLayoutDirtyRecursively();
 }
-RectF Calendar::dayBounds(CivilDate d) const noexcept {
+RectF CalendarNode::dayBounds(CivilDate d) const noexcept {
   CivilDate first{displayed_.year, displayed_.month, 1};
   int pos = weekday(first) + d.day - 1;
   return {bounds().x + kPad + (pos % 7) * kCell,
           bounds().y + kHeader + kWeek + kPad + (pos / 7) * kCell, kCell,
           kCell};
 }
-std::optional<CivilDate> Calendar::dateAt(PointF p) const noexcept {
+std::optional<CivilDate> CalendarNode::dateAt(PointF p) const noexcept {
   for (int d = 1; d <= daysInMonth(displayed_.year, displayed_.month); ++d) {
     CivilDate v{displayed_.year, displayed_.month, d};
     if (dayBounds(v).contains(p))
@@ -361,7 +361,7 @@ std::optional<CivilDate> Calendar::dateAt(PointF p) const noexcept {
   }
   return {};
 }
-void Calendar::paint(PaintContext &c) {
+void CalendarNode::paint(PaintContext &c) {
   const auto &t = theme();
   const auto b = c.snapRectEdges(bounds());
   c.fillRoundRect(b, t.radius.large, t.colors.neutralBackground1.rest);
@@ -459,16 +459,16 @@ void Calendar::paint(PaintContext &c) {
   }
   clearDirty(DirtyFlag::Paint);
 }
-void Calendar::setFocused(CivilDate v) {
+void CalendarNode::setFocused(CivilDate v) {
   focused_ = v;
   displayed_ = {v.year, v.month, 1};
   markDirty(DirtyFlag::Paint);
 }
-void Calendar::moveFocus(int n) {
+void CalendarNode::moveFocus(int n) {
   CivilDate v = addDays(focused_, n);
   setFocused(v);
 }
-void Calendar::select(CivilDate v) {
+void CalendarNode::select(CivilDate v) {
   if (!isDateEnabled(v))
     return;
   if (mode_ == CalendarSelectionMode::Single)
@@ -487,7 +487,7 @@ void Calendar::select(CivilDate v) {
                                                      : rangeEnd_);
   markDirty(DirtyFlag::Paint);
 }
-bool Calendar::onPointerEvent(const PointerEvent &e) {
+bool CalendarNode::onPointerEvent(const PointerEvent &e) {
   if (!isEnabled())
     return false;
   if (e.action == PointerAction::Leave ||
@@ -561,7 +561,7 @@ bool Calendar::onPointerEvent(const PointerEvent &e) {
   }
   return false;
 }
-bool Calendar::onKeyEvent(const KeyEvent &e) {
+bool CalendarNode::onKeyEvent(const KeyEvent &e) {
   if (e.action != KeyAction::Down || !isEnabled())
     return false;
   switch (e.keyCode) {
@@ -599,13 +599,13 @@ bool Calendar::onKeyEvent(const KeyEvent &e) {
   return true;
 }
 
-DatePicker::DatePicker(std::string p) : placeholder_(std::move(p)) {}
-DatePicker::~DatePicker() { closePopup(); }
-DatePicker &DatePicker::value(std::optional<CivilDate> v) {
+DatePickerNode::DatePickerNode(std::string p) : placeholder_(std::move(p)) {}
+DatePickerNode::~DatePickerNode() { closePopup(); }
+DatePickerNode &DatePickerNode::value(std::optional<CivilDate> v) {
   setValue(v);
   return *this;
 }
-void DatePicker::setValue(std::optional<CivilDate> v) {
+void DatePickerNode::setValue(std::optional<CivilDate> v) {
   if (v && !isValidDate(*v))
     v.reset();
   value_ = v;
@@ -613,39 +613,39 @@ void DatePicker::setValue(std::optional<CivilDate> v) {
   valid_ = true;
   markDirty(DirtyFlag::Paint);
 }
-std::optional<CivilDate> DatePicker::value() const noexcept { return value_; }
-DatePicker &DatePicker::text(std::string v) {
+std::optional<CivilDate> DatePickerNode::value() const noexcept { return value_; }
+DatePickerNode &DatePickerNode::text(std::string v) {
   text_ = std::move(v);
   validateText();
   return *this;
 }
-const std::string &DatePicker::text() const noexcept { return text_; }
-bool DatePicker::isValid() const noexcept { return valid_; }
-DatePicker &DatePicker::placeholder(std::string v) {
+const std::string &DatePickerNode::text() const noexcept { return text_; }
+bool DatePickerNode::isValid() const noexcept { return valid_; }
+DatePickerNode &DatePickerNode::placeholder(std::string v) {
   placeholder_ = std::move(v);
   return *this;
 }
-DatePicker &DatePicker::minimumDate(std::optional<CivilDate> v) {
+DatePickerNode &DatePickerNode::minimumDate(std::optional<CivilDate> v) {
   minimum_ = v;
   return *this;
 }
-DatePicker &DatePicker::maximumDate(std::optional<CivilDate> v) {
+DatePickerNode &DatePickerNode::maximumDate(std::optional<CivilDate> v) {
   maximum_ = v;
   return *this;
 }
-DatePicker &DatePicker::bindOverlayHost(OverlayHost &h) noexcept {
+DatePickerNode &DatePickerNode::bindOverlayHost(OverlayHost &h) noexcept {
   host_ = &h;
   return *this;
 }
-DatePicker &DatePicker::onChange(ChangeHandler h) {
+DatePickerNode &DatePickerNode::onChange(ChangeHandler h) {
   onChange_ = std::move(h);
   return *this;
 }
-bool DatePicker::isOpen() const noexcept { return open_; }
-SizeF DatePicker::measure(const Constraints &c) const {
+bool DatePickerNode::isOpen() const noexcept { return open_; }
+SizeF DatePickerNode::measure(const Constraints &c) const {
   return c.clamp({180, theme().controls.height});
 }
-void DatePicker::paint(PaintContext &c) {
+void DatePickerNode::paint(PaintContext &c) {
   const auto &t = theme();
   auto b = c.snapRectEdges(bounds());
   paintPickerChrome(c, *this, b, valid_);
@@ -663,7 +663,7 @@ void DatePicker::paint(PaintContext &c) {
                                 : t.colors.neutralForegroundDisabled);
   clearDirty(DirtyFlag::Paint);
 }
-void DatePicker::validateText() {
+void DatePickerNode::validateText() {
   if (text_.empty()) {
     value_.reset();
     valid_ = true;
@@ -676,21 +676,21 @@ void DatePicker::validateText() {
   }
   markDirty(DirtyFlag::Paint);
 }
-void DatePicker::commit(std::optional<CivilDate> v) {
+void DatePickerNode::commit(std::optional<CivilDate> v) {
   setValue(v);
   if (onChange_)
     onChange_(value_);
   closePopup();
 }
-void DatePicker::openPopup() {
+void DatePickerNode::openPopup() {
   if (open_ || !host_)
     return;
-  auto calendar = std::make_unique<Calendar>();
+  auto calendar = std::make_unique<CalendarNode>();
   calendar->setSelectedDate(value_);
   calendar->minimumDate(minimum_).maximumDate(maximum_);
   calendar->onSelect([this](auto first, auto) { commit(first); });
-  Calendar *raw = calendar.get();
-  auto popup = std::make_unique<Popup>();
+  CalendarNode *raw = calendar.get();
+  auto popup = std::make_unique<PopupNode>();
   popup->anchor(bounds()).preferredSize({kCalendarWidth, 0}).onDismiss([this] {
     closePopup();
   });
@@ -700,7 +700,7 @@ void DatePicker::openPopup() {
   host_->focus(raw);
   markDirty(DirtyFlag::Paint);
 }
-void DatePicker::closePopup() {
+void DatePickerNode::closePopup() {
   OverlayHost *host = host_;
   const auto overlay = overlay_;
   open_ = false;
@@ -712,7 +712,7 @@ void DatePicker::closePopup() {
   setVisualState(ControlVisualState::Focused, true);
   markDirty(DirtyFlag::Paint);
 }
-bool DatePicker::onPointerEvent(const PointerEvent &e) {
+bool DatePickerNode::onPointerEvent(const PointerEvent &e) {
   if (!isEnabled())
     return false;
   if (e.action == PointerAction::Enter ||
@@ -739,7 +739,7 @@ bool DatePicker::onPointerEvent(const PointerEvent &e) {
   }
   return false;
 }
-bool DatePicker::onKeyEvent(const KeyEvent &e) {
+bool DatePickerNode::onKeyEvent(const KeyEvent &e) {
   if (e.action != KeyAction::Down)
     return false;
   if (e.keyCode == kEsc) {
@@ -757,20 +757,20 @@ bool DatePicker::onKeyEvent(const KeyEvent &e) {
   }
   return false;
 }
-bool DatePicker::onTextInput(const TextInputEvent &e) {
+bool DatePickerNode::onTextInput(const TextInputEvent &e) {
   if (e.text.empty())
     return false;
   text_ += e.text;
   validateText();
   return true;
 }
-AccessibilityActionCapabilities DatePicker::accessibilityActions() const noexcept {
+AccessibilityActionCapabilities DatePickerNode::accessibilityActions() const noexcept {
   AccessibilityActionCapabilities actions;
   actions.expandCollapse = host_ != nullptr;
   actions.setValue = true;
   return actions;
 }
-AccessibilityActionStatus DatePicker::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value) {
+AccessibilityActionStatus DatePickerNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value) {
   if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
   if (kind == AccessibilityActionKind::Expand) {
     openPopup();
@@ -791,13 +791,13 @@ AccessibilityActionStatus DatePicker::performAccessibilityAction(AccessibilityAc
   return AccessibilityActionStatus::NotSupported;
 }
 
-TimePicker::TimePicker(std::string p) : placeholder_(std::move(p)) {}
-TimePicker::~TimePicker() { closePopup(); }
-TimePicker &TimePicker::value(std::optional<CivilTime> v) {
+TimePickerNode::TimePickerNode(std::string p) : placeholder_(std::move(p)) {}
+TimePickerNode::~TimePickerNode() { closePopup(); }
+TimePickerNode &TimePickerNode::value(std::optional<CivilTime> v) {
   setValue(v);
   return *this;
 }
-void TimePicker::setValue(std::optional<CivilTime> v) {
+void TimePickerNode::setValue(std::optional<CivilTime> v) {
   if (v && !isValidTime(*v))
     v.reset();
   value_ = v;
@@ -805,29 +805,29 @@ void TimePicker::setValue(std::optional<CivilTime> v) {
   valid_ = true;
   markDirty(DirtyFlag::Paint);
 }
-std::optional<CivilTime> TimePicker::value() const noexcept { return value_; }
-TimePicker &TimePicker::text(std::string v) {
+std::optional<CivilTime> TimePickerNode::value() const noexcept { return value_; }
+TimePickerNode &TimePickerNode::text(std::string v) {
   text_ = std::move(v);
   validateText();
   return *this;
 }
-const std::string &TimePicker::text() const noexcept { return text_; }
-bool TimePicker::isValid() const noexcept { return valid_; }
-TimePicker &TimePicker::minuteStep(int v) {
+const std::string &TimePickerNode::text() const noexcept { return text_; }
+bool TimePickerNode::isValid() const noexcept { return valid_; }
+TimePickerNode &TimePickerNode::minuteStep(int v) {
   minuteStep_ = std::clamp(v, 1, 60);
   return *this;
 }
-int TimePicker::minuteStep() const noexcept { return minuteStep_; }
-TimePicker &TimePicker::bindOverlayHost(OverlayHost &h) noexcept { host_ = &h; return *this; }
-TimePicker &TimePicker::onChange(ChangeHandler h) {
+int TimePickerNode::minuteStep() const noexcept { return minuteStep_; }
+TimePickerNode &TimePickerNode::bindOverlayHost(OverlayHost &h) noexcept { host_ = &h; return *this; }
+TimePickerNode &TimePickerNode::onChange(ChangeHandler h) {
   onChange_ = std::move(h);
   return *this;
 }
-bool TimePicker::isOpen() const noexcept { return open_; }
-SizeF TimePicker::measure(const Constraints &c) const {
+bool TimePickerNode::isOpen() const noexcept { return open_; }
+SizeF TimePickerNode::measure(const Constraints &c) const {
   return c.clamp({150, theme().controls.height});
 }
-void TimePicker::paint(PaintContext &c) {
+void TimePickerNode::paint(PaintContext &c) {
   const auto &t = theme();
   auto b = c.snapRectEdges(bounds());
   paintPickerChrome(c, *this, b, valid_);
@@ -845,7 +845,7 @@ void TimePicker::paint(PaintContext &c) {
                                 : t.colors.neutralForegroundDisabled);
   clearDirty(DirtyFlag::Paint);
 }
-void TimePicker::validateText() {
+void TimePickerNode::validateText() {
   if (text_.empty()) {
     value_.reset();
     valid_ = true;
@@ -857,15 +857,15 @@ void TimePicker::validateText() {
   }
   markDirty(DirtyFlag::Paint);
 }
-void TimePicker::commit(std::optional<CivilTime> v) {
+void TimePickerNode::commit(std::optional<CivilTime> v) {
   setValue(v);
   if (onChange_)
     onChange_(value_);
 }
-void TimePicker::openPopup() {
+void TimePickerNode::openPopup() {
   if (open_ || !host_) return;
-  auto list = std::make_unique<ListBox>();
-  ListBox *raw = list.get();
+  auto list = std::make_unique<ListBoxNode>();
+  ListBoxNode *raw = list.get();
   const int count = 24 * 60 / minuteStep_;
   for (int index = 0; index < count; ++index) {
     const CivilTime time{index * minuteStep_ / 60, index * minuteStep_ % 60, 0};
@@ -883,7 +883,7 @@ void TimePicker::openPopup() {
     if (picked) commit(picked);
     closePopup();
   });
-  auto popup = std::make_unique<Popup>();
+  auto popup = std::make_unique<PopupNode>();
   popup->anchor(bounds()).preferredSize({std::max(180.0f, bounds().width), 0.0f})
       .onDismiss([this] { closePopup(); });
   popup->content(std::move(list));
@@ -892,7 +892,7 @@ void TimePicker::openPopup() {
   host_->focus(raw);
   markDirty(DirtyFlag::Paint);
 }
-void TimePicker::closePopup() {
+void TimePickerNode::closePopup() {
   OverlayHost *host = host_;
   const auto overlay = overlay_;
   open_ = false;
@@ -903,7 +903,7 @@ void TimePicker::closePopup() {
   }
   markDirty(DirtyFlag::Paint);
 }
-bool TimePicker::onPointerEvent(const PointerEvent &e) {
+bool TimePickerNode::onPointerEvent(const PointerEvent &e) {
   if (!isEnabled())
     return false;
   if (e.action == PointerAction::Enter ||
@@ -930,7 +930,7 @@ bool TimePicker::onPointerEvent(const PointerEvent &e) {
   }
   return false;
 }
-bool TimePicker::onKeyEvent(const KeyEvent &e) {
+bool TimePickerNode::onKeyEvent(const KeyEvent &e) {
   if (e.action != KeyAction::Down)
     return false;
   if (e.keyCode == 8 && !text_.empty()) {
@@ -953,20 +953,20 @@ bool TimePicker::onKeyEvent(const KeyEvent &e) {
   }
   return false;
 }
-bool TimePicker::onTextInput(const TextInputEvent &e) {
+bool TimePickerNode::onTextInput(const TextInputEvent &e) {
   if (e.text.empty())
     return false;
   text_ += e.text;
   validateText();
   return true;
 }
-AccessibilityActionCapabilities TimePicker::accessibilityActions() const noexcept {
+AccessibilityActionCapabilities TimePickerNode::accessibilityActions() const noexcept {
   AccessibilityActionCapabilities actions;
   actions.expandCollapse = host_ != nullptr;
   actions.setValue = true;
   return actions;
 }
-AccessibilityActionStatus TimePicker::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value) {
+AccessibilityActionStatus TimePickerNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value) {
   if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled;
   if (kind == AccessibilityActionKind::Expand) {
     openPopup();

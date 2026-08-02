@@ -1,6 +1,6 @@
 #pragma once
 
-// Fluent Drawer. Drawers are surfaces attached to a window edge: inline
+// Fluent DrawerNode. Drawers are surfaces attached to a window edge: inline
 // drawers participate in their parent's layout, while overlay drawers own a
 // full-window input boundary and optionally a modal scrim.
 
@@ -16,26 +16,26 @@ enum class DrawerType { Inline, Overlay };
 enum class DrawerPosition { Start, End, Bottom };
 enum class DrawerSize { Small, Medium, Large, Full };
 
-class Drawer : public ContainerNode {
+class DrawerNode : public ContainerNode {
 public:
     using DismissHandler = std::function<void()>;
     using ActionHandler = std::function<void()>;
 
-    Drawer(std::string title = {}, std::string subtitle = {});
+    DrawerNode(std::string title = {}, std::string subtitle = {});
 
-    Drawer& content(std::unique_ptr<Node> value);
-    Drawer& title(std::string value);
-    Drawer& subtitle(std::string value);
-    Drawer& primaryAction(std::string label, ActionHandler handler = {});
-    Drawer& secondaryAction(std::string label, ActionHandler handler = {});
-    Drawer& type(DrawerType value) noexcept;
-    Drawer& position(DrawerPosition value) noexcept;
-    Drawer& size(DrawerSize value) noexcept;
-    Drawer& width(float logicalPixels) noexcept;
-    Drawer& modal(bool value = true) noexcept;
-    Drawer& dismissOnOutsidePress(bool value = true) noexcept;
-    Drawer& closeOnEscape(bool value = true) noexcept;
-    Drawer& onDismiss(DismissHandler handler);
+    DrawerNode& content(std::unique_ptr<Node> value);
+    DrawerNode& title(std::string value);
+    DrawerNode& subtitle(std::string value);
+    DrawerNode& primaryAction(std::string label, ActionHandler handler = {});
+    DrawerNode& secondaryAction(std::string label, ActionHandler handler = {});
+    DrawerNode& type(DrawerType value) noexcept;
+    DrawerNode& position(DrawerPosition value) noexcept;
+    DrawerNode& size(DrawerSize value) noexcept;
+    DrawerNode& width(float logicalPixels) noexcept;
+    DrawerNode& modal(bool value = true) noexcept;
+    DrawerNode& dismissOnOutsidePress(bool value = true) noexcept;
+    DrawerNode& closeOnEscape(bool value = true) noexcept;
+    DrawerNode& onDismiss(DismissHandler handler);
 
     [[nodiscard]] const std::string& title() const noexcept;
     [[nodiscard]] const std::string& subtitle() const noexcept;
@@ -46,7 +46,7 @@ public:
     [[nodiscard]] bool dismissesOnOutsidePress() const noexcept;
     [[nodiscard]] bool closesOnEscape() const noexcept;
     // Modal overlay drawers form a keyboard boundary. UiWindow/OverlayHost
-    // should focus the Drawer when it is shown and restore the trigger focus
+    // should focus the DrawerNode when it is shown and restore the trigger focus
     // after dismissing it.
     [[nodiscard]] bool trapsFocus() const noexcept;
     [[nodiscard]] const RectF& panelBounds() const noexcept;
@@ -75,7 +75,7 @@ private:
     void clampScrollOffset() noexcept;
     void invoke(ActionHandler& action);
     // OverlayHost installs this ownership callback when it adopts a modal
-    // Drawer. It is intentionally independent from the author's onDismiss
+    // DrawerNode. It is intentionally independent from the author's onDismiss
     // handler, so application callbacks cannot accidentally bypass removal.
     void setOverlayDismissHandler(DismissHandler handler) noexcept;
 

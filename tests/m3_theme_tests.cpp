@@ -196,13 +196,13 @@ void testTextConsumesNamedTypographyStyle()
     expect(fluent.typography.body1Strong.weight == 600 &&
                fluent.typography.subtitle2.weight == 600,
            "Fluent medium and large Button labels must use the reference Semibold weight");
-    wui::Text defaultText("Default token text");
+    wui::TextNode defaultText("Default token text");
     expect(defaultText.fontFamily() == "Segoe UI Variable",
            "Text constructed under the Windows default must inherit familyBase");
     defaultText.setFontFamily({});
     expect(defaultText.fontFamily() == "Segoe UI Variable",
            "Resetting a Text family must resolve through the active theme instead of a hard-coded face");
-    wui::Text text("Token text");
+    wui::TextNode text("Token text");
     text.setTextStyle(fluent.typography.subtitle1);
     expect(text.fontFamily() == "Segoe UI Variable" && text.fontSize() == 20.0f &&
                text.fontWeight() == 600 && text.lineHeight() == 28.0f,

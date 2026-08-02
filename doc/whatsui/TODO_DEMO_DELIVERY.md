@@ -1,5 +1,8 @@
 # Todo demo delivery
 
+> **Retired 2026-08-01:** Todo App 已从源码、构建和活动测试矩阵移除。
+> 本文仅保留为历史交付记录；当前产品级参考是 Focus Tomato。
+
 The Todo demo has two delivery targets built from the same `buildTodoUi()`
 declarative tree:
 

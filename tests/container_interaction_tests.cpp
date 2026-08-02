@@ -1,5 +1,5 @@
 // Tests for Container's optional InteractionArea attachment. The attached
-// component is what makes `wui::ui::Box().onClick(...)` a first-class Fluent
+// component is what makes `wui::Box().onClick(...)` a first-class Fluent
 // row (nav rail, tiles, clickable cards) without inheriting from ControlNode
 // or introducing an extra wrapper widget in the tree.
 
@@ -38,16 +38,16 @@ wui::KeyEvent key(int keyCode, wui::KeyAction action = wui::KeyAction::Down)
     return event;
 }
 
-std::unique_ptr<wui::Container> makeBox()
+std::unique_ptr<wui::BoxNode> makeBox()
 {
-    auto container = std::make_unique<wui::Container>();
+    auto container = std::make_unique<wui::BoxNode>();
     container->layout({0.0f, 0.0f, 100.0f, 40.0f});
     return container;
 }
 
 void testInteractionOnlyAttachesWhenAsked()
 {
-    wui::Container container;
+    wui::BoxNode container;
     expect(container.interaction() == nullptr,
            "A fresh Container must remain a pure layout node until an "
            "interaction setter is called");
@@ -126,7 +126,7 @@ void testKeyboardActivation()
 
 void testAccessibilityInvokeExposedOnlyWithClick()
 {
-    wui::Container container;
+    wui::BoxNode container;
     container.setHoverBackground({1, 2, 3, 4});  // no click yet
     expect(!container.accessibilityActions().invoke,
            "Visual-only interaction setters must not expose invoke");
@@ -148,7 +148,7 @@ void testAccessibilityInvokeExposedOnlyWithClick()
 
 void testRawPointerHooksCanConsumeEventsWithoutClick()
 {
-    wui::Container container;
+    wui::BoxNode container;
     container.layout({0.0f, 0.0f, 100.0f, 40.0f});
     int downs = 0;
     container.setOnPointerDown([&](const wui::PointerEvent&) {

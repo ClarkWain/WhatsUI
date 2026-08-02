@@ -17,7 +17,7 @@ void expect(bool condition, const char* message)
 
 void testAvatarSemanticsAndSizing()
 {
-    wui::Avatar avatar("Ada Lovelace", wui::AvatarSize::Size40);
+    wui::AvatarNode avatar("Ada Lovelace", wui::AvatarSize::Size40);
     expect(avatar.displayedInitials() == "AL", "Avatar must derive stable two-word initials");
     expect(std::fabs(avatar.measure({}).width - 40.0f) < 0.001f,
            "Avatar must use its Fluent size as a square intrinsic size");
@@ -34,7 +34,7 @@ void testAvatarSemanticsAndSizing()
     avatar.clearImage();
     expect(!avatar.hasImage(), "Clearing an Avatar image must restore its initials fallback");
 
-    wui::Avatar fallback({}, wui::AvatarSize::Size32);
+    wui::AvatarNode fallback({}, wui::AvatarSize::Size32);
     expect(fallback.displayedInitials().empty(),
            "An unnamed Avatar must select the Fluent Person icon fallback");
     fallback.setActive(true);
@@ -44,7 +44,7 @@ void testAvatarSemanticsAndSizing()
 
 void testAvatarGroupOverflowAndPaint()
 {
-    wui::AvatarGroup group;
+    wui::AvatarGroupNode group;
     group.size(wui::AvatarSize::Size32).maxVisible(2).accessibleLabel("Project members");
     group.addAvatar("Ada Lovelace");
     group.addAvatar("Grace Hopper");

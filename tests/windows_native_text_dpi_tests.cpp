@@ -148,7 +148,7 @@ NativeRender renderNativeText(float scale)
     wui::WhatsCanvasTextMeasurer measurer(*canvas, 1.0f);
     wui::setTextMeasurer(&measurer);
     try {
-        wui::Text text(kProbe);
+        wui::TextNode text(kProbe);
         text.setFontFamily(kFamily);
         text.setFontSize(kTextSize);
         text.setFontWeight(600);

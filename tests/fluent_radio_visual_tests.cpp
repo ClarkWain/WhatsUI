@@ -117,7 +117,7 @@ bool annularStrokeContains(const std::vector<std::uint8_t>& pixels, int width, i
     return false;
 }
 
-void configureState(wui::Radio& radio, std::size_t column)
+void configureState(wui::RadioNode& radio, std::size_t column)
 {
     switch (column) {
     case 1:
@@ -145,7 +145,7 @@ void configureState(wui::Radio& radio, std::size_t column)
 void paintRadio(wui::PaintContext& paint, float x, float y,
                 const char* label, bool checked, std::size_t column)
 {
-    wui::Radio radio(label, checked);
+    wui::RadioNode radio(label, checked);
     configureState(radio, column);
     radio.layout({x, y, 118.0f, 32.0f});
     radio.prepare(paint);

@@ -77,7 +77,7 @@ public:
     }
 
     // Shared logical-to-physical alignment contract for controls. Components
-    // used to duplicate these formulas, which let Button, Input and selection
+    // used to duplicate these formulas, which let ButtonNode, Input and selection
     // controls round the same one-DIP stroke differently at 125%/150% DPR.
     [[nodiscard]] float physicalPixel() const noexcept
     {
@@ -322,7 +322,7 @@ public:
 
     // A circular control outline shares one outer silhouette just like
     // fillStrokeRoundRect().  Keeping the stroke centre half a width inside
-    // the requested radius prevents Radio/Slider rings from growing beyond
+    // the requested radius prevents RadioNode/SliderNode rings from growing beyond
     // their layout box or being clipped at fractional DPR.
     void fillStrokeCircle(const PointF& center, float radius, float strokeWidth,
                           Color fillColor, Color strokeColor)
@@ -532,7 +532,7 @@ public:
         // ascent/descent and vertically centers using that convention).
         // WhatsCanvas defaults to a top anchor, which applied the text size a
         // second time in its glyph-atlas path.  That put button/input labels
-        // below their controls and made Text's bounds clip most glyphs.
+        // below their controls and made TextNode's bounds clip most glyphs.
         adapter.fillPaint().setTextBaseline(wsc::Paint::TextBaseline::BOTTOM);
         adapter.drawText(text, x * canvasCoordinateScale_, y * canvasCoordinateScale_);
         paintStats_.textDrawMilliseconds += elapsedMilliseconds(started);

@@ -138,7 +138,7 @@ VerticalPixelBounds verticalBoundsNearColor(
 
 void testOfficialSizesAndOptions()
 {
-    wui::Checkbox checkbox("Accept terms");
+    wui::CheckboxNode checkbox("Accept terms");
     expect(wui::theme().controls.checkboxSize == 16.0f,
            "Fluent medium Checkbox indicator token must be 16 DIP");
     expect(checkbox.measure({}).height == 32.0f,
@@ -157,7 +157,7 @@ void testOfficialSizesAndOptions()
 
 void testMixedStateAndNativeKeyboardContract()
 {
-    wui::Checkbox checkbox("Select all");
+    wui::CheckboxNode checkbox("Select all");
     checkbox.setCheckState(wui::CheckboxState::Mixed);
     int boolChanges = 0;
     int stateChanges = 0;
@@ -183,7 +183,7 @@ void testMixedStateAndNativeKeyboardContract()
 
 void testPointerDisabledAndAccessibility()
 {
-    wui::Checkbox checkbox("Select all");
+    wui::CheckboxNode checkbox("Select all");
     checkbox.layout({0.0f, 0.0f, 160.0f, 32.0f});
     checkbox.setMixed();
     checkbox.setRequired();
@@ -215,7 +215,7 @@ void testBindingReplacementUnsubscribesOldState()
 {
     wui::State<bool> oldState{false};
     wui::State<bool> newState{false};
-    wui::Checkbox checkbox("Bound");
+    wui::CheckboxNode checkbox("Bound");
     checkbox.bind(oldState);
     checkbox.bind(newState);
     checkbox.layout({0.0f, 0.0f, 120.0f, 32.0f});
@@ -249,28 +249,28 @@ void writeVisualMatrix(const std::string& output, float scale)
         paint.drawText("Fluent Checkbox state matrix", 24.0f, 38.0f, 20.0f,
                        wui::theme().colors.neutralForeground1, 600);
 
-        std::vector<std::unique_ptr<wui::Checkbox>> controls;
-        controls.push_back(std::make_unique<wui::Checkbox>("Unchecked"));
-        controls.push_back(std::make_unique<wui::Checkbox>("Unchecked hover"));
+        std::vector<std::unique_ptr<wui::CheckboxNode>> controls;
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Unchecked"));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Unchecked hover"));
         controls.back()->setVisualState(wui::ControlVisualState::Hovered, true);
-        controls.push_back(std::make_unique<wui::Checkbox>("Unchecked pressed"));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Unchecked pressed"));
         controls.back()->setVisualState(wui::ControlVisualState::Hovered, true);
         controls.back()->setVisualState(wui::ControlVisualState::Pressed, true);
-        controls.push_back(std::make_unique<wui::Checkbox>("Unchecked disabled"));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Unchecked disabled"));
         controls.back()->setEnabled(false);
 
-        controls.push_back(std::make_unique<wui::Checkbox>("Checked", true));
-        controls.push_back(std::make_unique<wui::Checkbox>("Checked hover", true));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Checked", true));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Checked hover", true));
         controls.back()->setVisualState(wui::ControlVisualState::Hovered, true);
-        controls.push_back(std::make_unique<wui::Checkbox>("Checked pressed", true));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Checked pressed", true));
         controls.back()->setVisualState(wui::ControlVisualState::Hovered, true);
         controls.back()->setVisualState(wui::ControlVisualState::Pressed, true);
-        controls.push_back(std::make_unique<wui::Checkbox>("Checked disabled", true));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Checked disabled", true));
         controls.back()->setEnabled(false);
 
         for (const char* label : {"Mixed", "Mixed hover", "Mixed pressed",
                                   "Mixed disabled"}) {
-            controls.push_back(std::make_unique<wui::Checkbox>(label));
+            controls.push_back(std::make_unique<wui::CheckboxNode>(label));
             controls.back()->setMixed();
         }
         controls[9]->setVisualState(wui::ControlVisualState::Hovered, true);
@@ -278,21 +278,21 @@ void writeVisualMatrix(const std::string& output, float scale)
         controls[10]->setVisualState(wui::ControlVisualState::Pressed, true);
         controls[11]->setEnabled(false);
 
-        controls.push_back(std::make_unique<wui::Checkbox>("Pointer focus", true));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Pointer focus", true));
         controls.back()->setVisualState(wui::ControlVisualState::Focused, true);
-        controls.push_back(std::make_unique<wui::Checkbox>("Keyboard focus", true));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Keyboard focus", true));
         controls.back()->setVisualState(wui::ControlVisualState::Focused, true);
         controls.back()->setVisualState(wui::ControlVisualState::FocusVisible, true);
-        controls.push_back(std::make_unique<wui::Checkbox>("Large circular task", true));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Large circular task", true));
         controls.back()->setSize(wui::CheckboxSize::Large);
         controls.back()->setShape(wui::CheckboxShape::Circular);
-        controls.push_back(std::make_unique<wui::Checkbox>("Circular mixed"));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Circular mixed"));
         controls.back()->setShape(wui::CheckboxShape::Circular);
         controls.back()->setMixed();
-        controls.push_back(std::make_unique<wui::Checkbox>("Required before"));
+        controls.push_back(std::make_unique<wui::CheckboxNode>("Required before"));
         controls.back()->setLabelPosition(wui::CheckboxLabelPosition::Before);
         controls.back()->setRequired();
-        controls.push_back(std::make_unique<wui::Checkbox>(
+        controls.push_back(std::make_unique<wui::CheckboxNode>(
             "A wrapping label keeps its indicator aligned with the first line"));
         expect(controls.back()->measure({0.0f, 210.0f}).height >= 40.0f,
                "A narrow Checkbox label must wrap to multiple visual lines");

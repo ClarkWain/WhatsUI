@@ -46,7 +46,7 @@ namespace button_visuals {
 [[nodiscard]] TextStyleToken buttonTextStyle(const Theme& current,
                                              ButtonSize size) noexcept
 {
-    // Fluent Web Button: small = 12/16 Regular, medium = 14/20 Semibold,
+    // Fluent Web ButtonNode: small = 12/16 Regular, medium = 14/20 Semibold,
     // large = 16/22 Semibold. The reference component uses classic Segoe UI.
     switch (size) {
     case ButtonSize::Small:
@@ -64,7 +64,7 @@ namespace button_visuals {
     return {0, 0, 0, 0};
 }
 
-// Figma wraps a Button label in a container with 2 DIP bottom padding.
+// Figma wraps a ButtonNode label in a container with 2 DIP bottom padding.
 // Centering that wrapper shifts the actual line box upward by 1 DIP.
 [[nodiscard]] constexpr float buttonLabelOpticalOffset() noexcept
 {
@@ -374,152 +374,127 @@ using namespace button_visuals;
 
 using namespace button_visuals;
 
-Button::Button(std::string label)
+ButtonNode::ButtonNode(std::string label)
     : label_(std::move(label))
 {
 }
 
-const std::string& Button::label() const noexcept
+const std::string& ButtonNode::label() const noexcept
 {
     return label_;
 }
 
-Button& Button::label(std::string label)
+ButtonNode& ButtonNode::label(std::string label)
 {
     setLabel(std::move(label));
     return *this;
 }
 
-void Button::setLabel(std::string label)
+void ButtonNode::setLabel(std::string label)
 {
     label_ = std::move(label);
     markDirty(DirtyFlag::Layout);
 }
 
-Button& Button::onClick(ClickHandler handler)
+ButtonNode& ButtonNode::onClick(ClickHandler handler)
 {
     onClick_ = std::move(handler);
     return *this;
 }
 
-void Button::setVariant(ButtonVariant variant) noexcept
-{
-    variant_ = variant;
-    switch (variant) {
-    case ButtonVariant::Primary: appearance_ = ButtonAppearance::Primary; break;
-    case ButtonVariant::Secondary: appearance_ = ButtonAppearance::Secondary; break;
-    // Legacy Ghost rendered as a bordered secondary action, so it maps to
-    // Outline rather than the borderless Fluent Subtle appearance.
-    case ButtonVariant::Ghost: appearance_ = ButtonAppearance::Outline; break;
-    case ButtonVariant::Danger: appearance_ = ButtonAppearance::Danger; break;
-    }
-    markDirty(DirtyFlag::Paint);
-}
-
-ButtonVariant Button::variant() const noexcept
-{
-    return variant_;
-}
-
-void Button::setAppearance(ButtonAppearance appearance) noexcept
+void ButtonNode::setAppearance(ButtonAppearance appearance) noexcept
 {
     appearance_ = appearance;
-    switch (appearance) {
-    case ButtonAppearance::Primary: variant_ = ButtonVariant::Primary; break;
-    case ButtonAppearance::Danger: variant_ = ButtonVariant::Danger; break;
-    case ButtonAppearance::Secondary: variant_ = ButtonVariant::Secondary; break;
-    default: variant_ = ButtonVariant::Ghost; break;
-    }
     markDirty(DirtyFlag::Paint);
 }
 
-ButtonAppearance Button::appearance() const noexcept { return appearance_; }
+ButtonAppearance ButtonNode::appearance() const noexcept { return appearance_; }
 
-void Button::setSize(ButtonSize size) noexcept
+void ButtonNode::setSize(ButtonSize size) noexcept
 {
     if (size_ == size) return;
     size_ = size;
     markDirty(DirtyFlag::Layout);
 }
 
-ButtonSize Button::size() const noexcept { return size_; }
+ButtonSize ButtonNode::size() const noexcept { return size_; }
 
-void Button::setShape(ButtonShape shape) noexcept
+void ButtonNode::setShape(ButtonShape shape) noexcept
 {
     if (shape_ == shape) return;
     shape_ = shape;
     markDirty(DirtyFlag::Paint);
 }
 
-ButtonShape Button::shape() const noexcept { return shape_; }
+ButtonShape ButtonNode::shape() const noexcept { return shape_; }
 
-Button& Button::icon(IconName value) noexcept
+ButtonNode& ButtonNode::icon(IconName value) noexcept
 {
     setIcon(value);
     return *this;
 }
 
-Button& Button::iconStyle(IconStyle value) noexcept
+ButtonNode& ButtonNode::iconStyle(IconStyle value) noexcept
 {
     setIconStyle(value);
     return *this;
 }
 
-Button& Button::iconPosition(ButtonIconPosition value) noexcept
+ButtonNode& ButtonNode::iconPosition(ButtonIconPosition value) noexcept
 {
     setIconPosition(value);
     return *this;
 }
 
-Button& Button::iconOnly(bool value) noexcept
+ButtonNode& ButtonNode::iconOnly(bool value) noexcept
 {
     setIconOnly(value);
     return *this;
 }
 
-Button& Button::clearIcon() noexcept
+ButtonNode& ButtonNode::clearIcon() noexcept
 {
     setIcon(std::nullopt);
     return *this;
 }
 
-void Button::setIcon(std::optional<IconName> value) noexcept
+void ButtonNode::setIcon(std::optional<IconName> value) noexcept
 {
     if (icon_ == value) return;
     icon_ = value;
     markDirty(DirtyFlag::Layout);
 }
 
-void Button::setIconStyle(IconStyle value) noexcept
+void ButtonNode::setIconStyle(IconStyle value) noexcept
 {
     if (iconStyle_ == value) return;
     iconStyle_ = value;
     markDirty(DirtyFlag::Paint);
 }
 
-void Button::setIconPosition(ButtonIconPosition value) noexcept
+void ButtonNode::setIconPosition(ButtonIconPosition value) noexcept
 {
     if (iconPosition_ == value) return;
     iconPosition_ = value;
     markDirty(DirtyFlag::Layout);
 }
 
-void Button::setIconOnly(bool value) noexcept
+void ButtonNode::setIconOnly(bool value) noexcept
 {
     if (iconOnly_ == value) return;
     iconOnly_ = value;
     markDirty(DirtyFlag::Layout);
 }
 
-std::optional<IconName> Button::icon() const noexcept { return icon_; }
-IconStyle Button::iconStyle() const noexcept { return iconStyle_; }
-ButtonIconPosition Button::iconPosition() const noexcept
+std::optional<IconName> ButtonNode::icon() const noexcept { return icon_; }
+IconStyle ButtonNode::iconStyle() const noexcept { return iconStyle_; }
+ButtonIconPosition ButtonNode::iconPosition() const noexcept
 {
     return iconPosition_;
 }
-bool Button::isIconOnly() const noexcept { return iconOnly_; }
+bool ButtonNode::isIconOnly() const noexcept { return iconOnly_; }
 
-SizeF Button::measure(const Constraints& constraints) const
+SizeF ButtonNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const auto& textStyle = buttonTextStyle(current, size_);
@@ -538,7 +513,7 @@ SizeF Button::measure(const Constraints& constraints) const
          height});
 }
 
-void Button::paint(PaintContext& context)
+void ButtonNode::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const bool disabled = !isEnabled();
@@ -552,7 +527,7 @@ void Button::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-bool Button::onPointerEvent(const PointerEvent& event)
+bool ButtonNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) {
         return false;
@@ -592,14 +567,14 @@ bool Button::onPointerEvent(const PointerEvent& event)
     return false;
 }
 
-AccessibilityActionCapabilities Button::accessibilityActions() const noexcept
+AccessibilityActionCapabilities ButtonNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.invoke = static_cast<bool>(onClick_);
     return actions;
 }
 
-AccessibilityActionStatus Button::performAccessibilityAction(
+AccessibilityActionStatus ButtonNode::performAccessibilityAction(
     AccessibilityActionKind kind, std::string_view value)
 {
     (void)value;
@@ -617,23 +592,23 @@ float compoundHeight(ButtonSize size) noexcept
 }
 }
 
-CompoundButton::CompoundButton(std::string label, std::string secondaryContent)
+CompoundButtonNode::CompoundButtonNode(std::string label, std::string secondaryContent)
     : label_(std::move(label)), secondaryContent_(std::move(secondaryContent)) {}
-const std::string& CompoundButton::label() const noexcept { return label_; }
-const std::string& CompoundButton::secondaryContent() const noexcept { return secondaryContent_; }
-CompoundButton& CompoundButton::label(std::string value) { setLabel(std::move(value)); return *this; }
-CompoundButton& CompoundButton::secondaryContent(std::string value) { setSecondaryContent(std::move(value)); return *this; }
-void CompoundButton::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
-void CompoundButton::setSecondaryContent(std::string value) { secondaryContent_ = std::move(value); markDirty(DirtyFlag::Layout); }
-CompoundButton& CompoundButton::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
-void CompoundButton::setAppearance(ButtonAppearance value) noexcept { appearance_ = value; markDirty(DirtyFlag::Paint); }
-ButtonAppearance CompoundButton::appearance() const noexcept { return appearance_; }
-void CompoundButton::setSize(ButtonSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
-ButtonSize CompoundButton::size() const noexcept { return size_; }
-void CompoundButton::setShape(ButtonShape value) noexcept { if (shape_ != value) { shape_ = value; markDirty(DirtyFlag::Paint); } }
-ButtonShape CompoundButton::shape() const noexcept { return shape_; }
+const std::string& CompoundButtonNode::label() const noexcept { return label_; }
+const std::string& CompoundButtonNode::secondaryContent() const noexcept { return secondaryContent_; }
+CompoundButtonNode& CompoundButtonNode::label(std::string value) { setLabel(std::move(value)); return *this; }
+CompoundButtonNode& CompoundButtonNode::secondaryContent(std::string value) { setSecondaryContent(std::move(value)); return *this; }
+void CompoundButtonNode::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
+void CompoundButtonNode::setSecondaryContent(std::string value) { secondaryContent_ = std::move(value); markDirty(DirtyFlag::Layout); }
+CompoundButtonNode& CompoundButtonNode::onClick(ClickHandler handler) { onClick_ = std::move(handler); return *this; }
+void CompoundButtonNode::setAppearance(ButtonAppearance value) noexcept { appearance_ = value; markDirty(DirtyFlag::Paint); }
+ButtonAppearance CompoundButtonNode::appearance() const noexcept { return appearance_; }
+void CompoundButtonNode::setSize(ButtonSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
+ButtonSize CompoundButtonNode::size() const noexcept { return size_; }
+void CompoundButtonNode::setShape(ButtonShape value) noexcept { if (shape_ != value) { shape_ = value; markDirty(DirtyFlag::Paint); } }
+ButtonShape CompoundButtonNode::shape() const noexcept { return shape_; }
 
-SizeF CompoundButton::measure(const Constraints& constraints) const
+SizeF CompoundButtonNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const auto textWidth = [](const std::string& text, const TextStyleToken& style) {
@@ -653,7 +628,7 @@ SizeF CompoundButton::measure(const Constraints& constraints) const
     return constraints.clamp({width + padding * 2.0f, compoundHeight(size_)});
 }
 
-void CompoundButton::paint(PaintContext& context)
+void CompoundButtonNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const bool disabled = !isEnabled();
@@ -699,7 +674,7 @@ void CompoundButton::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-bool CompoundButton::onPointerEvent(const PointerEvent& event)
+bool CompoundButtonNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     switch (event.action) {
@@ -712,26 +687,26 @@ bool CompoundButton::onPointerEvent(const PointerEvent& event)
     default: return false;
     }
 }
-AccessibilityActionCapabilities CompoundButton::accessibilityActions() const noexcept { AccessibilityActionCapabilities a; a.invoke = static_cast<bool>(onClick_); return a; }
-AccessibilityActionStatus CompoundButton::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
+AccessibilityActionCapabilities CompoundButtonNode::accessibilityActions() const noexcept { AccessibilityActionCapabilities a; a.invoke = static_cast<bool>(onClick_); return a; }
+AccessibilityActionStatus CompoundButtonNode::performAccessibilityAction(AccessibilityActionKind kind, std::string_view value)
 { (void)value; if (kind != AccessibilityActionKind::Invoke) return AccessibilityActionStatus::NotSupported; if (!isEnabled()) return AccessibilityActionStatus::ElementNotEnabled; if (!onClick_) return AccessibilityActionStatus::NotSupported; onClick_(); return AccessibilityActionStatus::Succeeded; }
 
-ToggleButton::ToggleButton(std::string label, bool checked)
+ToggleButtonNode::ToggleButtonNode(std::string label, bool checked)
     : label_(std::move(label)), checked_(checked)
 {
 }
 
-const std::string& ToggleButton::label() const noexcept { return label_; }
-ToggleButton& ToggleButton::label(std::string value) { setLabel(std::move(value)); return *this; }
-void ToggleButton::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
-bool ToggleButton::isChecked() const noexcept { return hasBinding_ ? binding_->get() : checked_; }
-ToggleButton& ToggleButton::checked(bool value) { setChecked(value); return *this; }
-void ToggleButton::setChecked(bool value)
+const std::string& ToggleButtonNode::label() const noexcept { return label_; }
+ToggleButtonNode& ToggleButtonNode::label(std::string value) { setLabel(std::move(value)); return *this; }
+void ToggleButtonNode::setLabel(std::string value) { label_ = std::move(value); markDirty(DirtyFlag::Layout); }
+bool ToggleButtonNode::isChecked() const noexcept { return hasBinding_ ? binding_->get() : checked_; }
+ToggleButtonNode& ToggleButtonNode::checked(bool value) { setChecked(value); return *this; }
+void ToggleButtonNode::setChecked(bool value)
 {
     if (hasBinding_) binding_->set(value);
     else if (checked_ != value) { checked_ = value; markDirty(DirtyFlag::Paint); }
 }
-ToggleButton& ToggleButton::bind(State<bool>& state)
+ToggleButtonNode& ToggleButtonNode::bind(State<bool>& state)
 {
     binding_.emplace(state);
     hasBinding_ = true;
@@ -741,79 +716,79 @@ ToggleButton& ToggleButton::bind(State<bool>& state)
     markDirty(DirtyFlag::Paint);
     return *this;
 }
-ToggleButton& ToggleButton::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
-void ToggleButton::setSize(ButtonSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
-ButtonSize ToggleButton::size() const noexcept { return size_; }
-void ToggleButton::setShape(ButtonShape value) noexcept { if (shape_ != value) { shape_ = value; markDirty(DirtyFlag::Paint); } }
-ButtonShape ToggleButton::shape() const noexcept { return shape_; }
-void ToggleButton::setAppearance(ButtonAppearance value) noexcept
+ToggleButtonNode& ToggleButtonNode::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
+void ToggleButtonNode::setSize(ButtonSize value) noexcept { if (size_ != value) { size_ = value; markDirty(DirtyFlag::Layout); } }
+ButtonSize ToggleButtonNode::size() const noexcept { return size_; }
+void ToggleButtonNode::setShape(ButtonShape value) noexcept { if (shape_ != value) { shape_ = value; markDirty(DirtyFlag::Paint); } }
+ButtonShape ToggleButtonNode::shape() const noexcept { return shape_; }
+void ToggleButtonNode::setAppearance(ButtonAppearance value) noexcept
 {
     if (appearance_ == value) return;
     appearance_ = value;
     markDirty(DirtyFlag::Paint);
 }
-ButtonAppearance ToggleButton::appearance() const noexcept
+ButtonAppearance ToggleButtonNode::appearance() const noexcept
 {
     return appearance_;
 }
-ToggleButton& ToggleButton::icon(IconName value) noexcept
+ToggleButtonNode& ToggleButtonNode::icon(IconName value) noexcept
 {
     setIcon(value);
     return *this;
 }
-ToggleButton& ToggleButton::iconStyle(IconStyle value) noexcept
+ToggleButtonNode& ToggleButtonNode::iconStyle(IconStyle value) noexcept
 {
     setIconStyle(value);
     return *this;
 }
-ToggleButton& ToggleButton::iconPosition(ButtonIconPosition value) noexcept
+ToggleButtonNode& ToggleButtonNode::iconPosition(ButtonIconPosition value) noexcept
 {
     setIconPosition(value);
     return *this;
 }
-ToggleButton& ToggleButton::iconOnly(bool value) noexcept
+ToggleButtonNode& ToggleButtonNode::iconOnly(bool value) noexcept
 {
     setIconOnly(value);
     return *this;
 }
-ToggleButton& ToggleButton::clearIcon() noexcept
+ToggleButtonNode& ToggleButtonNode::clearIcon() noexcept
 {
     setIcon(std::nullopt);
     return *this;
 }
-void ToggleButton::setIcon(std::optional<IconName> value) noexcept
+void ToggleButtonNode::setIcon(std::optional<IconName> value) noexcept
 {
     if (icon_ == value) return;
     icon_ = value;
     markDirty(DirtyFlag::Layout);
 }
-void ToggleButton::setIconStyle(IconStyle value) noexcept
+void ToggleButtonNode::setIconStyle(IconStyle value) noexcept
 {
     if (iconStyle_ == value) return;
     iconStyle_ = value;
     markDirty(DirtyFlag::Paint);
 }
-void ToggleButton::setIconPosition(ButtonIconPosition value) noexcept
+void ToggleButtonNode::setIconPosition(ButtonIconPosition value) noexcept
 {
     if (iconPosition_ == value) return;
     iconPosition_ = value;
     markDirty(DirtyFlag::Layout);
 }
-void ToggleButton::setIconOnly(bool value) noexcept
+void ToggleButtonNode::setIconOnly(bool value) noexcept
 {
     if (iconOnly_ == value) return;
     iconOnly_ = value;
     markDirty(DirtyFlag::Layout);
 }
-std::optional<IconName> ToggleButton::icon() const noexcept { return icon_; }
-IconStyle ToggleButton::iconStyle() const noexcept { return iconStyle_; }
-ButtonIconPosition ToggleButton::iconPosition() const noexcept
+std::optional<IconName> ToggleButtonNode::icon() const noexcept { return icon_; }
+IconStyle ToggleButtonNode::iconStyle() const noexcept { return iconStyle_; }
+ButtonIconPosition ToggleButtonNode::iconPosition() const noexcept
 {
     return iconPosition_;
 }
-bool ToggleButton::isIconOnly() const noexcept { return iconOnly_; }
+bool ToggleButtonNode::isIconOnly() const noexcept { return iconOnly_; }
 
-SizeF ToggleButton::measure(const Constraints& constraints) const
+SizeF ToggleButtonNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const auto& textStyle = buttonTextStyle(current, size_);
@@ -832,7 +807,7 @@ SizeF ToggleButton::measure(const Constraints& constraints) const
          height});
 }
 
-void ToggleButton::paint(PaintContext& context)
+void ToggleButtonNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const bool enabled = isEnabled();
@@ -847,14 +822,14 @@ void ToggleButton::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-void ToggleButton::toggle()
+void ToggleButtonNode::toggle()
 {
     const bool value = !isChecked();
     setChecked(value);
     if (onChange_) onChange_(value);
 }
 
-bool ToggleButton::onPointerEvent(const PointerEvent& event)
+bool ToggleButtonNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     switch (event.action) {
@@ -875,21 +850,21 @@ bool ToggleButton::onPointerEvent(const PointerEvent& event)
     }
 }
 
-bool ToggleButton::onKeyEvent(const KeyEvent& event)
+bool ToggleButtonNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled() || event.action != KeyAction::Down || (event.keyCode != 32 && event.keyCode != 13)) return false;
     toggle();
     return true;
 }
 
-AccessibilityActionCapabilities ToggleButton::accessibilityActions() const noexcept
+AccessibilityActionCapabilities ToggleButtonNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.toggle = true;
     return actions;
 }
 
-AccessibilityActionStatus ToggleButton::performAccessibilityAction(
+AccessibilityActionStatus ToggleButtonNode::performAccessibilityAction(
     AccessibilityActionKind kind, std::string_view value)
 {
     (void)value;
@@ -899,27 +874,27 @@ AccessibilityActionStatus ToggleButton::performAccessibilityAction(
     return AccessibilityActionStatus::Succeeded;
 }
 
-Checkbox::Checkbox(std::string label, bool checked)
+CheckboxNode::CheckboxNode(std::string label, bool checked)
     : label_(std::move(label))
     , checked_(checked)
 {
 }
 
-const std::string& Checkbox::label() const noexcept { return label_; }
-Checkbox& Checkbox::label(std::string label) { setLabel(std::move(label)); return *this; }
-void Checkbox::setLabel(std::string label) { label_ = std::move(label); markDirty(DirtyFlag::Layout); }
-const std::string& Checkbox::accessibleLabel() const noexcept { return accessibleLabel_; }
-Checkbox& Checkbox::accessibleLabel(std::string label) { setAccessibleLabel(std::move(label)); return *this; }
-void Checkbox::setAccessibleLabel(std::string label) { accessibleLabel_ = std::move(label); }
-bool Checkbox::isChecked() const noexcept { return hasBinding_ ? binding_->get() : checked_; }
-bool Checkbox::isMixed() const noexcept { return mixed_; }
-CheckboxState Checkbox::state() const noexcept
+const std::string& CheckboxNode::label() const noexcept { return label_; }
+CheckboxNode& CheckboxNode::label(std::string label) { setLabel(std::move(label)); return *this; }
+void CheckboxNode::setLabel(std::string label) { label_ = std::move(label); markDirty(DirtyFlag::Layout); }
+const std::string& CheckboxNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+CheckboxNode& CheckboxNode::accessibleLabel(std::string label) { setAccessibleLabel(std::move(label)); return *this; }
+void CheckboxNode::setAccessibleLabel(std::string label) { accessibleLabel_ = std::move(label); }
+bool CheckboxNode::isChecked() const noexcept { return hasBinding_ ? binding_->get() : checked_; }
+bool CheckboxNode::isMixed() const noexcept { return mixed_; }
+CheckboxState CheckboxNode::state() const noexcept
 {
     if (mixed_) return CheckboxState::Mixed;
     return isChecked() ? CheckboxState::Checked : CheckboxState::Unchecked;
 }
-Checkbox& Checkbox::checked(bool value) { setChecked(value); return *this; }
-void Checkbox::setChecked(bool value)
+CheckboxNode& CheckboxNode::checked(bool value) { setChecked(value); return *this; }
+void CheckboxNode::setChecked(bool value)
 {
     const bool wasMixed = mixed_;
     mixed_ = false;
@@ -932,8 +907,8 @@ void Checkbox::setChecked(bool value)
     if (wasMixed) markDirty(DirtyFlag::Paint);
 }
 
-Checkbox& Checkbox::mixed(bool value) { setMixed(value); return *this; }
-void Checkbox::setMixed(bool value)
+CheckboxNode& CheckboxNode::mixed(bool value) { setMixed(value); return *this; }
+void CheckboxNode::setMixed(bool value)
 {
     if (mixed_ == value) return;
     mixed_ = value;
@@ -944,8 +919,8 @@ void Checkbox::setMixed(bool value)
     markDirty(DirtyFlag::Paint);
 }
 
-Checkbox& Checkbox::checkState(CheckboxState value) { setCheckState(value); return *this; }
-void Checkbox::setCheckState(CheckboxState value)
+CheckboxNode& CheckboxNode::checkState(CheckboxState value) { setCheckState(value); return *this; }
+void CheckboxNode::setCheckState(CheckboxState value)
 {
     if (value == CheckboxState::Mixed) {
         setMixed(true);
@@ -954,7 +929,7 @@ void Checkbox::setCheckState(CheckboxState value)
     }
 }
 
-Checkbox& Checkbox::bind(State<bool>& state)
+CheckboxNode& CheckboxNode::bind(State<bool>& state)
 {
     binding_.emplace(state);
     hasBinding_ = true;
@@ -969,41 +944,41 @@ Checkbox& Checkbox::bind(State<bool>& state)
     return *this;
 }
 
-Checkbox& Checkbox::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
-Checkbox& Checkbox::onStateChange(StateChangeHandler handler) { onStateChange_ = std::move(handler); return *this; }
-Checkbox& Checkbox::size(CheckboxSize value) noexcept { setSize(value); return *this; }
-void Checkbox::setSize(CheckboxSize value) noexcept
+CheckboxNode& CheckboxNode::onChange(ChangeHandler handler) { onChange_ = std::move(handler); return *this; }
+CheckboxNode& CheckboxNode::onStateChange(StateChangeHandler handler) { onStateChange_ = std::move(handler); return *this; }
+CheckboxNode& CheckboxNode::size(CheckboxSize value) noexcept { setSize(value); return *this; }
+void CheckboxNode::setSize(CheckboxSize value) noexcept
 {
     if (size_ == value) return;
     size_ = value;
     markDirty(DirtyFlag::Layout);
 }
-CheckboxSize Checkbox::size() const noexcept { return size_; }
-Checkbox& Checkbox::shape(CheckboxShape value) noexcept { setShape(value); return *this; }
-void Checkbox::setShape(CheckboxShape value) noexcept
+CheckboxSize CheckboxNode::size() const noexcept { return size_; }
+CheckboxNode& CheckboxNode::shape(CheckboxShape value) noexcept { setShape(value); return *this; }
+void CheckboxNode::setShape(CheckboxShape value) noexcept
 {
     if (shape_ == value) return;
     shape_ = value;
     markDirty(DirtyFlag::Paint);
 }
-CheckboxShape Checkbox::shape() const noexcept { return shape_; }
-Checkbox& Checkbox::labelPosition(CheckboxLabelPosition value) noexcept { setLabelPosition(value); return *this; }
-void Checkbox::setLabelPosition(CheckboxLabelPosition value) noexcept
+CheckboxShape CheckboxNode::shape() const noexcept { return shape_; }
+CheckboxNode& CheckboxNode::labelPosition(CheckboxLabelPosition value) noexcept { setLabelPosition(value); return *this; }
+void CheckboxNode::setLabelPosition(CheckboxLabelPosition value) noexcept
 {
     if (labelPosition_ == value) return;
     labelPosition_ = value;
     markDirty(DirtyFlag::Layout);
 }
-CheckboxLabelPosition Checkbox::labelPosition() const noexcept { return labelPosition_; }
-Checkbox& Checkbox::required(bool value) noexcept { setRequired(value); return *this; }
-void Checkbox::setRequired(bool value) noexcept
+CheckboxLabelPosition CheckboxNode::labelPosition() const noexcept { return labelPosition_; }
+CheckboxNode& CheckboxNode::required(bool value) noexcept { setRequired(value); return *this; }
+void CheckboxNode::setRequired(bool value) noexcept
 {
     if (required_ == value) return;
     required_ = value;
     markDirty(DirtyFlag::Layout);
 }
-bool Checkbox::isRequired() const noexcept { return required_; }
-SizeF Checkbox::measure(const Constraints& constraints) const
+bool CheckboxNode::isRequired() const noexcept { return required_; }
+SizeF CheckboxNode::measure(const Constraints& constraints) const
 {
     const Theme& current = theme();
     const float hitSize = size_ == CheckboxSize::Large ? 36.0f : 32.0f;
@@ -1027,7 +1002,7 @@ SizeF Checkbox::measure(const Constraints& constraints) const
     return constraints.clamp({contentWidth, contentHeight});
 }
 
-void Checkbox::paint(PaintContext& context)
+void CheckboxNode::paint(PaintContext& context)
 {
     const Theme& current = theme();
     const bool enabled = isEnabled();
@@ -1173,7 +1148,7 @@ void Checkbox::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-void Checkbox::toggle()
+void CheckboxNode::toggle()
 {
     // The native input clears `indeterminate` before dispatching change and
     // exposes currentTarget.checked=true. Match that Mixed -> Checked contract.
@@ -1183,7 +1158,7 @@ void Checkbox::toggle()
     if (onStateChange_) { onStateChange_(state()); }
 }
 
-bool Checkbox::onPointerEvent(const PointerEvent& event)
+bool CheckboxNode::onPointerEvent(const PointerEvent& event)
 {
     if (!isEnabled()) return false;
     switch (event.action) {
@@ -1210,23 +1185,23 @@ bool Checkbox::onPointerEvent(const PointerEvent& event)
     }
 }
 
-bool Checkbox::onKeyEvent(const KeyEvent& event)
+bool CheckboxNode::onKeyEvent(const KeyEvent& event)
 {
     // Matches the native checkbox contract: Space toggles; Enter is left to
-    // form submission/default-button handling and must not activate Checkbox.
+    // form submission/default-button handling and must not activate CheckboxNode.
     if (!isEnabled() || event.action != KeyAction::Down || event.keyCode != 32) return false;
     toggle();
     return true;
 }
 
-AccessibilityActionCapabilities Checkbox::accessibilityActions() const noexcept
+AccessibilityActionCapabilities CheckboxNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.toggle = true;
     return actions;
 }
 
-AccessibilityActionStatus Checkbox::performAccessibilityAction(
+AccessibilityActionStatus CheckboxNode::performAccessibilityAction(
     AccessibilityActionKind kind, std::string_view value)
 {
     (void)value;

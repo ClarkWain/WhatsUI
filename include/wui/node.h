@@ -7,14 +7,19 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "wui/accessibility.h"
 #include "wui/events.h"
 #include "wui/paint_context.h"
 #include "wui/types.h"
+#include "wui/ui_context.h"
 
 namespace wui {
+
+class Node;
+using NodePtr = std::unique_ptr<Node>;
 
 enum class ControlVisualState : std::uint32_t {
     None = 0,
@@ -49,17 +54,18 @@ public:
         return parent_;
     }
 
-    [[nodiscard]] const std::vector<std::unique_ptr<Node>>& children() const noexcept
+    [[nodiscard]] const std::vector<NodePtr>& children() const noexcept
     {
         return children_;
     }
 
-    void appendChild(std::unique_ptr<Node> child);
-    void insertChild(std::size_t index, std::unique_ptr<Node> child);
+    void appendChild(NodePtr child);
+    void appendChildren(std::vector<NodePtr> children);
+    void insertChild(std::size_t index, NodePtr child);
     // Reorders an existing child without detaching it.  This preserves focus,
     // state subscriptions, and native input ownership for keyed collections.
     void moveChild(std::size_t from, std::size_t to);
-    [[nodiscard]] std::unique_ptr<Node> removeChild(std::size_t index);
+    [[nodiscard]] NodePtr removeChild(std::size_t index);
     void clearChildren();
 
     // A node becomes attached when a UiRoot or OverlayHost adopts it.  Nodes
@@ -75,6 +81,11 @@ public:
     [[nodiscard]] bool isAttached() const noexcept
     {
         return attached_;
+    }
+
+    [[nodiscard]] const UiContext& uiContext() const noexcept
+    {
+        return ownerContext_;
     }
 
     // Register a callback that runs when this node is destroyed. Reactive
@@ -118,15 +129,19 @@ public:
     virtual AccessibilityActionStatus performAccessibilityAction(
         AccessibilityActionKind kind, std::string_view value);
 
-    [[nodiscard]] const std::string& accessibilityId() const noexcept
+    [[nodiscard]] const std::string& automationId() const noexcept
     {
-        return accessibilityId_;
+        return automationId_;
     }
 
-    void setAccessibilityId(std::string id)
+    void setAutomationId(std::string id);
+
+    [[nodiscard]] const std::string& debugName() const noexcept
     {
-        accessibilityId_ = std::move(id);
+        return debugName_;
     }
+
+    void setDebugName(std::string name);
 
     // A layout change also changes the pixels occupied by this node and its
     // ancestors, so it implicitly invalidates paint up to the root boundary.
@@ -159,7 +174,7 @@ public:
         return bounds_;
     }
 
-    // Main-axis flex weight for Row/Column layout. 0 = fixed (measured) size;
+    // Main-axis flex weight for RowNode/ColumnNode layout. 0 = fixed (measured) size;
     // >0 = share of the remaining main-axis space, proportional to weight.
     [[nodiscard]] float flex() const noexcept
     {
@@ -174,6 +189,14 @@ public:
 
 protected:
     Node() = default;
+
+    // Runtime node invariants are enforced at the ownership boundary as well
+    // as by declarative Builders. Semantic containers override this hook to
+    // constrain child type, position, or cardinality before the tree mutates.
+    virtual void validateChildInsertion(
+        const Node& child,
+        std::size_t index,
+        std::size_t resultingCount) const;
 
     // Override these only for node-local resources.  Use the callback API for
     // bindings created by builders, where the subscription lifetime is owned
@@ -190,18 +213,27 @@ private:
     friend class UiRoot;
     friend class OverlayHost;
 
-    void attachRecursively();
+    void attachRecursively(UiContext ownerContext = {});
     void detachRecursively() noexcept;
+    void requireTreeMutationThread() const;
+    void reportLifecycleException(
+        std::string_view phase,
+        std::string_view message = {}) const noexcept;
+    void validateIdentitySubtree() const noexcept;
 
     Node* parent_{nullptr};
-    std::vector<std::unique_ptr<Node>> children_;
+    std::vector<NodePtr> children_;
     std::vector<std::function<void()>> attachCallbacks_;
     std::vector<std::function<void()>> detachCallbacks_;
     std::vector<std::function<void()>> teardown_;
     std::function<void()> invalidationHandler_;
     RectF bounds_{};
     float flex_{0.0f};
-    std::string accessibilityId_;
+    std::string automationId_;
+    std::string debugName_;
+    UiContext ownerContext_;
+    UiContext diagnosticContext_;
+    std::thread::id ownerThread_{};
     bool attached_{false};
     DirtyFlags dirtyFlags_{toMask(DirtyFlag::Layout) | toMask(DirtyFlag::Paint)};
     mutable std::optional<Constraints> lastMeasuredConstraints_;

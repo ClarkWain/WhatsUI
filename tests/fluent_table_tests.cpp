@@ -10,13 +10,13 @@
 
 namespace {
 void expect(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
-class InspectTable final : public wui::Table {
+class InspectTable final : public wui::TableNode {
 public:
-    using wui::Table::Table;
-    using wui::Table::columnWidths;
-    using wui::Table::columnAt;
-    using wui::Table::headerHeight;
-    using wui::Table::rowHeight;
+    using wui::TableNode::TableNode;
+    using wui::TableNode::columnWidths;
+    using wui::TableNode::columnAt;
+    using wui::TableNode::headerHeight;
+    using wui::TableNode::rowHeight;
 };
 
 class TestSurface final : public wui::RenderSurface {
@@ -88,7 +88,7 @@ void testPassiveTableWindowing()
 }
 void testGridSortSelectionAndKeyboard()
 {
-    wui::DataGrid grid; grid.setColumns(columns()).setRows(rows()).maxVisibleRows(2);
+    wui::DataGridNode grid; grid.setColumns(columns()).setRows(rows()).maxVisibleRows(2);
     grid.layout({0, 0, 440, 120});
     int selectionChanged = 0;
     grid.onSelectionChanged([&](const std::vector<std::size_t>&) { ++selectionChanged; });
@@ -109,7 +109,7 @@ void testGridSortSelectionAndKeyboard()
 }
 void testDisabledRowsAndHeaderPointerSort()
 {
-    wui::DataGrid grid; grid.setColumns(columns()).setRows(rows()); grid.layout({0, 0, 440, 240});
+    wui::DataGridNode grid; grid.setColumns(columns()).setRows(rows()); grid.layout({0, 0, 440, 240});
     expect(grid.onPointerEvent({0, wui::PointerType::Mouse, wui::PointerAction::Up, wui::MouseButton::Left, {50, 18}}) &&
                grid.sortDirection() == wui::TableSortDirection::Ascending,
            "DataGrid header hit testing must sort only explicitly sortable headers");
@@ -119,7 +119,7 @@ void testDisabledRowsAndHeaderPointerSort()
 }
 void testVirtualAccessibilityWindow()
 {
-    wui::Table table(columns()); table.setAccessibilityId("release-table");
+    wui::TableNode table(columns()); table.setAutomationId("release-table");
     table.setRows(rows()).maxVisibleRows(1); table.layout({0, 0, 240, 76});
     const auto entries = table.accessibilityEntries();
     std::size_t headers = 0, tableRows = 0, cells = 0;
@@ -134,7 +134,7 @@ void testVirtualAccessibilityWindow()
     expect(headers == columns().size() && tableRows == 1 && cells == columns().size(),
            "Table semantic materialization must include headers plus only the visible row window and its cells");
 
-    wui::DataGrid grid; grid.setAccessibilityId("work-grid"); grid.setColumns(columns()).setRows(rows()).maxVisibleRows(2);
+    wui::DataGridNode grid; grid.setAutomationId("work-grid"); grid.setColumns(columns()).setRows(rows()).maxVisibleRows(2);
     grid.layout({0, 0, 440, 116}); grid.sortBy(0);
     grid.onKeyEvent({0, wui::KeyAction::Down, 40}); grid.onKeyEvent({0, wui::KeyAction::Down, 32});
     bool sortedHeader = false, selectedRow = false, focusedCell = false;
@@ -151,7 +151,7 @@ void testVirtualAccessibilityWindow()
 
     void testProviderBackedGridRequestsOnlyVisibleRows()
     {
-        wui::DataGrid grid;
+        wui::DataGridNode grid;
         int requests = 0;
         int sortCalls = 0;
         grid.setColumns(columns()).setRowProvider(100000, [&requests](std::size_t row) {
@@ -185,7 +185,7 @@ void testVirtualAccessibilityWindow()
 
     void testProviderBackedGridUsesPhysicalViewportHeight()
     {
-        wui::DataGrid grid;
+        wui::DataGridNode grid;
         int requests = 0;
         grid.setColumns(columns()).setRowProvider(100000, [&requests](std::size_t row) {
             ++requests;
@@ -212,10 +212,10 @@ void testCentralSnapshotAndVirtualActionRouting()
     // materializer. Native adapters receive this exact snapshot and return
     // paths to this exact action router.
     wui::UiWindow window(std::make_unique<TestWindow>());
-    auto root = std::make_unique<wui::Container>();
-    auto grid = std::make_unique<wui::DataGrid>();
-    wui::DataGrid* raw = grid.get();
-    grid->setAccessibilityId("work-grid");
+    auto root = std::make_unique<wui::BoxNode>();
+    auto grid = std::make_unique<wui::DataGridNode>();
+    wui::DataGridNode* raw = grid.get();
+    grid->setAutomationId("work-grid");
     grid->accessibleLabel("Work items");
     grid->setColumns(columns()).setRows(rows()).maxVisibleRows(2);
     root->appendChild(std::move(grid));
@@ -261,7 +261,7 @@ void testCentralSnapshotAndVirtualActionRouting()
                raw->selectedRows() == std::vector<std::size_t>{0},
            "A current virtual DataGrid row path must safely route Invoke to stable row selection");
 
-    wui::Table passive(columns());
+    wui::TableNode passive(columns());
     passive.setRows(rows());
     passive.layout({0, 0, 440, 116});
     const auto passiveSnapshot = wui::snapshotAccessibilityTree(passive, &passive);

@@ -16,7 +16,7 @@ struct WindowMetrics {
     float scaleFactor{1.0f};
 };
 
-// Projects a logical TextInput caret to the coordinate space required by
+// Projects a logical TextFieldNode caret to the coordinate space required by
 // native client-area APIs such as IMM32.  The returned point is deliberately
 // rounded because Win32 candidate/composition windows accept integer client
 // pixels.  Keep this independent of a particular window backend so the exact
@@ -127,6 +127,9 @@ public:
     [[nodiscard]] virtual std::unique_ptr<PlatformWindow> createWindow(std::string title, SizeF logicalSize) = 0;
     [[nodiscard]] virtual int run() = 0;
     virtual void quit(int exitCode = 0) = 0;
+    // Thread-safe wake-up hook used when a worker posts UI work. Backends
+    // without a blocking event loop can keep the default no-op.
+    virtual void wake() {}
 };
 
 } // namespace wui

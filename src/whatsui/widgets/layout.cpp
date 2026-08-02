@@ -6,62 +6,62 @@
 
 namespace wui {
 
-Container& Container::child(std::unique_ptr<Node> child)
+BoxNode& BoxNode::child(std::unique_ptr<Node> child)
 {
     appendChild(std::move(child));
     return *this;
 }
 
-void Container::setBackground(Color color) noexcept
+void BoxNode::setBackground(Color color) noexcept
 {
     background_ = color;
     markDirty(DirtyFlag::Paint);
 }
 
-void Container::setRadius(float radius) noexcept
+void BoxNode::setRadius(float radius) noexcept
 {
     radius_ = radius;
     markDirty(DirtyFlag::Paint);
 }
 
-void Container::setPadding(InsetsF padding) noexcept
+void BoxNode::setPadding(InsetsF padding) noexcept
 {
     padding_ = padding;
     markDirty(DirtyFlag::Layout);
 }
 
-void Container::setContentAlignment(Alignment horizontal, Alignment vertical) noexcept
+void BoxNode::setContentAlignment(Alignment horizontal, Alignment vertical) noexcept
 {
     horizontalAlignment_ = horizontal;
     verticalAlignment_ = vertical;
     markDirty(DirtyFlag::Layout);
 }
 
-void Container::setWidth(float width) noexcept
+void BoxNode::setWidth(float width) noexcept
 {
     width_ = std::max(0.0f, width);
     markDirty(DirtyFlag::Layout);
 }
 
-void Container::clearWidth() noexcept
+void BoxNode::clearWidth() noexcept
 {
     width_.reset();
     markDirty(DirtyFlag::Layout);
 }
 
-void Container::setHeight(float height) noexcept
+void BoxNode::setHeight(float height) noexcept
 {
     height_ = std::max(0.0f, height);
     markDirty(DirtyFlag::Layout);
 }
 
-void Container::clearHeight() noexcept
+void BoxNode::clearHeight() noexcept
 {
     height_.reset();
     markDirty(DirtyFlag::Layout);
 }
 
-SizeF Container::measure(const Constraints& constraints) const
+SizeF BoxNode::measure(const Constraints& constraints) const
 {
     const Constraints innerConstraints = constraints.deflate(padding_);
     SizeF content{};
@@ -80,7 +80,7 @@ SizeF Container::measure(const Constraints& constraints) const
     return constraints.clamp(measured);
 }
 
-void Container::layout(const RectF& bounds)
+void BoxNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     const RectF contentBounds{bounds.x + padding_.left,
@@ -110,7 +110,7 @@ void Container::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-void Container::paint(PaintContext& context)
+void BoxNode::paint(PaintContext& context)
 {
     Color fill = background_;
     if (interaction_ != nullptr) {
@@ -130,7 +130,7 @@ void Container::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-InteractionArea& Container::ensureInteraction()
+InteractionArea& BoxNode::ensureInteraction()
 {
     if (interaction_ == nullptr) {
         interaction_ = std::make_unique<InteractionArea>();
@@ -138,59 +138,59 @@ InteractionArea& Container::ensureInteraction()
     return *interaction_;
 }
 
-void Container::setOnClick(std::function<void()> handler)
+void BoxNode::setOnClick(std::function<void()> handler)
 {
     ensureInteraction().onClick = std::move(handler);
 }
 
-void Container::setOnPointerDown(std::function<bool(const PointerEvent&)> handler)
+void BoxNode::setOnPointerDown(std::function<bool(const PointerEvent&)> handler)
 {
     ensureInteraction().onPointerDown = std::move(handler);
 }
 
-void Container::setOnPointerMove(std::function<bool(const PointerEvent&)> handler)
+void BoxNode::setOnPointerMove(std::function<bool(const PointerEvent&)> handler)
 {
     ensureInteraction().onPointerMove = std::move(handler);
 }
 
-void Container::setOnPointerUp(std::function<bool(const PointerEvent&)> handler)
+void BoxNode::setOnPointerUp(std::function<bool(const PointerEvent&)> handler)
 {
     ensureInteraction().onPointerUp = std::move(handler);
 }
 
-void Container::setOnHoverChange(std::function<void(bool)> handler)
+void BoxNode::setOnHoverChange(std::function<void(bool)> handler)
 {
     ensureInteraction().onHoverChange = std::move(handler);
 }
 
-void Container::setOnFocusChange(std::function<void(bool)> handler)
+void BoxNode::setOnFocusChange(std::function<void(bool)> handler)
 {
     ensureInteraction().onFocusChange = std::move(handler);
 }
 
-void Container::setOnKey(std::function<bool(const KeyEvent&)> handler)
+void BoxNode::setOnKey(std::function<bool(const KeyEvent&)> handler)
 {
     ensureInteraction().onKey = std::move(handler);
 }
 
-void Container::setHoverBackground(Color color) noexcept
+void BoxNode::setHoverBackground(Color color) noexcept
 {
     ensureInteraction().hoverBackground = color;
     markDirty(DirtyFlag::Paint);
 }
 
-void Container::setPressedBackground(Color color) noexcept
+void BoxNode::setPressedBackground(Color color) noexcept
 {
     ensureInteraction().pressedBackground = color;
     markDirty(DirtyFlag::Paint);
 }
 
-void Container::setAccessibleRole(AccessibilityRole role) noexcept
+void BoxNode::setAccessibleRole(AccessibilityRole role) noexcept
 {
     ensureInteraction().accessibleRole = role;
 }
 
-void Container::setAccessibleLabel(std::string label)
+void BoxNode::setAccessibleLabel(std::string label)
 {
     ensureInteraction().accessibleLabel = std::move(label);
 }
@@ -208,16 +208,16 @@ bool setInteractionState(InteractionArea& area, ControlVisualState flag,
 }
 } // namespace
 
-EventResult Container::onPointerEvent(const PointerEvent& event,
+EventResult BoxNode::onPointerEvent(const PointerEvent& event,
                                       EventContext& context)
 {
-    // Container is a router-aware node: without an interaction it defers to
+    // BoxNode is a router-aware node: without an interaction it defers to
     // the framework contract (Node forwards Target/Bubble to the legacy bool
     // overload). With an interaction, a click callback may synchronously
     // rebuild the tree — so once the callback has been dispatched we must ask
     // the router to stop bubbling before it visits ancestors that have just
-    // been freed. Fluent Button gets away with a plain bool because layout
-    // ancestors ignore the same event; a Container-with-InteractionArea is
+    // been freed. Fluent ButtonNode gets away with a plain bool because layout
+    // ancestors ignore the same event; a BoxNode-with-InteractionArea is
     // observed by many more nodes and would otherwise hit the latent UAF.
     if (interaction_ == nullptr) {
         return Node::onPointerEvent(event, context);
@@ -299,10 +299,10 @@ EventResult Container::onPointerEvent(const PointerEvent& event,
     return EventResult::Ignored;
 }
 
-bool Container::onPointerEvent(const PointerEvent& event)
+bool BoxNode::onPointerEvent(const PointerEvent& event)
 {
     // Legacy bool overload retained for test hosts and any code that calls
-    // Container::onPointerEvent(event) directly. The interactive router uses
+    // BoxNode::onPointerEvent(event) directly. The interactive router uses
     // the EventContext overload above, which is where the propagation control
     // that avoids the tree-rebuild UAF lives. Behavior here matches the
     // EventContext path for anything a bool caller can express.
@@ -379,7 +379,7 @@ bool Container::onPointerEvent(const PointerEvent& event)
     return ContainerNode::onPointerEvent(event);
 }
 
-bool Container::onKeyEvent(const KeyEvent& event)
+bool BoxNode::onKeyEvent(const KeyEvent& event)
 {
     if (interaction_ == nullptr) {
         return Node::onKeyEvent(event);
@@ -388,7 +388,7 @@ bool Container::onKeyEvent(const KeyEvent& event)
     if (area.onKey && area.onKey(event)) return true;
     if (event.action == KeyAction::Down && area.onClick) {
         // Space (32) and Enter (13) activate the interaction area, mirroring
-        // the Fluent Button keyboard contract so a11y stays uniform.
+        // the Fluent ButtonNode keyboard contract so a11y stays uniform.
         if (event.keyCode == 13 || event.keyCode == 32) {
             // Copy the handler out before invoking it: an onClick that swaps
             // the route will destroy `this` and free `area`, so we cannot
@@ -401,7 +401,7 @@ bool Container::onKeyEvent(const KeyEvent& event)
     return Node::onKeyEvent(event);
 }
 
-AccessibilityActionCapabilities Container::accessibilityActions() const noexcept
+AccessibilityActionCapabilities BoxNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     if (interaction_ != nullptr && interaction_->onClick) {
@@ -410,7 +410,7 @@ AccessibilityActionCapabilities Container::accessibilityActions() const noexcept
     return actions;
 }
 
-AccessibilityActionStatus Container::performAccessibilityAction(
+AccessibilityActionStatus BoxNode::performAccessibilityAction(
     AccessibilityActionKind kind, std::string_view value)
 {
     (void)value;
@@ -420,70 +420,70 @@ AccessibilityActionStatus Container::performAccessibilityAction(
     }
     if (!interaction_->onClick) return AccessibilityActionStatus::NotSupported;
     // Copy the handler before running it — a11y Invoke can (and, for the nav
-    // rail, does) tear down the tree that owns this Container.
+    // rail, does) tear down the tree that owns this BoxNode.
     auto onClick = interaction_->onClick;
     onClick();
     return AccessibilityActionStatus::Succeeded;
 }
 
-Row& Row::child(std::unique_ptr<Node> child)
+RowNode& RowNode::child(std::unique_ptr<Node> child)
 {
     appendChild(std::move(child));
     return *this;
 }
 
-Row& Row::gap(float gap) noexcept
+RowNode& RowNode::gap(float gap) noexcept
 {
     setGap(gap);
     return *this;
 }
 
-void Row::setGap(float gap) noexcept
+void RowNode::setGap(float gap) noexcept
 {
     gap_ = gap;
     markDirty(DirtyFlag::Layout);
 }
 
-float Row::gap() const noexcept
+float RowNode::gap() const noexcept
 {
     return gap_;
 }
 
-Row& Row::padding(InsetsF padding) noexcept
+RowNode& RowNode::padding(InsetsF padding) noexcept
 {
     setPadding(padding);
     return *this;
 }
 
-void Row::setPadding(InsetsF padding) noexcept
+void RowNode::setPadding(InsetsF padding) noexcept
 {
     padding_ = padding;
     markDirty(DirtyFlag::Layout);
 }
 
-InsetsF Row::padding() const noexcept
+InsetsF RowNode::padding() const noexcept
 {
     return padding_;
 }
 
-Row& Row::align(Alignment align) noexcept
+RowNode& RowNode::align(Alignment align) noexcept
 {
     setAlign(align);
     return *this;
 }
 
-void Row::setAlign(Alignment align) noexcept
+void RowNode::setAlign(Alignment align) noexcept
 {
     align_ = align;
     markDirty(DirtyFlag::Layout);
 }
 
-Alignment Row::align() const noexcept
+Alignment RowNode::align() const noexcept
 {
     return align_;
 }
 
-SizeF Row::measure(const Constraints& constraints) const
+SizeF RowNode::measure(const Constraints& constraints) const
 {
     const Constraints inner = constraints.deflate(padding_);
     float width = 0.0f;
@@ -521,7 +521,7 @@ SizeF Row::measure(const Constraints& constraints) const
     return constraints.clamp({width + padding_.horizontal(), height + padding_.vertical()});
 }
 
-void Row::layout(const RectF& bounds)
+void RowNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
 
@@ -612,64 +612,64 @@ void Row::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-Column& Column::child(std::unique_ptr<Node> child)
+ColumnNode& ColumnNode::child(std::unique_ptr<Node> child)
 {
     appendChild(std::move(child));
     return *this;
 }
 
-Column& Column::gap(float gap) noexcept
+ColumnNode& ColumnNode::gap(float gap) noexcept
 {
     setGap(gap);
     return *this;
 }
 
-void Column::setGap(float gap) noexcept
+void ColumnNode::setGap(float gap) noexcept
 {
     gap_ = gap;
     markDirty(DirtyFlag::Layout);
 }
 
-float Column::gap() const noexcept
+float ColumnNode::gap() const noexcept
 {
     return gap_;
 }
 
-Column& Column::padding(InsetsF padding) noexcept
+ColumnNode& ColumnNode::padding(InsetsF padding) noexcept
 {
     setPadding(padding);
     return *this;
 }
 
-void Column::setPadding(InsetsF padding) noexcept
+void ColumnNode::setPadding(InsetsF padding) noexcept
 {
     padding_ = padding;
     markDirty(DirtyFlag::Layout);
 }
 
-InsetsF Column::padding() const noexcept
+InsetsF ColumnNode::padding() const noexcept
 {
     return padding_;
 }
 
-Column& Column::align(Alignment align) noexcept
+ColumnNode& ColumnNode::align(Alignment align) noexcept
 {
     setAlign(align);
     return *this;
 }
 
-void Column::setAlign(Alignment align) noexcept
+void ColumnNode::setAlign(Alignment align) noexcept
 {
     align_ = align;
     markDirty(DirtyFlag::Layout);
 }
 
-Alignment Column::align() const noexcept
+Alignment ColumnNode::align() const noexcept
 {
     return align_;
 }
 
-SizeF Column::measure(const Constraints& constraints) const
+SizeF ColumnNode::measure(const Constraints& constraints) const
 {
     const Constraints inner = constraints.deflate(padding_);
     float width = 0.0f;
@@ -692,7 +692,7 @@ SizeF Column::measure(const Constraints& constraints) const
     return constraints.clamp({width + padding_.horizontal(), height + padding_.vertical()});
 }
 
-void Column::layout(const RectF& bounds)
+void ColumnNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
 

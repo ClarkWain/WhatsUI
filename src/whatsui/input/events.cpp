@@ -467,17 +467,17 @@ bool InputRouter::dispatchKey(const KeyEvent& event)
     // Give each widget first refusal: selection and range controls own their
     // precise keyboard contract, and text controls must keep editing keys.
     if (focused->onKeyEvent(event)) {
-        // Radio groups use arrow keys to change the active option. Fluent
+        // RadioNode groups use arrow keys to change the active option. Fluent
         // requires the roving tab stop to follow that selection, rather than
-        // leaving the FocusManager on the old Radio while a different option
+        // leaving the FocusManager on the old RadioNode while a different option
         // is visually checked. Keep this at the router boundary because only
         // it owns the real window focus state.
         const bool isArrow = event.action == KeyAction::Down &&
             (event.keyCode == 37 || event.keyCode == 38 || event.keyCode == 39 || event.keyCode == 40);
         if (isArrow) {
-            if (auto* radio = dynamic_cast<Radio*>(focused)) {
-                if (auto* group = dynamic_cast<RadioGroup*>(radio->parent())) {
-                    if (Radio* selected = group->selectedRadio(); selected != nullptr) {
+            if (auto* radio = dynamic_cast<RadioNode*>(focused)) {
+                if (auto* group = dynamic_cast<RadioGroupNode*>(radio->parent())) {
+                    if (RadioNode* selected = group->selectedRadio(); selected != nullptr) {
                         focusManager_->setFocused(selected, true);
                     }
                 }
@@ -488,7 +488,7 @@ bool InputRouter::dispatchKey(const KeyEvent& event)
 
     // Plain Buttons deliberately share their programmatic Invoke path instead
     // of receiving a fake pointer gesture at the control's top-left corner.
-    // This avoids accidental Slider jumps and Enter toggles on controls whose
+    // This avoids accidental SliderNode jumps and Enter toggles on controls whose
     // keyboard contract only accepts Space.
     const bool isActivation = event.action == KeyAction::Down &&
         (event.keyCode == 32 || event.keyCode == 13 || event.keyCode == 257);

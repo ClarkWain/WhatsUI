@@ -23,7 +23,7 @@ void testToastIntentActionAndPause()
 {
     int action = 0;
     int dismissed = 0;
-    wui::Toast toast("Saved", "Your task is available offline.");
+    wui::ToastNode toast("Saved", "Your task is available offline.");
     toast.setIntent(wui::ToastIntent::Success);
     toast.setAction("Undo", [&] { ++action; });
     toast.onDismiss([&] { ++dismissed; });
@@ -38,7 +38,7 @@ void testToastIntentActionAndPause()
     toast.advanceTimeout(std::chrono::milliseconds{100});
     expect(dismissed == 1, "Resumed Toast must dismiss after its remaining timeout");
 
-    wui::Toast actionable("Network", "Retry the request");
+    wui::ToastNode actionable("Network", "Retry the request");
     actionable.setAction("Retry", [&] { ++action; });
     actionable.layout({0, 0, 520, 300});
     expect(actionable.performAccessibilityAction(wui::AccessibilityActionKind::Invoke, {}) ==
@@ -55,9 +55,9 @@ void testToasterQueuesSafely()
 {
     wui::OverlayHost host;
     wui::Toaster toaster(host, wui::ToastPosition::TopEnd);
-    auto first = std::make_unique<wui::Toast>("First", "one");
+    auto first = std::make_unique<wui::ToastNode>("First", "one");
     first->setTimeout(std::chrono::milliseconds{0});
-    auto second = std::make_unique<wui::Toast>("Second", "two");
+    auto second = std::make_unique<wui::ToastNode>("Second", "two");
     second->setTimeout(std::chrono::milliseconds{0});
     toaster.show(std::move(first));
     toaster.show(std::move(second));
@@ -78,7 +78,7 @@ void testToasterQueuesSafely()
 
 void testSpinnerSizesLabelAndReducedMotion()
 {
-    wui::Spinner spinner("Loading tasks");
+    wui::SpinnerNode spinner("Loading tasks");
     constexpr std::array sizes{
         wui::SpinnerSize::ExtraTiny, wui::SpinnerSize::Tiny,
         wui::SpinnerSize::ExtraSmall, wui::SpinnerSize::Small,
@@ -87,7 +87,7 @@ void testSpinnerSizesLabelAndReducedMotion()
     };
     constexpr std::array diameters{16.0f, 20.0f, 24.0f, 28.0f,
                                    32.0f, 36.0f, 40.0f, 44.0f};
-    wui::Spinner bareSpinner;
+    wui::SpinnerNode bareSpinner;
     for (std::size_t index = 0; index < sizes.size(); ++index) {
         bareSpinner.setSize(sizes[index]);
         const auto measured = bareSpinner.measure({0, 100, 0, 100});

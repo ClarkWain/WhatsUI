@@ -31,38 +31,38 @@ void shadow(PaintContext& context, const RectF& bounds, float radius, const Elev
 }
 } // namespace
 
-Drawer::Drawer(std::string title, std::string subtitle)
+DrawerNode::DrawerNode(std::string title, std::string subtitle)
     : title_(std::move(title)), subtitle_(std::move(subtitle)) {}
 
-Drawer& Drawer::content(std::unique_ptr<Node> value) { clearChildren(); if (value) appendChild(std::move(value)); markDirty(DirtyFlag::Layout); return *this; }
-Drawer& Drawer::title(std::string value) { title_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
-Drawer& Drawer::subtitle(std::string value) { subtitle_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
-Drawer& Drawer::primaryAction(std::string label, ActionHandler handler) { primaryLabel_ = std::move(label); primaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
-Drawer& Drawer::secondaryAction(std::string label, ActionHandler handler) { secondaryLabel_ = std::move(label); secondaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
-Drawer& Drawer::type(DrawerType value) noexcept { type_ = value; markDirty(DirtyFlag::Layout); return *this; }
-Drawer& Drawer::position(DrawerPosition value) noexcept { position_ = value; markDirty(DirtyFlag::Layout); return *this; }
-Drawer& Drawer::size(DrawerSize value) noexcept { size_ = value; explicitExtent_ = 0.0f; markDirty(DirtyFlag::Layout); return *this; }
-Drawer& Drawer::width(float value) noexcept { explicitExtent_ = std::max(0.0f, value); markDirty(DirtyFlag::Layout); return *this; }
-Drawer& Drawer::modal(bool value) noexcept { modal_ = value; markDirty(DirtyFlag::Paint); return *this; }
-Drawer& Drawer::dismissOnOutsidePress(bool value) noexcept { dismissOnOutsidePress_ = value; return *this; }
-Drawer& Drawer::closeOnEscape(bool value) noexcept { closeOnEscape_ = value; return *this; }
-Drawer& Drawer::onDismiss(DismissHandler handler) { dismissHandler_ = std::move(handler); return *this; }
-const std::string& Drawer::title() const noexcept { return title_; }
-const std::string& Drawer::subtitle() const noexcept { return subtitle_; }
-DrawerType Drawer::type() const noexcept { return type_; }
-DrawerPosition Drawer::position() const noexcept { return position_; }
-DrawerSize Drawer::size() const noexcept { return size_; }
-bool Drawer::isModal() const noexcept { return modal_; }
-bool Drawer::dismissesOnOutsidePress() const noexcept { return dismissOnOutsidePress_; }
-bool Drawer::closesOnEscape() const noexcept { return closeOnEscape_; }
-bool Drawer::trapsFocus() const noexcept { return type_ == DrawerType::Overlay && modal_; }
-const RectF& Drawer::panelBounds() const noexcept { return panelBounds_; }
-const RectF& Drawer::contentBounds() const noexcept { return contentBounds_; }
-float Drawer::contentScrollOffset() const noexcept { return contentScrollOffset_; }
-float Drawer::maxContentScrollOffset() const noexcept { return std::max(0.0f, contentSize_.height - contentBounds_.height); }
-void Drawer::setContentScrollOffset(float value) noexcept { contentScrollOffset_ = value; clampScrollOffset(); markDirty(DirtyFlag::Paint); }
+DrawerNode& DrawerNode::content(std::unique_ptr<Node> value) { clearChildren(); if (value) appendChild(std::move(value)); markDirty(DirtyFlag::Layout); return *this; }
+DrawerNode& DrawerNode::title(std::string value) { title_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
+DrawerNode& DrawerNode::subtitle(std::string value) { subtitle_ = std::move(value); markDirty(DirtyFlag::Layout); return *this; }
+DrawerNode& DrawerNode::primaryAction(std::string label, ActionHandler handler) { primaryLabel_ = std::move(label); primaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
+DrawerNode& DrawerNode::secondaryAction(std::string label, ActionHandler handler) { secondaryLabel_ = std::move(label); secondaryHandler_ = std::move(handler); markDirty(DirtyFlag::Layout); return *this; }
+DrawerNode& DrawerNode::type(DrawerType value) noexcept { type_ = value; markDirty(DirtyFlag::Layout); return *this; }
+DrawerNode& DrawerNode::position(DrawerPosition value) noexcept { position_ = value; markDirty(DirtyFlag::Layout); return *this; }
+DrawerNode& DrawerNode::size(DrawerSize value) noexcept { size_ = value; explicitExtent_ = 0.0f; markDirty(DirtyFlag::Layout); return *this; }
+DrawerNode& DrawerNode::width(float value) noexcept { explicitExtent_ = std::max(0.0f, value); markDirty(DirtyFlag::Layout); return *this; }
+DrawerNode& DrawerNode::modal(bool value) noexcept { modal_ = value; markDirty(DirtyFlag::Paint); return *this; }
+DrawerNode& DrawerNode::dismissOnOutsidePress(bool value) noexcept { dismissOnOutsidePress_ = value; return *this; }
+DrawerNode& DrawerNode::closeOnEscape(bool value) noexcept { closeOnEscape_ = value; return *this; }
+DrawerNode& DrawerNode::onDismiss(DismissHandler handler) { dismissHandler_ = std::move(handler); return *this; }
+const std::string& DrawerNode::title() const noexcept { return title_; }
+const std::string& DrawerNode::subtitle() const noexcept { return subtitle_; }
+DrawerType DrawerNode::type() const noexcept { return type_; }
+DrawerPosition DrawerNode::position() const noexcept { return position_; }
+DrawerSize DrawerNode::size() const noexcept { return size_; }
+bool DrawerNode::isModal() const noexcept { return modal_; }
+bool DrawerNode::dismissesOnOutsidePress() const noexcept { return dismissOnOutsidePress_; }
+bool DrawerNode::closesOnEscape() const noexcept { return closeOnEscape_; }
+bool DrawerNode::trapsFocus() const noexcept { return type_ == DrawerType::Overlay && modal_; }
+const RectF& DrawerNode::panelBounds() const noexcept { return panelBounds_; }
+const RectF& DrawerNode::contentBounds() const noexcept { return contentBounds_; }
+float DrawerNode::contentScrollOffset() const noexcept { return contentScrollOffset_; }
+float DrawerNode::maxContentScrollOffset() const noexcept { return std::max(0.0f, contentSize_.height - contentBounds_.height); }
+void DrawerNode::setContentScrollOffset(float value) noexcept { contentScrollOffset_ = value; clampScrollOffset(); markDirty(DirtyFlag::Paint); }
 
-float Drawer::desiredExtent(const RectF& host) const noexcept
+float DrawerNode::desiredExtent(const RectF& host) const noexcept
 {
     if (explicitExtent_ > 0.0f) return explicitExtent_;
     if (size_ == DrawerSize::Full) return position_ == DrawerPosition::Bottom ? host.height : host.width;
@@ -71,7 +71,7 @@ float Drawer::desiredExtent(const RectF& host) const noexcept
     return std::min(base, position_ == DrawerPosition::Bottom ? host.height : host.width);
 }
 
-RectF Drawer::resolvePanel(const RectF& host) const noexcept
+RectF DrawerNode::resolvePanel(const RectF& host) const noexcept
 {
     if (type_ == DrawerType::Inline) return host;
     const float extent = desiredExtent(host);
@@ -80,7 +80,7 @@ RectF Drawer::resolvePanel(const RectF& host) const noexcept
     return {host.x + host.width - extent, host.y, extent, host.height};
 }
 
-float Drawer::headerHeight() const noexcept
+float DrawerNode::headerHeight() const noexcept
 {
     const auto& typography = theme().typography;
     if (title_.empty() && subtitle_.empty()) return kPadding;
@@ -89,21 +89,21 @@ float Drawer::headerHeight() const noexcept
                            : kHeaderGap + typography.body1.lineHeight) +
         kHeaderBottomPadding;
 }
-float Drawer::footerHeight() const noexcept
+float DrawerNode::footerHeight() const noexcept
 {
     return primaryLabel_.empty() && secondaryLabel_.empty()
         ? 0.0f
         : theme().controls.height + kFooterTopPadding + kPadding;
 }
 
-SizeF Drawer::measure(const Constraints& constraints) const
+SizeF DrawerNode::measure(const Constraints& constraints) const
 {
     const float extent = position_ == DrawerPosition::Bottom ? desiredExtent({0, 0, constraints.maxWidth, constraints.maxHeight}) : desiredExtent({0, 0, constraints.maxWidth, constraints.maxHeight});
     if (type_ == DrawerType::Overlay) return constraints.clamp({constraints.maxWidth, constraints.maxHeight});
     return position_ == DrawerPosition::Bottom ? constraints.clamp({constraints.maxWidth, extent}) : constraints.clamp({extent, constraints.maxHeight});
 }
 
-void Drawer::layout(const RectF& bounds)
+void DrawerNode::layout(const RectF& bounds)
 {
     Node::layout(bounds);
     panelBounds_ = resolvePanel(bounds);
@@ -120,12 +120,12 @@ void Drawer::layout(const RectF& bounds)
     clearLayoutDirtyRecursively();
 }
 
-RectF Drawer::closeBounds() const noexcept
+RectF DrawerNode::closeBounds() const noexcept
 {
     return {panelBounds_.x + panelBounds_.width - 16.0f - 32.0f,
             panelBounds_.y + kPadding, 32.0f, 32.0f};
 }
-RectF Drawer::primaryBounds() const noexcept
+RectF DrawerNode::primaryBounds() const noexcept
 {
     if (primaryLabel_.empty()) return {};
     const float width = std::max(80.0f, measureTextWidth(primaryLabel_, theme().typography.body1Strong) + 32.0f);
@@ -134,7 +134,7 @@ RectF Drawer::primaryBounds() const noexcept
                 theme().controls.height,
             width, theme().controls.height};
 }
-RectF Drawer::secondaryBounds() const noexcept
+RectF DrawerNode::secondaryBounds() const noexcept
 {
     if (secondaryLabel_.empty()) return {};
     const auto primary = primaryBounds();
@@ -151,7 +151,7 @@ RectF Drawer::secondaryBounds() const noexcept
             width, theme().controls.height};
 }
 
-void Drawer::paint(PaintContext& context)
+void DrawerNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     if (type_ == DrawerType::Overlay && modal_) context.fillRect(bounds(), current.colors.scrim);
@@ -215,14 +215,14 @@ void Drawer::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-Node* Drawer::hitTest(PointF point)
+Node* DrawerNode::hitTest(PointF point)
 {
     if (!bounds().contains(point) || !panelBounds_.contains(point)) return type_ == DrawerType::Overlay ? this : nullptr;
     if (contentBounds_.contains(point) && !children().empty()) { const PointF translated{point.x, point.y + contentScrollOffset_}; if (auto* hit = children().front()->hitTest(translated)) return hit; }
     return this;
 }
 
-bool Drawer::onPointerEvent(const PointerEvent& event)
+bool DrawerNode::onPointerEvent(const PointerEvent& event)
 {
     if (event.action == PointerAction::Scroll && contentBounds_.contains(event.position)) { const float before = contentScrollOffset_; setContentScrollOffset(contentScrollOffset_ - event.scrollDelta.y); return before != contentScrollOffset_; }
     if (event.action != PointerAction::Up || event.button != MouseButton::Left) return type_ == DrawerType::Overlay;
@@ -232,16 +232,16 @@ bool Drawer::onPointerEvent(const PointerEvent& event)
     if (secondaryBounds().contains(event.position)) { invoke(secondaryHandler_); return true; }
     return panelBounds_.contains(event.position);
 }
-bool Drawer::onKeyEvent(const KeyEvent& event)
+bool DrawerNode::onKeyEvent(const KeyEvent& event)
 {
     if (event.action != KeyAction::Down) return false;
     if (closeOnEscape_ && (event.keyCode == 27 || event.keyCode == 256)) { dismiss(); return true; }
     if (trapsFocus() && (event.keyCode == 9 || event.keyCode == 258)) return true;
     return false;
 }
-void Drawer::dismiss()
+void DrawerNode::dismiss()
 {
-    // Either callback can remove this Drawer from OverlayHost synchronously.
+    // Either callback can remove this DrawerNode from OverlayHost synchronously.
     // Copy both first and do not access object state once the ownership
     // callback begins.
     auto author = dismissHandler_;
@@ -249,9 +249,9 @@ void Drawer::dismiss()
     if (author) author();
     if (overlay) overlay();
 }
-void Drawer::clampScrollOffset() noexcept { contentScrollOffset_ = std::clamp(contentScrollOffset_, 0.0f, maxContentScrollOffset()); }
-void Drawer::invoke(ActionHandler& action) { auto handler = action; if (handler) handler(); dismiss(); }
-void Drawer::setOverlayDismissHandler(DismissHandler handler) noexcept { overlayDismissHandler_ = std::move(handler); }
+void DrawerNode::clampScrollOffset() noexcept { contentScrollOffset_ = std::clamp(contentScrollOffset_, 0.0f, maxContentScrollOffset()); }
+void DrawerNode::invoke(ActionHandler& action) { auto handler = action; if (handler) handler(); dismiss(); }
+void DrawerNode::setOverlayDismissHandler(DismissHandler handler) noexcept { overlayDismissHandler_ = std::move(handler); }
 
 
 } // namespace wui

@@ -9,7 +9,10 @@ include(CMakePackageConfigHelpers)
 # charset for every in-tree target: suppressing C4819 leaves the active ANSI
 # code page in control and can corrupt preprocessing on non-English Windows.
 if(MSVC)
-    add_compile_options(/utf-8)
+    # /FS serializes compiler writes to each target's PDB. Visual Studio's
+    # multi-process build otherwise intermittently fails with C1041 when a
+    # target has many translation units (notably the core WhatsUI library).
+    add_compile_options(/utf-8 /FS)
 endif()
 
 option(WHATSUI_WITH_WHATSCANVAS "Link WhatsCanvas into the WhatsUI target" OFF)
@@ -61,7 +64,9 @@ add_library(WhatsUI
     src/whatsui/core/text_units.cpp
     src/whatsui/core/theme.cpp
     src/whatsui/core/thread_check.cpp
+    src/whatsui/core/ui_dispatcher.cpp
     src/whatsui/core/ui_inspector.cpp
+    src/whatsui/core/ui_inspector_style.cpp
     src/whatsui/input/events.cpp
     src/whatsui/runtime/runtime.cpp
     src/whatsui/widgets/button.cpp
@@ -241,6 +246,26 @@ endif()
 if(WHATSUI_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+
+    # WhatsCanvas registers these tests from a dependency subdirectory. Make
+    # every registered executable part of the root ALL build so a normal
+    # build followed by CTest cannot fail merely because an EXCLUDE_FROM_ALL
+    # helper target was never generated.
+    set(WHATSUI_WHATSCANVAS_TEST_PREREQUISITES)
+    foreach(whatsui_test_target IN ITEMS
+            WhatsCanvasPerformanceSuite
+            WhatsCanvasAAShowcase)
+        if(TARGET ${whatsui_test_target})
+            list(APPEND WHATSUI_WHATSCANVAS_TEST_PREREQUISITES
+                ${whatsui_test_target})
+        endif()
+    endforeach()
+    if(WHATSUI_WHATSCANVAS_TEST_PREREQUISITES)
+        add_custom_target(WhatsUIWhatsCanvasTestPrerequisites ALL)
+        add_dependencies(WhatsUIWhatsCanvasTestPrerequisites
+            ${WHATSUI_WHATSCANVAS_TEST_PREREQUISITES})
+    endif()
+
 endif()
 
 # Core packages may be installed headless or with the selected exported

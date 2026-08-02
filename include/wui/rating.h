@@ -1,6 +1,6 @@
 #pragma once
 
-// Fluent 2 rating controls. Rating is the interactive input; RatingDisplay is
+// Fluent 2 rating controls. RatingNode is the interactive input; RatingDisplayNode is
 // deliberately passive and should be used when presenting an aggregate value.
 
 #include <cstdint>
@@ -17,20 +17,20 @@ enum class RatingColor { Neutral, Brand, Marigold };
 enum class RatingSize { Small, Medium, Large, ExtraLarge };
 enum class RatingShape { Star, Circle, Square };
 
-class Rating : public ControlNode {
+class RatingNode : public ControlNode {
 public:
     using ChangeHandler = std::function<void(float)>;
     using ItemLabelHandler = std::function<std::string(float)>;
 
-    explicit Rating(float value = 0.0f, int maximum = 5);
+    explicit RatingNode(float value = 0.0f, int maximum = 5);
 
     [[nodiscard]] float value() const noexcept;
-    Rating& value(float value);
+    RatingNode& value(float value);
     void setValue(float value);
     [[nodiscard]] int maximum() const noexcept;
     void setMaximum(int maximum);
     [[nodiscard]] float step() const noexcept;
-    Rating& step(float step);
+    RatingNode& step(float step);
     void setStep(float step);
     [[nodiscard]] RatingColor color() const noexcept;
     void setColor(RatingColor color) noexcept;
@@ -42,12 +42,12 @@ public:
     void setReadOnly(bool value) noexcept;
     [[nodiscard]] const std::string& accessibleLabel() const noexcept;
     void setAccessibleLabel(std::string label);
-    Rating& itemLabel(ItemLabelHandler handler);
+    RatingNode& itemLabel(ItemLabelHandler handler);
     void setItemLabel(ItemLabelHandler handler);
     [[nodiscard]] std::string labelForValue(float value) const;
     [[nodiscard]] std::string accessibleValueText() const;
-    Rating& bind(State<float>& state);
-    Rating& onChange(ChangeHandler handler);
+    RatingNode& bind(State<float>& state);
+    RatingNode& onChange(ChangeHandler handler);
 
     [[nodiscard]] SizeF measure(const Constraints& constraints) const override;
     void paint(PaintContext& context) override;
@@ -69,7 +69,7 @@ private:
     RatingSize size_{RatingSize::ExtraLarge};
     RatingShape shape_{RatingShape::Star};
     bool readOnly_{false};
-    std::string accessibleLabel_{"Rating"};
+    std::string accessibleLabel_{"RatingNode"};
     std::optional<float> hoveredValue_;
     std::optional<Binding<float>> binding_;
     StateSubscription<float> subscription_;
@@ -78,19 +78,19 @@ private:
     ItemLabelHandler itemLabel_;
 };
 
-class RatingDisplay : public Node {
+class RatingDisplayNode : public Node {
 public:
     using CountFormatter = std::function<std::string(std::uint64_t)>;
-    explicit RatingDisplay(std::optional<float> value = std::optional<float>{0.0f}, int maximum = 5);
+    explicit RatingDisplayNode(std::optional<float> value = std::optional<float>{0.0f}, int maximum = 5);
 
     [[nodiscard]] std::optional<float> value() const noexcept;
-    RatingDisplay& value(float value);
+    RatingDisplayNode& value(float value);
     void setValue(std::optional<float> value) noexcept;
     [[nodiscard]] int maximum() const noexcept;
     void setMaximum(int maximum) noexcept;
     [[nodiscard]] std::optional<std::uint64_t> count() const noexcept;
     void setCount(std::optional<std::uint64_t> count) noexcept;
-    RatingDisplay& countFormatter(CountFormatter formatter);
+    RatingDisplayNode& countFormatter(CountFormatter formatter);
     void setCountFormatter(CountFormatter formatter);
     [[nodiscard]] bool isCompact() const noexcept;
     void setCompact(bool compact) noexcept;

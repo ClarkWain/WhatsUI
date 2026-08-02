@@ -1055,9 +1055,9 @@ private:
             return UIA_E_INVALIDOPERATION;
         }
         AccessibilityActionRequest request;
-        // Retained Radio and Tab nodes already expose a control action. ListBox
+        // Retained RadioNode and Tab nodes already expose a control action. ListBoxNode
         // options are virtual snapshot children, so preserve the explicit
-        // Add/Remove request for UiWindow to route to ListBox.
+        // Add/Remove request for UiWindow to route to ListBoxNode.
         if (properties.role == AccessibilityRole::RadioButton) {
             request.kind = AccessibilityActionKind::Toggle;
         } else if (properties.role == AccessibilityRole::Tab) {

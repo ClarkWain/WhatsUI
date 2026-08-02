@@ -28,5 +28,5 @@ auto search = ui::TextField("Search commands")
 ```
 
 An active `Dialog` owns Escape first so its focus restoration contract remains
-authoritative; this is why the command palette reference uses a dialog while
-the input callback stays useful for inline command surfaces.
+authoritative; this is why the Component Gallery command-palette scenario uses
+a dialog while the input callback stays useful for inline command surfaces.

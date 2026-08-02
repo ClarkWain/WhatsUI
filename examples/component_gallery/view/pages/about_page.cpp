@@ -7,9 +7,9 @@
 #include "view/components/page_header.h"
 #include "view/components/responsive_layouts.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
- using namespace wui::ui;
+ using namespace wui;
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -43,12 +43,12 @@ std::unique_ptr<wui::Node> buildIdentityCard()
 
     auto identity = std::make_unique<view::components::ResponsiveRow>();
     identity->gap(18.0f).align(wui::Alignment::Center);
-    identity->appendChild(std::move(mark).intoNode());
-    identity->appendChild(std::move(details).intoNode());
+    identity->appendChild(std::move(mark).build());
+    identity->appendChild(std::move(details).build());
     return Card()
         .appearance(wui::CardAppearance::FilledAlternative)
         .children(std::move(identity))
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildPrinciples()
@@ -72,7 +72,7 @@ std::unique_ptr<wui::Node> buildPrinciples()
                     Text(title).size(15.0f).weight(600),
                     Text(description).size(11.0f).lineHeight(17.0f).wrap().color(wui::theme().colors.textMuted))
             )
-            .intoNode();
+            .build();
 
         card->setFlex(1.0f);
         row->appendChild(std::move(card));
@@ -87,7 +87,7 @@ std::unique_ptr<wui::Node> buildResources(const OpenLinkHandler& openLink)
         if (openLink) {
             item = std::move(item).onClick([openLink, href = std::move(href)] { openLink(href); });
         }
-        return std::move(item).intoNode();
+        return std::move(item).build();
     };
     
     return Card()
@@ -105,16 +105,16 @@ std::unique_ptr<wui::Node> buildResources(const OpenLinkHandler& openLink)
                 link("License", "https://github.com/ClarkWain/WhatsUI/blob/main/LICENSE")
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
 
 std::unique_ptr<wui::Node> buildAboutPage(OpenLinkHandler openLink)
 {
-    using namespace wui::ui;
+    using namespace wui;
     return ScrollView()
-        .children(
+        .content(
             Column()
             .gap(20.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})
@@ -127,7 +127,7 @@ std::unique_ptr<wui::Node> buildAboutPage(OpenLinkHandler openLink)
                 buildResources(openLink)
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::pages

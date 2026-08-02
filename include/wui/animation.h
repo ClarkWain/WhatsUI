@@ -20,6 +20,8 @@
 #include <functional>
 #include <vector>
 
+#include "wui/thread_check.h"
+
 namespace wui {
 
 // Easing function type: takes normalized time [0,1], returns curved value.
@@ -164,7 +166,7 @@ public:
     // Global singleton (UI-thread only, like State<T>).
     static Ticker& instance() noexcept
     {
-        static Ticker ticker;
+        thread_local Ticker ticker;
         return ticker;
     }
 

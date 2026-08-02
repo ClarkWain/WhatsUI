@@ -217,9 +217,9 @@ gallery_components::NavigationRailConfig railConfig(GalleryRoute selected)
     return config;
 }
 
-void collectButtons(wui::Node& node, std::vector<wui::Button*>& buttons)
+void collectButtons(wui::Node& node, std::vector<wui::ButtonNode*>& buttons)
 {
-    if (auto* button = dynamic_cast<wui::Button*>(&node)) {
+    if (auto* button = dynamic_cast<wui::ButtonNode*>(&node)) {
         buttons.push_back(button);
     }
     if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
@@ -233,9 +233,9 @@ void collectButtons(wui::Node& node, std::vector<wui::Button*>& buttons)
 // tests target those instead of raw Buttons so the interaction contract stays
 // close to the actual rendering path used by the app.
 void collectInteractiveContainers(wui::Node& node,
-                                  std::vector<wui::Container*>& containers)
+                                  std::vector<wui::BoxNode*>& containers)
 {
-    if (auto* container = dynamic_cast<wui::Container*>(&node)) {
+    if (auto* container = dynamic_cast<wui::BoxNode*>(&node)) {
         if (container->interaction() != nullptr &&
             !container->interaction()->accessibleLabel.empty()) {
             containers.push_back(container);
@@ -248,9 +248,9 @@ void collectInteractiveContainers(wui::Node& node,
     }
 }
 
-void collectToggleButtons(wui::Node& node, std::vector<wui::ToggleButton*>& buttons)
+void collectToggleButtons(wui::Node& node, std::vector<wui::ToggleButtonNode*>& buttons)
 {
-    if (auto* button = dynamic_cast<wui::ToggleButton*>(&node)) {
+    if (auto* button = dynamic_cast<wui::ToggleButtonNode*>(&node)) {
         buttons.push_back(button);
     }
     if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
@@ -260,9 +260,9 @@ void collectToggleButtons(wui::Node& node, std::vector<wui::ToggleButton*>& butt
     }
 }
 
-void collectRadios(wui::Node& node, std::vector<wui::Radio*>& radios)
+void collectRadios(wui::Node& node, std::vector<wui::RadioNode*>& radios)
 {
-    if (auto* radio = dynamic_cast<wui::Radio*>(&node)) {
+    if (auto* radio = dynamic_cast<wui::RadioNode*>(&node)) {
         radios.push_back(radio);
     }
     if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
@@ -272,9 +272,9 @@ void collectRadios(wui::Node& node, std::vector<wui::Radio*>& radios)
     }
 }
 
-void collectCards(wui::Node& node, std::vector<wui::Card*>& cards)
+void collectCards(wui::Node& node, std::vector<wui::CardNode*>& cards)
 {
-    if (auto* card = dynamic_cast<wui::Card*>(&node)) {
+    if (auto* card = dynamic_cast<wui::CardNode*>(&node)) {
         cards.push_back(card);
     }
     if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
@@ -287,7 +287,7 @@ void collectCards(wui::Node& node, std::vector<wui::Card*>& cards)
 template <class NodeType>
 NodeType* findNodeByAccessibilityId(wui::Node& node, std::string_view id)
 {
-    if (node.accessibilityId() == id) return dynamic_cast<NodeType*>(&node);
+    if (node.automationId() == id) return dynamic_cast<NodeType*>(&node);
     if (auto* container = dynamic_cast<wui::ContainerNode*>(&node)) {
         for (const auto& child : container->children()) {
             if (auto* result = findNodeByAccessibilityId<NodeType>(*child, id)) {
@@ -298,9 +298,9 @@ NodeType* findNodeByAccessibilityId(wui::Node& node, std::string_view id)
     return nullptr;
 }
 
-wui::Button* findButtonByLabel(wui::Node& node, std::string_view label)
+wui::ButtonNode* findButtonByLabel(wui::Node& node, std::string_view label)
 {
-    if (auto* button = dynamic_cast<wui::Button*>(&node);
+    if (auto* button = dynamic_cast<wui::ButtonNode*>(&node);
         button != nullptr && button->label() == label) {
         return button;
     }
@@ -388,7 +388,7 @@ void testNavigationRailInvokesEightAccessibleDestinations()
             viewModel.select(routeForKey(key));
         });
 
-    std::vector<wui::Container*> items;
+    std::vector<wui::BoxNode*> items;
     collectInteractiveContainers(*rail, items);
     expect(items.size() == std::size(allRoutes),
            "Navigation rail must retain one interactive Container per gallery route");
@@ -419,15 +419,15 @@ void testSelectedRailStateTracksViewModelRebuild()
         viewModel.select(route);
         auto rail = gallery_components::buildNavigationRail(
             railConfig(viewModel.currentRoute().get()));
-        std::vector<wui::Button*> buttons;
+        std::vector<wui::ButtonNode*> buttons;
         collectButtons(*rail, buttons);
         expect(buttons.empty(),
-               "Nav rail rows must not embed a wui::Button once they are Container-based");
+               "Nav rail rows must not embed a wui::ButtonNode once they are Container-based");
 
         // The selected row is the only one whose background alpha is opaque:
         // unselected rows leave background at transparent and only paint their
         // accent through the InteractionArea hover/pressed tokens.
-        std::vector<wui::Container*> items;
+        std::vector<wui::BoxNode*> items;
         collectInteractiveContainers(*rail, items);
         expect(items.size() == std::size(allRoutes),
                "Rebuilt rail must expose every route as an interactive Container");
@@ -447,7 +447,7 @@ void testUnknownRailKeyDoesNotCorruptNavigationState()
         std::move(config), [&](const std::string& key) {
             if (key != "unknown-route") viewModel.select(routeForKey(key));
         });
-    std::vector<wui::Container*> items;
+    std::vector<wui::BoxNode*> items;
     collectInteractiveContainers(*rail, items);
     expect(items.size() == 1,
            "Unknown-route fixture must contain one invokable rail row");
@@ -548,18 +548,18 @@ void testCategorySelectionAdaptsBetweenDesktopAndCompactAccessibility()
     // The desktop catalog keeps dense ToggleButtons, preserving the existing
     // quick filter affordance at usable page widths.
     page->layout({0.0f, 0.0f, 800.0f, 640.0f});
-    std::vector<wui::Card*> cards;
+    std::vector<wui::CardNode*> cards;
     collectCards(*page, cards);
     if (viewModel.visibleComponents().get().size() > 8) {
         expect(cards.size() <= 20,
              "All Components results must mount only the visible component cards instead of the full catalog");
         }
-    std::vector<wui::ToggleButton*> toggles;
+    std::vector<wui::ToggleButtonNode*> toggles;
     collectToggleButtons(*page, toggles);
     expect(toggles.size() == 10,
            "Desktop All Components must expose one ToggleButton per category");
 
-    auto findToggle = [&](std::string_view label) -> wui::ToggleButton* {
+    auto findToggle = [&](std::string_view label) -> wui::ToggleButtonNode* {
         for (auto* toggle : toggles) {
             if (toggle->label() == label) return toggle;
         }
@@ -612,11 +612,11 @@ void testCategorySelectionAdaptsBetweenDesktopAndCompactAccessibility()
     // instead expose real radio buttons: a single-column, keyboard and UIA
     // reachable exclusive selection control rather than clipped content.
     page->layout({0.0f, 0.0f, 267.0f, 640.0f});
-    std::vector<wui::Radio*> radios;
+    std::vector<wui::RadioNode*> radios;
     collectRadios(*page, radios);
     expect(radios.size() == 10,
            "Compact All Components must expose one RadioButton per category");
-    auto findRadio = [&](std::string_view label) -> wui::Radio* {
+    auto findRadio = [&](std::string_view label) -> wui::RadioNode* {
         for (auto* radio : radios) {
             if (radio->label() == label) return radio;
         }
@@ -650,9 +650,9 @@ void testLongTextPageUsesOneTenThousandLineTextDocument()
     auto page = whatsui::gallery::view::pages::buildLongTextPage();
     page->layout({0.0f, 0.0f, 800.0f, 700.0f});
 
-    auto* const document = findNodeByAccessibilityId<wui::Text>(
+    auto* const document = findNodeByAccessibilityId<wui::TextNode>(
         *page, "gallery.long-text.document");
-    auto* const viewport = findNodeByAccessibilityId<wui::ScrollView>(
+    auto* const viewport = findNodeByAccessibilityId<wui::ScrollViewNode>(
         *page, "gallery.long-text.viewport");
     expect(document != nullptr && viewport != nullptr,
            "Long Text page must use one Text document inside one ScrollView");
@@ -672,7 +672,7 @@ void testLongTextPageUsesOneTenThousandLineTextDocument()
     expect(paint.paintStats().textDrawCalls < 100,
            "Long Text Gallery page must keep paint submissions bounded by its viewport");
 
-    auto* const pageViewport = dynamic_cast<wui::ScrollView*>(page.get());
+    auto* const pageViewport = dynamic_cast<wui::ScrollViewNode*>(page.get());
     auto* const lineOne = findButtonByLabel(*page, "Line 1");
     auto* const lineFiveThousand = findButtonByLabel(*page, "Line 5,000");
     expect(pageViewport != nullptr && lineOne != nullptr && lineFiveThousand != nullptr,
@@ -684,7 +684,7 @@ void testLongTextPageUsesOneTenThousandLineTextDocument()
 
     wui::InputRouter input;
     input.setRoot(page.get());
-    const auto click = [&](wui::Button& button) {
+    const auto click = [&](wui::ButtonNode& button) {
         const auto bounds = button.bounds();
         const wui::PointF point{
             bounds.x + bounds.width * 0.5f,
@@ -753,7 +753,7 @@ void testLongTextPageUsesOneTenThousandLineTextDocument()
         window.layout();
         expect(navigation.currentRoute().get() == GalleryRoute::AllComponents,
             "Production router must switch to the All Components route after the route click");
-        std::vector<wui::Card*> cards;
+        std::vector<wui::CardNode*> cards;
         collectCards(*window.root(), cards);
         expect(!cards.empty() && cards.size() <= 20,
             "Production All Components page must build a virtualized, bounded result list");

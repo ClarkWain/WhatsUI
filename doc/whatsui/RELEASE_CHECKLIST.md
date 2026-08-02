@@ -48,10 +48,10 @@ the remaining manual/legal gates above are still required.
 - [ ] Headless install/export plus an external `find_package` consumer smoke
   test succeeds.
 - [ ] WhatsCanvas Software build and deterministic visual regression succeeds.
-- [ ] Todo responsive captures are reviewed by a human at narrow, regular, and
-  wide sizes; hashes are updated only for an intentional visual decision.
-- [ ] GLFW Todo, Settings, and Command Palette reference applications launch on
-  the release Windows version.
+- [ ] Focus Tomato and Component Gallery captures are reviewed by a human at
+  supported desktop sizes; hashes are updated only for an intentional visual decision.
+- [ ] GLFW Focus Tomato, Component Gallery, Inspector, and Hello Window reference
+  applications launch on the release Windows version.
 - [ ] Text input/IME manual matrix has evidence at 100%, 150%, and 200% DPI.
 - [ ] Windows UI Automation bridge plus a Narrator/screen-reader validation
   matrix has release-owner sign-off. A platform-neutral semantic snapshot is
@@ -80,6 +80,7 @@ an automated pass.
 | 2026-07-15, Windows/MSVC Release, native UIA events | A real HWND was observed by MTA property/focus/structure handlers while the UI thread changed control state, appended semantic content, and moved the native window. Event emission used a posted UI-thread flush after action COM stacks unwound. | Name, IsEnabled, ToggleState, Value, BoundingRectangle, focus, and ChildrenInvalidated events arrived; retained RuntimeId stayed stable; identical republishes produced no event storm; the native test passed repeatedly. | Selection/Text ranges, Invoke event occurrence, disabled/error-path matrix, 100%/150%/200% Narrator validation, or release approval. |
 | 2026-07-19, Windows/MSVC Release, Fluent visual alignment | Shared text baseline changed from a line-height approximation to normalized ascent/descent metrics; Todo row, mixed Checkbox, and Slider endpoint geometry were reviewed. Strict semantic-pixel gates ran at 100/125/150/200%, followed by a full serial Release suite. | Button/Label/Input rendered-ink centres are within one physical pixel; Todo completion/title centres align; component artifacts were inspected; **128/128** CTest tests passed. | Native multi-monitor movement, installed IME/Narrator evidence, signed artifacts, or release-owner approval. |
 | 2026-07-21, Windows/MSVC Release, isolated `build-release-gate` | Fresh configure with WhatsCanvas, tests, examples, and the GLFW/UIA host enabled; complete serial build, then CTest. The initial four-worker CTest run passed **175/177** and exposed only recursive MSBuild `.tlog` contention in two WhatsCanvas tests; both were rerun serially from the same clean output directory. | **177/177** tests passed, including DirectWrite DPI, all Fluent 100/125/150/200% pixel gates, Todo regression/review/performance, package consumers, real GLFW/UIA `Selection` + `SelectionItem`, and the current Todo demo targets. | A tagged clean candidate, installed IME/multi-monitor/Narrator evidence, release archive/signing, or legal/release-owner approval. |
+| 2026-08-01, Windows/MSVC Release, declarative architecture completion | Full serial CTest after the per-context UI ownership, declarative header split, semantic composition, identity, lifecycle, and Focus Tomato gate changes. Focus Tomato task, setup, timer, completion, and break captures were inspected separately. | **208/208** tests passed, including Software/OpenGL DPI matrices, UIA, package consumers, Focus Tomato, Component Gallery, lifecycle, Dispatcher, State, and declarative external-header contracts. Todo targets were retired before this run. | A tagged clean candidate, installed IME/multi-monitor/Narrator evidence, release archive/signing, or legal/release-owner approval. |
 
 Retain the command logs with the candidate tag before changing any engineering
 row above to checked. Re-run the matrix from a fresh output directory whenever

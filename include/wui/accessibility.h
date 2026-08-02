@@ -66,7 +66,7 @@ enum class AccessibilityActionKind {
     Invoke,
     Toggle,
     // Selection actions are used by native adapters for virtual children
-    // (for example ListBox options).  They remain distinct from SetValue so
+    // (for example ListBoxNode options).  They remain distinct from SetValue so
     // a multi-select container can preserve Add/Remove semantics.
     Select,
     AddToSelection,
@@ -85,7 +85,7 @@ struct AccessibilityActionCapabilities {
     bool focus{false};
     bool valueReadOnly{false};
     // The control publishes a full TextModel for its editable content and
-    // opts into the future UIA Text/TextRange pattern. See
+    // opts into the future UIA TextNode/TextRange pattern. See
     // doc/whatsui/UIA_TEXT_PATTERN_DESIGN.md for the surface contract.
     // Consumers must populate AccessibilityProperties::textModel on every
     // publish when this flag is true.
@@ -105,7 +105,7 @@ enum class AccessibilityActionStatus {
 
 // Semantic data belonging to one control or logical content node.  Labels and
 // descriptions are plain UTF-8 text; value is deliberately optional because a
-// Button normally has no value while a Slider or editable TextField does.
+// ButtonNode normally has no value while a SliderNode or editable TextField does.
 // Selection range within the editable text of an accessibility text model.
 // Byte offsets refer to UTF-8 bytes in AccessibilityTextModel::text and
 // remain in sync with wui::TextRange from wui/text_input.h. An empty range
@@ -180,10 +180,10 @@ struct AccessibilityProperties {
     // taking focus. Native adapters project this as a polite live region.
     bool live{false};
     // Present only for controls exposing an expand/collapse relationship,
-    // such as a MenuButton or the disclosure half of a SplitButton.
+    // such as a MenuButtonNode or the disclosure half of a SplitButtonNode.
     std::optional<bool> expanded;
     // Hierarchical collections expose one-based item depth (for example a
-    // TreeItem's UIA Level property). The absence of a value means the role
+    // TreeItemNode's UIA Level property). The absence of a value means the role
     // does not participate in a hierarchy.
     std::optional<int> level;
     std::optional<std::string> value;
@@ -196,7 +196,7 @@ struct AccessibilityProperties {
     std::optional<double> largeChange;
     // Populated only when actions.text is true. See AccessibilityTextModel
     // and doc/whatsui/UIA_TEXT_PATTERN_DESIGN.md for the shared-model
-    // contract exposed as the future UIA Text/TextRange pattern.
+    // contract exposed as the future UIA TextNode/TextRange pattern.
     std::optional<AccessibilityTextModel> textModel;
     AccessibilityActionCapabilities actions{};
 
@@ -363,7 +363,7 @@ namespace detail {
 
 // Snapshot paths normally mirror child indices in the rendered Node tree.
 // Virtualized controls reserve this impossible child index to expose logical
-// children (for example, visible ListBox rows) without retaining a Node per
+// children (for example, visible ListBoxNode rows) without retaining a Node per
 // option.
 inline constexpr std::size_t kVirtualAccessibilityChild =
     std::numeric_limits<std::size_t>::max();

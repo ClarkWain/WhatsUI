@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace whatsui::gallery::view::components {
 
@@ -208,15 +208,25 @@ private:
     float verticalGap_{8.0f};
 };
 
+class ResponsiveFlowBuilder final
+    : public wui::ContainerBuilderBase<
+          ResponsiveFlowBuilder,
+          ResponsiveFlow> {
+public:
+    explicit ResponsiveFlowBuilder(float horizontalGap)
+        : ContainerBuilderBase()
+    {
+        node_->gap(horizontalGap);
+    }
+};
+
 template <class... Children>
-[[nodiscard]] std::unique_ptr<wui::Node> buildResponsiveFlow(
+[[nodiscard]] ResponsiveFlowBuilder buildResponsiveFlow(
     float horizontalGap,
     Children&&... children)
 {
-    auto flow = std::make_unique<ResponsiveFlow>();
-    flow->gap(horizontalGap);
-    (flow->appendChild(wui::ui::asNode(std::forward<Children>(children))), ...);
-    return flow;
+    return ResponsiveFlowBuilder(horizontalGap)
+        .children(std::forward<Children>(children)...);
 }
 
 } // namespace whatsui::gallery::view::components

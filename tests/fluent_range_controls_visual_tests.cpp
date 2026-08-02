@@ -102,22 +102,22 @@ int main(int argc, char** argv)
                        wui::theme().colors.neutralForeground1, 600);
 
         section(paint, "DIVIDER APPEARANCES / ALIGNMENT", 78);
-        wui::Divider dividerDefault; dividerDefault.content("Default");
-        wui::Divider dividerSubtle; dividerSubtle.content("Subtle").appearance(wui::DividerAppearance::Subtle).contentAlignment(wui::DividerContentAlignment::Start);
-        wui::Divider dividerBrand; dividerBrand.content("Brand").appearance(wui::DividerAppearance::Brand).inset(true);
-        wui::Divider dividerStrong; dividerStrong.content("Strong").appearance(wui::DividerAppearance::Strong).contentAlignment(wui::DividerContentAlignment::End);
+        wui::DividerNode dividerDefault; dividerDefault.content("Default");
+        wui::DividerNode dividerSubtle; dividerSubtle.content("Subtle").appearance(wui::DividerAppearance::Subtle).contentAlignment(wui::DividerContentAlignment::Start);
+        wui::DividerNode dividerBrand; dividerBrand.content("Brand").appearance(wui::DividerAppearance::Brand).inset(true);
+        wui::DividerNode dividerStrong; dividerStrong.content("Strong").appearance(wui::DividerAppearance::Strong).contentAlignment(wui::DividerContentAlignment::End);
         draw(dividerDefault, paint, {28, 92, 210, 24});
         draw(dividerSubtle, paint, {258, 92, 210, 24});
         draw(dividerBrand, paint, {488, 92, 210, 24});
         draw(dividerStrong, paint, {718, 92, 214, 24});
 
         section(paint, "SLIDER SIZES / STATES / ORIENTATION", 146);
-        wui::Slider sliderSmall(0, 100, 38); sliderSmall.setSize(wui::SliderSize::Small);
-        wui::Slider sliderMedium(0, 100, 56);
-        wui::Slider sliderHover(0, 100, 64); sliderHover.setVisualState(wui::ControlVisualState::Hovered, true);
-        wui::Slider sliderPressed(0, 100, 72); sliderPressed.setVisualState(wui::ControlVisualState::Pressed, true);
-        wui::Slider sliderFocused(0, 100, 45); sliderFocused.setVisualState(wui::ControlVisualState::Focused, true); sliderFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
-        wui::Slider sliderDisabled(0, 100, 70); sliderDisabled.setEnabled(false);
+        wui::SliderNode sliderSmall(0, 100, 38); sliderSmall.setSize(wui::SliderSize::Small);
+        wui::SliderNode sliderMedium(0, 100, 56);
+        wui::SliderNode sliderHover(0, 100, 64); sliderHover.setVisualState(wui::ControlVisualState::Hovered, true);
+        wui::SliderNode sliderPressed(0, 100, 72); sliderPressed.setVisualState(wui::ControlVisualState::Pressed, true);
+        wui::SliderNode sliderFocused(0, 100, 45); sliderFocused.setVisualState(wui::ControlVisualState::Focused, true); sliderFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
+        wui::SliderNode sliderDisabled(0, 100, 70); sliderDisabled.setEnabled(false);
         draw(sliderSmall, paint, {28, 164, 270, 24});
         draw(sliderMedium, paint, {330, 160, 270, 32});
         draw(sliderHover, paint, {632, 160, 270, 32});
@@ -126,16 +126,16 @@ int main(int argc, char** argv)
         draw(sliderDisabled, paint, {632, 206, 270, 32});
         // Pressed endpoint thumbs grow by 2 DIP. Keep both circles fully
         // inside their hit rects so an ancestor clip cannot flatten them.
-        wui::Slider pressedMinimum(0, 100, 0), pressedMaximum(0, 100, 100);
+        wui::SliderNode pressedMinimum(0, 100, 0), pressedMaximum(0, 100, 100);
         pressedMinimum.setVisualState(wui::ControlVisualState::Pressed, true);
         pressedMaximum.setVisualState(wui::ControlVisualState::Pressed, true);
         draw(pressedMinimum, paint, {28, 248, 270, 32});
         draw(pressedMaximum, paint, {330, 248, 270, 32});
-        wui::Slider vertical(0, 100, 62); vertical.setOrientation(wui::SliderOrientation::Vertical);
+        wui::SliderNode vertical(0, 100, 62); vertical.setOrientation(wui::SliderOrientation::Vertical);
         draw(vertical, paint, {910, 146, 32, 112});
 
         section(paint, "PROGRESS COLORS / SHAPES / THICKNESS / INDETERMINATE", 288);
-        wui::ProgressBar brand(0, 1, .65f), success(0, 1, .65f), warning(0, 1, .65f), error(0, 1, .65f);
+        wui::ProgressBarNode brand(0, 1, .65f), success(0, 1, .65f), warning(0, 1, .65f), error(0, 1, .65f);
         success.color(wui::ProgressBarColor::Success);
         warning.color(wui::ProgressBarColor::Warning);
         error.color(wui::ProgressBarColor::Error);
@@ -143,43 +143,43 @@ int main(int argc, char** argv)
         draw(success, paint, {258, 306, 200, 8});
         draw(warning, paint, {488, 306, 200, 8});
         draw(error, paint, {718, 306, 214, 8});
-        wui::ProgressBar largeSquare(0, 1, .45f); largeSquare.thickness(wui::ProgressBarThickness::Large).shape(wui::ProgressBarShape::Square);
-        wui::ProgressBar indeterminate; indeterminate.indeterminate(true).motionEnabled(false);
+        wui::ProgressBarNode largeSquare(0, 1, .45f); largeSquare.thickness(wui::ProgressBarThickness::Large).shape(wui::ProgressBarShape::Square);
+        wui::ProgressBarNode indeterminate; indeterminate.indeterminate(true).motionEnabled(false);
         draw(largeSquare, paint, {28, 338, 430, 8});
         draw(indeterminate, paint, {488, 338, 444, 8});
 
         section(paint, "SWITCH SMALL / MEDIUM / INTERACTION / LABEL POSITION", 386);
-        wui::Switch switchSmall("Small", false); switchSmall.size(wui::SwitchSize::Small);
-        wui::Switch switchOn("On", true);
-        wui::Switch switchHover("Hover", false); switchHover.setVisualState(wui::ControlVisualState::Hovered, true);
-        wui::Switch switchPressed("Pressed", true); switchPressed.setVisualState(wui::ControlVisualState::Pressed, true);
-        wui::Switch switchFocused("Focused", true); switchFocused.setVisualState(wui::ControlVisualState::Focused, true); switchFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
-        wui::Switch switchDisabled("Disabled", true); switchDisabled.setEnabled(false);
+        wui::SwitchNode switchSmall("Small", false); switchSmall.size(wui::SwitchSize::Small);
+        wui::SwitchNode switchOn("On", true);
+        wui::SwitchNode switchHover("Hover", false); switchHover.setVisualState(wui::ControlVisualState::Hovered, true);
+        wui::SwitchNode switchPressed("Pressed", true); switchPressed.setVisualState(wui::ControlVisualState::Pressed, true);
+        wui::SwitchNode switchFocused("Focused", true); switchFocused.setVisualState(wui::ControlVisualState::Focused, true); switchFocused.setVisualState(wui::ControlVisualState::FocusVisible, true);
+        wui::SwitchNode switchDisabled("Disabled", true); switchDisabled.setEnabled(false);
         draw(switchSmall, paint, {28, 404, 120, 32});
         draw(switchOn, paint, {166, 402, 110, 36});
         draw(switchHover, paint, {294, 402, 130, 36});
         draw(switchPressed, paint, {442, 402, 140, 36});
         draw(switchFocused, paint, {600, 402, 140, 36});
         draw(switchDisabled, paint, {758, 402, 150, 36});
-        wui::Switch before("Before", false); before.labelPosition(wui::SwitchLabelPosition::Before);
-        wui::Switch above("Required", true); above.labelPosition(wui::SwitchLabelPosition::Above).required(true);
+        wui::SwitchNode before("Before", false); before.labelPosition(wui::SwitchLabelPosition::Before);
+        wui::SwitchNode above("Required", true); above.labelPosition(wui::SwitchLabelPosition::Above).required(true);
         draw(before, paint, {28, 450, 150, 36});
         draw(above, paint, {216, 446, 150, 56});
 
         section(paint, "RADIO GROUP LAYOUTS / DISABLED OPTION / SELECTED STATE", 540);
-        wui::RadioGroup verticalGroup;
+        wui::RadioGroupNode verticalGroup;
         verticalGroup.accessibleLabel("Vertical choices").value("two");
         verticalGroup.addOption("one", "First");
         verticalGroup.addOption("two", "Second");
         verticalGroup.addOption("three", "Unavailable", false);
         draw(verticalGroup, paint, {28, 558, 220, 104});
-        wui::RadioGroup horizontalGroup;
+        wui::RadioGroupNode horizontalGroup;
         horizontalGroup.groupLayout(wui::RadioGroupLayout::Horizontal).value("b");
         horizontalGroup.addOption("a", "Alpha");
         horizontalGroup.addOption("b", "Beta");
         horizontalGroup.addOption("c", "Gamma");
         draw(horizontalGroup, paint, {300, 558, 450, 40});
-        wui::RadioGroup stackedGroup;
+        wui::RadioGroupNode stackedGroup;
         stackedGroup.groupLayout(wui::RadioGroupLayout::HorizontalStacked).value("center");
         stackedGroup.addOption("left", "Left");
         stackedGroup.addOption("center", "Center");
@@ -187,7 +187,7 @@ int main(int argc, char** argv)
         draw(stackedGroup, paint, {300, 620, 450, 60});
 
         section(paint, "VERTICAL DIVIDER", 716);
-        wui::Divider verticalDivider(wui::DividerOrientation::Vertical);
+        wui::DividerNode verticalDivider(wui::DividerOrientation::Vertical);
         verticalDivider.appearance(wui::DividerAppearance::Brand).content("OR");
         draw(verticalDivider, paint, {858, 548, 72, 150});
 

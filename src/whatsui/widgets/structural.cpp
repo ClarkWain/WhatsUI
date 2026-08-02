@@ -160,7 +160,7 @@ void ForEachNode::layout(const RectF& bounds)
     const Constraints loose{0.0f, innerWidth, 0.0f, innerHeight};
 
     if (direction_ == ForEachDirection::Vertical) {
-        // Vertical layout (Column-like)
+        // Vertical layout (ColumnNode-like)
         std::vector<SizeF> sizes(childNodes.size());
         float fixedHeight = 0.0f;
         float totalFlex = 0.0f;
@@ -205,7 +205,7 @@ void ForEachNode::layout(const RectF& bounds)
             cursorY += childSize.height + gap_;
         }
     } else {
-        // Horizontal layout (Row-like)
+        // Horizontal layout (RowNode-like)
         std::vector<SizeF> sizes(childNodes.size());
         float fixedWidth = 0.0f;
         float totalFlex = 0.0f;

@@ -4,7 +4,7 @@
 
 #include "wui/accessibility.h"
 #include "wui/persona.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
 namespace {
 void expect(bool condition, const char* message)
@@ -24,7 +24,7 @@ wui::PointerEvent primaryPointer(wui::PointerAction action, wui::PointF position
 
 void testFluentSizingAndTextContract()
 {
-    wui::Persona persona("Ada Lovelace", wui::PersonaSize::Medium);
+    wui::PersonaNode persona("Ada Lovelace", wui::PersonaSize::Medium);
     expect(persona.avatarSize() == wui::AvatarSize::Size32,
            "Fluent medium Persona must map to a 32 DIP Avatar");
     persona.setSize(wui::PersonaSize::Huge);
@@ -48,7 +48,7 @@ void testFluentSizingAndTextContract()
 
 void testPresenceAndInteractivePolicy()
 {
-    wui::Persona persona("Grace Hopper");
+    wui::PersonaNode persona("Grace Hopper");
     expect(!persona.isInteractive(), "Persona must remain passive without an explicit activation handler");
     expect(!persona.onPointerEvent(primaryPointer(wui::PointerAction::Down, {2, 2})),
            "Passive Persona must not consume pointer input");
@@ -73,7 +73,7 @@ void testPresenceAndInteractivePolicy()
 
 void testAccessibilitySnapshot()
 {
-    wui::Persona persona("Katherine Johnson");
+    wui::PersonaNode persona("Katherine Johnson");
     persona.setSecondaryText("Flight dynamics");
     const auto passive = wui::snapshotAccessibilityTree(persona);
     expect(!passive.empty() && passive.front().properties.role == wui::AccessibilityRole::Group &&
@@ -88,7 +88,7 @@ void testAccessibilitySnapshot()
 
 void testDeclarativeBuilderCoverage()
 {
-    auto built = std::move(wui::ui::Persona("Annie Easley")
+    auto built = std::move(wui::Persona("Annie Easley")
                                .avatarColor(wui::AvatarColor::Teal)
                                .avatarShape(wui::AvatarShape::Square)
                                .avatarImage(wui::ImageSource({255, 255, 255, 255}, 1, 1))
@@ -97,8 +97,8 @@ void testDeclarativeBuilderCoverage()
                                .textPosition(wui::PersonaTextPosition::Below)
                                .textAlignment(wui::PersonaTextAlignment::Center)
                                .secondaryText("Engineer"))
-                     .intoNode();
-    const auto* persona = dynamic_cast<const wui::Persona*>(built.get());
+                     .build();
+    const auto* persona = dynamic_cast<const wui::PersonaNode*>(built.get());
     expect(persona != nullptr && persona->isPresenceOnly() && persona->avatarColor() == wui::AvatarColor::Teal,
            "Persona declarative builder must expose identity, presence and layout configuration");
 }

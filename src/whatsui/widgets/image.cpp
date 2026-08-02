@@ -85,11 +85,11 @@ ImageResourcePtr internImageResource(std::vector<unsigned char> pixels, int widt
 ImageSource::ImageSource(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
 {
     if (pixelWidth <= 0 || pixelHeight <= 0) {
-        throw std::invalid_argument("Image dimensions must be positive");
+        throw std::invalid_argument("ImageNode dimensions must be positive");
     }
     const auto expected = static_cast<std::size_t>(pixelWidth) * static_cast<std::size_t>(pixelHeight) * 4u;
     if (rgbaPixels.size() != expected) {
-        throw std::invalid_argument("Image RGBA data size does not match its dimensions");
+        throw std::invalid_argument("ImageNode RGBA data size does not match its dimensions");
     }
     resource_ = internImageResource(std::move(rgbaPixels), pixelWidth, pixelHeight);
 }
@@ -104,38 +104,38 @@ int ImageSource::pixelHeight() const noexcept { return resource_ ? resource_->pi
 bool ImageSource::empty() const noexcept { return !resource_; }
 bool ImageSource::operator==(const ImageSource& other) const noexcept { return resource_ == other.resource_; }
 
-Image::Image() = default;
+ImageNode::ImageNode() = default;
 
-Image::Image(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
+ImageNode::ImageNode(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
 {
     setSource(std::move(rgbaPixels), pixelWidth, pixelHeight);
 }
 
-Image::Image(ImageSource source)
+ImageNode::ImageNode(ImageSource source)
     : source_(std::move(source))
 {
 }
 
-Image::~Image() = default;
+ImageNode::~ImageNode() = default;
 
-Image& Image::source(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
+ImageNode& ImageNode::source(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
 {
     setSource(std::move(rgbaPixels), pixelWidth, pixelHeight);
     return *this;
 }
 
-Image& Image::source(ImageSource source)
+ImageNode& ImageNode::source(ImageSource source)
 {
     setSource(std::move(source));
     return *this;
 }
 
-void Image::setSource(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
+void ImageNode::setSource(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
 {
     setSource(ImageSource(std::move(rgbaPixels), pixelWidth, pixelHeight));
 }
 
-void Image::setSource(ImageSource source)
+void ImageNode::setSource(ImageSource source)
 {
     source_ = std::move(source);
     texture_.reset();
@@ -143,7 +143,7 @@ void Image::setSource(ImageSource source)
     markDirty(DirtyFlag::Paint);
 }
 
-void Image::clearSource() noexcept
+void ImageNode::clearSource() noexcept
 {
     source_ = ImageSource{};
     texture_.reset();
@@ -151,18 +151,18 @@ void Image::clearSource() noexcept
     markDirty(DirtyFlag::Paint);
 }
 
-Image& Image::fallback(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
+ImageNode& ImageNode::fallback(std::vector<unsigned char> rgbaPixels, int pixelWidth, int pixelHeight)
 {
     return fallback(ImageSource(std::move(rgbaPixels), pixelWidth, pixelHeight));
 }
 
-Image& Image::fallback(ImageSource source)
+ImageNode& ImageNode::fallback(ImageSource source)
 {
     setFallback(std::move(source));
     return *this;
 }
 
-void Image::setFallback(ImageSource source)
+void ImageNode::setFallback(ImageSource source)
 {
     fallback_ = std::move(source);
     texture_.reset();
@@ -170,7 +170,7 @@ void Image::setFallback(ImageSource source)
     markDirty(DirtyFlag::Paint);
 }
 
-void Image::clearFallback() noexcept
+void ImageNode::clearFallback() noexcept
 {
     fallback_ = ImageSource{};
     texture_.reset();
@@ -178,84 +178,84 @@ void Image::clearFallback() noexcept
     markDirty(DirtyFlag::Paint);
 }
 
-const ImageSource Image::imageSource() const noexcept { return source_; }
+const ImageSource ImageNode::imageSource() const noexcept { return source_; }
 
-Image& Image::fit(ImageFit fit) noexcept
+ImageNode& ImageNode::fit(ImageFit fit) noexcept
 {
     setFit(fit);
     return *this;
 }
 
-void Image::setFit(ImageFit fit) noexcept
+void ImageNode::setFit(ImageFit fit) noexcept
 {
     fit_ = fit;
     markDirty(DirtyFlag::Paint);
 }
 
-ImageFit Image::fit() const noexcept
+ImageFit ImageNode::fit() const noexcept
 {
     return fit_;
 }
 
-Image& Image::align(float x, float y) noexcept
+ImageNode& ImageNode::align(float x, float y) noexcept
 {
     setAlignment(x, y);
     return *this;
 }
 
-void Image::setAlignment(float x, float y) noexcept
+void ImageNode::setAlignment(float x, float y) noexcept
 {
     alignment_ = {std::clamp(x, 0.0f, 1.0f), std::clamp(y, 0.0f, 1.0f)};
     markDirty(DirtyFlag::Paint);
 }
 
-PointF Image::alignment() const noexcept
+PointF ImageNode::alignment() const noexcept
 {
     return alignment_;
 }
 
-Image& Image::shape(ImageShape shape) noexcept { setShape(shape); return *this; }
-void Image::setShape(ImageShape shape) noexcept { shape_ = shape; markDirty(DirtyFlag::Paint); }
-ImageShape Image::shape() const noexcept { return shape_; }
-Image& Image::bordered(bool bordered) noexcept { setBordered(bordered); return *this; }
-void Image::setBordered(bool bordered) noexcept { bordered_ = bordered; markDirty(DirtyFlag::Paint); }
-bool Image::isBordered() const noexcept { return bordered_; }
-Image& Image::shadow(bool shadow) noexcept { setShadow(shadow); return *this; }
-void Image::setShadow(bool shadow) noexcept { shadow_ = shadow; markDirty(DirtyFlag::Paint); }
-bool Image::hasShadow() const noexcept { return shadow_; }
-Image& Image::block(bool block) noexcept { setBlock(block); return *this; }
-void Image::setBlock(bool block) noexcept { block_ = block; markDirty(DirtyFlag::Layout); }
-bool Image::isBlock() const noexcept { return block_; }
-Image& Image::alt(std::string description) { setAlt(std::move(description)); return *this; }
-void Image::setAlt(std::string description)
+ImageNode& ImageNode::shape(ImageShape shape) noexcept { setShape(shape); return *this; }
+void ImageNode::setShape(ImageShape shape) noexcept { shape_ = shape; markDirty(DirtyFlag::Paint); }
+ImageShape ImageNode::shape() const noexcept { return shape_; }
+ImageNode& ImageNode::bordered(bool bordered) noexcept { setBordered(bordered); return *this; }
+void ImageNode::setBordered(bool bordered) noexcept { bordered_ = bordered; markDirty(DirtyFlag::Paint); }
+bool ImageNode::isBordered() const noexcept { return bordered_; }
+ImageNode& ImageNode::shadow(bool shadow) noexcept { setShadow(shadow); return *this; }
+void ImageNode::setShadow(bool shadow) noexcept { shadow_ = shadow; markDirty(DirtyFlag::Paint); }
+bool ImageNode::hasShadow() const noexcept { return shadow_; }
+ImageNode& ImageNode::block(bool block) noexcept { setBlock(block); return *this; }
+void ImageNode::setBlock(bool block) noexcept { block_ = block; markDirty(DirtyFlag::Layout); }
+bool ImageNode::isBlock() const noexcept { return block_; }
+ImageNode& ImageNode::alt(std::string description) { setAlt(std::move(description)); return *this; }
+void ImageNode::setAlt(std::string description)
 {
     if (alt_ != description) { alt_ = std::move(description); markDirty(DirtyFlag::Style); }
 }
-const std::string& Image::alt() const noexcept { return alt_; }
-Image& Image::decorative(bool decorative) noexcept { setDecorative(decorative); return *this; }
-void Image::setDecorative(bool decorative) noexcept
+const std::string& ImageNode::alt() const noexcept { return alt_; }
+ImageNode& ImageNode::decorative(bool decorative) noexcept { setDecorative(decorative); return *this; }
+void ImageNode::setDecorative(bool decorative) noexcept
 {
     if (decorative_ != decorative) { decorative_ = decorative; markDirty(DirtyFlag::Style); }
 }
-bool Image::isDecorative() const noexcept { return decorative_; }
+bool ImageNode::isDecorative() const noexcept { return decorative_; }
 
-SizeF Image::intrinsicSize() const noexcept
+SizeF ImageNode::intrinsicSize() const noexcept
 {
     const auto& source = effectiveSource();
     return {static_cast<float>(source.pixelWidth()), static_cast<float>(source.pixelHeight())};
 }
 
-bool Image::hasSource() const noexcept
+bool ImageNode::hasSource() const noexcept
 {
     return !effectiveSource().empty();
 }
 
-const ImageSource& Image::effectiveSource() const noexcept
+const ImageSource& ImageNode::effectiveSource() const noexcept
 {
     return source_.empty() ? fallback_ : source_;
 }
 
-SizeF Image::measure(const Constraints& constraints) const
+SizeF ImageNode::measure(const Constraints& constraints) const
 {
     SizeF desired = intrinsicSize();
     if (block_ && desired.width > 0.0f && desired.height > 0.0f &&
@@ -271,7 +271,7 @@ SizeF Image::measure(const Constraints& constraints) const
     return constraints.clamp(desired);
 }
 
-void Image::prepare(PaintContext& context)
+void ImageNode::prepare(PaintContext& context)
 {
 #ifdef WHATSUI_HAS_WHATSCANVAS
     auto* canvas = context.canvas();
@@ -290,7 +290,7 @@ void Image::prepare(PaintContext& context)
 #endif
 }
 
-void Image::paint(PaintContext& context)
+void ImageNode::paint(PaintContext& context)
 {
     const auto& current = theme();
     const RectF renderedBounds = context.snapRectEdges(bounds());

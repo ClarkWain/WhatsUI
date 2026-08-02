@@ -96,16 +96,18 @@ void drawBottomStroke(PaintContext& context, const RectF& bounds, float radius,
     const RectF segment{
         left,
         bottom - snappedThickness,
-        std::max(context.physicalPixel(), right - left),
+        // Canvas fill coverage includes the pixel whose centre lies on the
+        // right edge on some backends. Keep the exclusive edge one physical
+        // pixel inside instead of relying on a path clip to remove spill.
+        std::max(context.physicalPixel(),
+                 right - left - context.physicalPixel()),
         snappedThickness,
     };
-    // Match Fluent's clipped ::after construction. At full width the input's
-    // bottom corners define the silhouette; during scaleX animation the
-    // segment retains clean rounded leading edges instead of square horns.
-    const int checkpoint = context.save();
-    context.clipRoundRect(bounds, radius);
-    context.fillRoundRect(segment, std::min(radius, thickness * 0.5f), color);
-    context.restoreTo(checkpoint);
+    // The segment is already snapped inside the field bounds. Giving it
+    // half-stroke end caps matches Fluent's clipped ::after silhouette while
+    // avoiding a path-clip/fill ordering hazard in batched OpenGL backends.
+    context.fillRoundRect(
+        segment, std::min(radius, snappedThickness * 0.5f), color);
 }
 
 [[nodiscard]] float measuredTextWidth(const std::string& text, std::size_t end,
@@ -116,7 +118,7 @@ void drawBottomStroke(PaintContext& context, const RectF& bounds, float radius,
         try {
             return std::max(0.0f, measurer->measureText(text.substr(0, end), fontSize).width);
         } catch (...) {
-            // Text editing must remain usable if an optional platform
+            // TextNode editing must remain usable if an optional platform
             // measurer becomes unavailable while a window is closing.
         }
     }
@@ -144,7 +146,7 @@ struct EditableLine {
 }
 
 // Ask the platform shaper for exactly the same wrap decisions it uses for
-// normal Text nodes. The conservative fallback keeps headless tests and hosts
+// normal TextNode nodes. The conservative fallback keeps headless tests and hosts
 // without a layout provider fully editable (the editing controller itself has
 // byte-offset semantics today, so fallback boundaries intentionally match it).
 [[nodiscard]] std::vector<EditableLine> editableLines(const std::string& text, float fontSize,
@@ -529,18 +531,18 @@ void TextEditingController::normalize() noexcept
     value_.composition = normalizeRange(value_.composition, value_.text.size());
 }
 
-TextInput::TextInput(std::string placeholder)
+TextFieldNode::TextFieldNode(std::string placeholder)
     : placeholder_(std::move(placeholder))
 {
 }
 
-TextInput::~TextInput()
+TextFieldNode::~TextFieldNode()
 {
     stopCaretBlinkAnimation();
     stopFocusIndicatorAnimation();
 }
 
-void TextInput::ensureCaretBlinkAnimation()
+void TextFieldNode::ensureCaretBlinkAnimation()
 {
     if (caretBlinkAnimation_ != 0 || !isEnabled()) return;
     // Windows' text caret is visible for the first half of each one-second
@@ -556,20 +558,20 @@ void TextInput::ensureCaretBlinkAnimation()
     caretBlinkAnimation_ = Ticker::instance().add(std::move(blink));
 }
 
-void TextInput::stopCaretBlinkAnimation() noexcept
+void TextFieldNode::stopCaretBlinkAnimation() noexcept
 {
     if (caretBlinkAnimation_ == 0) return;
     Ticker::instance().cancel(caretBlinkAnimation_);
     caretBlinkAnimation_ = 0;
 }
 
-void TextInput::resetCaretBlink()
+void TextFieldNode::resetCaretBlink()
 {
     stopCaretBlinkAnimation();
     caretVisible_ = true;
 }
 
-void TextInput::syncFocusIndicatorAnimation(bool active)
+void TextFieldNode::syncFocusIndicatorAnimation(bool active)
 {
     if (focusIndicatorTargetActive_ == active) return;
     focusIndicatorTargetActive_ = active;
@@ -606,57 +608,57 @@ void TextInput::syncFocusIndicatorAnimation(bool active)
     focusIndicatorAnimation_ = Ticker::instance().add(std::move(animation));
 }
 
-void TextInput::stopFocusIndicatorAnimation() noexcept
+void TextFieldNode::stopFocusIndicatorAnimation() noexcept
 {
     if (focusIndicatorAnimation_ == 0) return;
     Ticker::instance().cancel(focusIndicatorAnimation_);
     focusIndicatorAnimation_ = 0;
 }
 
-void TextInput::onDetach() noexcept
+void TextFieldNode::onDetach() noexcept
 {
     stopCaretBlinkAnimation();
     stopFocusIndicatorAnimation();
 }
 
-TextEditingController& TextInput::controller() noexcept
+TextEditingController& TextFieldNode::controller() noexcept
 {
     return controller_;
 }
 
-const TextEditingController& TextInput::controller() const noexcept
+const TextEditingController& TextFieldNode::controller() const noexcept
 {
     return controller_;
 }
 
-TextInputModel& TextInput::model() noexcept
+TextInputModel& TextFieldNode::model() noexcept
 {
     return controller_;
 }
 
-const TextInputModel& TextInput::model() const noexcept
+const TextInputModel& TextFieldNode::model() const noexcept
 {
     return controller_;
 }
 
-const std::string& TextInput::placeholder() const noexcept
+const std::string& TextFieldNode::placeholder() const noexcept
 {
     return placeholder_;
 }
 
-TextInput& TextInput::placeholder(std::string placeholder)
+TextFieldNode& TextFieldNode::placeholder(std::string placeholder)
 {
     setPlaceholder(std::move(placeholder));
     return *this;
 }
 
-void TextInput::setPlaceholder(std::string placeholder)
+void TextFieldNode::setPlaceholder(std::string placeholder)
 {
     placeholder_ = std::move(placeholder);
     markDirty(DirtyFlag::Paint);
 }
 
-TextInput& TextInput::text(std::string text)
+TextFieldNode& TextFieldNode::text(std::string text)
 {
     controller_.setText(std::move(text));
     resetCaretBlink();
@@ -666,21 +668,21 @@ TextInput& TextInput::text(std::string text)
     return *this;
 }
 
-TextInput& TextInput::accessibleLabel(std::string label)
+TextFieldNode& TextFieldNode::accessibleLabel(std::string label)
 {
     setAccessibleLabel(std::move(label));
     return *this;
 }
 
-const std::string& TextInput::accessibleLabel() const noexcept { return accessibleLabel_; }
-void TextInput::setAccessibleLabel(std::string label) { accessibleLabel_ = std::move(label); }
-void TextInput::setSize(InputSize size) noexcept { if (size_ != size) { size_ = size; markDirty(DirtyFlag::Layout); } }
-InputSize TextInput::size() const noexcept { return size_; }
-void TextInput::setAppearance(InputAppearance appearance) noexcept { if (appearance_ != appearance) { appearance_ = appearance; markDirty(DirtyFlag::Paint); } }
-InputAppearance TextInput::appearance() const noexcept { return appearance_; }
-void TextInput::setInvalid(bool invalid) noexcept { if (invalid_ != invalid) { invalid_ = invalid; markDirty(DirtyFlag::Paint); } }
-bool TextInput::isInvalid() const noexcept { return invalid_; }
-void TextInput::setMotionEnabled(bool enabled) noexcept
+const std::string& TextFieldNode::accessibleLabel() const noexcept { return accessibleLabel_; }
+void TextFieldNode::setAccessibleLabel(std::string label) { accessibleLabel_ = std::move(label); }
+void TextFieldNode::setSize(InputSize size) noexcept { if (size_ != size) { size_ = size; markDirty(DirtyFlag::Layout); } }
+InputSize TextFieldNode::size() const noexcept { return size_; }
+void TextFieldNode::setAppearance(InputAppearance appearance) noexcept { if (appearance_ != appearance) { appearance_ = appearance; markDirty(DirtyFlag::Paint); } }
+InputAppearance TextFieldNode::appearance() const noexcept { return appearance_; }
+void TextFieldNode::setInvalid(bool invalid) noexcept { if (invalid_ != invalid) { invalid_ = invalid; markDirty(DirtyFlag::Paint); } }
+bool TextFieldNode::isInvalid() const noexcept { return invalid_; }
+void TextFieldNode::setMotionEnabled(bool enabled) noexcept
 {
     if (motionEnabled_ == enabled) return;
     motionEnabled_ = enabled;
@@ -688,8 +690,8 @@ void TextInput::setMotionEnabled(bool enabled) noexcept
     focusIndicatorProgress_ = focusIndicatorTargetActive_ ? 1.0f : 0.0f;
     markDirty(DirtyFlag::Paint);
 }
-bool TextInput::isMotionEnabled() const noexcept { return motionEnabled_; }
-void TextInput::setMultiline(bool value) noexcept
+bool TextFieldNode::isMotionEnabled() const noexcept { return motionEnabled_; }
+void TextFieldNode::setMultiline(bool value) noexcept
 {
     if (multiline_ == value) return;
     multiline_ = value;
@@ -698,8 +700,8 @@ void TextInput::setMultiline(bool value) noexcept
     revealCaretPending_ = true;
     markDirty(DirtyFlag::Layout);
 }
-bool TextInput::isMultiline() const noexcept { return multiline_; }
-void TextInput::setMinimumLines(std::size_t value) noexcept
+bool TextFieldNode::isMultiline() const noexcept { return multiline_; }
+void TextFieldNode::setMinimumLines(std::size_t value) noexcept
 {
     const auto normalized = std::max<std::size_t>(1, value);
     if (minimumLines_ == normalized) return;
@@ -707,9 +709,9 @@ void TextInput::setMinimumLines(std::size_t value) noexcept
     revealCaretPending_ = true;
     markDirty(DirtyFlag::Layout);
 }
-std::size_t TextInput::minimumLines() const noexcept { return minimumLines_; }
-float TextInput::verticalScrollOffset() const noexcept { return verticalScrollOffset_; }
-float TextInput::maximumVerticalScrollOffset() const noexcept
+std::size_t TextFieldNode::minimumLines() const noexcept { return minimumLines_; }
+float TextFieldNode::verticalScrollOffset() const noexcept { return verticalScrollOffset_; }
+float TextFieldNode::maximumVerticalScrollOffset() const noexcept
 {
     if (!multiline_) return 0.0f;
     const auto& current = theme();
@@ -721,25 +723,25 @@ float TextInput::maximumVerticalScrollOffset() const noexcept
     return maximumVerticalOffset(lines, lineHeight, viewport.height);
 }
 
-TextInput& TextInput::onChange(ChangeHandler handler)
+TextFieldNode& TextFieldNode::onChange(ChangeHandler handler)
 {
     onChange_ = std::move(handler);
     return *this;
 }
 
-TextInput& TextInput::onSubmit(SubmitHandler handler)
+TextFieldNode& TextFieldNode::onSubmit(SubmitHandler handler)
 {
     onSubmit_ = std::move(handler);
     return *this;
 }
 
-TextInput& TextInput::onCancel(CancelHandler handler)
+TextFieldNode& TextFieldNode::onCancel(CancelHandler handler)
 {
     onCancel_ = std::move(handler);
     return *this;
 }
 
-void TextInput::notifyChanged()
+void TextFieldNode::notifyChanged()
 {
     resetCaretBlink();
     if (onChange_) {
@@ -747,13 +749,13 @@ void TextInput::notifyChanged()
     }
 }
 
-void TextInput::syncSession(TextInputSession& session, const RectF& caretRect) const
+void TextFieldNode::syncSession(TextInputSession& session, const RectF& caretRect) const
 {
     session.setCaretRect(caretRect);
     session.setSurroundingText(controller_.text(), controller_.selection().start, controller_.selection().end);
 }
 
-RectF TextInput::caretRect() const noexcept
+RectF TextFieldNode::caretRect() const noexcept
 {
     const auto& current = theme();
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
@@ -784,7 +786,7 @@ RectF TextInput::caretRect() const noexcept
             current.stroke.thin, std::max(1.0f, lineHeight)};
 }
 
-SizeF TextInput::measure(const Constraints& constraints) const
+SizeF TextFieldNode::measure(const Constraints& constraints) const
 {
     const auto& current = theme();
     const float horizontalPadding =
@@ -808,7 +810,7 @@ SizeF TextInput::measure(const Constraints& constraints) const
     return constraints.clamp({widest + horizontalPadding * 2.0f, height});
 }
 
-void TextInput::paint(PaintContext& context)
+void TextFieldNode::paint(PaintContext& context)
 {
     const bool showPlaceholder = controller_.text().empty();
     const auto& text = showPlaceholder ? placeholder_ : controller_.text();
@@ -1007,7 +1009,7 @@ void TextInput::paint(PaintContext& context)
     clearDirty(DirtyFlag::Paint);
 }
 
-std::size_t TextInput::caretAt(PointF point) const noexcept
+std::size_t TextFieldNode::caretAt(PointF point) const noexcept
 {
     const bool focused = (visualStates() & toMask(ControlVisualState::Focused)) != 0;
     const RectF viewport =
@@ -1033,7 +1035,7 @@ std::size_t TextInput::caretAt(PointF point) const noexcept
     return line.start + nearestTextOffset(lineText, localX, theme().typography.body1.size);
 }
 
-EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& context)
+EventResult TextFieldNode::onPointerEvent(const PointerEvent& event, EventContext& context)
 {
     if (!isEnabled()) return EventResult::Ignored;
     if (context.phase() == EventPhase::Capture) {
@@ -1113,7 +1115,7 @@ EventResult TextInput::onPointerEvent(const PointerEvent& event, EventContext& c
     }
 }
 
-bool TextInput::onKeyEvent(const KeyEvent& event)
+bool TextFieldNode::onKeyEvent(const KeyEvent& event)
 {
     if (!isEnabled()) return false;
     if (event.action != KeyAction::Down) {
@@ -1280,7 +1282,7 @@ bool TextInput::onKeyEvent(const KeyEvent& event)
     }
 }
 
-bool TextInput::onTextInput(const TextInputEvent& event)
+bool TextFieldNode::onTextInput(const TextInputEvent& event)
 {
     if (!isEnabled()) return false;
     if (event.text.empty()) {
@@ -1295,7 +1297,7 @@ bool TextInput::onTextInput(const TextInputEvent& event)
     return true;
 }
 
-bool TextInput::onCompositionInput(const CompositionInputEvent& event)
+bool TextFieldNode::onCompositionInput(const CompositionInputEvent& event)
 {
     if (!isEnabled()) return false;
     if (event.phase == CompositionInputEvent::Phase::End) {
@@ -1316,17 +1318,17 @@ bool TextInput::onCompositionInput(const CompositionInputEvent& event)
     return true;
 }
 
-AccessibilityActionCapabilities TextInput::accessibilityActions() const noexcept
+AccessibilityActionCapabilities TextFieldNode::accessibilityActions() const noexcept
 {
     AccessibilityActionCapabilities actions;
     actions.setValue = true;
-    // Opt into the UIA Text/TextRange pattern; core/accessibility.cpp
+    // Opt into the UIA TextNode/TextRange pattern; core/accessibility.cpp
     // populates AccessibilityProperties::textModel for this node.
     actions.text = true;
     return actions;
 }
 
-AccessibilityActionStatus TextInput::performAccessibilityAction(
+AccessibilityActionStatus TextFieldNode::performAccessibilityAction(
     AccessibilityActionKind kind, std::string_view value)
 {
     if (kind != AccessibilityActionKind::SetValue) return AccessibilityActionStatus::NotSupported;
@@ -1335,7 +1337,7 @@ AccessibilityActionStatus TextInput::performAccessibilityAction(
     return AccessibilityActionStatus::Succeeded;
 }
 
-bool TextInput::copySelection(Clipboard& clipboard) const
+bool TextFieldNode::copySelection(Clipboard& clipboard) const
 {
     const auto selected = controller_.selectedText();
     if (selected.empty()) {
@@ -1345,7 +1347,7 @@ bool TextInput::copySelection(Clipboard& clipboard) const
     return true;
 }
 
-bool TextInput::cutSelection(Clipboard& clipboard)
+bool TextFieldNode::cutSelection(Clipboard& clipboard)
 {
     if (!copySelection(clipboard)) {
         return false;
@@ -1358,7 +1360,7 @@ bool TextInput::cutSelection(Clipboard& clipboard)
     return true;
 }
 
-bool TextInput::paste(Clipboard& clipboard)
+bool TextFieldNode::paste(Clipboard& clipboard)
 {
     if (!clipboard.hasText()) {
         return false;
@@ -1371,25 +1373,25 @@ bool TextInput::paste(Clipboard& clipboard)
     return true;
 }
 
-TextArea::TextArea(std::string placeholder)
-    : TextInput(std::move(placeholder))
+TextAreaNode::TextAreaNode(std::string placeholder)
+    : TextFieldNode(std::move(placeholder))
 {
     setMultiline(true);
     setRows(3);
 }
 
-TextArea& TextArea::rows(std::size_t value) noexcept
+TextAreaNode& TextAreaNode::rows(std::size_t value) noexcept
 {
     setRows(value);
     return *this;
 }
 
-void TextArea::setRows(std::size_t value) noexcept
+void TextAreaNode::setRows(std::size_t value) noexcept
 {
     setMinimumLines(std::max<std::size_t>(1, value));
 }
 
-std::size_t TextArea::rows() const noexcept
+std::size_t TextAreaNode::rows() const noexcept
 {
     return minimumLines();
 }

@@ -3,22 +3,27 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "wui/frame_stats.h"
 #include "wui/accessibility.h"
 #include "wui/platform.h"
 #include "wui/runtime.h"
+#include "wui/ui_dispatcher.h"
 
 namespace wui {
 
-class TextInput;
-class Dialog;
-class Drawer;
+class TextFieldNode;
+class DialogNode;
+class DrawerNode;
 
 class UiWindow {
 public:
-    explicit UiWindow(std::unique_ptr<PlatformWindow> platformWindow);
+    explicit UiWindow(
+        std::unique_ptr<PlatformWindow> platformWindow,
+        UiContext context = {});
     ~UiWindow();
 
     [[nodiscard]] WindowId id() const noexcept;
@@ -38,15 +43,37 @@ public:
 
     // Modal dialogs are overlays with input isolation. Escape and an enabled
     // backdrop dismissal route through this API so the prior focus is restored.
-    [[nodiscard]] OverlayId showDialog(std::unique_ptr<Dialog> dialog);
+    [[nodiscard]] OverlayId showDialog(std::unique_ptr<DialogNode> dialog);
+    template <
+        class Dialog,
+        std::enable_if_t<isViewLikeV<Dialog>, int> = 0>
+    [[nodiscard]] OverlayId showDialog(Dialog&& dialog)
+    {
+        return showDialog(detail::materializeAs<DialogNode>(
+            std::forward<Dialog>(dialog)));
+    }
     // During a UiWindow input dispatch, destruction is deferred until the
     // current handler has returned. In that case this returns nullptr; the
     // modal is removed before dispatchPointer()/dispatchKey() returns.
-    [[nodiscard]] std::unique_ptr<Dialog> dismissDialog(OverlayId id);
-    [[nodiscard]] std::unique_ptr<Dialog> dismissTopDialog();
+    [[nodiscard]] std::unique_ptr<DialogNode> dismissDialog(OverlayId id);
+    [[nodiscard]] std::unique_ptr<DialogNode> dismissTopDialog();
     [[nodiscard]] bool hasDialog() const noexcept;
 
     void setRoot(std::unique_ptr<Node> root);
+    template <
+        class Content,
+        std::enable_if_t<isViewLikeV<Content>, int> = 0>
+    void setRoot(Content&& content)
+    {
+        setRoot(detail::materialize(std::forward<Content>(content)));
+    }
+    template <
+        class Content,
+        std::enable_if_t<isViewLikeV<Content>, int> = 0>
+    void content(Content&& content)
+    {
+        setRoot(std::forward<Content>(content));
+    }
     [[nodiscard]] Node* root() const noexcept;
 
     // A frame-safe, platform-neutral projection of the active UI. The
@@ -95,20 +122,25 @@ private:
     void beginEventDispatch() noexcept;
     void endEventDispatch() noexcept;
     void requestDialogDismissal(OverlayId id);
-    [[nodiscard]] std::unique_ptr<Dialog> dismissDialogImmediately(OverlayId id);
+    [[nodiscard]] std::unique_ptr<DialogNode> dismissDialogImmediately(OverlayId id);
     void flushDeferredDialogDismissals() noexcept;
     [[nodiscard]] Node* hitTest(PointF point) const;
-    [[nodiscard]] Dialog* activeDialog() const noexcept;
-    [[nodiscard]] Drawer* activeModalDrawer() const noexcept;
+    [[nodiscard]] DialogNode* activeDialog() const noexcept;
+    [[nodiscard]] DrawerNode* activeModalDrawer() const noexcept;
 
     std::unique_ptr<PlatformWindow> platformWindow_;
+    UiContext context_;
     UiRoot uiRoot_;
     FocusManager focusManager_;
     InputRouter inputRouter_{&focusManager_};
     Navigator navigator_;
     OverlayHost overlayHost_;
-    TextInput* activeTextInput_{nullptr};
-    struct DialogEntry { OverlayId id; Node* restoreFocus; };
+    TextFieldNode* activeTextInput_{nullptr};
+    struct DialogEntry {
+        OverlayId id;
+        Node* restoreFocus;
+        Node* restoreRoot;
+    };
     std::vector<DialogEntry> dialogs_;
     std::size_t eventDispatchDepth_{0};
     std::vector<OverlayId> deferredDialogDismissals_;
@@ -117,10 +149,13 @@ private:
 
 class UiApp {
 public:
-    UiApp() = default;
-    explicit UiApp(std::unique_ptr<PlatformHost> host) noexcept;
+    UiApp();
+    explicit UiApp(std::unique_ptr<PlatformHost> host);
 
     [[nodiscard]] PlatformHost* host() const noexcept;
+    [[nodiscard]] UiDispatcher& dispatcher() noexcept;
+    [[nodiscard]] const UiDispatcher& dispatcher() const noexcept;
+    [[nodiscard]] UiContext uiContext() const noexcept;
 
     UiWindow& attachWindow(std::unique_ptr<PlatformWindow> platformWindow);
     UiWindow& openWindow(std::string title, SizeF logicalSize);
@@ -134,6 +169,7 @@ public:
 
 private:
     std::unique_ptr<PlatformHost> host_;
+    UiDispatcher dispatcher_;
     std::vector<std::unique_ptr<UiWindow>> windows_;
 };
 

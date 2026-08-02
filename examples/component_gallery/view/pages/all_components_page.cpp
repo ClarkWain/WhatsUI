@@ -11,9 +11,9 @@
 #include "view/components/responsive_choice_group.h"
 #include "wui/events.h"
 #include "wui/theme.h"
-#include "wui/ui.h"
+#include "wui/declarative.h"
 
-using namespace wui::ui;
+using namespace wui;
 
 namespace whatsui::gallery::view::pages {
 namespace {
@@ -37,7 +37,7 @@ wui::IconName iconFor(ComponentIcon icon)
 std::unique_ptr<wui::Node> buildDescriptorPreview(const ComponentDescriptor& descriptor)
 {
     if (descriptor.id == "textarea") {
-        return TextArea("Write a short note...").rows(2).intoNode();
+        return TextArea("Write a short note...").rows(2).build();
     }
 
     if (descriptor.id == "table") {
@@ -45,20 +45,20 @@ std::unique_ptr<wui::Node> buildDescriptorPreview(const ComponentDescriptor& des
             .rows({{"one", {"Button", "Stable"}}, {"two", {"Avatar", "Stable"}}})
             .maxVisibleRows(2)
             .accessibleLabel("Component status preview")
-            .intoNode();
+            .build();
     }
 
     if (descriptor.id == "avatar") {
         return Row().gap(8.0f).align(wui::Alignment::Center).children(
             Avatar("Ada Lovelace", wui::AvatarSize::Size40).initials("AL"),
-            Text("Ada Lovelace").size(12.0f)).intoNode();
+            Text("Ada Lovelace").size(12.0f)).build();
     }
 
     if (descriptor.id == "progress-bar") {
         return Column().gap(8.0f).align(wui::Alignment::Stretch).children(
             Text("Uploading · 68%").size(11.0f),
             ProgressBar(0.0f, 100.0f, 68.0f).accessibleLabel("Upload progress"))
-            .intoNode();
+            .build();
     }
 
     return Row()
@@ -68,7 +68,7 @@ std::unique_ptr<wui::Node> buildDescriptorPreview(const ComponentDescriptor& des
             Icon(iconFor(descriptor.icon)).size(wui::IconSize::Size20),
             Text(descriptor.name).size(12.0f).weight(600)
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildComponent(
@@ -256,7 +256,7 @@ std::unique_ptr<wui::Node> buildFilters(GalleryViewModel& viewModel)
                 "Component category",
                 5)
         )
-        .intoNode();
+        .build();
 }
 
 std::unique_ptr<wui::Node> buildResults(GalleryViewModel& viewModel, OpenComponentHandler onOpen)
@@ -270,7 +270,7 @@ std::unique_ptr<wui::Node> buildResults(GalleryViewModel& viewModel, OpenCompone
             }).size(12.0f).color(wui::theme().colors.textMuted),
             std::make_unique<ComponentResultsList>(viewModel, std::move(onOpen))
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace
@@ -280,7 +280,7 @@ std::unique_ptr<wui::Node> buildAllComponentsPage(
     OpenComponentHandler onOpenComponent)
 {
     return ScrollView()
-        .children(
+        .content(
             Column()
             .gap(20.0f)
             .padding({32.0f, 32.0f, 40.0f, 32.0f})
@@ -291,7 +291,7 @@ std::unique_ptr<wui::Node> buildAllComponentsPage(
                 buildResults(viewModel, std::move(onOpenComponent))
             )
         )
-        .intoNode();
+        .build();
 }
 
 } // namespace whatsui::gallery::view::pages

@@ -23,9 +23,9 @@ preview contract in this document.
 
 ## 1.0 release gate
 
-The project will only declare 1.0 after Windows package consumers, the Todo,
-Settings, and Inspector reference applications, and the published support
-matrix have passed their release checks. The release owner must approve the
+The project will only declare 1.0 after Windows package consumers, Focus Tomato,
+Component Gallery, Hello Window, and Inspector reference applications, and the
+published support matrix have passed their release checks. The release owner must approve the
 proposed 1.0 policy, record the exact supported compiler/CRT combinations in
 the release notes, and complete the deprecation and ABI evidence required by
 the release checklist.

@@ -34,7 +34,7 @@ wui::PointerEvent pointer(wui::PointerAction action, float x, float y,
 
 class WheelAncestor final : public wui::ContainerNode {
 public:
-    explicit WheelAncestor(std::unique_ptr<wui::TextArea> area)
+    explicit WheelAncestor(std::unique_ptr<wui::TextAreaNode> area)
     {
         appendChild(std::move(area));
     }
@@ -70,9 +70,9 @@ public:
     int bubbleCount{0};
 };
 
-std::unique_ptr<wui::TextArea> longArea()
+std::unique_ptr<wui::TextAreaNode> longArea()
 {
-    auto area = std::make_unique<wui::TextArea>("Notes");
+    auto area = std::make_unique<wui::TextAreaNode>("Notes");
     area->text("00\n11\n22\n33\n44\n55\n66\n77\n88\n99");
     return area;
 }
@@ -80,7 +80,7 @@ std::unique_ptr<wui::TextArea> longArea()
 void testWheelConsumesOnlyAvailableDistanceAndCaretFollowsBothWays()
 {
     auto area = longArea();
-    wui::TextArea* rawArea = area.get();
+    wui::TextAreaNode* rawArea = area.get();
     WheelAncestor root(std::move(area));
     root.layout({0.0f, 0.0f, 200.0f, 64.0f});
 
@@ -130,9 +130,9 @@ void testWheelConsumesOnlyAvailableDistanceAndCaretFollowsBothWays()
 
 void testPointerSelectionAndCompositionAcrossVisualLines()
 {
-    auto area = std::make_unique<wui::TextArea>("Notes");
+    auto area = std::make_unique<wui::TextAreaNode>("Notes");
     area->text("first line\nsecond line\nthird line\nfourth line");
-    wui::TextArea* rawArea = area.get();
+    wui::TextAreaNode* rawArea = area.get();
     WheelAncestor root(std::move(area));
     root.layout({0.0f, 0.0f, 128.0f, 64.0f});
     wui::FocusManager focus;
@@ -173,7 +173,7 @@ void testPointerSelectionAndCompositionAcrossVisualLines()
 
 void testDisabledTextAreaRejectsAllEditingRoutes()
 {
-    wui::TextArea area("Disabled notes");
+    wui::TextAreaNode area("Disabled notes");
     area.text("unchanged");
     area.layout({0.0f, 0.0f, 180.0f, 64.0f});
     area.setEnabled(false);
@@ -194,7 +194,7 @@ void testTextInputPublishesAccessibilityTextModel()
     // TextEditingController and opt into AccessibilityActionCapabilities::text
     // so a future ITextProvider can read the model without introducing a
     // second source of truth. See doc/whatsui/UIA_TEXT_PATTERN_DESIGN.md.
-    wui::TextInput input("Type here");
+    wui::TextFieldNode input("Type here");
     input.setAccessibleLabel("Reply");
     input.text("hello world");
     input.controller().setSelection({6, 11});
