@@ -14,7 +14,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Configure default build
         run: cmake -S . -B build
@@ -35,7 +41,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Configure MSVC AddressSanitizer build
         run: cmake -S . -B build-asan -DWHATSUI_ENABLE_SANITIZERS=ON
@@ -65,7 +77,13 @@ jobs:
           clean: true
           fetch-depth: 0
           persist-credentials: false
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Verify clean recursive checkout
         shell: pwsh
@@ -176,7 +194,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Configure Clang ASan and UBSan build
         run: cmake -S . -B build-sanitizers -DCMAKE_BUILD_TYPE=Debug -DWHATSUI_ENABLE_SANITIZERS=ON
@@ -207,7 +231,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize recursive submodules
+        run: |
+          git config --global core.longpaths true
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Configure WhatsCanvas-enabled build (${{ matrix.name }})
         run: cmake -S . -B build-wsc ${{ matrix.configure_args }}

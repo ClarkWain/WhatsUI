@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <utility>
 
 #include "wui/icons.h"
