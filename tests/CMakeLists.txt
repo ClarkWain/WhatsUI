@@ -1309,6 +1309,23 @@ add_test(
     COMMAND WhatsUIFocusTomatoMigratorTests
 )
 
+add_executable(WhatsUIFocusTomatoMigrationTransactionTests
+    focus_tomato_migration_transaction_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/application/migration_transaction.cpp
+)
+
+target_include_directories(WhatsUIFocusTomatoMigrationTransactionTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/application
+)
+
+target_compile_features(WhatsUIFocusTomatoMigrationTransactionTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_focus_tomato_migration_transaction_tests
+    COMMAND WhatsUIFocusTomatoMigrationTransactionTests
+)
+
 add_executable(WhatsUIFocusTomatoFileRepositoryTests
     focus_tomato_file_repository_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data.cpp
