@@ -655,6 +655,85 @@ DataCommandResult FocusDataService::skipBreakSession(
     return commit(std::move(candidate));
 }
 
+DataCommandResult FocusDataService::recordInterruption(
+    const RecordInterruptionCommand& command)
+{
+    if (command.sessionId.empty() || command.nowUtcMs <= 0) {
+        return commandResult(DataCommandStatus::InvalidArgument,
+                             "Session ID or record time is invalid.");
+    }
+    if (command.event.occurredAtUtcMs <= 0
+        || command.event.detectedAtUtcMs <= 0
+        || command.event.detectedAtUtcMs < command.event.occurredAtUtcMs) {
+        return commandResult(DataCommandStatus::InvalidArgument,
+                             "Interruption timestamps must be positive and "
+                             "detectedAt must not precede occurredAt.");
+    }
+    const FocusSessionRecord* current = findSession(command.sessionId);
+    if (current == nullptr) {
+        return commandResult(DataCommandStatus::NotFound,
+                             "Session was not found.");
+    }
+    if (!data_.activeSessionId || *data_.activeSessionId != command.sessionId
+        || current->status != SessionStatus::Paused) {
+        return commandResult(DataCommandStatus::Conflict,
+                             "Only the current paused session can record an "
+                             "interruption.");
+    }
+    if (command.decision == ResumeDecision::SkipRest
+        && current->type == SessionType::Focus) {
+        return commandResult(DataCommandStatus::Conflict,
+                             "SkipRest is only valid for break sessions.");
+    }
+    if (command.decision == ResumeDecision::Continue
+        && command.nowUtcMs > std::numeric_limits<std::int64_t>::max()
+            - current->remainingMs) {
+        return commandResult(DataCommandStatus::InvalidArgument,
+                             "Resume deadline would overflow storage.");
+    }
+    if (command.nowUtcMs < current->startedAtUtcMs) {
+        return commandResult(DataCommandStatus::Conflict,
+                             "Now cannot precede the session start.");
+    }
+
+    FocusData candidate = data_;
+    FocusSessionRecord* session = findSession(candidate, command.sessionId);
+    session->interruptions.push_back(command.event);
+    switch (command.decision) {
+    case ResumeDecision::Continue: {
+        const std::int64_t targetEndAt = command.nowUtcMs + session->remainingMs;
+        session->status = SessionStatus::Running;
+        session->targetEndAtUtcMs = targetEndAt;
+        candidate.timerSnapshot = TimerSnapshot{
+            kCurrentSchemaVersion,
+            command.sessionId,
+            SessionStatus::Running,
+            command.nowUtcMs,
+            targetEndAt,
+            session->remainingMs,
+        };
+        break;
+    }
+    case ResumeDecision::EndSession:
+        session->status = SessionStatus::Aborted;
+        session->targetEndAtUtcMs.reset();
+        session->endedAtUtcMs = command.nowUtcMs;
+        session->completionReason = CompletionReason::UserAborted;
+        candidate.activeSessionId.reset();
+        candidate.timerSnapshot.reset();
+        break;
+    case ResumeDecision::SkipRest:
+        session->status = SessionStatus::Skipped;
+        session->targetEndAtUtcMs.reset();
+        session->endedAtUtcMs = command.nowUtcMs;
+        session->completionReason = CompletionReason::UserSkipped;
+        candidate.activeSessionId.reset();
+        candidate.timerSnapshot.reset();
+        break;
+    }
+    return commit(std::move(candidate));
+}
+
 DataCommandResult FocusDataService::commit(FocusData candidate)
 {
     ValidationReport report = validateFocusData(candidate);

@@ -394,6 +394,93 @@ void taskCompletionIsReversibleAndRevisionChecked()
            "Restoring should return the task to active with a new revision");
 }
 
+void recordInterruptionAppliesUnionTransaction()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository, dataWithTask());
+    expect(service.startSession(focusCommand()).succeeded(),
+           "Setup focus start should succeed");
+    expect(service.pauseSession("session-1", 310'000).succeeded(),
+           "Setup pause should succeed");
+    const int savesBeforeInterruption = repository.saveCalls;
+
+    // 1. Continue decision: append event and resume the timer.
+    RecordInterruptionCommand cont;
+    cont.sessionId = "session-1";
+    cont.event = {
+        InterruptionReason::Meeting, "standup",
+        315'000, 315'020, InterruptionSource::User,
+    };
+    cont.decision = ResumeDecision::Continue;
+    cont.nowUtcMs = 400'000;
+    const auto contResult = service.recordInterruption(cont);
+    expect(contResult.status == DataCommandStatus::Success,
+           "Continue decision must succeed on a paused active session");
+    const auto& afterContinue = service.data().sessions.front();
+    expect(afterContinue.status == SessionStatus::Running,
+           "Continue decision must resume the timer");
+    expect(afterContinue.interruptions.size() == 1
+               && afterContinue.interruptions.at(0).reason
+                       == InterruptionReason::Meeting,
+           "Continue decision must append the interruption event");
+    expect(afterContinue.targetEndAtUtcMs
+               == std::optional<std::int64_t>{
+                       cont.nowUtcMs + afterContinue.remainingMs},
+           "Continue decision must recompute the deadline from now + remaining");
+    expect(repository.saveCalls == savesBeforeInterruption + 1,
+           "Continue decision must be a single atomic commit");
+
+    // 2. Running is not paused: recordInterruption must reject.
+    RecordInterruptionCommand invalid = cont;
+    invalid.event.occurredAtUtcMs = 500'000;
+    invalid.event.detectedAtUtcMs = 500'010;
+    invalid.decision = ResumeDecision::EndSession;
+    invalid.nowUtcMs = 500'020;
+    const auto invalidResult = service.recordInterruption(invalid);
+    expect(invalidResult.status == DataCommandStatus::Conflict,
+           "recordInterruption must reject a running session");
+    expect(service.data().sessions.front().interruptions.size() == 1,
+           "Conflict must not append the event");
+
+    // 3. Pause again, then EndSession decision aborts atomically.
+    expect(service.pauseSession("session-1", 600'000).succeeded(),
+           "Setup second pause should succeed");
+    RecordInterruptionCommand endCmd;
+    endCmd.sessionId = "session-1";
+    endCmd.event = {
+        InterruptionReason::Emergency, "fire drill",
+        600'500, 600'520, InterruptionSource::User,
+    };
+    endCmd.decision = ResumeDecision::EndSession;
+    endCmd.nowUtcMs = 601'000;
+    const auto endResult = service.recordInterruption(endCmd);
+    expect(endResult.status == DataCommandStatus::Success,
+           "EndSession decision must succeed on a paused session");
+    const auto& afterEnd = service.data().sessions.front();
+    expect(afterEnd.status == SessionStatus::Aborted,
+           "EndSession decision must abort the session");
+    expect(afterEnd.completionReason == CompletionReason::UserAborted,
+           "EndSession must record UserAborted as the completion reason");
+    expect(afterEnd.interruptions.size() == 2
+               && afterEnd.interruptions.at(1).reason
+                       == InterruptionReason::Emergency,
+           "EndSession must append the interruption event");
+    expect(!service.data().activeSessionId,
+           "EndSession must clear the active session");
+
+    // 4. SkipRest on a focus session must be rejected.
+    RecordInterruptionCommand skipFocus = endCmd;
+    skipFocus.decision = ResumeDecision::SkipRest;
+    skipFocus.event.occurredAtUtcMs = 700'000;
+    skipFocus.event.detectedAtUtcMs = 700'010;
+    skipFocus.nowUtcMs = 700'020;
+    const auto skipResult = service.recordInterruption(skipFocus);
+    expect(skipResult.status == DataCommandStatus::Conflict
+               || skipResult.status == DataCommandStatus::NotFound
+               || skipResult.status == DataCommandStatus::InvalidArgument,
+           "SkipRest against a non-active focus session must not succeed");
+}
+
 } // namespace
 
 int main()
@@ -411,6 +498,7 @@ int main()
         activeTaskCannotBeDeletedUntilItsSessionEnds();
         taskEditingAndRestoreAreRevisionChecked();
         taskCompletionIsReversibleAndRevisionChecked();
+        recordInterruptionAppliesUnionTransaction();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

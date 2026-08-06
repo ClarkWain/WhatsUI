@@ -43,7 +43,7 @@ build\examples\Debug\WhatsUIFocusTomatoApp.exe --new-task-smoke
 
 | 已自动化 | 部分验证 | 尚未实现 | 合计 |
 |---:|---:|---:|---:|
-| 33 | 25 | 42 | 100 |
+| 33 | 30 | 37 | 100 |
 
 | 场景 | 工程状态 | 当前证据或缺口 |
 |---|---|---|
@@ -65,10 +65,10 @@ build\examples\Debug\WhatsUIFocusTomatoApp.exe --new-task-smoke
 | SC-16 | 已自动化 | 取消确认不写数据；确认后写 aborted 并返回任务页。 |
 | SC-17 | 已自动化 | 活动会话关联任务的删除会被拒绝；允许编辑，但当前会话标题、计划时长和声音快照保持不变。 |
 | SC-18 | 部分验证 | 恢复数据完整；关闭到托盘策略尚未实现。 |
-| SC-19 | 尚未实现 | 没有中断实体、原因和备注表单。 |
+| SC-19 | 部分验证 | 中断实体（InterruptionEvent + Reason + Source + note）已就绪并 round-trip 序列化；UI 表单尚未接入。 |
 | SC-20 | 尚未实现 | 没有中断页面。 |
-| SC-21 | 尚未实现 | 没有中断与终止的联合事务。 |
-| SC-22 | 尚未实现 | 暂停会话可恢复，但中断草稿流程不存在。 |
+| SC-21 | 部分验证 | recordInterruption 应用命令实现 ResumeDecision(Continue/EndSession/SkipRest) 联合事务，已有单元测试覆盖；页面级 UI 尚未接入。 |
+| SC-22 | 部分验证 | 数据模型允许 Paused 会话之上追加 InterruptionEvent；草稿页 UI 未实现。 |
 | SC-23 | 部分验证 | 使用绝对 deadline 和恢复快照；需 suspend/resume 实机测试。 |
 | SC-24 | 已自动化 | 超过 deadline 后建立完成检查点并幂等结算。 |
 | SC-25 | 已自动化 | 单调时钟回拨测试会按实际经过时间暂停并提示。 |
@@ -102,11 +102,11 @@ build\examples\Debug\WhatsUIFocusTomatoApp.exe --new-task-smoke
 | SC-53 | 已自动化 | 可造成视觉欺骗的文本控制字符被验证器拒绝。 |
 | SC-54 | 尚未实现 | 任务列表未虚拟化，未通过 10,000 条性能基准。 |
 | SC-55 | 尚未实现 | 未通过 100,000 会话统计性能基准。 |
-| SC-56 | 尚未实现 | 当前 schemaVersion=1，没有迁移执行器。 |
-| SC-57 | 尚未实现 | 没有迁移事务与回滚 UI。 |
+| SC-56 | 部分验证 | schemaVersion 已升级至 2；FocusDataMigrator 提供单步链式迁移，registerBuiltinMigrations 已注册 v1_to_v2_interruption_entity；file_focus_repository 已接线。UI 迁移对话框未实现。 |
+| SC-57 | 部分验证 | MigrationTransaction 提供 .pre-migration-v<N>.bak 事务；rollback/commit 均保留 .bak；UI 迁移错误对话框未实现。 |
 | SC-58 | 已自动化 | 损坏文件会隔离为 `.corrupt`，不会覆盖原始字节。 |
 | SC-59 | 部分验证 | 写入失败不会发布候选状态；磁盘满需系统级故障注入。 |
-| SC-60 | 部分验证 | 快照 schema 与聚合一致性会被拒绝；没有版本迁移器。 |
+| SC-60 | 部分验证 | 快照 schema 与聚合一致性会被拒绝；FocusDataMigrator v1_to_v2 已同时 bump 嵌入 TimerSnapshot 的 schemaVersion。 |
 | SC-61 | 部分验证 | 本地日范围通过 `mktime` 处理 DST；需目标时区集成测试。 |
 | SC-62 | 部分验证 | 同 SC-61，仍需重复小时实机/时区矩阵。 |
 | SC-63 | 已自动化 | 统计区间采用严格 `[from, to)`，边界不会重复计数。 |

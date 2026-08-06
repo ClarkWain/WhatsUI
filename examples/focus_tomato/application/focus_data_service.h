@@ -57,6 +57,22 @@ struct UpdateTaskCommand {
     TaskExecutionPreferences execution;
 };
 
+// ADR-008 §4: post-interruption decision issued after a Paused session records
+// a reason. Continue resumes the timer; EndSession aborts the focus/break;
+// SkipRest is valid only for break sessions.
+enum class ResumeDecision {
+    Continue,
+    EndSession,
+    SkipRest,
+};
+
+struct RecordInterruptionCommand {
+    std::string sessionId;
+    InterruptionEvent event;
+    ResumeDecision decision{ResumeDecision::Continue};
+    std::int64_t nowUtcMs{0};
+};
+
 class FocusDataService {
 public:
     FocusDataService(FocusRepository& repository, FocusData initialData = {});
@@ -95,6 +111,13 @@ public:
     [[nodiscard]] DataCommandResult skipBreakSession(
         const std::string& sessionId,
         std::int64_t nowUtcMs);
+
+    // ADR-008 §4: append an InterruptionEvent to a Paused session and apply
+    // the caller-provided ResumeDecision atomically. Every failure returns
+    // without touching state; success writes the event and the state
+    // transition as a single commit.
+    [[nodiscard]] DataCommandResult recordInterruption(
+        const RecordInterruptionCommand& command);
 
 private:
     [[nodiscard]] DataCommandResult commit(FocusData candidate);
