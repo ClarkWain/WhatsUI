@@ -2,12 +2,10 @@
 
 #include "../components/common_components.h"
 #include "../focus_style.h"
-#include "../../domain/focus_statistics.h"
 #include "wui/declarative.h"
 
 #include <algorithm>
 #include <iomanip>
-#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -34,11 +32,10 @@ std::string completedDuration(const FocusData& data)
 }
 
 wui::Row buildCompletionMetrics(
-    const FocusData& data, float availableWidth)
+    const FocusViewModel& viewModel, float availableWidth)
 {
     using namespace wui;
-    const auto statistics = calculateFocusStatistics(
-        data, 0, std::numeric_limits<std::int64_t>::max());
+    const auto statistics = viewModel.todayStatistics();
     const float cardWidth =
         std::min(180.0f, (availableWidth - 24.0f) / 3.0f);
     return Row()
@@ -46,7 +43,10 @@ wui::Row buildCompletionMetrics(
         .align(wui::Alignment::Start)
         .children(
             buildMetricCard(
-                cardWidth, "专注时长", completedDuration(data), ""),
+                cardWidth,
+                "专注时长",
+                completedDuration(viewModel.data()),
+                ""),
             buildMetricCard(cardWidth, "完成番茄", "1", "个"),
             buildMetricCard(
                 cardWidth,
@@ -57,14 +57,22 @@ wui::Row buildCompletionMetrics(
 }
 
 wui::Row buildCompletionActions(
+    const FocusViewModel& viewModel,
     CompletionPageActions actions)
 {
     using namespace wui;
+    const SessionType breakType = viewModel.recommendedBreakType();
+    const int minutes = breakType == SessionType::LongBreak
+        ? viewModel.data().settings.longBreakMinutes
+        : viewModel.data().settings.shortBreakMinutes;
+    const std::string breakLabel =
+        (breakType == SessionType::LongBreak ? "长休息 " : "短休息 ")
+        + std::to_string(minutes) + " 分钟";
     return Row()
         .gap(14.0f)
         .children(
             buildSecondaryTextButton(
-                "休息一下", std::move(actions.startBreak)),
+                breakLabel, std::move(actions.startBreak)),
             buildPrimaryTextButton(
                 "继续专注", std::move(actions.continueFocus))
         );
@@ -80,6 +88,7 @@ wui::Box CompletionPage::body()
     const float pageWidth = pageWidth_;
     const float pageHeight = pageHeight_;
     CompletionPageActions actions = std::move(actions_);
+    const auto returnToTasks = actions.returnToTasks;
     const float contentWidth = std::max(320.0f, pageWidth - 56.0f);
     auto content = Column()
         .gap(14.0f)
@@ -97,22 +106,37 @@ wui::Box CompletionPage::body()
             Text("一个番茄钟完成了，注意力被好好保存下来。")
                 .style(style::text(13.0f, 400, 19.0f))
                 .color(style::textSecondary),
-            buildCompletionMetrics(viewModel.data(), contentWidth),
-            buildCompletionActions(std::move(actions))
+            buildOperationBanner(viewModel, contentWidth),
+            buildCompletionMetrics(viewModel, contentWidth),
+            buildCompletionActions(viewModel, std::move(actions))
         );
 
     return Box()
         .background(style::canvas)
         .width(pageWidth)
         .height(pageHeight)
+        .onKey([returnToTasks](const wui::KeyEvent& event) {
+            if (event.action == wui::KeyAction::Down
+                && (event.keyCode == 27
+                    || (event.keyCode == 263
+                        && (event.modifiers & wui::KeyModifierAlt) != 0))
+                && returnToTasks) {
+                returnToTasks();
+                return true;
+            }
+            return false;
+        })
         .children(
             Column()
                 .align(wui::Alignment::Stretch)
                 .children(
-                    buildWindowBar(
-                        pageWidth, "FocusTomato · 完成", assets),
+                    buildPageNavigationAction(
+                        pageWidth,
+                        "← 返回任务",
+                        "focus.completion.back",
+                        returnToTasks),
                     Box()
-                        .height(pageHeight - 56.0f)
+                        .height(pageHeight - 52.0f)
                         .padding({28.0f, 20.0f, 28.0f, 24.0f})
                         .contentAlign(
                             wui::Alignment::Center,

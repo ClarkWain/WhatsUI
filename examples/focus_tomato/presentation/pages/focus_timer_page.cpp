@@ -5,6 +5,7 @@
 #include "wui/declarative.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
 namespace whatsui::focus_tomato::presentation {
@@ -29,9 +30,13 @@ wui::Box buildTaskContext(
     using namespace wui;
     const int estimated = task ? task->estimatedPomodoros : 1;
     const int completed = task ? task->completedPomodoros : 0;
-    const std::string progress =
-        std::to_string(std::min(completed + 1, estimated))
-        + " / " + std::to_string(estimated);
+    const std::string progress = task
+        ? std::to_string(std::min(completed + 1, estimated))
+            + " / " + std::to_string(estimated)
+        : "自由";
+    const std::string detail = task
+        ? "今日优先任务 · 预计 " + std::to_string(estimated) + " 个番茄"
+        : "不关联任务 · 仍会计入今日专注统计";
 
     return Box()
         .background(style::surface)
@@ -52,9 +57,7 @@ wui::Box buildTaskContext(
                             Text(session.titleSnapshot)
                                 .style(style::text(13.0f, 500, 19.0f))
                                 .color(style::textPrimary),
-                            Text("今日优先任务 · 预计 "
-                                 + std::to_string(estimated)
-                                 + " 个番茄")
+                            Text(detail)
                                 .style(style::text(11.0f, 400, 16.0f))
                                 .color(style::textSecondary)
                         ),
@@ -76,7 +79,7 @@ wui::Box buildTimerStage(
     const FocusAssets& assets,
     float width,
     bool running,
-    int remainingPomodoros)
+    std::optional<int> remainingPomodoros)
 {
     using namespace wui;
     return Box()
@@ -105,9 +108,11 @@ wui::Box buildTimerStage(
                         .bind(viewModel.remainingText())
                         .style(style::text(52.0f, 700, 58.0f))
                         .color(style::textPrimary),
-                    Text("本轮完成后，任务还剩 "
-                         + std::to_string(remainingPomodoros)
-                         + " 个番茄")
+                    Text(remainingPomodoros
+                             ? "本轮完成后，任务还剩 "
+                                 + std::to_string(*remainingPomodoros)
+                                 + " 个番茄"
+                             : "本轮完成后会计入今日专注统计")
                         .style(style::text(11.0f, 400, 16.0f))
                         .color(style::textSecondary)
                 )
@@ -136,14 +141,16 @@ wui::Box buildTimerControls(
                         21.0f,
                         false,
                         "重置本轮",
-                        std::move(actions.reset)),
+                        std::move(actions.reset))
+                        .automationId("focus.timer.reset"),
                     buildGlyphControl(
                         running ? "▮▮" : "▶",
                         68.0f,
                         running ? 15.0f : 22.0f,
                         true,
                         running ? "暂停专注" : "继续专注",
-                        std::move(actions.toggle)),
+                        std::move(actions.toggle))
+                        .automationId("focus.timer.toggle"),
                     buildGlyphControl(
                         "▶|",
                         40.0f,
@@ -151,14 +158,12 @@ wui::Box buildTimerControls(
                         false,
                         "提前结束",
                         std::move(actions.abort))
+                        .automationId("focus.timer.abort")
                 )
         );
 }
 
-wui::Box buildFocusFooter(
-    int shortBreakMinutes,
-    float width,
-    std::function<void()> recordInterruption)
+wui::Box buildFocusFooter(float width)
 {
     using namespace wui;
     return Box()
@@ -170,18 +175,10 @@ wui::Box buildFocusFooter(
                 .gap(4.0f)
                 .align(wui::Alignment::Center)
                 .children(
-                    Box()
-                        .accessibleRole(wui::AccessibilityRole::Button)
-                        .accessibleLabel("记录一次打断")
-                        .onClick(std::move(recordInterruption))
-                        .children(
-                            Text("＋ 记录一次打断")
-                                .style(style::text(12.0f, 500, 17.0f))
-                                .color(style::accent)
-                        ),
-                    Text("完成本轮 → 短休息 "
-                         + std::to_string(shortBreakMinutes)
-                         + " 分钟 → 返回任务")
+                    Text("完成本轮 → 进入休息 → 返回任务")
+                        .style(style::text(12.0f, 500, 17.0f))
+                        .color(style::accent),
+                    Text("计时、结算和休息状态会自动保存")
                         .style(style::text(10.0f, 400, 15.0f))
                         .color(style::textMuted)
                 )
@@ -214,6 +211,8 @@ wui::Box FocusTimerPage::body()
     const float pageWidth = pageWidth_;
     const float pageHeight = pageHeight_;
     FocusTimerPageActions actions = std::move(actions_);
+    const auto minimizeShortcut = actions.minimize;
+    const auto toggleShortcut = actions.toggle;
     const FocusSessionRecord* session = viewModel.activeSession();
     if (session == nullptr) {
         return buildMissingSessionPage(pageWidth, pageHeight);
@@ -232,32 +231,49 @@ wui::Box FocusTimerPage::body()
         .align(wui::Alignment::Center)
         .children(
             buildTaskContext(*session, task, contentWidth),
+            buildOperationBanner(viewModel, contentWidth),
             buildTimerStage(
                 viewModel,
                 assets,
                 contentWidth,
                 running,
-                remainingPomodoros),
+                task ? std::optional<int>{remainingPomodoros}
+                     : std::nullopt),
             buildTimerControls(
                 assets, contentWidth, running, actions),
-            buildFocusFooter(
-                viewModel.data().settings.shortBreakMinutes,
-                contentWidth,
-                std::move(actions.recordInterruption))
+            buildFocusFooter(contentWidth)
         );
 
     return Box()
         .background(style::canvas)
         .width(pageWidth)
         .height(pageHeight)
+        .onKey([minimizeShortcut, toggleShortcut](const wui::KeyEvent& event) {
+            if (event.action != wui::KeyAction::Down) return false;
+            if ((event.keyCode == 27
+                    || (event.keyCode == 263
+                        && (event.modifiers & wui::KeyModifierAlt) != 0))
+                && minimizeShortcut) {
+                minimizeShortcut();
+                return true;
+            }
+            if (event.keyCode == 32 && toggleShortcut) {
+                toggleShortcut();
+                return true;
+            }
+            return false;
+        })
         .children(
             Column()
                 .align(wui::Alignment::Stretch)
                 .children(
-                    buildWindowBar(
-                        pageWidth, "FocusTomato · 专注", assets),
+                    buildPageNavigationAction(
+                        pageWidth,
+                        "← 返回任务 · 计时继续",
+                        "focus.timer.minimize",
+                        minimizeShortcut),
                     Box()
-                        .height(pageHeight - 56.0f)
+                        .height(pageHeight - 52.0f)
                         .padding({28.0f, 20.0f, 28.0f, 20.0f})
                         .contentAlign(
                             wui::Alignment::Center,

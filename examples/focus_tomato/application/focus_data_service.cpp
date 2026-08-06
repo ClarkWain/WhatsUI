@@ -51,7 +51,7 @@ const FocusData& FocusDataService::data() const noexcept
 DataCommandResult FocusDataService::addTask(const AddTaskCommand& command)
 {
     if (command.taskId.empty() || command.nowUtcMs <= 0
-        || command.estimatedPomodoros < 1 || command.estimatedPomodoros > 100) {
+        || command.estimatedPomodoros < 1 || command.estimatedPomodoros > 99) {
         return commandResult(DataCommandStatus::InvalidArgument,
                              "Task ID, estimate, or creation time is invalid.");
     }
@@ -60,8 +60,16 @@ DataCommandResult FocusDataService::addTask(const AddTaskCommand& command)
                                            return item.id == command.taskId;
                                        });
     if (existing != data_.tasks.end()) {
-        return commandResult(DataCommandStatus::NoChange,
-                             "This add-task command has already been applied.");
+        if (existing->title == command.title
+            && existing->estimatedPomodoros == command.estimatedPomodoros
+            && existing->createdAtUtcMs == command.nowUtcMs
+            && existing->execution == command.execution) {
+            return commandResult(DataCommandStatus::NoChange,
+                                 "This add-task command has already been applied.");
+        }
+        return commandResult(
+            DataCommandStatus::Conflict,
+            "The task ID is already associated with different task data.");
     }
 
     std::int64_t sortOrder = 1024;
@@ -84,7 +92,56 @@ DataCommandResult FocusDataService::addTask(const AddTaskCommand& command)
         1,
         command.nowUtcMs,
         command.nowUtcMs,
+        command.execution,
     });
+    return commit(std::move(candidate));
+}
+
+DataCommandResult FocusDataService::updateTask(
+    const UpdateTaskCommand& command)
+{
+    if (command.taskId.empty() || command.expectedRevision < 1
+        || command.nowUtcMs <= 0 || command.estimatedPomodoros < 1
+        || command.estimatedPomodoros > 99) {
+        return commandResult(
+            DataCommandStatus::InvalidArgument,
+            "Task ID, estimate, revision, or update time is invalid.");
+    }
+    FocusData candidate = data_;
+    const auto task = std::find_if(
+        candidate.tasks.begin(), candidate.tasks.end(),
+        [&command](const TaskRecord& item) {
+            return item.id == command.taskId;
+        });
+    if (task == candidate.tasks.end()) {
+        return commandResult(DataCommandStatus::NotFound,
+                             "Task was not found.");
+    }
+    if (isArchivedTaskStatus(task->status)) {
+        return commandResult(
+            DataCommandStatus::Conflict,
+            "A deleted task must be restored before editing.");
+    }
+    if (task->revision != command.expectedRevision) {
+        return commandResult(
+            DataCommandStatus::Conflict,
+            "Task changed after the editor was opened.");
+    }
+    if (command.nowUtcMs < task->updatedAtUtcMs) {
+        return commandResult(DataCommandStatus::InvalidArgument,
+                             "Task update time must not move backwards.");
+    }
+    if (task->title == command.title
+        && task->estimatedPomodoros == command.estimatedPomodoros
+        && task->execution == command.execution) {
+        return commandResult(DataCommandStatus::NoChange,
+                             "Task already contains these values.");
+    }
+    task->title = command.title;
+    task->estimatedPomodoros = command.estimatedPomodoros;
+    task->execution = command.execution;
+    ++task->revision;
+    task->updatedAtUtcMs = command.nowUtcMs;
     return commit(std::move(candidate));
 }
 
@@ -104,7 +161,7 @@ DataCommandResult FocusDataService::archiveTask(const std::string& taskId,
     if (task == candidate.tasks.end()) {
         return commandResult(DataCommandStatus::NotFound, "Task was not found.");
     }
-    if (task->status == TaskStatus::Archived) {
+    if (isArchivedTaskStatus(task->status)) {
         return commandResult(DataCommandStatus::NoChange,
                              "Task has already been archived.");
     }
@@ -112,14 +169,76 @@ DataCommandResult FocusDataService::archiveTask(const std::string& taskId,
         return commandResult(DataCommandStatus::Conflict,
                              "Task changed after the editor was opened.");
     }
-    if (candidate.activeSessionId) {
-        const FocusSessionRecord* active = findSession(*candidate.activeSessionId);
-        if (active != nullptr && active->taskId == std::optional<std::string>{taskId}) {
-            return commandResult(DataCommandStatus::Conflict,
-                                 "The task cannot be archived during its active session.");
-        }
+    const auto activeSession = std::find_if(
+        candidate.sessions.begin(), candidate.sessions.end(),
+        [&candidate, &taskId](const FocusSessionRecord& session) {
+            return candidate.activeSessionId
+                && session.id == *candidate.activeSessionId
+                && session.taskId
+                && *session.taskId == taskId;
+        });
+    if (activeSession != candidate.sessions.end()) {
+        return commandResult(
+            DataCommandStatus::Conflict,
+            "A task used by the active timer cannot be deleted.");
     }
-    task->status = TaskStatus::Archived;
+    if (nowUtcMs < task->updatedAtUtcMs) {
+        return commandResult(DataCommandStatus::InvalidArgument,
+                             "Task update time must not move backwards.");
+    }
+    task->status = task->status == TaskStatus::Done
+        ? TaskStatus::ArchivedDone
+        : TaskStatus::Archived;
+    ++task->revision;
+    task->updatedAtUtcMs = nowUtcMs;
+    return commit(std::move(candidate));
+}
+
+DataCommandResult FocusDataService::restoreTask(
+    const std::string& taskId,
+    std::int64_t expectedRevision,
+    std::int64_t nowUtcMs)
+{
+    if (taskId.empty() || expectedRevision < 1 || nowUtcMs <= 0) {
+        return commandResult(
+            DataCommandStatus::InvalidArgument,
+            "Task ID, expected revision, or update time is invalid.");
+    }
+    FocusData candidate = data_;
+    const auto task = std::find_if(
+        candidate.tasks.begin(), candidate.tasks.end(),
+        [&taskId](const TaskRecord& item) { return item.id == taskId; });
+    if (task == candidate.tasks.end()) {
+        return commandResult(DataCommandStatus::NotFound,
+                             "Task was not found.");
+    }
+    if (!isArchivedTaskStatus(task->status)) {
+        return commandResult(DataCommandStatus::NoChange,
+                             "Task is already visible in the task list.");
+    }
+    if (task->revision != expectedRevision) {
+        return commandResult(
+            DataCommandStatus::Conflict,
+            "Task changed after the deleted list was displayed.");
+    }
+    if (nowUtcMs < task->updatedAtUtcMs) {
+        return commandResult(DataCommandStatus::InvalidArgument,
+                             "Task update time must not move backwards.");
+    }
+    std::int64_t sortOrder = 1024;
+    for (const auto& item : candidate.tasks) {
+        if (item.status != TaskStatus::Active) continue;
+        if (item.sortOrder > std::numeric_limits<std::int64_t>::max() - 1024) {
+            return commandResult(
+                DataCommandStatus::Conflict,
+                "Task ordering must be compacted before restoring this task.");
+        }
+        sortOrder = std::max(sortOrder, item.sortOrder + 1024);
+    }
+    task->status = task->status == TaskStatus::ArchivedDone
+        ? TaskStatus::Done
+        : TaskStatus::Active;
+    task->sortOrder = sortOrder;
     ++task->revision;
     task->updatedAtUtcMs = nowUtcMs;
     return commit(std::move(candidate));
@@ -136,6 +255,44 @@ DataCommandResult FocusDataService::updateSettings(FocusSettings settings)
     return commit(std::move(candidate));
 }
 
+DataCommandResult FocusDataService::setTaskCompletion(
+    const std::string& taskId,
+    bool completed,
+    std::int64_t expectedRevision,
+    std::int64_t nowUtcMs)
+{
+    if (taskId.empty() || expectedRevision < 1 || nowUtcMs <= 0) {
+        return commandResult(
+            DataCommandStatus::InvalidArgument,
+            "Task ID, expected revision, or update time is invalid.");
+    }
+    FocusData candidate = data_;
+    const auto task = std::find_if(
+        candidate.tasks.begin(), candidate.tasks.end(),
+        [&taskId](const TaskRecord& item) { return item.id == taskId; });
+    if (task == candidate.tasks.end()) {
+        return commandResult(DataCommandStatus::NotFound, "Task was not found.");
+    }
+    if (isArchivedTaskStatus(task->status)) {
+        return commandResult(
+            DataCommandStatus::Conflict,
+            "An archived task must be restored before changing completion.");
+    }
+    const TaskStatus target = completed ? TaskStatus::Done : TaskStatus::Active;
+    if (task->status == target) {
+        return commandResult(DataCommandStatus::NoChange,
+                             "Task completion already has this value.");
+    }
+    if (task->revision != expectedRevision) {
+        return commandResult(DataCommandStatus::Conflict,
+                             "Task changed after the row was displayed.");
+    }
+    task->status = target;
+    ++task->revision;
+    task->updatedAtUtcMs = nowUtcMs;
+    return commit(std::move(candidate));
+}
+
 DataCommandResult FocusDataService::startSession(const StartSessionCommand& command)
 {
     if (command.sessionId.empty() || command.nowUtcMs <= 0
@@ -146,9 +303,19 @@ DataCommandResult FocusDataService::startSession(const StartSessionCommand& comm
         return commandResult(DataCommandStatus::InvalidArgument,
                              "Session ID, start time, or duration is invalid.");
     }
-    if (findSession(command.sessionId) != nullptr) {
-        return commandResult(DataCommandStatus::NoChange,
-                             "This start command has already been applied.");
+    if (const FocusSessionRecord* existing = findSession(command.sessionId)) {
+        if (existing->taskId == command.taskId
+            && existing->type == command.type
+            && existing->plannedDurationMs == command.plannedDurationMs
+            && existing->startedAtUtcMs == command.nowUtcMs
+            && existing->idempotencyKey == command.sessionId
+            && existing->soundscapeIdSnapshot == command.soundscapeId) {
+            return commandResult(DataCommandStatus::NoChange,
+                                 "This start command has already been applied.");
+        }
+        return commandResult(
+            DataCommandStatus::Conflict,
+            "The session ID is already associated with a different start command.");
     }
     if (data_.activeSessionId) {
         return commandResult(DataCommandStatus::Conflict,
@@ -174,7 +341,13 @@ DataCommandResult FocusDataService::startSession(const StartSessionCommand& comm
     }
 
     FocusData candidate = data_;
-    const std::int64_t targetEndAt = command.nowUtcMs + command.plannedDurationMs;
+    const std::optional<std::int64_t> targetEndAt = command.startPaused
+        ? std::nullopt
+        : std::optional<std::int64_t>{
+            command.nowUtcMs + command.plannedDurationMs};
+    const SessionStatus initialStatus = command.startPaused
+        ? SessionStatus::Paused
+        : SessionStatus::Running;
     candidate.sessions.push_back({
         command.sessionId,
         command.taskId,
@@ -184,16 +357,17 @@ DataCommandResult FocusDataService::startSession(const StartSessionCommand& comm
         command.nowUtcMs,
         targetEndAt,
         command.plannedDurationMs,
-        SessionStatus::Running,
+        initialStatus,
         std::nullopt,
         CompletionReason::None,
         command.sessionId,
+        command.soundscapeId,
     });
     candidate.activeSessionId = command.sessionId;
     candidate.timerSnapshot = TimerSnapshot{
         kCurrentSchemaVersion,
         command.sessionId,
-        SessionStatus::Running,
+        initialStatus,
         command.nowUtcMs,
         targetEndAt,
         command.plannedDurationMs,
@@ -418,7 +592,8 @@ DataCommandResult FocusDataService::abortSession(const std::string& sessionId,
                              "Session has already been aborted.");
     }
     if (!data_.activeSessionId || *data_.activeSessionId != sessionId
-        || !isActiveSessionStatus(current->status)
+        || (current->status != SessionStatus::Running
+            && current->status != SessionStatus::Paused)
         || nowUtcMs < current->startedAtUtcMs) {
         return commandResult(DataCommandStatus::Conflict,
                              "Only the current active session can be aborted.");
@@ -461,7 +636,8 @@ DataCommandResult FocusDataService::skipBreakSession(
             "The break session has already been skipped.");
     }
     if (!data_.activeSessionId || *data_.activeSessionId != sessionId
-        || !isActiveSessionStatus(current->status)
+        || (current->status != SessionStatus::Running
+            && current->status != SessionStatus::Paused)
         || nowUtcMs < current->startedAtUtcMs) {
         return commandResult(
             DataCommandStatus::Conflict,

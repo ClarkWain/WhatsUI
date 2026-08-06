@@ -16,6 +16,14 @@ struct FocusStatistics {
     std::unordered_map<std::string, std::int64_t> focusedDurationMsByTask;
 };
 
+struct UtcTimeRange {
+    std::int64_t fromUtcMs{0};
+    std::int64_t toUtcMs{0};
+};
+
+[[nodiscard]] UtcTimeRange localDayUtcRange(
+    std::int64_t nowUtcMs) noexcept;
+
 // Statistics are projections only. FocusSession records are the source of
 // truth; Task.completedPomodoros and future daily summary tables are caches.
 [[nodiscard]] FocusStatistics calculateFocusStatistics(

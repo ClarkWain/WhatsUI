@@ -133,6 +133,7 @@ const char* taskStatusName(TaskStatus value) noexcept
     case TaskStatus::Active: return "active";
     case TaskStatus::Done: return "done";
     case TaskStatus::Archived: return "archived";
+    case TaskStatus::ArchivedDone: return "archived_done";
     }
     return "invalid";
 }
@@ -142,7 +143,32 @@ bool parseTaskStatus(const std::string& value, TaskStatus& output)
     if (value == "active") output = TaskStatus::Active;
     else if (value == "done") output = TaskStatus::Done;
     else if (value == "archived") output = TaskStatus::Archived;
+    else if (value == "archived_done") output = TaskStatus::ArchivedDone;
     else return false;
+    return true;
+}
+
+const char* taskSoundPreferenceName(TaskSoundPreference value) noexcept
+{
+    switch (value) {
+    case TaskSoundPreference::Inherit: return "inherit";
+    case TaskSoundPreference::Off: return "off";
+    case TaskSoundPreference::Soundscape: return "soundscape";
+    }
+    return "invalid";
+}
+
+bool parseTaskSoundPreference(
+    const std::string& value,
+    TaskSoundPreference& output)
+{
+    if (value == "inherit") output = TaskSoundPreference::Inherit;
+    else if (value == "off") output = TaskSoundPreference::Off;
+    else if (value == "soundscape") {
+        output = TaskSoundPreference::Soundscape;
+    } else {
+        return false;
+    }
     return true;
 }
 
@@ -219,7 +245,7 @@ bool parseCompletionReason(const std::string& value, CompletionReason& output)
 
 bool parseTask(const std::vector<std::string>& fields, TaskRecord& task)
 {
-    return fields.size() == 10
+    const bool baseParsed = (fields.size() == 10 || fields.size() == 13)
         && decodeField(fields[1], task.id)
         && decodeField(fields[2], task.title)
         && parseTaskStatus(fields[3], task.status)
@@ -229,11 +255,22 @@ bool parseTask(const std::vector<std::string>& fields, TaskRecord& task)
         && parseInteger(fields[7], task.revision)
         && parseInteger(fields[8], task.createdAtUtcMs)
         && parseInteger(fields[9], task.updatedAtUtcMs);
+    if (!baseParsed || fields.size() == 10) return baseParsed;
+
+    int focusMinutes = 0;
+    if (!parseInteger(fields[10], focusMinutes)
+        || !parseTaskSoundPreference(fields[11], task.execution.sound)
+        || !decodeField(fields[12], task.execution.soundscapeId)) {
+        return false;
+    }
+    if (focusMinutes == 0) task.execution.focusMinutes.reset();
+    else task.execution.focusMinutes = focusMinutes;
+    return true;
 }
 
 bool parseSession(const std::vector<std::string>& fields, FocusSessionRecord& session)
 {
-    return fields.size() == 13
+    const bool baseParsed = (fields.size() == 13 || fields.size() == 14)
         && decodeField(fields[1], session.id)
         && decodeOptionalString(fields[2], session.taskId)
         && decodeField(fields[3], session.titleSnapshot)
@@ -246,11 +283,14 @@ bool parseSession(const std::vector<std::string>& fields, FocusSessionRecord& se
         && decodeOptionalInteger(fields[10], session.endedAtUtcMs)
         && parseCompletionReason(fields[11], session.completionReason)
         && decodeField(fields[12], session.idempotencyKey);
+    if (!baseParsed || fields.size() == 13) return baseParsed;
+    return decodeOptionalString(
+        fields[13], session.soundscapeIdSnapshot);
 }
 
 bool parseSettingsRow(const std::vector<std::string>& fields, FocusSettings& settings)
 {
-    return fields.size() == 8
+    const bool baseParsed = (fields.size() == 8 || fields.size() == 9)
         && parseInteger(fields[1], settings.focusMinutes)
         && parseInteger(fields[2], settings.shortBreakMinutes)
         && parseInteger(fields[3], settings.longBreakMinutes)
@@ -258,6 +298,8 @@ bool parseSettingsRow(const std::vector<std::string>& fields, FocusSettings& set
         && parseInteger(fields[5], settings.soundVolumePercent)
         && parseBool(fields[6], settings.autoStartBreak)
         && parseBool(fields[7], settings.launchAtLogin);
+    if (!baseParsed || fields.size() == 8) return baseParsed;
+    return decodeField(fields[8], settings.defaultSoundscapeId);
 }
 
 bool parseSnapshot(const std::vector<std::string>& fields, TimerSnapshot& snapshot)
@@ -349,7 +391,8 @@ bool writeStore(const std::filesystem::path& path,
            << '\t' << data.settings.longBreakEvery
            << '\t' << data.settings.soundVolumePercent
            << '\t' << (data.settings.autoStartBreak ? 1 : 0)
-           << '\t' << (data.settings.launchAtLogin ? 1 : 0) << '\n';
+           << '\t' << (data.settings.launchAtLogin ? 1 : 0)
+           << '\t' << encodeField(data.settings.defaultSoundscapeId) << '\n';
     for (const auto& task : data.tasks) {
         output << "T\t" << encodeField(task.id)
                << '\t' << encodeField(task.title)
@@ -359,7 +402,10 @@ bool writeStore(const std::filesystem::path& path,
                << '\t' << task.sortOrder
                << '\t' << task.revision
                << '\t' << task.createdAtUtcMs
-               << '\t' << task.updatedAtUtcMs << '\n';
+               << '\t' << task.updatedAtUtcMs
+               << '\t' << task.execution.focusMinutes.value_or(0)
+               << '\t' << taskSoundPreferenceName(task.execution.sound)
+               << '\t' << encodeField(task.execution.soundscapeId) << '\n';
     }
     for (const auto& session : data.sessions) {
         output << "F\t" << encodeField(session.id)
@@ -373,7 +419,9 @@ bool writeStore(const std::filesystem::path& path,
                << '\t' << sessionStatusName(session.status)
                << '\t' << encodeOptionalInteger(session.endedAtUtcMs)
                << '\t' << completionReasonName(session.completionReason)
-               << '\t' << encodeField(session.idempotencyKey) << '\n';
+               << '\t' << encodeField(session.idempotencyKey)
+               << '\t' << encodeOptionalString(
+                    session.soundscapeIdSnapshot) << '\n';
     }
     output << "A\t" << encodeOptionalString(data.activeSessionId) << '\n';
     if (data.timerSnapshot) {

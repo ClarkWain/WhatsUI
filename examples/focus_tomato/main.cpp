@@ -1,8 +1,10 @@
 #include "application/focus_data_service.h"
 #include "infrastructure/file_focus_repository.h"
 #include "presentation/focus_assets.h"
+#include "presentation/dialogs/confirmation_dialog.h"
 #include "presentation/dialogs/new_task_dialog.h"
 #include "presentation/focus_router.h"
+#include "presentation/focus_style.h"
 #include "presentation/focus_view_model.h"
 
 #include "wui/animation.h"
@@ -26,6 +28,12 @@ std::int64_t nowUtcMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+std::int64_t monotonicMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 std::string nextId()
@@ -63,6 +71,87 @@ struct NewTaskSmokeState {
     bool dialogOpened{false};
     bool dialogRendered{false};
 };
+
+struct DesktopIntegrationState {
+    bool forceExit{false};
+    bool trayInstalled{false};
+    std::string sessionId;
+    bool sessionRunning{false};
+    wui::DesktopIcon trayIcon;
+};
+
+wui::TrayIconOptions makeTrayOptions(
+    const FocusViewModel& viewModel,
+    const wui::DesktopIcon& icon)
+{
+    const bool hasSession = viewModel.activeSession() != nullptr;
+    return {
+        "FocusTomato 番茄钟",
+        icon,
+        {
+            {"show", "打开 FocusTomato"},
+            {"toggle-session",
+             viewModel.isRunning() ? "暂停当前计时" : "继续当前计时",
+             wui::TrayMenuItemKind::Action,
+             hasSession},
+            {{}, {}, wui::TrayMenuItemKind::Separator},
+            {"exit", "退出 FocusTomato"},
+        },
+        "show",
+    };
+}
+
+void updateTrayState(
+    wui::DesktopServices& desktop,
+    const FocusViewModel& viewModel,
+    DesktopIntegrationState& state,
+    bool force = false)
+{
+    const auto* session = viewModel.activeSession();
+    const std::string sessionId = session == nullptr ? "" : session->id;
+    const bool running = viewModel.isRunning();
+    if (!force && sessionId == state.sessionId
+        && running == state.sessionRunning) {
+        return;
+    }
+    state.sessionId = sessionId;
+    state.sessionRunning = running;
+    state.trayInstalled = desktop.setTrayIcon(
+        makeTrayOptions(viewModel, state.trayIcon))
+        == wui::DesktopOperationResult::Succeeded;
+}
+
+void showMainWindow(wui::UiWindow& window)
+{
+    window.platformWindow().show();
+    window.platformWindow().restore();
+    window.platformWindow().focus();
+}
+
+void requestApplicationExit(
+    wui::UiWindow& window,
+    const FocusViewModel& viewModel,
+    const std::shared_ptr<DesktopIntegrationState>& state)
+{
+    if (viewModel.activeSession() == nullptr) {
+        state->forceExit = true;
+        window.platformWindow().close();
+        return;
+    }
+    showMainWindow(window);
+    if (window.hasDialog()) return;
+    showConfirmationDialog(
+        window,
+        {
+            "退出 FocusTomato？",
+            "当前计时进度已经保存。退出后计时会停止，下次启动时可继续。",
+            "仍要退出",
+        },
+        [&window, state] {
+            state->forceExit = true;
+            window.platformWindow().close();
+        });
+}
 
 void installNewTaskNativeSmoke(
     wui::UiWindow& window,
@@ -110,18 +199,104 @@ int main(int argc, char** argv)
             : applicationStorePath();
         FileFocusRepository repository(storePath);
         FocusDataService service(repository, loadInitialData(repository));
-        FocusViewModel viewModel(service, nowUtcMs, nextId);
+        FocusViewModel viewModel(service, nowUtcMs, nextId, monotonicMs);
         const FocusAssets assets =
             loadFocusAssets(std::filesystem::path(FOCUS_TOMATO_ASSET_DIR));
 
+        wui::setTheme(style::focusTheme());
         wui::UiApp application(wui::createGlfwPlatformHost());
-        auto& window = application.openWindow("FocusTomato", {width, height});
+        wui::WindowOptions windowOptions;
+        windowOptions.title = "FocusTomato";
+        windowOptions.initialSize = {width, height};
+        windowOptions.minimumSize = {width, height};
+        windowOptions.maximumSize = {width, height};
+        windowOptions.frameStyle = wui::WindowFrameStyle::Custom;
+        windowOptions.resizable = false;
+        windowOptions.visibleOnCreate = false;
+        auto& window = application.openWindow(windowOptions);
         FocusRouter router(window, viewModel, assets, width, height);
         router.start();
-        window.platformWindow().show();
+
+        auto& desktop = application.desktopServices();
+        auto desktopState = std::make_shared<DesktopIntegrationState>();
+        desktopState->trayIcon = {
+            assets.brandTomato.rgbaPixels(),
+            assets.brandTomato.pixelWidth(),
+            assets.brandTomato.pixelHeight(),
+        };
+        updateTrayState(desktop, viewModel, *desktopState, true);
+        window.platformWindow().setCloseRequestHandler(
+            [&window, &viewModel, desktopState] {
+                if (!desktopState->forceExit
+                    && desktopState->trayInstalled
+                    && !desktopState->sessionId.empty()) {
+                    return wui::WindowCloseDecision::Hide;
+                }
+                if (!desktopState->forceExit
+                    && viewModel.activeSession() != nullptr) {
+                    requestApplicationExit(
+                        window, viewModel, desktopState);
+                    return wui::WindowCloseDecision::Cancel;
+                }
+                return wui::WindowCloseDecision::Close;
+            });
+        desktop.setEventHandler(
+            [&window, &viewModel, &router, &desktop, desktopState](
+                const wui::DesktopEvent& event) {
+                if (event.kind == wui::DesktopEventKind::NotificationActivated) {
+                    showMainWindow(window);
+                    if (event.payload == "focus-completed") {
+                        router.showCompletion();
+                    } else {
+                        router.showActiveSession();
+                    }
+                    return;
+                }
+                if (event.id == "show") {
+                    showMainWindow(window);
+                } else if (event.id == "toggle-session") {
+                    if (viewModel.activeSession() != nullptr) {
+                        (void)viewModel.toggleActiveSession();
+                        router.refresh();
+                        updateTrayState(
+                            desktop, viewModel, *desktopState, true);
+                    }
+                } else if (event.id == "exit") {
+                    requestApplicationExit(
+                        window, viewModel, desktopState);
+                }
+            });
+        showMainWindow(window);
 
         auto timer = wui::Animation(
-            0.25f, [&router](float) { router.updateClock(); });
+            0.25f,
+            [&router, &viewModel, &desktop, desktopState](float) {
+                const auto* active = viewModel.activeSession();
+                const bool hadActiveSession = active != nullptr;
+                const SessionType completingType = hadActiveSession
+                    ? active->type
+                    : SessionType::Focus;
+                const std::string completedTitle = hadActiveSession
+                    ? active->titleSnapshot
+                    : std::string{};
+                router.updateClock();
+                if (hadActiveSession
+                    && viewModel.activeSession() == nullptr) {
+                    const bool focusCompleted =
+                        completingType == SessionType::Focus;
+                    (void)desktop.showNotification({
+                        focusCompleted ? "focus-completed" : "break-completed",
+                        focusCompleted ? "一个番茄完成了" : "休息结束了",
+                        focusCompleted
+                            ? (completedTitle.empty()
+                                   ? "做得好，休息一下再继续。"
+                                   : completedTitle + " 已完成一轮专注。")
+                            : "准备好后，开始下一轮专注。",
+                        focusCompleted ? "focus-completed" : "break-completed",
+                    });
+                }
+                updateTrayState(desktop, viewModel, *desktopState);
+            });
         timer.repeat(-1);
         const auto timerId = wui::Ticker::instance().add(std::move(timer));
         auto smokeState = std::make_shared<NewTaskSmokeState>();
@@ -130,6 +305,8 @@ int main(int argc, char** argv)
         }
         const int exitCode = wui::runGlfwUiApp(application);
         wui::Ticker::instance().cancel(timerId);
+        desktop.setEventHandler({});
+        desktop.removeTrayIcon();
         if (newTaskSmoke) {
             if (!smokeState->dialogOpened || !smokeState->dialogRendered) {
                 std::cerr << "FocusTomato new-task smoke: failed"

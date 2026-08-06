@@ -10,10 +10,10 @@
 namespace whatsui::focus_tomato::presentation {
 
 struct FocusTimerPageActions {
+    std::function<void()> minimize;
     std::function<void()> toggle;
     std::function<void()> reset;
     std::function<void()> abort;
-    std::function<void()> recordInterruption;
 };
 
 class FocusTimerPage {

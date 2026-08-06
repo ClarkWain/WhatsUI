@@ -21,6 +21,9 @@ set(WHATSUI_FOCUS_TOMATO_SOURCES
     focus_tomato/presentation/focus_router.cpp
     focus_tomato/presentation/focus_view_model.cpp
     focus_tomato/presentation/components/common_components.cpp
+    focus_tomato/presentation/components/task_execution_preferences.cpp
+    focus_tomato/presentation/dialogs/confirmation_dialog.cpp
+    focus_tomato/presentation/dialogs/edit_task_dialog.cpp
     focus_tomato/presentation/dialogs/new_task_dialog.cpp
     focus_tomato/presentation/pages/completion_page.cpp
     focus_tomato/presentation/pages/focus_timer_page.cpp

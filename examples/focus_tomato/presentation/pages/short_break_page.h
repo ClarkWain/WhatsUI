@@ -9,19 +9,20 @@
 
 namespace whatsui::focus_tomato::presentation {
 
-struct ShortBreakPageActions {
+struct BreakTimerPageActions {
+    std::function<void()> minimize;
     std::function<void()> toggle;
     std::function<void()> reset;
     std::function<void()> skip;
 };
 
-class ShortBreakPage {
+class BreakTimerPage {
 public:
-    ShortBreakPage(FocusViewModel& viewModel,
+    BreakTimerPage(FocusViewModel& viewModel,
                    const FocusAssets& assets,
                    float pageWidth,
                    float pageHeight,
-                   ShortBreakPageActions actions)
+                   BreakTimerPageActions actions)
         : viewModel_(&viewModel)
         , assets_(&assets)
         , pageWidth_(pageWidth)
@@ -37,7 +38,7 @@ private:
     const FocusAssets* assets_;
     float pageWidth_;
     float pageHeight_;
-    ShortBreakPageActions actions_;
+    BreakTimerPageActions actions_;
 };
 
 } // namespace whatsui::focus_tomato::presentation

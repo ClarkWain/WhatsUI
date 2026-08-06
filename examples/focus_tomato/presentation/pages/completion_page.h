@@ -10,6 +10,7 @@
 namespace whatsui::focus_tomato::presentation {
 
 struct CompletionPageActions {
+    std::function<void()> returnToTasks;
     std::function<void()> startBreak;
     std::function<void()> continueFocus;
 };

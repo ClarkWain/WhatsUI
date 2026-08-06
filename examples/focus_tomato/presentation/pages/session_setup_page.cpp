@@ -1,6 +1,7 @@
 #include "session_setup_page.h"
 
 #include "../components/common_components.h"
+#include "../components/task_execution_preferences.h"
 #include "../focus_style.h"
 #include "wui/declarative.h"
 
@@ -36,7 +37,9 @@ wui::Box buildSelectedTaskCard(
 }
 
 wui::Box buildSessionConfiguration(
-    std::string configuration, float width)
+    std::string configuration,
+    float width,
+    std::function<void()> manageTask)
 {
     using namespace wui;
     return Box()
@@ -44,16 +47,33 @@ wui::Box buildSessionConfiguration(
         .radius(16.0f)
         .width(width)
         .height(68.0f)
-        .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
+        .padding({18.0f, 0.0f, 14.0f, 0.0f})
         .children(
-            Text(std::move(configuration))
-                .style(style::text(12.0f, 500, 18.0f))
-                .color(style::textSecondary)
+            Row()
+                .align(wui::Alignment::Center)
+                .gap(10.0f)
+                .children(
+                    Column()
+                        .gap(3.0f)
+                        .flex(1.0f)
+                        .children(
+                            Text("本轮执行设置")
+                                .style(style::text(11.0f, 500, 16.0f))
+                                .color(style::textMuted),
+                            Text(std::move(configuration))
+                                .style(style::text(12.0f, 500, 18.0f))
+                                .color(style::textSecondary)
+                        ),
+                    Button("调整")
+                        .automationId("focus.setup.manage-task")
+                        .appearance(ButtonAppearance::Outline)
+                        .onClick(std::move(manageTask))
+                )
         );
 }
 
 wui::Column buildSetupContent(
-    const FocusAssets& assets,
+    FocusViewModel& viewModel,
     float contentWidth,
     std::string title,
     std::string progress,
@@ -70,8 +90,11 @@ wui::Column buildSetupContent(
                 .color(style::textPrimary),
             buildSelectedTaskCard(
                 std::move(title), std::move(progress), contentWidth),
+            buildOperationBanner(viewModel, contentWidth),
             buildSessionConfiguration(
-                std::move(configuration), contentWidth),
+                std::move(configuration),
+                contentWidth,
+                std::move(actions.manageTask)),
             buildGlyphControl(
                 "▶", 68.0f, 22.0f, true,
                 "开始专注", std::move(actions.start)),
@@ -87,7 +110,6 @@ wui::Box SessionSetupPage::body()
 {
     using namespace wui;
     FocusViewModel& viewModel = *viewModel_;
-    const FocusAssets& assets = *assets_;
     const float pageWidth = pageWidth_;
     const float pageHeight = pageHeight_;
     SessionSetupPageActions actions = std::move(actions_);
@@ -98,10 +120,12 @@ wui::Box SessionSetupPage::body()
     const std::string progress =
         "第 " + std::to_string(std::min(completed + 1, estimated))
         + " / " + std::to_string(estimated) + " 个番茄 · 今日优先任务";
-    const std::string configuration =
-        std::to_string(viewModel.data().settings.focusMinutes)
-        + " 分钟    雨声    完成后休息 "
-        + std::to_string(viewModel.data().settings.shortBreakMinutes) + " 分钟";
+    const std::string configuration = task
+        ? taskExecutionSummary(*task, viewModel.data().settings)
+        : std::to_string(viewModel.data().settings.focusMinutes)
+            + " 分钟 · "
+            + soundscapeLabel(
+                viewModel.data().settings.defaultSoundscapeId);
     const float contentWidth = std::max(320.0f, pageWidth - 64.0f);
     const auto start = actions.start;
     const auto back = actions.back;
@@ -117,7 +141,10 @@ wui::Box SessionSetupPage::body()
                     start();
                     return true;
                 }
-                if (event.keyCode == 27 && back) {
+                if ((event.keyCode == 27
+                        || (event.keyCode == 263
+                            && (event.modifiers & wui::KeyModifierAlt) != 0))
+                    && back) {
                     back();
                     return true;
                 }
@@ -127,17 +154,20 @@ wui::Box SessionSetupPage::body()
             Column()
                 .align(wui::Alignment::Stretch)
                 .children(
-                    buildWindowBar(
-                        pageWidth, "FocusTomato · 准备开始", assets),
+                    buildPageNavigationAction(
+                        pageWidth,
+                        "← 返回任务",
+                        "focus.setup.back",
+                        back),
                     Box()
-                        .height(pageHeight - 56.0f)
+                        .height(pageHeight - 52.0f)
                         .padding({32.0f, 44.0f, 32.0f, 32.0f})
                         .contentAlign(
                             wui::Alignment::Center,
                             wui::Alignment::Center)
                         .children(
                             buildSetupContent(
-                                assets,
+                                viewModel,
                                 contentWidth,
                                 title,
                                 progress,

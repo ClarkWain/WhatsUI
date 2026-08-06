@@ -36,6 +36,8 @@ struct StartSessionCommand {
     SessionType type{SessionType::Focus};
     std::int64_t plannedDurationMs{25 * kMinuteMs};
     std::int64_t nowUtcMs{0};
+    bool startPaused{false};
+    std::optional<std::string> soundscapeId;
 };
 
 struct AddTaskCommand {
@@ -43,6 +45,16 @@ struct AddTaskCommand {
     std::string title;
     int estimatedPomodoros{1};
     std::int64_t nowUtcMs{0};
+    TaskExecutionPreferences execution;
+};
+
+struct UpdateTaskCommand {
+    std::string taskId;
+    std::string title;
+    int estimatedPomodoros{1};
+    std::int64_t expectedRevision{0};
+    std::int64_t nowUtcMs{0};
+    TaskExecutionPreferences execution;
 };
 
 class FocusDataService {
@@ -52,9 +64,20 @@ public:
     [[nodiscard]] const FocusData& data() const noexcept;
 
     [[nodiscard]] DataCommandResult addTask(const AddTaskCommand& command);
+    [[nodiscard]] DataCommandResult updateTask(
+        const UpdateTaskCommand& command);
     [[nodiscard]] DataCommandResult archiveTask(const std::string& taskId,
                                                 std::int64_t expectedRevision,
                                                 std::int64_t nowUtcMs);
+    [[nodiscard]] DataCommandResult restoreTask(
+        const std::string& taskId,
+        std::int64_t expectedRevision,
+        std::int64_t nowUtcMs);
+    [[nodiscard]] DataCommandResult setTaskCompletion(
+        const std::string& taskId,
+        bool completed,
+        std::int64_t expectedRevision,
+        std::int64_t nowUtcMs);
     [[nodiscard]] DataCommandResult updateSettings(FocusSettings settings);
     [[nodiscard]] DataCommandResult startSession(const StartSessionCommand& command);
     [[nodiscard]] DataCommandResult pauseSession(const std::string& sessionId,
