@@ -1330,6 +1330,7 @@ add_executable(WhatsUIFocusTomatoFileRepositoryTests
     focus_tomato_file_repository_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data_validator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/application/focus_data_migrator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/infrastructure/file_focus_repository.cpp
 )
 

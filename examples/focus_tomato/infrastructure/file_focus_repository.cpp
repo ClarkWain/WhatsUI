@@ -3,9 +3,13 @@
 #include <charconv>
 #include <fstream>
 #include <limits>
+#include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #include <vector>
+
+#include "../application/focus_data_migrator.h"
 
 namespace whatsui::focus_tomato {
 namespace {
@@ -496,6 +500,22 @@ RepositoryLoadResult FileFocusRepository::load() const
         }
         result.status = RepositoryLoadStatus::RejectedCorrupt;
         return result;
+    }
+
+    if (result.data.schemaVersion != kCurrentSchemaVersion) {
+        const auto migrator = makeDefaultMigrator();
+        const int originalVersion = result.data.schemaVersion;
+        auto migration = migrator.migrateToCurrent(std::move(result.data));
+        if (auto* err = std::get_if<MigrationError>(&migration)) {
+            result.data = FocusData{};
+            result.status = RepositoryLoadStatus::MigrationFailed;
+            result.message =
+                "Focus store schema " + std::to_string(originalVersion)
+                + " could not be migrated to "
+                + std::to_string(kCurrentSchemaVersion) + ": " + err->message;
+            return result;
+        }
+        result.data = std::move(std::get<FocusData>(migration));
     }
 
     result.validation = validateFocusData(result.data);
