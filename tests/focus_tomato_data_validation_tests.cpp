@@ -95,6 +95,26 @@ void fieldErrorsHaveStableDiagnosticCodes()
     }
     {
         auto data = validPausedData();
+        data.tasks.front().execution.focusMinutes = 181;
+        expect(validateFocusData(data).has(ValidationCode::ValueOutOfRange),
+               "Task-specific focus duration must use the shared duration range");
+    }
+    {
+        auto data = validPausedData();
+        data.tasks.front().execution.sound =
+            TaskSoundPreference::Soundscape;
+        expect(validateFocusData(data).has(ValidationCode::ValueOutOfRange),
+               "Selecting sound without a stable catalog ID must be rejected");
+    }
+    {
+        auto data = validPausedData();
+        data.tasks.front().execution.sound = TaskSoundPreference::Off;
+        data.tasks.front().execution.soundscapeId = "rain";
+        expect(validateFocusData(data).has(ValidationCode::InvalidEnumValue),
+               "Disabled sound must not retain a hidden soundscape ID");
+    }
+    {
+        auto data = validPausedData();
         data.tasks.front().updatedAtUtcMs = data.tasks.front().createdAtUtcMs - 1;
         expect(validateFocusData(data).has(ValidationCode::InvalidTimestampOrder),
                "Impossible timestamp order must be visible to callers");

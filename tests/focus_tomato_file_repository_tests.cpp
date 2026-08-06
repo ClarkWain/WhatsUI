@@ -46,10 +46,17 @@ FocusData validData()
     FocusData data;
     data.settings.focusMinutes = 50;
     data.settings.autoStartBreak = true;
+    data.settings.defaultSoundscapeId = "cafe";
     data.tasks.push_back({
         "task-%-1", "含有 Unicode\t与换行\n🍅", TaskStatus::Active,
         3, 0, 1024, 4, 1'000, 2'000,
     });
+    data.tasks.push_back({
+        "task-deleted-done", "已删除的已完成任务", TaskStatus::ArchivedDone,
+        2, 0, 2048, 3, 1'000, 2'000,
+    });
+    data.tasks.front().execution = {
+        40, TaskSoundPreference::Soundscape, "forest"};
     data.sessions.push_back({
         "session-1",
         std::string{"task-%-1"},
@@ -63,6 +70,7 @@ FocusData validData()
         std::nullopt,
         CompletionReason::None,
         "session-1",
+        std::string{"forest"},
     });
     data.activeSessionId = "session-1";
     data.timerSnapshot = TimerSnapshot{
@@ -90,6 +98,30 @@ void roundTripPreservesCompleteAggregate()
            "A saved aggregate should load normally");
     expect(loaded.validation.ok() && loaded.data == expected,
            "Round trip must preserve every record and pass post-read validation");
+}
+
+void legacyRowsReceiveSafeExecutionDefaults()
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "legacy.store";
+    {
+        std::ofstream output(path, std::ios::binary);
+        output
+            << "WhatsUIFocusTomatoStore\t1\n"
+            << "S\t25\t5\t15\t4\t70\t0\t0\n"
+            << "T\ttask-1\tLegacy\tactive\t1\t0\t1024\t1\t1000\t1000\n"
+            << "A\t-\n";
+    }
+    FileFocusRepository repository(path);
+    const auto loaded = repository.load();
+    expect(loaded.status == RepositoryLoadStatus::Loaded
+               && loaded.data.tasks.size() == 1,
+           "Rows written before task preferences must remain readable");
+    expect(!loaded.data.tasks.front().execution.focusMinutes
+               && loaded.data.tasks.front().execution.sound
+                    == TaskSoundPreference::Inherit
+               && loaded.data.settings.defaultSoundscapeId == "rain",
+           "Legacy rows must inherit the same duration and sound users previously saw");
 }
 
 void rejectedSaveLeavesLastGoodFileUntouched()
@@ -169,6 +201,7 @@ int main()
 {
     try {
         roundTripPreservesCompleteAggregate();
+        legacyRowsReceiveSafeExecutionDefaults();
         rejectedSaveLeavesLastGoodFileUntouched();
         malformedFileIsPreservedInsteadOfOverwritten();
         semanticallyInvalidFileReturnsValidationReport();

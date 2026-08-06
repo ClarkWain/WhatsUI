@@ -1353,6 +1353,10 @@ if(TARGET WhatsUIFocusTomatoCore)
 
     target_link_libraries(WhatsUIFocusTomatoProductFlowTests
         PRIVATE WhatsUIFocusTomatoCore)
+    if(TARGET WhatsCanvas::Software)
+        target_link_libraries(WhatsUIFocusTomatoProductFlowTests
+            PRIVATE WhatsCanvas::Software)
+    endif()
     target_compile_features(
         WhatsUIFocusTomatoProductFlowTests PRIVATE cxx_std_17)
 

@@ -54,6 +54,8 @@ StartSessionCommand focusCommand(std::int64_t nowUtcMs = 10'000)
         SessionType::Focus,
         25 * kMinuteMs,
         nowUtcMs,
+        false,
+        std::string{"forest"},
     };
 }
 
@@ -71,6 +73,9 @@ void startIsOneValidatedCommit()
     expect(service.data().timerSnapshot
                && service.data().timerSnapshot->sessionId == "session-1",
            "Start must atomically create its recovery snapshot");
+    expect(service.data().sessions.front().soundscapeIdSnapshot
+               == std::optional<std::string>{"forest"},
+           "Start must freeze the resolved sound preference for this session");
 }
 
 void taskAndSettingsMutationsUseTheSameValidationGateway()
@@ -254,6 +259,141 @@ void breakSkipUsesItsOwnTerminalFact()
            "A focus session must never be mislabeled as a skipped break");
 }
 
+void reusedIdentifiersRejectDifferentCommands()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository);
+    expect(service.addTask({"task-1", "原任务", 1, 1'000}).succeeded(),
+           "Setup task creation should succeed");
+    expect(service.addTask({"task-1", "不同任务", 2, 2'000}).status
+               == DataCommandStatus::Conflict,
+           "Reusing a task ID for different data must be a conflict, not idempotent success");
+
+    FocusDataService sessionService(repository, dataWithTask());
+    expect(sessionService.startSession(focusCommand()).succeeded(),
+           "Setup session creation should succeed");
+    expect(sessionService.abortSession("session-1", 20'000).succeeded(),
+           "Setup session abort should succeed");
+    auto conflicting = focusCommand(30'000);
+    conflicting.plannedDurationMs = 50 * kMinuteMs;
+    expect(sessionService.startSession(conflicting).status
+               == DataCommandStatus::Conflict,
+           "Reusing a session ID for a different start command must be rejected");
+}
+
+void completionCheckpointWinsTerminalRaces()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository, dataWithTask());
+    expect(service.startSession(focusCommand()).succeeded(),
+           "Setup focus should start");
+    const std::int64_t deadline = 10'000 + 25 * kMinuteMs;
+    expect(service.markDeadlineReached("session-1", deadline).succeeded(),
+           "Natural completion checkpoint should persist");
+    expect(service.abortSession("session-1", deadline + 1).status
+               == DataCommandStatus::Conflict,
+           "A completion-pending focus must not be overwritten as aborted");
+    expect(service.data().sessions.front().status
+               == SessionStatus::CompletionPending,
+           "Rejected abort must preserve the recoverable completion checkpoint");
+}
+
+void activeTaskCannotBeDeletedUntilItsSessionEnds()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository, dataWithTask());
+    expect(service.startSession(focusCommand()).succeeded(),
+           "Setup focus should start");
+    expect(service.archiveTask("task-1", 1, 20'000).status
+               == DataCommandStatus::Conflict,
+           "A task used by the active timer must not disappear from management");
+    expect(service.data().tasks.front().status == TaskStatus::Active,
+           "Rejected deletion must preserve the visible task");
+
+    const std::int64_t deadline = 10'000 + 25 * kMinuteMs;
+    expect(service.markDeadlineReached("session-1", deadline).succeeded()
+               && service.finalizeCompletion("session-1", deadline).succeeded(),
+           "The protected active session should still complete normally");
+    expect(service.archiveTask("task-1", 2, deadline + 1).succeeded(),
+           "A task may be soft-deleted after its active session ends");
+    expect(service.data().tasks.front().status == TaskStatus::Archived
+               && service.data().tasks.front().completedPomodoros == 1
+               && service.data().sessions.front().titleSnapshot
+                    == "完成产品设计稿",
+           "Soft deletion must preserve historical facts and title snapshots");
+}
+
+void taskEditingAndRestoreAreRevisionChecked()
+{
+    RecordingRepository repository;
+    FocusData data = dataWithTask();
+    data.tasks.push_back({
+        "task-2", "第二项", TaskStatus::Active, 1, 0,
+        2048, 1, 1'000, 1'000,
+    });
+    FocusDataService service(repository, data);
+
+    expect(service.updateTask(
+               {"task-1", "更新后的名称", 5, 99, 2'000}).status
+               == DataCommandStatus::Conflict,
+           "A stale editor must not overwrite a newer task revision");
+    expect(service.updateTask(
+               {"task-1", "更新后的名称", 5, 1, 2'000,
+                {{40}, TaskSoundPreference::Soundscape, "forest"}}).succeeded(),
+           "A matching editor revision should update title and estimate");
+    expect(service.data().tasks.front().title == "更新后的名称"
+               && service.data().tasks.front().estimatedPomodoros == 5
+               && service.data().tasks.front().execution.focusMinutes
+                    == std::optional<int>{40}
+               && service.data().tasks.front().execution.soundscapeId
+                    == "forest"
+               && service.data().tasks.front().revision == 2,
+           "Task editing must publish execution preferences in one revision");
+    expect(service.updateTask(
+               {"task-1", "更新后的名称", 5, 2, 3'000,
+                {{40}, TaskSoundPreference::Soundscape, "forest"}}).status
+               == DataCommandStatus::NoChange,
+           "Submitting an unchanged editor must not create a revision");
+
+    expect(service.archiveTask("task-1", 2, 3'000).succeeded(),
+           "Edited tasks should remain soft-deletable");
+    expect(service.restoreTask("task-1", 3, 4'000).succeeded(),
+           "A deleted task should be recoverable");
+    expect(service.data().tasks.front().status == TaskStatus::Active
+               && service.data().tasks.front().sortOrder == 3072
+               && service.data().tasks.front().revision == 4,
+           "Restoring must allocate a collision-free active sort order");
+
+    expect(service.setTaskCompletion("task-1", true, 4, 5'000).succeeded()
+               && service.archiveTask("task-1", 5, 6'000).succeeded(),
+           "Completed tasks should also be soft-deletable");
+    expect(service.data().tasks.front().status == TaskStatus::ArchivedDone,
+           "Soft deletion must remember that a task was completed");
+    expect(service.restoreTask("task-1", 6, 7'000).succeeded()
+               && service.data().tasks.front().status == TaskStatus::Done
+               && service.data().tasks.front().revision == 7,
+           "Restoring a deleted completed task must preserve completion");
+}
+
+void taskCompletionIsReversibleAndRevisionChecked()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository, dataWithTask());
+    expect(service.setTaskCompletion("task-1", true, 99, 2'000).status
+               == DataCommandStatus::Conflict,
+           "A stale task row must not overwrite newer completion state");
+    expect(service.setTaskCompletion("task-1", true, 1, 2'000).succeeded(),
+           "An active task should be markable as done");
+    expect(service.data().tasks.front().status == TaskStatus::Done
+               && service.data().tasks.front().revision == 2,
+           "Completing a task should update status and optimistic revision");
+    expect(service.setTaskCompletion("task-1", false, 2, 3'000).succeeded(),
+           "A completed task should be restorable without deleting history");
+    expect(service.data().tasks.front().status == TaskStatus::Active
+               && service.data().tasks.front().revision == 3,
+           "Restoring should return the task to active with a new revision");
+}
+
 } // namespace
 
 int main()
@@ -266,6 +406,11 @@ int main()
         completionIsRecoverableAtomicAndIdempotent();
         abortNeverIncrementsFocusFacts();
         breakSkipUsesItsOwnTerminalFact();
+        reusedIdentifiersRejectDifferentCommands();
+        completionCheckpointWinsTerminalRaces();
+        activeTaskCannotBeDeletedUntilItsSessionEnds();
+        taskEditingAndRestoreAreRevisionChecked();
+        taskCompletionIsReversibleAndRevisionChecked();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
