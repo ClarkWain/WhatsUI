@@ -1290,6 +1290,25 @@ add_test(
     COMMAND WhatsUIFocusTomatoDataServiceTests
 )
 
+add_executable(WhatsUIFocusTomatoMigratorTests
+    focus_tomato_migrator_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/application/focus_data_migrator.cpp
+)
+
+target_include_directories(WhatsUIFocusTomatoMigratorTests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain
+        ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/application
+)
+
+target_compile_features(WhatsUIFocusTomatoMigratorTests PRIVATE cxx_std_17)
+
+add_test(
+    NAME whatsui_focus_tomato_migrator_tests
+    COMMAND WhatsUIFocusTomatoMigratorTests
+)
+
 add_executable(WhatsUIFocusTomatoFileRepositoryTests
     focus_tomato_file_repository_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../examples/focus_tomato/domain/focus_data.cpp

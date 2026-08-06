@@ -12,6 +12,7 @@ target_compile_features(WhatsUIRenderToImage PRIVATE cxx_std_17)
 
 set(WHATSUI_FOCUS_TOMATO_SOURCES
     focus_tomato/application/focus_data_service.cpp
+    focus_tomato/application/focus_data_migrator.cpp
     focus_tomato/domain/clock_drift.cpp
     focus_tomato/domain/focus_data.cpp
     focus_tomato/domain/focus_data_validator.cpp
