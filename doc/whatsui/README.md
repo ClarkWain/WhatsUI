@@ -16,21 +16,22 @@
 8. `ADR-007-desktop-services-and-custom-frame.md`
 9. `ADR-008-focus-tomato-interruption-entity.md`
 10. `ADR-009-focus-tomato-audio-subsystem.md`
-11. `DECLARATIVE_API_INVENTORY.md`
-12. `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`
-13. `DECLARATIVE_COMPONENT_AUTHORING.md`
-14. `DECLARATIVE_MODIFIER_INVENTORY.md`
-15. `REACTIVITY_AND_STRUCTURE.md`
-16. `LAYOUT_MODEL.md`
-17. `TEXT_INPUT_AND_IME.md`
-18. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
-19. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
-20. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
-21. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
-22. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
-23. `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`（集合控件 viewport、回收与懒加载架构）
-24. `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`（集合虚拟化分步实现、测试与最终基线）
-25. `COLLECTION_VIRTUALIZATION_BASELINE.md`（集合虚拟化最终验证结果与测试基线）
+11. `ADR-010-focus-tomato-schema-migration.md`
+12. `DECLARATIVE_API_INVENTORY.md`
+13. `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`
+14. `DECLARATIVE_COMPONENT_AUTHORING.md`
+15. `DECLARATIVE_MODIFIER_INVENTORY.md`
+16. `REACTIVITY_AND_STRUCTURE.md`
+17. `LAYOUT_MODEL.md`
+18. `TEXT_INPUT_AND_IME.md`
+19. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
+20. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
+21. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
+22. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
+23. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
+24. `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`（集合控件 viewport、回收与懒加载架构）
+25. `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`（集合虚拟化分步实现、测试与最终基线）
+26. `COLLECTION_VIRTUALIZATION_BASELINE.md`（集合虚拟化最终验证结果与测试基线）
 
 ## 文档职责
 
@@ -44,6 +45,7 @@
 - `ADR-007-desktop-services-and-custom-frame.md`：把自绘边框、`WindowOptions`、`DesktopServices`（托盘、系统通知）扩展进 ADR-003 的最小 host 壳，并定义能力降级契约。
 - `ADR-008-focus-tomato-interruption-entity.md`：Accepted — 定义 FocusTomato 中断作为会话内事件（非独立实体）、`InterruptionReason` 枚举、联合事务和草稿仅内存态。
 - `ADR-009-focus-tomato-audio-subsystem.md`：Accepted — 选定 miniaudio 作为音频后端，`AudioService` 契约，UI/音频线程边界，失败降级静音，**不打包内置声音资产**，Vorbis 为首选格式，v0.3 引入 200ms 线性 crossfade。
+- `ADR-010-focus-tomato-schema-migration.md`：Accepted — 定义 FocusTomato 三类落盘文件的单步链式升级路径、幂等 migration、`.bak` 事务回滚、单实例协调及 fixture 驱动测试。为 ADR-008 中断实体蓝图落地提供 v1→v2 前置。
 - `DECLARATIVE_API_INVENTORY.md`：记录全部 Builder/Node 映射、组合能力、公共所有权契约和当前自动门禁范围。
 - `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`：记录 ADR-006 第一阶段后的风险分级、目标能力模型和后续独立优化切片。
 - `DECLARATIVE_COMPONENT_AUTHORING.md`：说明 `body()`、`ViewLike`、动态 `View`、Props/Callbacks、响应式数据和 `CallbackLifetime` 的安全边界。
