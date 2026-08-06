@@ -14,21 +14,23 @@
 6. `ADR-005-declarative-builder-api.md`
 7. `ADR-006-declarative-authoring-and-node-boundary.md`
 8. `ADR-007-desktop-services-and-custom-frame.md`
-9. `DECLARATIVE_API_INVENTORY.md`
-10. `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`
-11. `DECLARATIVE_COMPONENT_AUTHORING.md`
-12. `DECLARATIVE_MODIFIER_INVENTORY.md`
-13. `REACTIVITY_AND_STRUCTURE.md`
-14. `LAYOUT_MODEL.md`
-15. `TEXT_INPUT_AND_IME.md`
-16. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
-17. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
-18. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
-19. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
-20. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
-21. `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`（集合控件 viewport、回收与懒加载架构）
-22. `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`（集合虚拟化分步实现、测试与最终基线）
-23. `COLLECTION_VIRTUALIZATION_BASELINE.md`（集合虚拟化最终验证结果与测试基线）
+9. `ADR-008-focus-tomato-interruption-entity.md`
+10. `ADR-009-focus-tomato-audio-subsystem.md`
+11. `DECLARATIVE_API_INVENTORY.md`
+12. `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`
+13. `DECLARATIVE_COMPONENT_AUTHORING.md`
+14. `DECLARATIVE_MODIFIER_INVENTORY.md`
+15. `REACTIVITY_AND_STRUCTURE.md`
+16. `LAYOUT_MODEL.md`
+17. `TEXT_INPUT_AND_IME.md`
+18. `WINDOWS_IME_DPI_EVIDENCE_TEMPLATE.md`
+19. `TESTING_AND_VALIDATION.md`（含 sanitizer CI gate）
+20. `../WINDOWS_TEXT_RENDERING_POSTMORTEM.md`（Windows 文字发虚故障复盘）
+21. `FLUENT_TEXT_BASELINE_POSTMORTEM.md`（控件文字与 Todo 行对齐故障复盘）
+22. `FLUENT_VISUAL_QUALITY_GATES.md`（一物理像素级视觉发布门禁）
+23. `COLLECTION_VIRTUALIZATION_ARCHITECTURE.md`（集合控件 viewport、回收与懒加载架构）
+24. `COLLECTION_VIRTUALIZATION_IMPLEMENTATION_PLAN.md`（集合虚拟化分步实现、测试与最终基线）
+25. `COLLECTION_VIRTUALIZATION_BASELINE.md`（集合虚拟化最终验证结果与测试基线）
 
 ## 文档职责
 
@@ -40,6 +42,8 @@
 - `ADR-005-declarative-builder-api.md`：说明声明式构建器编写 API（move-only 构建器 + CRTP + 变参 children），以及为何保留 `unique_ptr` 而不改用句柄。
 - `ADR-006-declarative-authoring-and-node-boundary.md`：定义声明式 Builder、运行时 `*Node`、单一 `wui` 作者命名空间、Builder 能力分层、所有权入口、组件边界和迁移验收标准。
 - `ADR-007-desktop-services-and-custom-frame.md`：把自绘边框、`WindowOptions`、`DesktopServices`（托盘、系统通知）扩展进 ADR-003 的最小 host 壳，并定义能力降级契约。
+- `ADR-008-focus-tomato-interruption-entity.md`：Draft — 定义 FocusTomato 中断作为会话内事件（非独立实体）、`InterruptionReason` 枚举、联合事务和草稿保留规则。
+- `ADR-009-focus-tomato-audio-subsystem.md`：Draft — 选定 miniaudio 作为音频后端，定义 `AudioService` 契约、UI 与音频线程边界和失败降级策略。
 - `DECLARATIVE_API_INVENTORY.md`：记录全部 Builder/Node 映射、组合能力、公共所有权契约和当前自动门禁范围。
 - `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`：记录 ADR-006 第一阶段后的风险分级、目标能力模型和后续独立优化切片。
 - `DECLARATIVE_COMPONENT_AUTHORING.md`：说明 `body()`、`ViewLike`、动态 `View`、Props/Callbacks、响应式数据和 `CallbackLifetime` 的安全边界。

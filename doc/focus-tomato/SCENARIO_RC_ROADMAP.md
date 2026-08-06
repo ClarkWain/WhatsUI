@@ -226,9 +226,9 @@ M5 门禁必须完成的实机证据矩阵。
 | 任务代号 | 内容 | 类型 |
 | --- | --- | --- |
 | T7-A | 类别 A 桌面壳收尾（含 mini 模式、单实例、通知权限） | 产品 subagent |
-| T7-B | 音频 ADR 起草（miniaudio vs cubeb） | 决策 subagent |
+| T7-B | 音频 ADR 起草（miniaudio vs cubeb） | 决策 subagent — **草案已提交为 ADR-009** |
 | T7-C | CSV 导入 ADR 起草（staging 模型） | 决策 subagent |
-| T7-D | 中断实体 ADR 起草（事件 vs 实体） | 决策 subagent |
+| T7-D | 中断实体 ADR 起草（事件 vs 实体） | 决策 subagent — **草案已提交为 ADR-008** |
 | T7-E | 虚拟化 10k/100k 基准执行 | QA subagent |
 | T7-F | 无障碍/DPI 实机矩阵记录（RC-blocker） | 项目负责人 + 实机 |
 | T7-G | schemaVersion 迁移框架起草 | 平台 subagent |
