@@ -38,7 +38,18 @@ bool FocusSessionRecord::operator==(const FocusSessionRecord& other) const noexc
         && endedAtUtcMs == other.endedAtUtcMs
         && completionReason == other.completionReason
         && idempotencyKey == other.idempotencyKey
-        && soundscapeIdSnapshot == other.soundscapeIdSnapshot;
+        && soundscapeIdSnapshot == other.soundscapeIdSnapshot
+        && interruptions == other.interruptions;
+}
+
+bool InterruptionEvent::operator==(
+    const InterruptionEvent& other) const noexcept
+{
+    return reason == other.reason
+        && note == other.note
+        && occurredAtUtcMs == other.occurredAtUtcMs
+        && detectedAtUtcMs == other.detectedAtUtcMs
+        && source == other.source;
 }
 
 bool TimerSnapshot::operator==(const TimerSnapshot& other) const noexcept

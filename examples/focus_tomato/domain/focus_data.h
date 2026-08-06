@@ -7,7 +7,7 @@
 
 namespace whatsui::focus_tomato {
 
-inline constexpr int kCurrentSchemaVersion = 1;
+inline constexpr int kCurrentSchemaVersion = 2;
 inline constexpr std::int64_t kMinuteMs = 60'000;
 
 enum class TaskStatus {
@@ -66,6 +66,36 @@ enum class CompletionReason {
     UserSkipped,
 };
 
+// ADR-008: interruption events attached to a session. See
+// doc/whatsui/ADR-008-focus-tomato-interruption-entity.md.
+enum class InterruptionReason {
+    UserPause,
+    UserAway,
+    Meeting,
+    Emergency,
+    SystemLock,
+    ApplicationClose,
+    NetworkOffline,
+    Other,
+};
+
+enum class InterruptionSource {
+    User,
+    System,
+    Application,
+};
+
+struct InterruptionEvent {
+    InterruptionReason reason{InterruptionReason::UserPause};
+    std::string note;
+    std::int64_t occurredAtUtcMs{0};
+    std::int64_t detectedAtUtcMs{0};
+    InterruptionSource source{InterruptionSource::User};
+
+    [[nodiscard]] bool operator==(
+        const InterruptionEvent& other) const noexcept;
+};
+
 struct TaskRecord {
     std::string id;
     std::string title;
@@ -96,6 +126,9 @@ struct FocusSessionRecord {
     std::string idempotencyKey;
     // Resolved at session start. Empty means this session is intentionally silent.
     std::optional<std::string> soundscapeIdSnapshot;
+    // ADR-008: append-only list of interruption events. Every Running->Paused
+    // transition writes one entry; presentation layer aggregates for display.
+    std::vector<InterruptionEvent> interruptions;
 
     [[nodiscard]] bool operator==(const FocusSessionRecord& other) const noexcept;
 };

@@ -14,7 +14,7 @@
 namespace whatsui::focus_tomato {
 namespace {
 
-constexpr const char* kHeader = "WhatsUIFocusTomatoStore\t1";
+constexpr const char* kHeaderPrefix = "WhatsUIFocusTomatoStore\t";
 
 std::string encodeField(const std::string& value)
 {
@@ -247,6 +247,65 @@ bool parseCompletionReason(const std::string& value, CompletionReason& output)
     return true;
 }
 
+const char* interruptionReasonName(InterruptionReason value) noexcept
+{
+    switch (value) {
+    case InterruptionReason::UserPause: return "user_pause";
+    case InterruptionReason::UserAway: return "user_away";
+    case InterruptionReason::Meeting: return "meeting";
+    case InterruptionReason::Emergency: return "emergency";
+    case InterruptionReason::SystemLock: return "system_lock";
+    case InterruptionReason::ApplicationClose: return "application_close";
+    case InterruptionReason::NetworkOffline: return "network_offline";
+    case InterruptionReason::Other: return "other";
+    }
+    return "invalid";
+}
+
+bool parseInterruptionReason(const std::string& value, InterruptionReason& output)
+{
+    if (value == "user_pause") output = InterruptionReason::UserPause;
+    else if (value == "user_away") output = InterruptionReason::UserAway;
+    else if (value == "meeting") output = InterruptionReason::Meeting;
+    else if (value == "emergency") output = InterruptionReason::Emergency;
+    else if (value == "system_lock") output = InterruptionReason::SystemLock;
+    else if (value == "application_close") output = InterruptionReason::ApplicationClose;
+    else if (value == "network_offline") output = InterruptionReason::NetworkOffline;
+    else if (value == "other") output = InterruptionReason::Other;
+    else return false;
+    return true;
+}
+
+const char* interruptionSourceName(InterruptionSource value) noexcept
+{
+    switch (value) {
+    case InterruptionSource::User: return "user";
+    case InterruptionSource::System: return "system";
+    case InterruptionSource::Application: return "application";
+    }
+    return "invalid";
+}
+
+bool parseInterruptionSource(const std::string& value, InterruptionSource& output)
+{
+    if (value == "user") output = InterruptionSource::User;
+    else if (value == "system") output = InterruptionSource::System;
+    else if (value == "application") output = InterruptionSource::Application;
+    else return false;
+    return true;
+}
+
+bool parseInterruption(const std::vector<std::string>& fields, InterruptionEvent& event)
+{
+    // I <reason> <source> <occurredAtUtcMs> <detectedAtUtcMs> <note>
+    return fields.size() == 6
+        && parseInterruptionReason(fields[1], event.reason)
+        && parseInterruptionSource(fields[2], event.source)
+        && parseInteger(fields[3], event.occurredAtUtcMs)
+        && parseInteger(fields[4], event.detectedAtUtcMs)
+        && decodeField(fields[5], event.note);
+}
+
 bool parseTask(const std::vector<std::string>& fields, TaskRecord& task)
 {
     const bool baseParsed = (fields.size() == 10 || fields.size() == 13)
@@ -327,16 +386,31 @@ bool parseStore(const std::filesystem::path& path,
         return false;
     }
     std::string line;
-    if (!std::getline(input, line) || line != kHeader) {
+    if (!std::getline(input, line)) {
+        message = "Focus store header or version is unsupported.";
+        return false;
+    }
+    const std::string_view prefix(kHeaderPrefix);
+    if (line.size() <= prefix.size()
+        || line.compare(0, prefix.size(), prefix) != 0) {
+        message = "Focus store header or version is unsupported.";
+        return false;
+    }
+    int headerVersion = 0;
+    const std::string versionText = line.substr(prefix.size());
+    if (!parseInteger(versionText, headerVersion)
+        || headerVersion < 1 || headerVersion > kCurrentSchemaVersion) {
         message = "Focus store header or version is unsupported.";
         return false;
     }
 
     data = FocusData{};
+    data.schemaVersion = headerVersion;
     bool sawSettings = false;
     bool sawActive = false;
     bool sawSnapshot = false;
     std::size_t lineNumber = 1;
+    FocusSessionRecord* currentSession = nullptr;
     while (std::getline(input, line)) {
         ++lineNumber;
         if (line.empty()) continue;
@@ -354,7 +428,18 @@ bool parseStore(const std::filesystem::path& path,
         } else if (fields[0] == "F") {
             FocusSessionRecord session;
             parsed = parseSession(fields, session);
-            if (parsed) data.sessions.push_back(std::move(session));
+            if (parsed) {
+                data.sessions.push_back(std::move(session));
+                currentSession = &data.sessions.back();
+            }
+        } else if (fields[0] == "I") {
+            if (headerVersion < 2 || currentSession == nullptr) {
+                parsed = false;
+            } else {
+                InterruptionEvent event;
+                parsed = parseInterruption(fields, event);
+                if (parsed) currentSession->interruptions.push_back(std::move(event));
+            }
         } else if (fields[0] == "A" && fields.size() == 2 && !sawActive) {
             parsed = decodeOptionalString(fields[1], data.activeSessionId);
             sawActive = parsed;
@@ -388,7 +473,7 @@ bool writeStore(const std::filesystem::path& path,
         message = "Could not create the temporary focus store.";
         return false;
     }
-    output << kHeader << '\n'
+    output << kHeaderPrefix << kCurrentSchemaVersion << '\n'
            << "S\t" << data.settings.focusMinutes
            << '\t' << data.settings.shortBreakMinutes
            << '\t' << data.settings.longBreakMinutes
@@ -426,6 +511,13 @@ bool writeStore(const std::filesystem::path& path,
                << '\t' << encodeField(session.idempotencyKey)
                << '\t' << encodeOptionalString(
                     session.soundscapeIdSnapshot) << '\n';
+        for (const auto& event : session.interruptions) {
+            output << "I\t" << interruptionReasonName(event.reason)
+                   << '\t' << interruptionSourceName(event.source)
+                   << '\t' << event.occurredAtUtcMs
+                   << '\t' << event.detectedAtUtcMs
+                   << '\t' << encodeField(event.note) << '\n';
+        }
     }
     output << "A\t" << encodeOptionalString(data.activeSessionId) << '\n';
     if (data.timerSnapshot) {

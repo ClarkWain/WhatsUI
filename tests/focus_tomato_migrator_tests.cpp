@@ -208,6 +208,81 @@ void testBuiltinsAtCurrentVersionAreIdempotent()
            "default migrator must not mutate current-version input");
 }
 
+void testV1ToV2MigrationBumpsSchemaAndPreservesData()
+{
+    FocusData data = makeSample(1);
+    // Populate a session so we can verify interruptions default to empty
+    // instead of being lost or fabricated by the migration.
+    FocusSessionRecord session;
+    session.id = "session-1";
+    session.taskId = "task-A";
+    session.titleSnapshot = "sample";
+    session.type = SessionType::Focus;
+    session.plannedDurationMs = 25 * kMinuteMs;
+    session.startedAtUtcMs = 1'000;
+    session.targetEndAtUtcMs = 1'000 + 25 * kMinuteMs;
+    session.remainingMs = 25 * kMinuteMs;
+    session.status = SessionStatus::Running;
+    session.completionReason = CompletionReason::None;
+    session.idempotencyKey = "session-1";
+    data.sessions.push_back(session);
+    data.activeSessionId = "session-1";
+    // Simulate a v1 timer snapshot: schemaVersion is 1 in the file.
+    TimerSnapshot snapshot;
+    snapshot.schemaVersion = 1;
+    snapshot.sessionId = "session-1";
+    snapshot.status = SessionStatus::Paused;
+    snapshot.savedAtUtcMs = 2'000;
+    snapshot.remainingMs = 20 * kMinuteMs;
+    data.timerSnapshot = snapshot;
+
+    const auto migrator = makeDefaultMigrator();
+    const auto result = migrator.migrateToCurrent(std::move(data));
+    const auto* out = std::get_if<FocusData>(&result);
+    expect(out != nullptr, "v1 -> v2 migration must succeed");
+    expect(out->schemaVersion == 2,
+           "schema version must reach the current value");
+    expect(out->sessions.size() == 1
+            && out->sessions.at(0).interruptions.empty(),
+           "existing sessions must default to empty interruptions");
+    expect(out->timerSnapshot.has_value()
+            && out->timerSnapshot->schemaVersion == 2,
+           "timer snapshot schemaVersion must be bumped with the aggregate");
+    expect(out->tasks.at(0).title == "sample",
+           "task titles must not be touched by v1 -> v2");
+}
+
+void testV2InputIsIdempotentOnDefault()
+{
+    // Build a v2 FocusData with an interruption already recorded.
+    FocusData data = makeSample(kCurrentSchemaVersion);
+    FocusSessionRecord session;
+    session.id = "session-1";
+    session.titleSnapshot = "existing";
+    session.plannedDurationMs = 25 * kMinuteMs;
+    session.startedAtUtcMs = 1'000;
+    session.remainingMs = 25 * kMinuteMs;
+    session.status = SessionStatus::Paused;
+    session.idempotencyKey = "session-1";
+    session.interruptions.push_back({
+        InterruptionReason::Meeting,
+        "team standup",
+        1'000, 1'050,
+        InterruptionSource::User,
+    });
+    data.sessions.push_back(session);
+
+    const auto migrator = makeDefaultMigrator();
+    const auto original = data;
+    const auto result = migrator.migrateToCurrent(std::move(data));
+    const auto* out = std::get_if<FocusData>(&result);
+    expect(out != nullptr, "v2 input must remain accepted");
+    expect(*out == original,
+           "v2 input must be returned untouched (identity short-circuit)");
+    expect(out->sessions.at(0).interruptions.size() == 1,
+           "existing interruption events must not be dropped");
+}
+
 } // namespace
 
 int main()
@@ -222,6 +297,8 @@ int main()
         testContractViolationDetected();
         testIdempotencyWhenRerun();
         testBuiltinsAtCurrentVersionAreIdempotent();
+        testV1ToV2MigrationBumpsSchemaAndPreservesData();
+        testV2InputIsIdempotentOnDefault();
     } catch (const std::exception& e) {
         std::cerr << "focus_tomato_migrator_tests: " << e.what() << "\n";
         return EXIT_FAILURE;

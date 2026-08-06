@@ -179,6 +179,92 @@ void semanticallyInvalidFileReturnsValidationReport()
            "Load result must expose semantic diagnostics to the recovery UI");
 }
 
+void legacyV1FileMigratesToV2OnLoad()
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "focus.store";
+    {
+        std::ofstream output(path, std::ios::binary);
+        output
+            << "WhatsUIFocusTomatoStore\t1\n"
+            << "S\t25\t5\t15\t4\t70\t0\t0\train\n"
+            << "T\ttask-1\tTitle\tactive\t1\t0\t1024\t1\t1000\t1000\n"
+            << "A\t-\n";
+    }
+    FileFocusRepository repository(path);
+    const auto loaded = repository.load();
+    expect(loaded.status == RepositoryLoadStatus::Loaded,
+           "A well-formed legacy v1 file must be accepted after migration");
+    expect(loaded.data.schemaVersion == kCurrentSchemaVersion,
+           "Migration must bump schemaVersion to the current value");
+    expect(loaded.data.tasks.size() == 1,
+           "Migration must preserve v1 tasks verbatim");
+    expect(loaded.validation.ok(),
+           "Migrated aggregate must satisfy the current validator");
+
+    // Saving now must produce a v2 header; reloading must round-trip
+    // through the identity short-circuit.
+    expect(repository.save(loaded.data).succeeded(),
+           "Migrated aggregate must save cleanly");
+    const auto reloaded = repository.load();
+    expect(reloaded.status == RepositoryLoadStatus::Loaded
+            && reloaded.data == loaded.data,
+           "Second load after save must be a no-op (identity migration)");
+
+    std::ifstream input(path, std::ios::binary);
+    std::string firstLine;
+    std::getline(input, firstLine);
+    expect(firstLine == "WhatsUIFocusTomatoStore\t2",
+           "On-disk header must reflect the current schemaVersion after save");
+}
+
+void unsupportedFutureVersionIsRejected()
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "focus.store";
+    {
+        std::ofstream output(path, std::ios::binary);
+        output
+            << "WhatsUIFocusTomatoStore\t"
+            << (kCurrentSchemaVersion + 1) << "\n"
+            << "S\t25\t5\t15\t4\t70\t0\t0\train\n"
+            << "A\t-\n";
+    }
+    FileFocusRepository repository(path);
+    const auto loaded = repository.load();
+    expect(loaded.status == RepositoryLoadStatus::RejectedCorrupt,
+           "A version newer than the current one must be rejected without "
+           "silent downgrade");
+}
+
+void interruptionEventsRoundTripAcrossSaveLoad()
+{
+    TemporaryDirectory directory;
+    FileFocusRepository repository(directory.path() / "focus.store");
+
+    FocusData data = validData();
+    data.sessions.front().interruptions.push_back({
+        InterruptionReason::Meeting,
+        std::string{"team standup\t含有 tab 与换行\n🍅"},
+        1'234, 1'250,
+        InterruptionSource::User,
+    });
+    data.sessions.front().interruptions.push_back({
+        InterruptionReason::SystemLock,
+        std::string{},
+        1'500, 1'505,
+        InterruptionSource::System,
+    });
+
+    expect(repository.save(data).succeeded(),
+           "Interruption events must save alongside the session");
+    const auto loaded = repository.load();
+    expect(loaded.status == RepositoryLoadStatus::Loaded,
+           "Round trip must succeed");
+    expect(loaded.data == data,
+           "Interruption fields (reason, source, timestamps, note) must round-trip verbatim");
+}
+
 void interruptedReplacementRestoresCompleteBackup()
 {
     TemporaryDirectory directory;
@@ -205,6 +291,9 @@ int main()
         rejectedSaveLeavesLastGoodFileUntouched();
         malformedFileIsPreservedInsteadOfOverwritten();
         semanticallyInvalidFileReturnsValidationReport();
+        legacyV1FileMigratesToV2OnLoad();
+        unsupportedFutureVersionIsRejected();
+        interruptionEventsRoundTripAcrossSaveLoad();
         interruptedReplacementRestoresCompleteBackup();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {

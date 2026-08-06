@@ -81,10 +81,27 @@ MigrationResult FocusDataMigrator::migrateTo(
     return current;
 }
 
-void registerBuiltinMigrations(FocusDataMigrator& /*migrator*/)
+void registerBuiltinMigrations(FocusDataMigrator& migrator)
 {
-    // kCurrentSchemaVersion == 1: no built-in migrations yet.
-    // ADR-008 interruption entity will register the first v1->v2 patch here.
+    // v1 -> v2: introduce InterruptionEvent (ADR-008). Old records default to
+    // an empty interruptions vector, which is the correct historical statement
+    // ("we did not track interruptions before v2"). Nothing else changes.
+    migrator.registerMigration({
+        1, 2, "v1_to_v2_interruption_entity",
+        [](FocusData data) -> MigrationResult {
+            data.schemaVersion = 2;
+            if (data.timerSnapshot) {
+                data.timerSnapshot->schemaVersion = 2;
+            }
+            // FocusSessionRecord::interruptions defaults to an empty vector,
+            // so no per-session mutation is required. Iterate anyway to
+            // document the intent for future contributors.
+            for (auto& session : data.sessions) {
+                (void)session;
+            }
+            return data;
+        },
+    });
 }
 
 FocusDataMigrator makeDefaultMigrator()
