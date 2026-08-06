@@ -59,6 +59,7 @@ public:
 
     [[nodiscard]] int pixelWidth() const noexcept;
     [[nodiscard]] int pixelHeight() const noexcept;
+    [[nodiscard]] const std::vector<unsigned char>& rgbaPixels() const noexcept;
     [[nodiscard]] bool empty() const noexcept;
     [[nodiscard]] bool operator==(const ImageSource& other) const noexcept;
     [[nodiscard]] bool operator!=(const ImageSource& other) const noexcept { return !(*this == other); }

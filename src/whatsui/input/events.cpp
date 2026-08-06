@@ -106,8 +106,14 @@ bool FocusManager::focusNext(Node* root, bool reverse) noexcept
 
     std::vector<Node*> candidates;
     const auto collect = [&candidates](const auto& self, Node* node) -> void {
-        if (auto* control = dynamic_cast<ControlNode*>(node); control != nullptr && control->isEnabled()) {
-            candidates.push_back(node);
+        if (auto* control = dynamic_cast<ControlNode*>(node)) {
+            if (control->isEnabled()) candidates.push_back(node);
+        } else {
+            const auto actions = node->accessibilityActions();
+            if (actions.invoke || actions.toggle || actions.setValue
+                || actions.focus || actions.text) {
+                candidates.push_back(node);
+            }
         }
         for (const auto& child : node->children()) {
             self(self, child.get());
@@ -451,7 +457,7 @@ bool InputRouter::dispatchKey(const KeyEvent& event)
 
     Node* focused = focusManager_->focused();
     if (focused == nullptr) {
-        return false;
+        return root_ != nullptr && root_->onKeyEvent(event);
     }
     if (auto* control = dynamic_cast<ControlNode*>(focused); control != nullptr && !control->isEnabled()) {
         focusManager_->clear();
@@ -493,8 +499,21 @@ bool InputRouter::dispatchKey(const KeyEvent& event)
     const bool isActivation = event.action == KeyAction::Down &&
         (event.keyCode == 32 || event.keyCode == 13 || event.keyCode == 257);
     if (isActivation && focused->accessibilityActions().invoke) {
-        return focused->performAccessibilityAction(AccessibilityActionKind::Invoke, {}) ==
-               AccessibilityActionStatus::Succeeded;
+        if (focused->performAccessibilityAction(
+                AccessibilityActionKind::Invoke, {}) ==
+            AccessibilityActionStatus::Succeeded) {
+            return true;
+        }
+    }
+
+    // Editable text owns unhandled character keys through the platform text
+    // input path. Never turn a Space typed into an editor into a page-level
+    // shortcut. Other focused nodes bubble unhandled commands to their
+    // ancestors so declarative page roots can provide keyboard shortcuts.
+    if (dynamic_cast<TextFieldNode*>(focused) != nullptr) return false;
+    for (Node* ancestor = focused->parent(); ancestor != nullptr;
+         ancestor = ancestor->parent()) {
+        if (ancestor->onKeyEvent(event)) return true;
     }
     return false;
 }

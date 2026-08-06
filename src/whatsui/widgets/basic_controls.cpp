@@ -250,8 +250,8 @@ void RadioNode::paint(PaintContext& context)
     StateProperty<Color> unselectedBorder{current.colors.neutralStrokeAccessible};
     unselectedBorder.set(ControlVisualState::Hovered, current.colors.neutralStrokeAccessibleHover)
         .set(ControlVisualState::Pressed, current.colors.neutralStrokeAccessiblePressed);
-    StateProperty<Color> unselectedText{current.colors.neutralForeground3};
-    unselectedText.set(ControlVisualState::Hovered, current.colors.neutralForeground2)
+    StateProperty<Color> unselectedText{current.colors.neutralForeground2};
+    unselectedText.set(ControlVisualState::Hovered, current.colors.neutralForeground1)
         .set(ControlVisualState::Pressed, current.colors.neutralForeground1);
     Color border = selected ? selectedBorder.resolve(visualStates())
                             : unselectedBorder.resolve(visualStates());

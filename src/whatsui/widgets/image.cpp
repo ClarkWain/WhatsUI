@@ -101,6 +101,11 @@ ImageSource::ImageSource(std::shared_ptr<detail::ImageResource> resource) noexce
 
 int ImageSource::pixelWidth() const noexcept { return resource_ ? resource_->pixelWidth : 0; }
 int ImageSource::pixelHeight() const noexcept { return resource_ ? resource_->pixelHeight : 0; }
+const std::vector<unsigned char>& ImageSource::rgbaPixels() const noexcept
+{
+    static const std::vector<unsigned char> empty;
+    return resource_ ? resource_->pixels : empty;
+}
 bool ImageSource::empty() const noexcept { return !resource_; }
 bool ImageSource::operator==(const ImageSource& other) const noexcept { return resource_ == other.resource_; }
 
