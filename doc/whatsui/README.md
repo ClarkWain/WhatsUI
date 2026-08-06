@@ -42,8 +42,8 @@
 - `ADR-005-declarative-builder-api.md`：说明声明式构建器编写 API（move-only 构建器 + CRTP + 变参 children），以及为何保留 `unique_ptr` 而不改用句柄。
 - `ADR-006-declarative-authoring-and-node-boundary.md`：定义声明式 Builder、运行时 `*Node`、单一 `wui` 作者命名空间、Builder 能力分层、所有权入口、组件边界和迁移验收标准。
 - `ADR-007-desktop-services-and-custom-frame.md`：把自绘边框、`WindowOptions`、`DesktopServices`（托盘、系统通知）扩展进 ADR-003 的最小 host 壳，并定义能力降级契约。
-- `ADR-008-focus-tomato-interruption-entity.md`：Draft — 定义 FocusTomato 中断作为会话内事件（非独立实体）、`InterruptionReason` 枚举、联合事务和草稿保留规则。
-- `ADR-009-focus-tomato-audio-subsystem.md`：Draft — 选定 miniaudio 作为音频后端，定义 `AudioService` 契约、UI 与音频线程边界和失败降级策略。
+- `ADR-008-focus-tomato-interruption-entity.md`：Accepted — 定义 FocusTomato 中断作为会话内事件（非独立实体）、`InterruptionReason` 枚举、联合事务和草稿仅内存态。
+- `ADR-009-focus-tomato-audio-subsystem.md`：Accepted — 选定 miniaudio 作为音频后端，`AudioService` 契约，UI/音频线程边界，失败降级静音，**不打包内置声音资产**，Vorbis 为首选格式，v0.3 引入 200ms 线性 crossfade。
 - `DECLARATIVE_API_INVENTORY.md`：记录全部 Builder/Node 映射、组合能力、公共所有权契约和当前自动门禁范围。
 - `DECLARATIVE_API_OPTIMIZATION_ROADMAP.md`：记录 ADR-006 第一阶段后的风险分级、目标能力模型和后续独立优化切片。
 - `DECLARATIVE_COMPONENT_AUTHORING.md`：说明 `body()`、`ViewLike`、动态 `View`、Props/Callbacks、响应式数据和 `CallbackLifetime` 的安全边界。

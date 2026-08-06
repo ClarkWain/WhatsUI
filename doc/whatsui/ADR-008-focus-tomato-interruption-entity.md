@@ -1,6 +1,6 @@
 # ADR-008: Interruption Entity for FocusTomato
 
-状态：Draft（决策待议）
+状态：Accepted（3 项待议由项目负责人于 2026-08-06 决定；见 [Decisions locked in](#decisions-locked-in)）
 起草人：项目负责人
 日期：2026-08-06
 
@@ -104,9 +104,21 @@ app.recordInterruption(session, event, decision)
 
 ## 待议决策
 
+_（已在下述 Decisions locked in 中定夺，本节保留仅供历史参考。）_
+
 1. **草稿是否持久化**：初稿说"否"。若产品希望"用户离开电脑 8 小时回来仍能填理由"，需要落盘（引入 SC-22 的 outbox）。**倾向：不持久化**。
 2. **多次 pause 是合并还是分别记录**：本 ADR 说"分别记录"。若统计视图会显得吵，也可以合并（keep first reason，累加时长）。**倾向：分别记录**（保持事实完整）。
 3. **是否允许"中断"在 `Completed` 后追加**（比如用户回顾今天为什么效率低）：**倾向：不允许**。已完成会话是不可变事实。
+
+## Decisions locked in
+
+项目负责人于 2026-08-06 对上述 3 项待议做出以下决定：
+
+1. **草稿不持久化**。草稿仅存于 `FocusViewModel::pendingInterruptionDraft` 内存中；应用退出或崩溃后草稿丢失，会话回到 `Paused` 无理由态。理由：避免"用户忘了处理"的心智负担；持久化会引入 outbox / 冲突解决等复杂度，与产品价值不匹配。
+2. **多次 pause 分别记录**。每次 `Running → Paused` 追加一条 `InterruptionEvent`；`Running → Running` 内部不生成事件。理由：保持事实完整性优先，为统计和用户回顾提供最准确的原始数据；未来若统计视图需要聚合，在展示层做即可。
+3. **不允许 Completed 后追加中断**。已完成会话的 `interruptions` 字段进入不可变态；任何"回顾式"补录尝试都返回 `InvalidTransition`。理由：已完成的事实不可变是 FocusTomato 核心不变量之一（SC-92 已建立），中断补录会破坏统计可重现性。
+
+本 ADR 从此进入 Accepted 状态；后续实施只对 §1..§6 契约做**兼容性补充**，不得修改上述 3 项决策，除非再走新 ADR。
 
 ## Consequences
 

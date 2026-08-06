@@ -103,9 +103,10 @@ struct AudioStateEvent {
 ### 4. Soundscape ID 与资产
 
 - `soundscapeId` 是**稳定 slug**（例如 `rain`, `whitenoise`, `campfire`）；
-- ID → 文件路径的解析由 `SoundscapeCatalog` 提供，可以通过配置扩展；
+- ID → 文件路径的解析由 `SoundscapeCatalog` 提供，通过用户配置扩展；
 - 未识别 ID → `AudioService` 报 `Failed`，会话继续但静音；
-- 内置声音打包为 `assets/soundscapes/*.ogg`（Vorbis 兼顾体积与许可）。
+- **不打包内置声音资产**（避免应用体积膨胀）；空目录时 UI 显示引导用户导入 `.ogg` 文件；
+- 支持格式：**Vorbis (`.ogg`)** 作为首选（miniaudio 内置支持、兼容性最广、许可宽松）；MP3 与 WAV 保留导入兼容但不推荐。
 
 ### 5. 失败降级契约（SC-42）
 
@@ -122,12 +123,23 @@ miniaudio 的 device notification 用于：
 - `AudioService` 自动切换到系统新默认设备；
 - UI 只在切换失败时提示。
 
-## 待议决策
+## Decisions locked in
 
-1. **是否内置声音资产**：初稿说"是"，打包 3-5 个（rain, whitenoise, campfire, ocean, forest）。若产品希望用户自导入，需要走 T7-C 导入路径。**倾向：内置最小集**。
-2. **声音资产格式**：Vorbis (.ogg) vs Opus (.opus)。Vorbis 兼容更广，Opus 体积更小但要检查 miniaudio 支持。**倾向：Vorbis**。
-3. **音频与会话开始的耦合**：初稿说"会话开始 → startSessionPlayback"。是否允许延迟启动（用户先看到"3, 2, 1"再播）？**倾向：立即开始，但用户可全局禁用**。
-4. **crossfade**：初稿说"可选"。会话之间切换声音（例如休息切静音）需要 crossfade 避免突兀，但 miniaudio 不原生支持——需要在 mixer 层手写。**倾向：v0.3 preview 引入基础 crossfade，未来优化**。
+项目负责人于 2026-08-06 对 Draft 阶段的 4 项待议做出以下决定：
+
+1. **不内置声音资产**（用户明确决定；打包体积优先）。空目录 UI 引导用户导入，导入路径与 T7-C ADR（CSV 导入）分离，但共享文件权限错误处理。
+2. **容器格式**：Vorbis (`.ogg`) 为首选。miniaudio 内置支持、宽松许可、跨平台兼容性最广，覆盖用户可能持有的绝大多数音源。MP3/WAV 保留导入兼容但不作为文档化推荐格式。
+3. **会话开始耦合**：立即开始播放，**没有额外的 3-2-1 缓冲**。用户可通过 `FocusSettings.audioEnabled` 全局禁用，禁用时 `AudioService::startSessionPlayback` 直接 no-op 但发布 `Started` 事件（保持 UI 状态一致）。
+4. **crossfade**：v0.3 preview 引入 **200ms 线性 crossfade**（换声、停止、启动共用同一淡入淡出），mixer 在 UI 线程侧准备两个 miniaudio decoder 并加权。突然设备切换是硬切（不淡出）。未来若需要曲线/时长可调，走独立 ADR。
+
+本 ADR 从此进入 Accepted 状态；后续实施只对 §1..§6 契约做**兼容性补充**，不得修改上述 4 项决策，除非再走新 ADR。
+
+## 历史待议问题（已定夺，仅供参考）
+
+1. **是否内置声音资产**：初稿倾向"内置最小集"；用户 2026-08-06 决定 **不内置**。见 §Decisions locked in 第 1 项。
+2. **声音资产格式**：Vorbis vs Opus；负责人裁定 **Vorbis**（miniaudio 支持广、许可宽松）。
+3. **音频与会话开始耦合**：负责人裁定 **立即开始 + 用户可全局禁用**。
+4. **crossfade**：负责人裁定 **v0.3 preview 引入 200ms 线性 crossfade**。
 
 ## Consequences
 
@@ -142,7 +154,9 @@ miniaudio 的 device notification 用于：
 - 不实现均衡器 / 空间音频 / 高级 mixer；
 - 不实现"根据情境自动选音"这种 AI feature；
 - 不实现节拍器（会话结束提示音是单独的 SFX 通道，非 soundscape）；
-- 不为 v0.2 preview 支持自定义声音导入。
+- **不打包任何内置声音资产**（由 §1 决定，历史待议 1）；
+- 不为 v0.2 preview 支持自定义声音导入；
+- Opus 与其它非 Vorbis 格式的**推荐**支持（由 §2 决定，历史待议 2）。
 
 ## Verification（实现后需要覆盖）
 
