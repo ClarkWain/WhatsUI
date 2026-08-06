@@ -80,6 +80,8 @@ hitTestWindowFrameRegions(
 struct WindowOptions {
     std::string title;
     SizeF initialSize{800.0f, 600.0f};
+    // A zero-vector minimum/maximum means "unconstrained on that axis";
+    // to lock a dimension, set both minimum and maximum to the same value.
     SizeF minimumSize{};
     SizeF maximumSize{};
     WindowFrameStyle frameStyle{WindowFrameStyle::System};
@@ -90,6 +92,8 @@ struct WindowOptions {
     bool visibleOnCreate{true};
 };
 
+// Capability sets grow only additively: new fields default to false so
+// clients using aggregate-init or field-by-field checks keep compiling.
 struct WindowCapabilities {
     bool customFrame{false};
     bool transparentFramebuffer{false};
@@ -114,6 +118,9 @@ enum class DesktopOperationResult {
     Failed,
 };
 
+// pre-1.0 preview: tray menus expose only Action/Check/Separator. Submenu
+// and Radio semantics are deferred to a future tray-menu-v2 revision so
+// backends do not need to emulate them today.
 enum class TrayMenuItemKind {
     Action,
     Check,
@@ -128,6 +135,10 @@ struct TrayMenuItem {
     bool checked{false};
 };
 
+// Packed RGBA icon buffer: one row is exactly pixelWidth*4 bytes with no
+// stride padding, channel order is R,G,B,A, alpha is straight (not
+// premultiplied), and colours are in sRGB. Backends convert to BGRA or
+// premultiplied variants when the platform requires it.
 struct DesktopIcon {
     std::vector<unsigned char> rgbaPixels;
     int pixelWidth{0};
@@ -167,6 +178,8 @@ struct DesktopNotification {
     NotificationUrgency urgency{NotificationUrgency::Normal};
 };
 
+// Capability sets grow only additively: new fields default to false so
+// clients using aggregate-init or field-by-field checks keep compiling.
 struct DesktopCapabilities {
     bool tray{false};
     bool notifications{false};

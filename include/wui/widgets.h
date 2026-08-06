@@ -59,6 +59,9 @@ public:
 
     [[nodiscard]] int pixelWidth() const noexcept;
     [[nodiscard]] int pixelHeight() const noexcept;
+    // Returned reference lives as long as *this. ImageSource is cheap to copy
+    // (shared_ptr to interned resource), so retain the ImageSource rather
+    // than the reference if the pixels must outlive the current expression.
     [[nodiscard]] const std::vector<unsigned char>& rgbaPixels() const noexcept;
     [[nodiscard]] bool empty() const noexcept;
     [[nodiscard]] bool operator==(const ImageSource& other) const noexcept;
