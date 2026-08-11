@@ -121,15 +121,31 @@ target_compile_features(WhatsUIComponentGalleryApp PRIVATE cxx_std_17)
 
 # --- Interactive window example (GLFW + OpenGL) ---
 if(TARGET WhatsUI::Glfw)
+    # Windows re-links intermittently fail with LNK1104 when a still-running
+    # instance of the target holds the .exe open. This helper attaches a
+    # silent PRE_LINK taskkill that removes any such lingering process. The
+    # `& exit 0` suffix keeps the step successful when the target is not
+    # running (the common case) so incremental builds are never blocked.
+    function(whatsui_glfw_example target)
+        if(WIN32)
+            add_custom_command(TARGET ${target} PRE_LINK
+                COMMAND cmd /c "taskkill /IM $<TARGET_FILE_NAME:${target}> /F >nul 2>nul & exit 0"
+                COMMENT "Killing any running ${target} process before link"
+                VERBATIM)
+        endif()
+    endfunction()
+
     add_executable(WhatsUIFocusTomatoApp focus_tomato/main.cpp)
     target_link_libraries(WhatsUIFocusTomatoApp
         PRIVATE WhatsUIFocusTomatoCore WhatsUI::Glfw)
     target_compile_features(WhatsUIFocusTomatoApp PRIVATE cxx_std_17)
+    whatsui_glfw_example(WhatsUIFocusTomatoApp)
 
     add_executable(WhatsUIComponentGalleryGlfw component_gallery/main.cpp)
     target_link_libraries(WhatsUIComponentGalleryGlfw
         PRIVATE WhatsUIComponentGalleryCore WhatsUI::Glfw)
     target_compile_features(WhatsUIComponentGalleryGlfw PRIVATE cxx_std_17)
+    whatsui_glfw_example(WhatsUIComponentGalleryGlfw)
 
     add_executable(WhatsUIDebugInspectorGlfw
         debug_inspector/interactive_main.cpp
@@ -142,6 +158,7 @@ if(TARGET WhatsUI::Glfw)
     )
 
     target_compile_features(WhatsUIDebugInspectorGlfw PRIVATE cxx_std_17)
+    whatsui_glfw_example(WhatsUIDebugInspectorGlfw)
 
     add_executable(WhatsUIHelloWindow
         hello_window/main.cpp
@@ -153,6 +170,7 @@ if(TARGET WhatsUI::Glfw)
     )
 
     target_compile_features(WhatsUIHelloWindow PRIVATE cxx_std_17)
+    whatsui_glfw_example(WhatsUIHelloWindow)
 
     add_executable(WhatsUIComponentShowcase
         component_showcase/main.cpp
@@ -164,4 +182,5 @@ if(TARGET WhatsUI::Glfw)
     )
 
     target_compile_features(WhatsUIComponentShowcase PRIVATE cxx_std_17)
+    whatsui_glfw_example(WhatsUIComponentShowcase)
 endif()
