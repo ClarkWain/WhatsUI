@@ -2,16 +2,37 @@
 setlocal EnableExtensions
 
 rem Build and launch the Windows GLFW Focus Tomato app.
-rem Usage: build.bat [Debug^|Release]
-rem Release is the default because it is the intended interactive demo build.
+rem
+rem Usage:
+rem     build.bat [Debug|Release] [--clean] [--no-launch]
+rem
+rem Positional argument sets the CMake configuration (default: Release, since
+rem this is the intended interactive demo build). Flags may appear in any
+rem order:
+rem     --clean       Delete build-focus-tomato\ before configuring
+rem                   (forces a full cold build).
+rem     --no-launch   Do not `start` the compiled executable at the end.
+rem                   Useful for CI, benchmarking, and any wrapper that
+rem                   consumes the exit code without expecting a window.
 
-set "CONFIG=%~1"
+set "CONFIG="
+set "CLEAN="
+set "NO_LAUNCH="
+
+:parse
+if "%~1"=="" goto :parsed
+if /I "%~1"=="Debug"       ( set "CONFIG=Debug"      & shift & goto :parse )
+if /I "%~1"=="Release"     ( set "CONFIG=Release"    & shift & goto :parse )
+if /I "%~1"=="--clean"     ( set "CLEAN=1"           & shift & goto :parse )
+if /I "%~1"=="--no-launch" ( set "NO_LAUNCH=1"       & shift & goto :parse )
+if /I "%~1"=="-h"          goto :usage
+if /I "%~1"=="/h"          goto :usage
+if /I "%~1"=="--help"      goto :usage
+echo Unknown argument: %~1
+goto :usage
+:parsed
+
 if "%CONFIG%"=="" set "CONFIG=Release"
-
-if /I not "%CONFIG%"=="Debug" if /I not "%CONFIG%"=="Release" (
-    echo Usage: %~nx0 [Debug^|Release]
-    exit /b 2
-)
 
 set "ROOT=%~dp0"
 set "ROOT=%ROOT:~0,-1%"
@@ -25,6 +46,11 @@ if errorlevel 1 (
 )
 
 pushd "%ROOT%" >nul
+
+if defined CLEAN (
+    echo [0/3] --clean requested; removing %BUILD_DIR%...
+    if exist "%BUILD_DIR%" rd /s /q "%BUILD_DIR%"
+)
 
 echo [1/3] Updating required submodules...
 rem Skip when the WhatsCanvas submodule already looks populated. A one-off
@@ -55,13 +81,14 @@ if exist "%BUILD_DIR%\CMakeCache.txt" (
 )
 
 echo [3/3] Building WhatsUIFocusTomatoApp...
-rem Kill any prior Focus Tomato instance still holding the exe open. This
-rem avoids LNK1104 "cannot open file" when re-linking after an edit.
-taskkill /IM WhatsUIFocusTomatoApp.exe /F >nul 2>nul
+rem The GLFW example targets in examples/CMakeLists.txt already attach a
+rem PRE_LINK taskkill so a still-running previous instance does not block
+rem the re-link with LNK1104.
 rem /MP (in root CMakeLists.txt) gives cl.exe per-file parallelism inside
 rem one project. --parallel additionally lets msbuild pipeline independent
-rem projects. On a 16-core box a cold Focus Tomato build takes ~46s with
-rem both, ~84s with /MP alone, and 5-10+ min without either.
+rem projects. On a 16-core box a cold Focus Tomato build takes ~46s of pure
+rem cmake --build time with both, ~84s with /MP alone, and 5-10+ min without
+rem either.
 cmake --build "%BUILD_DIR%" --config "%CONFIG%" --target WhatsUIFocusTomatoApp --parallel
 if errorlevel 1 goto :failure
 
@@ -71,11 +98,25 @@ if not exist "%DEMO%" (
     goto :failure
 )
 
+if defined NO_LAUNCH (
+    echo Build complete: %DEMO%
+    popd >nul
+    exit /b 0
+)
+
 echo Launching Focus Tomato...
 start "WhatsUI Focus Tomato" /D "%BUILD_DIR%\examples\%CONFIG%" "%DEMO%"
 set "RESULT=%ERRORLEVEL%"
 popd >nul
 exit /b %RESULT%
+
+:usage
+echo Usage: %~nx0 [Debug^|Release] [--clean] [--no-launch]
+echo   Debug^|Release   CMake configuration to build (default: Release)
+echo   --clean         Delete build-focus-tomato\ before configuring
+echo   --no-launch     Do not start the compiled executable at the end
+popd 2>nul >nul
+exit /b 2
 
 :failure
 set "RESULT=%ERRORLEVEL%"
