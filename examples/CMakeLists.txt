@@ -153,4 +153,15 @@ if(TARGET WhatsUI::Glfw)
     )
 
     target_compile_features(WhatsUIHelloWindow PRIVATE cxx_std_17)
+
+    add_executable(WhatsUIComponentShowcase
+        component_showcase/main.cpp
+    )
+
+    target_link_libraries(WhatsUIComponentShowcase
+        PRIVATE
+            WhatsUI::Glfw
+    )
+
+    target_compile_features(WhatsUIComponentShowcase PRIVATE cxx_std_17)
 endif()
