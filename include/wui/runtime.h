@@ -238,6 +238,21 @@ public:
     [[nodiscard]] std::unique_ptr<Node> dismiss(OverlayId id);
     [[nodiscard]] std::unique_ptr<Node> dismissTop();
     void clear() noexcept;
+
+    // Deferred-dismissal scope. `dismiss(id)` and `dismissTop()` invoked
+    // while depth > 0 queue the id for later removal and return nullptr,
+    // matching UiWindow::dismissDialog's contract. When the outermost scope
+    // unwinds, the queued ids are dismissed in reverse-order-of-request so
+    // that a nested overlay's cleanup cannot outlive its host.
+    // Rationale: InputRouter snapshots the pointer/keyboard path before
+    // dispatching. If a widget's handler dismisses its own overlay (Combobox,
+    // Dropdown, DatePicker, Popup outside-press), immediate destruction turns
+    // every parent frame in that snapshot into a dangling pointer and the
+    // subsequent Bubble phase crashes deep inside stdlib.
+    void beginDeferredDismissals() noexcept;
+    void endDeferredDismissals();
+    [[nodiscard]] bool isDeferringDismissals() const noexcept;
+
     void layout(const RectF& bounds);
     void prepare(PaintContext& context);
     void paint(PaintContext& context);
@@ -256,6 +271,8 @@ private:
     FocusManager* focusManager_{nullptr};
     UiContext context_;
     std::thread::id ownerThread_;
+    std::size_t deferralDepth_{0};
+    std::vector<OverlayId> deferredDismissals_;
 };
 
 } // namespace wui

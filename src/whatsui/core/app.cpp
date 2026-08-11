@@ -78,10 +78,19 @@ public:
         : window_(window)
     {
         window_.beginEventDispatch();
+        // Overlay dismissals initiated from inside a handler (Popup outside
+        // press → Combobox/Dropdown/DatePicker closePopup → host->dismiss)
+        // used to destroy the popup subtree while the InputRouter still
+        // held raw pointers to it in its captured dispatch path, causing a
+        // use-after-free during the Bubble phase. Deferring dismissals for
+        // the duration of the current dispatch matches how dialog dismissal
+        // is already handled by UiWindow::dismissDialog.
+        window_.overlayHost_.beginDeferredDismissals();
     }
 
     ~EventDispatchScope()
     {
+        window_.overlayHost_.endDeferredDismissals();
         window_.endEventDispatch();
     }
 

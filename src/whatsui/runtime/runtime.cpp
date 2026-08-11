@@ -397,6 +397,16 @@ void OverlayHost::setOnChange(ChangeHandler handler)
 std::unique_ptr<Node> OverlayHost::dismiss(OverlayId id)
 {
     requireOwnerThread();
+    if (deferralDepth_ != 0) {
+        // Queue for post-dispatch teardown. Coalesce so a widget dismissing
+        // its own popup from within a dismiss callback (which itself was
+        // fired by outside-click delivery) does not enqueue twice.
+        if (std::find(deferredDismissals_.begin(), deferredDismissals_.end(), id)
+            == deferredDismissals_.end()) {
+            deferredDismissals_.push_back(id);
+        }
+        return nullptr;
+    }
     for (auto it = overlays_.begin(); it != overlays_.end(); ++it) {
         if (it->id == id) {
             auto overlay = std::move(it->content);
@@ -421,6 +431,14 @@ std::unique_ptr<Node> OverlayHost::dismissTop()
     if (overlays_.empty()) {
         return nullptr;
     }
+    if (deferralDepth_ != 0) {
+        const OverlayId id = overlays_.back().id;
+        if (std::find(deferredDismissals_.begin(), deferredDismissals_.end(), id)
+            == deferredDismissals_.end()) {
+            deferredDismissals_.push_back(id);
+        }
+        return nullptr;
+    }
 
     auto overlay = std::move(overlays_.back().content);
     Node* const restoreFocus = overlays_.back().restoreFocus;
@@ -433,6 +451,34 @@ std::unique_ptr<Node> OverlayHost::dismissTop()
     }
     if (restore) focus(restoreFocus);
     return overlay;
+}
+
+void OverlayHost::beginDeferredDismissals() noexcept
+{
+    ++deferralDepth_;
+}
+
+void OverlayHost::endDeferredDismissals()
+{
+    if (deferralDepth_ == 0) return;
+    --deferralDepth_;
+    if (deferralDepth_ != 0) return;
+
+    // Drain in reverse-insertion order. A dismiss callback that queues more
+    // ids nests naturally: they land at the tail of the (empty-again) queue
+    // and are handled by the next iteration.
+    while (!deferredDismissals_.empty()) {
+        auto pending = std::move(deferredDismissals_);
+        deferredDismissals_.clear();
+        for (auto it = pending.rbegin(); it != pending.rend(); ++it) {
+            (void)dismiss(*it);
+        }
+    }
+}
+
+bool OverlayHost::isDeferringDismissals() const noexcept
+{
+    return deferralDepth_ != 0;
 }
 
 void OverlayHost::clear() noexcept
