@@ -105,11 +105,22 @@ cmake -S . -B build-release `
   -DWHATSUI_WITH_WHATSCANVAS=ON `
   -DWHATSUI_BUILD_TESTS=ON `
   -DWHATSUI_BUILD_EXAMPLES=ON
-cmake --build build-release --config Release --parallel 1
+cmake --build build-release --config Release --parallel
 
 # 部分 WhatsCanvas 测试会在内部运行 CMake/MSBuild；Windows 完整 gate 必须串行。
 ctest --test-dir build-release -C Release --output-on-failure --parallel 1
 ```
+
+### 构建并行度
+
+- `CMakeLists.txt` 的 MSVC 段已经默认加了 `/MP`，`cl.exe` 会用满所有逻辑核并行编
+  译**同一个项目内**的翻译单元。同时也加了 `/FS` 以序列化 PDB 写入，避免多进程
+  下的 `C1041`。
+- `cmake --build ... --parallel` 会额外让 MSBuild 在**项目之间**流水线，与 `/MP`
+  正交，两者叠加更快，不会在 8/16 核工作站上互相冲突。
+- 想手工限并发时用环境变量 `CL=/MPn` 或 `CMAKE_BUILD_PARALLEL_LEVEL=n`。
+- `ctest --parallel 1` 是刻意串行的：部分 WhatsCanvas 测试会内嵌自己的
+  CMake/MSBuild，让 CTest 并行会自套自锁。
 
 隔离 Release gate 的自动化证据（Fluent DPI、Focus Tomato、包消费、DirectWrite 与真实 Windows
 UIA）见 [release checklist](doc/whatsui/RELEASE_CHECKLIST.md)。
