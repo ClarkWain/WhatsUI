@@ -13,11 +13,22 @@ if(MSVC)
     # multi-process build otherwise intermittently fails with C1041 when a
     # target has many translation units (notably the core WhatsUI library).
     add_compile_options(/utf-8 /FS)
+
+    # Emit PDBs (with source-line info) for Release too so crash minidumps
+    # captured by tools/monkey_runner can be symbolicated later. /DEBUG makes
+    # the linker write the PDB; /OPT:REF and /OPT:ICF restore the Release
+    # code-size optimisations that /DEBUG would otherwise turn off.
+    add_compile_options($<$<CONFIG:Release>:/Zi>)
+    add_link_options(
+        $<$<CONFIG:Release>:/DEBUG>
+        $<$<CONFIG:Release>:/OPT:REF>
+        $<$<CONFIG:Release>:/OPT:ICF>)
 endif()
 
 option(WHATSUI_WITH_WHATSCANVAS "Link WhatsCanvas into the WhatsUI target" OFF)
 option(WHATSUI_BUILD_TESTS "Build WhatsUI tests" ON)
 option(WHATSUI_BUILD_EXAMPLES "Build WhatsUI examples (requires WHATSUI_WITH_WHATSCANVAS)" OFF)
+option(WHATSUI_BUILD_TOOLS "Build auxiliary tools (Windows-only monkey runner, ...)" OFF)
 option(WHATSUI_INSTALL "Generate install and CMake package export rules" ON)
 option(WHATSUI_ENABLE_SANITIZERS "Enable supported runtime memory sanitizers for WhatsUI and its dependents" OFF)
 option(WHATSUI_ENABLE_ADVANCED_TEXT
@@ -241,6 +252,10 @@ endif()
 
 if(WHATSUI_WITH_WHATSCANVAS AND WHATSUI_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+if(WHATSUI_BUILD_TOOLS AND WIN32)
+    add_subdirectory(tools)
 endif()
 
 if(WHATSUI_BUILD_TESTS)

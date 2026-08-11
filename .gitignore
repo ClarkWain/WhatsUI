@@ -29,3 +29,8 @@ fluentui/
 
 # Local product-input notes are intentionally not source or release artifacts.
 建议.txt
+
+# Monkey-runner artifacts. Each run creates a timestamped folder with a
+# minidump, event log, and crash/run report.
+monkey_logs/
+showcase_stderr.log
