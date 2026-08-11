@@ -87,6 +87,8 @@ struct Options {
     bool attachDebugger = true;
     fs::path logDir;
     int maxLoggedEvents = 200;
+    fs::path replayPath;             // when set, feed events.jsonl instead of RNG
+    bool replayHonorTimestamps = true;
 };
 
 static void printUsage()
@@ -98,6 +100,8 @@ static void printUsage()
         "  --interval-ms N          Delay between events (default: 25)\n"
         "  --duration-sec N         Max wall-clock duration (default: 60)\n"
         "  --wait-startup-ms N      Wait budget for target window (default: 5000)\n"
+        "  --replay <events.jsonl>  Deterministic replay of a previous run\n"
+        "  --replay-fixed-interval  Ignore recorded t=... timestamps; use --interval-ms\n"
         "  --include-keys           Also fuzz keyboard input\n"
         "  --no-dump                Skip debugger attachment (no minidump)\n"
         "  --log-dir DIR            Report directory (default: ./monkey_logs)\n"
@@ -157,6 +161,11 @@ static bool parseOptions(int argc, char** argv, Options& opt)
             opt.logDir = fs::path(utf8ToWide(argv[++i]));
         }
         else if (a == "--max-logged-events") { if (!next(opt.maxLoggedEvents)) return false; }
+        else if (a == "--replay") {
+            if (i + 1 >= argc) return false;
+            opt.replayPath = fs::path(utf8ToWide(argv[++i]));
+        }
+        else if (a == "--replay-fixed-interval") { opt.replayHonorTimestamps = false; }
         else if (a == "-h" || a == "--help") { printUsage(); return false; }
         else {
             std::fprintf(stderr, "Unknown option: %s\n", a.c_str());
@@ -882,6 +891,131 @@ static void runMonkey(HWND hwnd, HANDLE hProcess,
 }
 
 // ---------------------------------------------------------------------------
+// Replay mode — feed the target from a previous run's events.jsonl in order.
+// Line format is the same one runMonkey writes: one JSON object per line with
+// integer-valued fields, no nested strings beyond the "kind" enum. The parser
+// is deliberately tiny — no dependency, no allocation per number.
+// ---------------------------------------------------------------------------
+
+static long long extractInt(const std::string& line, const char* key)
+{
+    // Locate `"key":` then parse the following (optionally signed) integer.
+    const std::string needle = std::string("\"") + key + "\":";
+    const auto pos = line.find(needle);
+    if (pos == std::string::npos) return 0;
+    std::size_t p = pos + needle.size();
+    bool neg = false;
+    if (p < line.size() && line[p] == '-') { neg = true; ++p; }
+    long long value = 0;
+    while (p < line.size() && line[p] >= '0' && line[p] <= '9') {
+        value = value * 10 + (line[p] - '0');
+        ++p;
+    }
+    return neg ? -value : value;
+}
+
+static std::string extractString(const std::string& line, const char* key)
+{
+    const std::string needle = std::string("\"") + key + "\":\"";
+    const auto pos = line.find(needle);
+    if (pos == std::string::npos) return {};
+    std::size_t p = pos + needle.size();
+    std::string out;
+    while (p < line.size() && line[p] != '"') { out.push_back(line[p]); ++p; }
+    return out;
+}
+
+static std::vector<MonkeyEvent> loadReplayFile(const fs::path& path)
+{
+    std::vector<MonkeyEvent> events;
+    std::ifstream in(path);
+    if (!in.is_open()) return events;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line.front() != '{') continue;
+        MonkeyEvent ev{};
+        ev.tMs = extractInt(line, "t");
+        const std::string kind = extractString(line, "kind");
+        // Point the "kind" pointer at a stable literal; EventLog's own
+        // recording likewise stores literals only.
+        if      (kind == "click") ev.kind = "click";
+        else if (kind == "drag")  ev.kind = "drag";
+        else if (kind == "wheel") ev.kind = "wheel";
+        else if (kind == "key")   ev.kind = "key";
+        else continue;
+        ev.button    = static_cast<int>(extractInt(line, "button"));
+        ev.x         = static_cast<int>(extractInt(line, "x"));
+        ev.y         = static_cast<int>(extractInt(line, "y"));
+        ev.x2        = static_cast<int>(extractInt(line, "x2"));
+        ev.y2        = static_cast<int>(extractInt(line, "y2"));
+        ev.key       = static_cast<int>(extractInt(line, "key"));
+        ev.wheelDelta = static_cast<int>(extractInt(line, "wheel"));
+        events.push_back(ev);
+    }
+    return events;
+}
+
+static void runReplay(HWND hwnd, HANDLE hProcess,
+                     const Options& opt, EventLog& log,
+                     std::atomic<bool>& stop)
+{
+    auto events = loadReplayFile(opt.replayPath);
+    std::fprintf(stderr, "[monkey] replay: %zu events from %ls\n",
+                 events.size(), opt.replayPath.wstring().c_str());
+    if (events.empty()) return;
+
+    const auto start = std::chrono::steady_clock::now();
+    const auto deadline = start + std::chrono::seconds(opt.durationSec);
+    int count = 0;
+    int lastProgressReport = 0;
+
+    for (const auto& src : events) {
+        if (stop.load()) break;
+        if (std::chrono::steady_clock::now() >= deadline) break;
+        if (WaitForSingleObject(hProcess, 0) == WAIT_OBJECT_0) break;
+        if (!IsWindow(hwnd)) break;
+
+        // Advance to this event's scheduled time. Timestamps are wall-clock
+        // milliseconds relative to the recording's start. --replay-fixed-interval
+        // ignores them and paces every event by opt.intervalMs instead.
+        if (opt.replayHonorTimestamps) {
+            const auto targetTp = start + std::chrono::milliseconds(src.tMs);
+            const auto now = std::chrono::steady_clock::now();
+            if (targetTp > now) {
+                std::this_thread::sleep_for(targetTp - now);
+            }
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(opt.intervalMs));
+        }
+
+        // Post the event exactly as recorded.
+        const std::string k = src.kind;
+        if (k == "click") {
+            postClick(hwnd, src.x, src.y, src.button ? src.button : 1);
+        } else if (k == "drag") {
+            postDrag(hwnd, src.x, src.y, src.x2, src.y2, 6);
+        } else if (k == "wheel") {
+            postWheel(hwnd, src.x, src.y, src.wheelDelta);
+        } else if (k == "key") {
+            postKey(hwnd, static_cast<WORD>(src.key));
+        }
+
+        MonkeyEvent ev = src;
+        ev.tMs = nowMs(start);
+        log.push(ev);
+        ++count;
+
+        if (count - lastProgressReport >= 500) {
+            const long long elapsedSec = nowMs(start) / 1000;
+            std::fprintf(stderr, "[monkey] progress: %d events, %llds elapsed\n",
+                         count, elapsedSec);
+            lastProgressReport = count;
+        }
+    }
+    std::fprintf(stderr, "[monkey] replayed %d events\n", count);
+}
+
+// ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
 
@@ -1142,7 +1276,11 @@ int main(int argc, char** argv)
             hwnd = h;
             std::fprintf(stderr, "[monkey] target hwnd=0x%p pid=%lu\n",
                          (void*)h, pi.dwProcessId);
-            runMonkey(h, pi.hProcess, opt, log, monkeyStop);
+            if (opt.replayPath.empty()) {
+                runMonkey(h, pi.hProcess, opt, log, monkeyStop);
+            } else {
+                runReplay(h, pi.hProcess, opt, log, monkeyStop);
+            }
             // Give the target a moment to process any queued messages so a
             // delayed crash still lands inside our debug loop.
             WaitForSingleObject(pi.hProcess, 1500);
@@ -1170,7 +1308,11 @@ int main(int argc, char** argv)
         }
         std::fprintf(stderr, "[monkey] target hwnd=0x%p pid=%lu\n",
                      (void*)hwnd, pi.dwProcessId);
-        runMonkey(hwnd, pi.hProcess, opt, log, monkeyStop);
+        if (opt.replayPath.empty()) {
+            runMonkey(hwnd, pi.hProcess, opt, log, monkeyStop);
+        } else {
+            runReplay(hwnd, pi.hProcess, opt, log, monkeyStop);
+        }
         WaitForSingleObject(pi.hProcess, 1500);
         if (!info.processExited.load()) {
             PostMessageW(hwnd, WM_CLOSE, 0, 0);
