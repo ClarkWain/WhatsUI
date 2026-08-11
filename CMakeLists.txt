@@ -12,7 +12,12 @@ if(MSVC)
     # /FS serializes compiler writes to each target's PDB. Visual Studio's
     # multi-process build otherwise intermittently fails with C1041 when a
     # target has many translation units (notably the core WhatsUI library).
-    add_compile_options(/utf-8 /FS)
+    # /MP enables cl.exe's per-file parallelism so a single project (WhatsUI,
+    # HarfBuzz, FreeType) uses all cores instead of compiling serially. This
+    # is what makes a cold build.bat run take a couple of minutes instead of
+    # ten. /MP defers to CL environment / CMAKE_BUILD_PARALLEL_LEVEL, so a
+    # user who wants to cap parallelism can still set `CL=/MP4`.
+    add_compile_options(/utf-8 /FS /MP)
 
     # Emit PDBs (with source-line info) for Release too so crash minidumps
     # captured by tools/monkey_runner can be symbolicated later. /DEBUG makes
