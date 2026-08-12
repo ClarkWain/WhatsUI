@@ -12,6 +12,8 @@ target_compile_features(WhatsUIRenderToImage PRIVATE cxx_std_17)
 
 set(WHATSUI_FOCUS_TOMATO_SOURCES
     focus_tomato/application/focus_data_service.cpp
+    focus_tomato/application/focus_data_migrator.cpp
+    focus_tomato/application/migration_transaction.cpp
     focus_tomato/domain/clock_drift.cpp
     focus_tomato/domain/focus_data.cpp
     focus_tomato/domain/focus_data_validator.cpp
@@ -21,6 +23,9 @@ set(WHATSUI_FOCUS_TOMATO_SOURCES
     focus_tomato/presentation/focus_router.cpp
     focus_tomato/presentation/focus_view_model.cpp
     focus_tomato/presentation/components/common_components.cpp
+    focus_tomato/presentation/components/task_execution_preferences.cpp
+    focus_tomato/presentation/dialogs/confirmation_dialog.cpp
+    focus_tomato/presentation/dialogs/edit_task_dialog.cpp
     focus_tomato/presentation/dialogs/new_task_dialog.cpp
     focus_tomato/presentation/pages/completion_page.cpp
     focus_tomato/presentation/pages/focus_timer_page.cpp

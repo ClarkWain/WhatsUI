@@ -7,14 +7,39 @@
 
 namespace whatsui::focus_tomato {
 
-inline constexpr int kCurrentSchemaVersion = 1;
+inline constexpr int kCurrentSchemaVersion = 2;
 inline constexpr std::int64_t kMinuteMs = 60'000;
 
 enum class TaskStatus {
     Active,
     Done,
     Archived,
+    ArchivedDone,
 };
+
+enum class TaskSoundPreference {
+    Inherit,
+    Off,
+    Soundscape,
+};
+
+struct TaskExecutionPreferences {
+    // Empty means the task follows FocusSettings::focusMinutes.
+    std::optional<int> focusMinutes;
+    TaskSoundPreference sound{TaskSoundPreference::Inherit};
+    // Required only when sound == Soundscape.
+    std::string soundscapeId;
+
+    [[nodiscard]] bool operator==(
+        const TaskExecutionPreferences& other) const noexcept;
+};
+
+[[nodiscard]] inline constexpr bool isArchivedTaskStatus(
+    TaskStatus status) noexcept
+{
+    return status == TaskStatus::Archived
+        || status == TaskStatus::ArchivedDone;
+}
 
 enum class SessionType {
     Focus,
@@ -41,6 +66,36 @@ enum class CompletionReason {
     UserSkipped,
 };
 
+// ADR-008: interruption events attached to a session. See
+// doc/whatsui/ADR-008-focus-tomato-interruption-entity.md.
+enum class InterruptionReason {
+    UserPause,
+    UserAway,
+    Meeting,
+    Emergency,
+    SystemLock,
+    ApplicationClose,
+    NetworkOffline,
+    Other,
+};
+
+enum class InterruptionSource {
+    User,
+    System,
+    Application,
+};
+
+struct InterruptionEvent {
+    InterruptionReason reason{InterruptionReason::UserPause};
+    std::string note;
+    std::int64_t occurredAtUtcMs{0};
+    std::int64_t detectedAtUtcMs{0};
+    InterruptionSource source{InterruptionSource::User};
+
+    [[nodiscard]] bool operator==(
+        const InterruptionEvent& other) const noexcept;
+};
+
 struct TaskRecord {
     std::string id;
     std::string title;
@@ -51,6 +106,7 @@ struct TaskRecord {
     std::int64_t revision{1};
     std::int64_t createdAtUtcMs{0};
     std::int64_t updatedAtUtcMs{0};
+    TaskExecutionPreferences execution;
 
     [[nodiscard]] bool operator==(const TaskRecord& other) const noexcept;
 };
@@ -68,6 +124,11 @@ struct FocusSessionRecord {
     std::optional<std::int64_t> endedAtUtcMs;
     CompletionReason completionReason{CompletionReason::None};
     std::string idempotencyKey;
+    // Resolved at session start. Empty means this session is intentionally silent.
+    std::optional<std::string> soundscapeIdSnapshot;
+    // ADR-008: append-only list of interruption events. Every Running->Paused
+    // transition writes one entry; presentation layer aggregates for display.
+    std::vector<InterruptionEvent> interruptions;
 
     [[nodiscard]] bool operator==(const FocusSessionRecord& other) const noexcept;
 };
@@ -91,6 +152,8 @@ struct FocusSettings {
     int soundVolumePercent{70};
     bool autoStartBreak{false};
     bool launchAtLogin{false};
+    // Empty means sound is globally disabled.
+    std::string defaultSoundscapeId{"rain"};
 
     [[nodiscard]] bool operator==(const FocusSettings& other) const noexcept;
 };
@@ -108,5 +171,11 @@ struct FocusData {
 
 [[nodiscard]] bool isActiveSessionStatus(SessionStatus status) noexcept;
 [[nodiscard]] bool isTerminalSessionStatus(SessionStatus status) noexcept;
+[[nodiscard]] int effectiveFocusMinutes(
+    const TaskRecord& task,
+    const FocusSettings& settings) noexcept;
+[[nodiscard]] std::optional<std::string> effectiveSoundscapeId(
+    const TaskRecord& task,
+    const FocusSettings& settings);
 
 } // namespace whatsui::focus_tomato

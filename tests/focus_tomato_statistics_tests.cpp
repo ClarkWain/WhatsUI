@@ -82,6 +82,35 @@ void manualCompletionCreditsOnlyElapsedDuration()
            "Time windows must use completedAt with [from, to) bounds");
 }
 
+void localDayRangeIsContiguousAndFiltersAdjacentDays()
+{
+    constexpr std::int64_t now = 1'700'000'000'000;
+    const auto range = localDayUtcRange(now);
+    expect(range.fromUtcMs <= now && now < range.toUtcMs
+               && range.toUtcMs > range.fromUtcMs,
+           "The local-day range must contain now and remain non-empty across DST");
+
+    FocusData data;
+    auto today = session(
+        "today", SessionType::Focus, SessionStatus::Completed,
+        std::nullopt, range.fromUtcMs + 1);
+    today.startedAtUtcMs = range.fromUtcMs;
+    today.plannedDurationMs = 1;
+    today.idempotencyKey = today.id;
+    auto previous = session(
+        "previous", SessionType::Focus, SessionStatus::Completed,
+        std::nullopt, range.fromUtcMs - 1);
+    previous.startedAtUtcMs = range.fromUtcMs - 2;
+    previous.plannedDurationMs = 1;
+    previous.idempotencyKey = previous.id;
+    data.sessions = {today, previous};
+
+    const auto result = calculateFocusStatistics(
+        data, range.fromUtcMs, range.toUtcMs);
+    expect(result.completedFocusSessions == 1,
+           "Today's statistics must not silently include prior-day history");
+}
+
 } // namespace
 
 int main()
@@ -89,6 +118,7 @@ int main()
     try {
         statisticsUseOnlyCompletedFocusFacts();
         manualCompletionCreditsOnlyElapsedDuration();
+        localDayRangeIsContiguousAndFiltersAdjacentDays();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

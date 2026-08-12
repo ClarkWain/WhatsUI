@@ -899,6 +899,23 @@ UiApp::UiApp(std::unique_ptr<PlatformHost> host)
 {
     registerUiThread();
     dispatcher_.bindToCurrentThread();
+    if (host_) {
+        host_->desktopServices().setEventDispatcher(
+            [context = dispatcher_.context()](std::function<void()> task) {
+                (void)context.post(std::move(task));
+            });
+    }
+}
+
+UiApp::~UiApp()
+{
+    if (host_) {
+        auto& desktop = host_->desktopServices();
+        desktop.setEventHandler({});
+        desktop.setEventDispatcher({});
+    }
+    windows_.clear();
+    host_.reset();
 }
 
 PlatformHost* UiApp::host() const noexcept
@@ -921,6 +938,15 @@ UiContext UiApp::uiContext() const noexcept
     return dispatcher_.context();
 }
 
+DesktopServices& UiApp::desktopServices() noexcept
+{
+    if (!host_) {
+        static DesktopServices unsupported;
+        return unsupported;
+    }
+    return host_->desktopServices();
+}
+
 UiWindow& UiApp::attachWindow(std::unique_ptr<PlatformWindow> platformWindow)
 {
     WUI_ASSERT_UI_THREAD();
@@ -937,6 +963,15 @@ UiWindow& UiApp::openWindow(std::string title, SizeF logicalSize)
         throw std::runtime_error("UiApp::openWindow requires a PlatformHost");
     }
     return attachWindow(host_->createWindow(std::move(title), logicalSize));
+}
+
+UiWindow& UiApp::openWindow(const WindowOptions& options)
+{
+    WUI_ASSERT_UI_THREAD();
+    if (!host_) {
+        throw std::runtime_error("UiApp::openWindow requires a PlatformHost");
+    }
+    return attachWindow(host_->createWindow(options));
 }
 
 UiWindow* UiApp::findWindow(WindowId id) noexcept

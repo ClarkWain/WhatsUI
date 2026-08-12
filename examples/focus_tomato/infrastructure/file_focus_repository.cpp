@@ -3,14 +3,18 @@
 #include <charconv>
 #include <fstream>
 #include <limits>
+#include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #include <vector>
+
+#include "../application/focus_data_migrator.h"
 
 namespace whatsui::focus_tomato {
 namespace {
 
-constexpr const char* kHeader = "WhatsUIFocusTomatoStore\t1";
+constexpr const char* kHeaderPrefix = "WhatsUIFocusTomatoStore\t";
 
 std::string encodeField(const std::string& value)
 {
@@ -133,6 +137,7 @@ const char* taskStatusName(TaskStatus value) noexcept
     case TaskStatus::Active: return "active";
     case TaskStatus::Done: return "done";
     case TaskStatus::Archived: return "archived";
+    case TaskStatus::ArchivedDone: return "archived_done";
     }
     return "invalid";
 }
@@ -142,7 +147,32 @@ bool parseTaskStatus(const std::string& value, TaskStatus& output)
     if (value == "active") output = TaskStatus::Active;
     else if (value == "done") output = TaskStatus::Done;
     else if (value == "archived") output = TaskStatus::Archived;
+    else if (value == "archived_done") output = TaskStatus::ArchivedDone;
     else return false;
+    return true;
+}
+
+const char* taskSoundPreferenceName(TaskSoundPreference value) noexcept
+{
+    switch (value) {
+    case TaskSoundPreference::Inherit: return "inherit";
+    case TaskSoundPreference::Off: return "off";
+    case TaskSoundPreference::Soundscape: return "soundscape";
+    }
+    return "invalid";
+}
+
+bool parseTaskSoundPreference(
+    const std::string& value,
+    TaskSoundPreference& output)
+{
+    if (value == "inherit") output = TaskSoundPreference::Inherit;
+    else if (value == "off") output = TaskSoundPreference::Off;
+    else if (value == "soundscape") {
+        output = TaskSoundPreference::Soundscape;
+    } else {
+        return false;
+    }
     return true;
 }
 
@@ -217,9 +247,68 @@ bool parseCompletionReason(const std::string& value, CompletionReason& output)
     return true;
 }
 
+const char* interruptionReasonName(InterruptionReason value) noexcept
+{
+    switch (value) {
+    case InterruptionReason::UserPause: return "user_pause";
+    case InterruptionReason::UserAway: return "user_away";
+    case InterruptionReason::Meeting: return "meeting";
+    case InterruptionReason::Emergency: return "emergency";
+    case InterruptionReason::SystemLock: return "system_lock";
+    case InterruptionReason::ApplicationClose: return "application_close";
+    case InterruptionReason::NetworkOffline: return "network_offline";
+    case InterruptionReason::Other: return "other";
+    }
+    return "invalid";
+}
+
+bool parseInterruptionReason(const std::string& value, InterruptionReason& output)
+{
+    if (value == "user_pause") output = InterruptionReason::UserPause;
+    else if (value == "user_away") output = InterruptionReason::UserAway;
+    else if (value == "meeting") output = InterruptionReason::Meeting;
+    else if (value == "emergency") output = InterruptionReason::Emergency;
+    else if (value == "system_lock") output = InterruptionReason::SystemLock;
+    else if (value == "application_close") output = InterruptionReason::ApplicationClose;
+    else if (value == "network_offline") output = InterruptionReason::NetworkOffline;
+    else if (value == "other") output = InterruptionReason::Other;
+    else return false;
+    return true;
+}
+
+const char* interruptionSourceName(InterruptionSource value) noexcept
+{
+    switch (value) {
+    case InterruptionSource::User: return "user";
+    case InterruptionSource::System: return "system";
+    case InterruptionSource::Application: return "application";
+    }
+    return "invalid";
+}
+
+bool parseInterruptionSource(const std::string& value, InterruptionSource& output)
+{
+    if (value == "user") output = InterruptionSource::User;
+    else if (value == "system") output = InterruptionSource::System;
+    else if (value == "application") output = InterruptionSource::Application;
+    else return false;
+    return true;
+}
+
+bool parseInterruption(const std::vector<std::string>& fields, InterruptionEvent& event)
+{
+    // I <reason> <source> <occurredAtUtcMs> <detectedAtUtcMs> <note>
+    return fields.size() == 6
+        && parseInterruptionReason(fields[1], event.reason)
+        && parseInterruptionSource(fields[2], event.source)
+        && parseInteger(fields[3], event.occurredAtUtcMs)
+        && parseInteger(fields[4], event.detectedAtUtcMs)
+        && decodeField(fields[5], event.note);
+}
+
 bool parseTask(const std::vector<std::string>& fields, TaskRecord& task)
 {
-    return fields.size() == 10
+    const bool baseParsed = (fields.size() == 10 || fields.size() == 13)
         && decodeField(fields[1], task.id)
         && decodeField(fields[2], task.title)
         && parseTaskStatus(fields[3], task.status)
@@ -229,11 +318,22 @@ bool parseTask(const std::vector<std::string>& fields, TaskRecord& task)
         && parseInteger(fields[7], task.revision)
         && parseInteger(fields[8], task.createdAtUtcMs)
         && parseInteger(fields[9], task.updatedAtUtcMs);
+    if (!baseParsed || fields.size() == 10) return baseParsed;
+
+    int focusMinutes = 0;
+    if (!parseInteger(fields[10], focusMinutes)
+        || !parseTaskSoundPreference(fields[11], task.execution.sound)
+        || !decodeField(fields[12], task.execution.soundscapeId)) {
+        return false;
+    }
+    if (focusMinutes == 0) task.execution.focusMinutes.reset();
+    else task.execution.focusMinutes = focusMinutes;
+    return true;
 }
 
 bool parseSession(const std::vector<std::string>& fields, FocusSessionRecord& session)
 {
-    return fields.size() == 13
+    const bool baseParsed = (fields.size() == 13 || fields.size() == 14)
         && decodeField(fields[1], session.id)
         && decodeOptionalString(fields[2], session.taskId)
         && decodeField(fields[3], session.titleSnapshot)
@@ -246,11 +346,14 @@ bool parseSession(const std::vector<std::string>& fields, FocusSessionRecord& se
         && decodeOptionalInteger(fields[10], session.endedAtUtcMs)
         && parseCompletionReason(fields[11], session.completionReason)
         && decodeField(fields[12], session.idempotencyKey);
+    if (!baseParsed || fields.size() == 13) return baseParsed;
+    return decodeOptionalString(
+        fields[13], session.soundscapeIdSnapshot);
 }
 
 bool parseSettingsRow(const std::vector<std::string>& fields, FocusSettings& settings)
 {
-    return fields.size() == 8
+    const bool baseParsed = (fields.size() == 8 || fields.size() == 9)
         && parseInteger(fields[1], settings.focusMinutes)
         && parseInteger(fields[2], settings.shortBreakMinutes)
         && parseInteger(fields[3], settings.longBreakMinutes)
@@ -258,6 +361,8 @@ bool parseSettingsRow(const std::vector<std::string>& fields, FocusSettings& set
         && parseInteger(fields[5], settings.soundVolumePercent)
         && parseBool(fields[6], settings.autoStartBreak)
         && parseBool(fields[7], settings.launchAtLogin);
+    if (!baseParsed || fields.size() == 8) return baseParsed;
+    return decodeField(fields[8], settings.defaultSoundscapeId);
 }
 
 bool parseSnapshot(const std::vector<std::string>& fields, TimerSnapshot& snapshot)
@@ -281,16 +386,31 @@ bool parseStore(const std::filesystem::path& path,
         return false;
     }
     std::string line;
-    if (!std::getline(input, line) || line != kHeader) {
+    if (!std::getline(input, line)) {
+        message = "Focus store header or version is unsupported.";
+        return false;
+    }
+    const std::string_view prefix(kHeaderPrefix);
+    if (line.size() <= prefix.size()
+        || line.compare(0, prefix.size(), prefix) != 0) {
+        message = "Focus store header or version is unsupported.";
+        return false;
+    }
+    int headerVersion = 0;
+    const std::string versionText = line.substr(prefix.size());
+    if (!parseInteger(versionText, headerVersion)
+        || headerVersion < 1 || headerVersion > kCurrentSchemaVersion) {
         message = "Focus store header or version is unsupported.";
         return false;
     }
 
     data = FocusData{};
+    data.schemaVersion = headerVersion;
     bool sawSettings = false;
     bool sawActive = false;
     bool sawSnapshot = false;
     std::size_t lineNumber = 1;
+    FocusSessionRecord* currentSession = nullptr;
     while (std::getline(input, line)) {
         ++lineNumber;
         if (line.empty()) continue;
@@ -308,7 +428,18 @@ bool parseStore(const std::filesystem::path& path,
         } else if (fields[0] == "F") {
             FocusSessionRecord session;
             parsed = parseSession(fields, session);
-            if (parsed) data.sessions.push_back(std::move(session));
+            if (parsed) {
+                data.sessions.push_back(std::move(session));
+                currentSession = &data.sessions.back();
+            }
+        } else if (fields[0] == "I") {
+            if (headerVersion < 2 || currentSession == nullptr) {
+                parsed = false;
+            } else {
+                InterruptionEvent event;
+                parsed = parseInterruption(fields, event);
+                if (parsed) currentSession->interruptions.push_back(std::move(event));
+            }
         } else if (fields[0] == "A" && fields.size() == 2 && !sawActive) {
             parsed = decodeOptionalString(fields[1], data.activeSessionId);
             sawActive = parsed;
@@ -342,14 +473,15 @@ bool writeStore(const std::filesystem::path& path,
         message = "Could not create the temporary focus store.";
         return false;
     }
-    output << kHeader << '\n'
+    output << kHeaderPrefix << kCurrentSchemaVersion << '\n'
            << "S\t" << data.settings.focusMinutes
            << '\t' << data.settings.shortBreakMinutes
            << '\t' << data.settings.longBreakMinutes
            << '\t' << data.settings.longBreakEvery
            << '\t' << data.settings.soundVolumePercent
            << '\t' << (data.settings.autoStartBreak ? 1 : 0)
-           << '\t' << (data.settings.launchAtLogin ? 1 : 0) << '\n';
+           << '\t' << (data.settings.launchAtLogin ? 1 : 0)
+           << '\t' << encodeField(data.settings.defaultSoundscapeId) << '\n';
     for (const auto& task : data.tasks) {
         output << "T\t" << encodeField(task.id)
                << '\t' << encodeField(task.title)
@@ -359,7 +491,10 @@ bool writeStore(const std::filesystem::path& path,
                << '\t' << task.sortOrder
                << '\t' << task.revision
                << '\t' << task.createdAtUtcMs
-               << '\t' << task.updatedAtUtcMs << '\n';
+               << '\t' << task.updatedAtUtcMs
+               << '\t' << task.execution.focusMinutes.value_or(0)
+               << '\t' << taskSoundPreferenceName(task.execution.sound)
+               << '\t' << encodeField(task.execution.soundscapeId) << '\n';
     }
     for (const auto& session : data.sessions) {
         output << "F\t" << encodeField(session.id)
@@ -373,7 +508,16 @@ bool writeStore(const std::filesystem::path& path,
                << '\t' << sessionStatusName(session.status)
                << '\t' << encodeOptionalInteger(session.endedAtUtcMs)
                << '\t' << completionReasonName(session.completionReason)
-               << '\t' << encodeField(session.idempotencyKey) << '\n';
+               << '\t' << encodeField(session.idempotencyKey)
+               << '\t' << encodeOptionalString(
+                    session.soundscapeIdSnapshot) << '\n';
+        for (const auto& event : session.interruptions) {
+            output << "I\t" << interruptionReasonName(event.reason)
+                   << '\t' << interruptionSourceName(event.source)
+                   << '\t' << event.occurredAtUtcMs
+                   << '\t' << event.detectedAtUtcMs
+                   << '\t' << encodeField(event.note) << '\n';
+        }
     }
     output << "A\t" << encodeOptionalString(data.activeSessionId) << '\n';
     if (data.timerSnapshot) {
@@ -448,6 +592,22 @@ RepositoryLoadResult FileFocusRepository::load() const
         }
         result.status = RepositoryLoadStatus::RejectedCorrupt;
         return result;
+    }
+
+    if (result.data.schemaVersion != kCurrentSchemaVersion) {
+        const auto migrator = makeDefaultMigrator();
+        const int originalVersion = result.data.schemaVersion;
+        auto migration = migrator.migrateToCurrent(std::move(result.data));
+        if (auto* err = std::get_if<MigrationError>(&migration)) {
+            result.data = FocusData{};
+            result.status = RepositoryLoadStatus::MigrationFailed;
+            result.message =
+                "Focus store schema " + std::to_string(originalVersion)
+                + " could not be migrated to "
+                + std::to_string(kCurrentSchemaVersion) + ": " + err->message;
+            return result;
+        }
+        result.data = std::move(std::get<FocusData>(migration));
     }
 
     result.validation = validateFocusData(result.data);

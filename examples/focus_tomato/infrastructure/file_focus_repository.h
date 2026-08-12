@@ -12,6 +12,7 @@ enum class RepositoryLoadStatus {
     Missing,
     RecoveredBackup,
     RejectedCorrupt,
+    MigrationFailed,
     IoError,
 };
 

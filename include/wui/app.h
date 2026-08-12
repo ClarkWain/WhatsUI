@@ -151,14 +151,17 @@ class UiApp {
 public:
     UiApp();
     explicit UiApp(std::unique_ptr<PlatformHost> host);
+    ~UiApp();
 
     [[nodiscard]] PlatformHost* host() const noexcept;
     [[nodiscard]] UiDispatcher& dispatcher() noexcept;
     [[nodiscard]] const UiDispatcher& dispatcher() const noexcept;
     [[nodiscard]] UiContext uiContext() const noexcept;
+    [[nodiscard]] DesktopServices& desktopServices() noexcept;
 
     UiWindow& attachWindow(std::unique_ptr<PlatformWindow> platformWindow);
     UiWindow& openWindow(std::string title, SizeF logicalSize);
+    UiWindow& openWindow(const WindowOptions& options);
     [[nodiscard]] UiWindow* findWindow(WindowId id) noexcept;
 
     // Releases UI and platform resources for windows whose native peer has

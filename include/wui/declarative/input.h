@@ -25,6 +25,18 @@ public:
     {
     }
 
+    TextField& text(std::string value) &
+    {
+        node_->text(std::move(value));
+        return self();
+    }
+
+    TextField&& text(std::string value) &&
+    {
+        node_->text(std::move(value));
+        return std::move(self());
+    }
+
     TextField& placeholder(std::string value) &
     {
         node_->setPlaceholder(std::move(value));
@@ -142,6 +154,18 @@ public:
     Button&& label(std::string label) &&
     {
         node_->setLabel(std::move(label));
+        return std::move(self());
+    }
+
+    Button& enabled(bool value) &
+    {
+        node_->setEnabled(value);
+        return self();
+    }
+
+    Button&& enabled(bool value) &&
+    {
+        node_->setEnabled(value);
         return std::move(self());
     }
 

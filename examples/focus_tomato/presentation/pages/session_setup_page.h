@@ -12,6 +12,7 @@ namespace whatsui::focus_tomato::presentation {
 struct SessionSetupPageActions {
     std::function<void()> start;
     std::function<void()> back;
+    std::function<void()> manageTask;
 };
 
 class SessionSetupPage {

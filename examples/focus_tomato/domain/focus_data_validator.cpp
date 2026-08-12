@@ -26,9 +26,32 @@ bool validTaskStatus(TaskStatus value) noexcept
     case TaskStatus::Active:
     case TaskStatus::Done:
     case TaskStatus::Archived:
+    case TaskStatus::ArchivedDone:
         return true;
     }
     return false;
+}
+
+bool validTaskSoundPreference(TaskSoundPreference value) noexcept
+{
+    switch (value) {
+    case TaskSoundPreference::Inherit:
+    case TaskSoundPreference::Off:
+    case TaskSoundPreference::Soundscape:
+        return true;
+    }
+    return false;
+}
+
+bool validSoundscapeId(std::string_view value) noexcept
+{
+    if (value.empty() || value.size() > 64) return false;
+    return std::all_of(
+        value.begin(), value.end(), [](unsigned char character) {
+            return (character >= 'a' && character <= 'z')
+                || (character >= '0' && character <= '9')
+                || character == '-' || character == '_';
+        });
 }
 
 bool validSessionType(SessionType value) noexcept
@@ -178,6 +201,12 @@ void validateSettings(const FocusSettings& settings, ValidationReport& report)
         issue(report, ValidationCode::ValueOutOfRange, "settings", "global", "soundVolumePercent",
               "Sound volume must be between 0 and 100 percent.");
     }
+    if (!settings.defaultSoundscapeId.empty()
+        && !validSoundscapeId(settings.defaultSoundscapeId)) {
+        issue(report, ValidationCode::ValueOutOfRange,
+              "settings", "global", "defaultSoundscapeId",
+              "Default soundscape ID must be an ASCII identifier of at most 64 characters.");
+    }
 }
 
 void validateTask(const TaskRecord& task, ValidationReport& report)
@@ -209,13 +238,35 @@ void validateTask(const TaskRecord& task, ValidationReport& report)
         }
     }
 
-    if (task.estimatedPomodoros < 1 || task.estimatedPomodoros > 100) {
+    if (task.estimatedPomodoros < 1 || task.estimatedPomodoros > 99) {
         issue(report, ValidationCode::ValueOutOfRange, "task", task.id, "estimatedPomodoros",
-              "Estimated pomodoros must be between 1 and 100.");
+              "Estimated pomodoros must be between 1 and 99.");
     }
     if (task.completedPomodoros < 0) {
         issue(report, ValidationCode::ValueOutOfRange, "task", task.id, "completedPomodoros",
               "Completed pomodoros must not be negative.");
+    }
+    if (task.execution.focusMinutes
+        && (*task.execution.focusMinutes < 1
+            || *task.execution.focusMinutes > 180)) {
+        issue(report, ValidationCode::ValueOutOfRange,
+              "task", task.id, "execution.focusMinutes",
+              "Task focus duration must be between 1 and 180 minutes.");
+    }
+    if (!validTaskSoundPreference(task.execution.sound)) {
+        issue(report, ValidationCode::InvalidEnumValue,
+              "task", task.id, "execution.sound",
+              "Task sound preference is not a supported enum value.");
+    } else if (task.execution.sound == TaskSoundPreference::Soundscape) {
+        if (!validSoundscapeId(task.execution.soundscapeId)) {
+            issue(report, ValidationCode::ValueOutOfRange,
+                  "task", task.id, "execution.soundscapeId",
+                  "A selected soundscape requires a valid soundscape ID.");
+        }
+    } else if (!task.execution.soundscapeId.empty()) {
+        issue(report, ValidationCode::InvalidEnumValue,
+              "task", task.id, "execution.soundscapeId",
+              "Inherited or disabled sound must not retain a soundscape ID.");
     }
     if (task.revision < 1) {
         issue(report, ValidationCode::ValueOutOfRange, "task", task.id, "revision",
@@ -275,6 +326,12 @@ void validateSessionFields(const FocusSessionRecord& session, ValidationReport& 
     if (session.idempotencyKey != session.id || session.idempotencyKey.empty()) {
         issue(report, ValidationCode::InvalidIdempotencyKey, "session", session.id, "idempotencyKey",
               "Session idempotency key must equal the session ID.");
+    }
+    if (session.soundscapeIdSnapshot
+        && !validSoundscapeId(*session.soundscapeIdSnapshot)) {
+        issue(report, ValidationCode::ValueOutOfRange,
+              "session", session.id, "soundscapeIdSnapshot",
+              "Session soundscape snapshot must contain a valid soundscape ID.");
     }
 
     bool validState = true;

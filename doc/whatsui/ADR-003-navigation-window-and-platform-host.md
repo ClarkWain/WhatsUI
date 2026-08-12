@@ -37,6 +37,8 @@ WhatsUI 需要支持多页面、多窗口和平台接入，但这些能力的边
 - `IClipboard`
 - `ICursorService`
 
+进程级桌面能力（自绘边框、托盘、系统通知等）由 ADR-007 追加的 `DesktopServices` 与 `PlatformWindow` 扩展承载；本 ADR 的最小 host 壳清单以 ADR-007 为准。
+
 ## Consequences
 
 - 页面、浮层、多窗口职责清晰，不再混杂。

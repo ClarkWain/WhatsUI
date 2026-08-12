@@ -133,3 +133,12 @@ remain. The other
 release work is the native IME/DPI matrix, transitive legal/SBOM review,
 candidate tagging, and owner approval. New components must not bypass the
 runtime, input, Windows text, or accessibility snapshot contracts.
+
+## Scenario-level backlog
+
+The FocusTomato-scoped scenario backlog and its RC-blocker classification is
+tracked in
+[doc/focus-tomato/SCENARIO_RC_ROADMAP.md](doc/focus-tomato/SCENARIO_RC_ROADMAP.md).
+It maps every unimplemented spec scenario to a target release lane
+(RC-blocker / v0.2-preview / v0.3-preview / v0.4-preview) and lists the ADRs
+each lane needs before implementation starts.

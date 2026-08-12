@@ -1,14 +1,29 @@
 #include "new_task_dialog.h"
 
+#include "../components/task_execution_preferences.h"
 #include "../focus_style.h"
 #include "wui/app.h"
 #include "wui/scheduler.h"
 #include "wui/declarative.h"
 
+#include <charconv>
+#include <optional>
 #include <utility>
 
 namespace whatsui::focus_tomato::presentation {
 namespace {
+
+std::optional<int> parseEstimate(const std::string& text)
+{
+    int value = 0;
+    const auto result = std::from_chars(
+        text.data(), text.data() + text.size(), value);
+    if (result.ec != std::errc{} || result.ptr != text.data() + text.size()
+        || value < 1 || value > 99) {
+        return std::nullopt;
+    }
+    return value;
+}
 
 class NewTaskDialogView {
 public:
@@ -28,9 +43,24 @@ public:
         auto submit = [window = window_,
                        viewModel = viewModel_,
                        title = title_,
+                       estimate = estimate_,
+                       execution = execution_,
                        error = error_,
                        onCreated = std::move(onCreated_)]() mutable {
-            const auto result = viewModel->addTask(title.get());
+            const auto parsedEstimate = parseEstimate(estimate.get());
+            if (!parsedEstimate) {
+                error.set("预计番茄数请输入 1～99 的整数。");
+                return;
+            }
+            std::string preferenceError;
+            const auto preferences = parseTaskExecutionPreferences(
+                execution, preferenceError);
+            if (!preferences) {
+                error.set(std::move(preferenceError));
+                return;
+            }
+            const auto result = viewModel->addTask(
+                title.get(), *parsedEstimate, *preferences);
             if (!result.succeeded()) {
                 error.set(result.message.empty()
                     ? "任务没有保存，请检查名称后重试。"
@@ -59,10 +89,10 @@ public:
         initialFocus_ = title.node();
 
         return Dialog()
-            .maxWidth(400.0f)
+            .maxWidth(440.0f)
             .content(
                 Box()
-                    .width(352.0f)
+                    .width(392.0f)
                     .background(style::surface)
                     .radius(16.0f)
                     .padding({22.0f, 20.0f, 22.0f, 20.0f})
@@ -84,6 +114,30 @@ public:
                                             .color(style::textSecondary)
                                     ),
                                 std::move(title),
+                                Row()
+                                    .align(wui::Alignment::Center)
+                                    .gap(10.0f)
+                                    .children(
+                                        Text("预计番茄数")
+                                            .style(style::text(
+                                                12.0f, 500, 18.0f))
+                                            .color(style::textSecondary),
+                                        TextField("1～99")
+                                            .automationId(
+                                                "focus.new-task.estimate")
+                                            .accessibleLabel("预计番茄数")
+                                            .flex(1.0f)
+                                            .onSubmit(submit)
+                                            .onChange(
+                                                [draft = estimate_](
+                                                    const std::string& value) {
+                                                    draft.set(value);
+                                                })
+                                    ),
+                                buildTaskExecutionPreferenceFields(
+                                    viewModel_->data().settings,
+                                    execution_,
+                                    "focus.new-task"),
                                 Text()
                                     .bind(error_)
                                     .style(style::text(12.0f, 400, 18.0f))
@@ -124,6 +178,8 @@ private:
     FocusViewModel* viewModel_;
     TaskCreatedCallback onCreated_;
     wui::State<std::string> title_;
+    wui::State<std::string> estimate_{"1"};
+    TaskExecutionDraft execution_;
     wui::State<std::string> error_;
     wui::Node* initialFocus_{nullptr};
 };

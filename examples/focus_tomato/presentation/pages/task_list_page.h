@@ -11,8 +11,14 @@
 namespace whatsui::focus_tomato::presentation {
 
 struct TaskListPageActions {
+    std::function<void()> openActiveSession;
     std::function<void(std::string)> selectTask;
+    std::function<void(std::string)> toggleCompletion;
+    std::function<void(std::string)> manageTask;
+    std::function<void(std::string, std::int64_t)> restoreTask;
+    std::function<void(TaskFilter)> setFilter;
     std::function<void()> createTask;
+    std::function<void()> startFreeFocus;
 };
 
 class TaskListPage {

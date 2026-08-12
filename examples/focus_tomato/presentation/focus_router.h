@@ -19,7 +19,7 @@ enum class FocusRoute {
     Setup,
     Timer,
     Completion,
-    ShortBreak,
+    Break,
 };
 
 class FocusRouter {
@@ -39,7 +39,9 @@ public:
     void showSetup();
     void showTimer();
     void showCompletion();
-    void showShortBreak();
+    void showBreak();
+    void showActiveSession();
+    void goBack();
     void refresh();
     void updateClock();
     void shutdown() noexcept;
@@ -47,9 +49,22 @@ public:
     [[nodiscard]] FocusRoute currentRoute() const noexcept;
 
 private:
-    [[nodiscard]] wui::View buildCurrentPage();
-    void install(FocusRoute route);
+    [[nodiscard]] wui::View buildPage(FocusRoute route);
+    [[nodiscard]] wui::View buildRouteContent(FocusRoute route);
+    [[nodiscard]] bool handlePageShortcut(
+        FocusRoute route, const wui::KeyEvent& event);
+    void installRoot(FocusRoute route);
+    void push(FocusRoute route);
+    void replace(FocusRoute route);
     void requestNewTask();
+    void requestEditTask(std::string taskId);
+    void requestDeleteTask(
+        std::string taskId,
+        std::string taskTitle,
+        std::int64_t expectedRevision);
+    void requestResetConfirmation();
+    void requestAbortConfirmation();
+    void requestSkipBreakConfirmation();
 
     wui::UiWindow* window_{nullptr};
     FocusViewModel* viewModel_{nullptr};
@@ -61,5 +76,7 @@ private:
 };
 
 [[nodiscard]] std::string_view focusRouteKey(FocusRoute route) noexcept;
+[[nodiscard]] FocusRoute focusInitialRoute(
+    const FocusViewModel& viewModel) noexcept;
 
 } // namespace whatsui::focus_tomato::presentation

@@ -12,47 +12,42 @@
 #include "wui/paint_context.h"
 #include "wui/whatscanvas_text.h"
 
+using namespace wui;
+using namespace wsc;
+
 int main()
 {
     constexpr int width = 320;
     constexpr int height = 180;
 
-    auto canvas = wsc::Canvas::create(wsc::Canvas::Backend::Software, width, height);
+    auto canvas = Canvas::create(Canvas::Backend::Software, width, height);
     if (!canvas || !canvas->initializeContext()) {
         std::cerr << "failed to create software canvas" << std::endl;
         return 1;
     }
 
     // Real, shaped text metrics for layout.
-    wui::WhatsCanvasTextMeasurer measurer(*canvas);
-    wui::setTextMeasurer(&measurer);
+    WhatsCanvasTextMeasurer measurer(*canvas);
+    setTextMeasurer(&measurer);
+    
+    State<int> count{3};
 
-    using namespace wui;
-    wui::State<int> count{3};
+    auto rootNode = Column().padding(16).gap(12).children(
+            Text("WhatsUI on WhatsCanvas").color({255, 255, 255, 255}).size(20).weight(600),
+            Text().bind(count, [](const int& c) { return "Items: " + std::to_string(c); }),
+            Row().gap(8).children(Button("Cancel"),Button("Confirm"))
+        )
+        .build();
 
-    std::unique_ptr<wui::Node> root =
-        Column()
-            .padding(16)
-            .gap(12)
-            .children(
-                Text("WhatsUI on WhatsCanvas"),
-                Text().bind(count, [](const int& c) { return "Items: " + std::to_string(c); }),
-                Row().gap(8).children(
-                    Button("Cancel"),
-                    Button("Confirm")
-                )
-            )
-            .build();
+    rootNode->layout({0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
 
-    root->layout({0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
-
-    wui::PaintContext paint(*canvas);
-    root->prepare(paint);
+    PaintContext paint(*canvas);
+    rootNode->prepare(paint);
     canvas->beginFrame();
-    root->paint(paint);
+    rootNode->paint(paint);
     canvas->endFrame();
 
-    const char* outputPath = "whatsui_render.ppm";
+    std::string outputPath = "whatsui_render.ppm";
     if (!canvas->savePixelsPPM(outputPath)) {
         std::cerr << "failed to save image" << std::endl;
         return 1;

@@ -36,12 +36,40 @@ struct StartSessionCommand {
     SessionType type{SessionType::Focus};
     std::int64_t plannedDurationMs{25 * kMinuteMs};
     std::int64_t nowUtcMs{0};
+    bool startPaused{false};
+    std::optional<std::string> soundscapeId;
 };
 
 struct AddTaskCommand {
     std::string taskId;
     std::string title;
     int estimatedPomodoros{1};
+    std::int64_t nowUtcMs{0};
+    TaskExecutionPreferences execution;
+};
+
+struct UpdateTaskCommand {
+    std::string taskId;
+    std::string title;
+    int estimatedPomodoros{1};
+    std::int64_t expectedRevision{0};
+    std::int64_t nowUtcMs{0};
+    TaskExecutionPreferences execution;
+};
+
+// ADR-008 §4: post-interruption decision issued after a Paused session records
+// a reason. Continue resumes the timer; EndSession aborts the focus/break;
+// SkipRest is valid only for break sessions.
+enum class ResumeDecision {
+    Continue,
+    EndSession,
+    SkipRest,
+};
+
+struct RecordInterruptionCommand {
+    std::string sessionId;
+    InterruptionEvent event;
+    ResumeDecision decision{ResumeDecision::Continue};
     std::int64_t nowUtcMs{0};
 };
 
@@ -52,9 +80,20 @@ public:
     [[nodiscard]] const FocusData& data() const noexcept;
 
     [[nodiscard]] DataCommandResult addTask(const AddTaskCommand& command);
+    [[nodiscard]] DataCommandResult updateTask(
+        const UpdateTaskCommand& command);
     [[nodiscard]] DataCommandResult archiveTask(const std::string& taskId,
                                                 std::int64_t expectedRevision,
                                                 std::int64_t nowUtcMs);
+    [[nodiscard]] DataCommandResult restoreTask(
+        const std::string& taskId,
+        std::int64_t expectedRevision,
+        std::int64_t nowUtcMs);
+    [[nodiscard]] DataCommandResult setTaskCompletion(
+        const std::string& taskId,
+        bool completed,
+        std::int64_t expectedRevision,
+        std::int64_t nowUtcMs);
     [[nodiscard]] DataCommandResult updateSettings(FocusSettings settings);
     [[nodiscard]] DataCommandResult startSession(const StartSessionCommand& command);
     [[nodiscard]] DataCommandResult pauseSession(const std::string& sessionId,
@@ -72,6 +111,13 @@ public:
     [[nodiscard]] DataCommandResult skipBreakSession(
         const std::string& sessionId,
         std::int64_t nowUtcMs);
+
+    // ADR-008 §4: append an InterruptionEvent to a Paused session and apply
+    // the caller-provided ResumeDecision atomically. Every failure returns
+    // without touching state; success writes the event and the state
+    // transition as a single commit.
+    [[nodiscard]] DataCommandResult recordInterruption(
+        const RecordInterruptionCommand& command);
 
 private:
     [[nodiscard]] DataCommandResult commit(FocusData candidate);

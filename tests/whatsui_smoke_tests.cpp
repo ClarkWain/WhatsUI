@@ -558,6 +558,45 @@ void testCheckboxPointerKeyboardBindingAndDisabledState()
            "Button Space must invoke through its accessibility action");
 }
 
+void testPageShortcutFallbackAndInteractiveBoxTabStop()
+{
+    auto root = std::make_unique<wui::BoxNode>();
+    int pageShortcuts = 0;
+    root->setOnKey([&pageShortcuts](const wui::KeyEvent& event) {
+        if (event.action == wui::KeyAction::Down && event.keyCode == 32) {
+            ++pageShortcuts;
+            return true;
+        }
+        return false;
+    });
+    auto action = std::make_unique<wui::BoxNode>();
+    auto* actionRaw = action.get();
+    int invocations = 0;
+    action->setOnClick([&invocations] { ++invocations; });
+    auto editor = std::make_unique<wui::TextFieldNode>("draft");
+    auto* editorRaw = editor.get();
+    root->appendChild(std::move(action));
+    root->appendChild(std::move(editor));
+
+    wui::FocusManager focus;
+    wui::InputRouter router(&focus);
+    router.setRoot(root.get());
+    expect(router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false})
+               && pageShortcuts == 1,
+           "A page root must receive its shortcut when no child owns focus");
+    expect(router.dispatchKey({0, wui::KeyAction::Down, 9, 0, false})
+               && focus.focused() == actionRaw,
+           "A declarative clickable Box must participate in the Tab order");
+    expect(router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false})
+               && invocations == 1 && pageShortcuts == 1,
+           "Space on a focused clickable Box must invoke that Box, not the page");
+
+    focus.setFocused(editorRaw, true);
+    expect(!router.dispatchKey({0, wui::KeyAction::Down, 32, 0, false})
+               && pageShortcuts == 1,
+           "An editor's unhandled Space must never bubble into a page shortcut");
+}
+
 void testOverlayHitTestingAndRouting()
 {
     wui::OverlayHost overlays;
@@ -1094,6 +1133,7 @@ int main()
     testInputRouterAndButton();
     testPointerCaptureTargetBubbleRoutingContract();
     testCheckboxPointerKeyboardBindingAndDisabledState();
+    testPageShortcutFallbackAndInteractiveBoxTabStop();
     testOverlayHitTestingAndRouting();
     testDeclarativeBuilderAndCounter();
     testReactiveText();

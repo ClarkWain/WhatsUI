@@ -11,7 +11,9 @@ namespace whatsui::focus_tomato::presentation {
 namespace {
 
 wui::Box buildBreakContext(
-    const FocusViewModel& viewModel, float width)
+    const FocusViewModel& viewModel,
+    const FocusSessionRecord& session,
+    float width)
 {
     using namespace wui;
     const TaskRecord* task = viewModel.selectedTask();
@@ -36,7 +38,9 @@ wui::Box buildBreakContext(
                             Text("下一轮：" + nextTitle)
                                 .style(style::text(13.0f, 500, 19.0f))
                                 .color(style::textPrimary),
-                            Text("刚完成 1 个番茄 · 休息后继续")
+                             Text(session.type == SessionType::LongBreak
+                                      ? "完成一轮专注周期 · 充分放松后继续"
+                                      : "刚完成 1 个番茄 · 休息后继续")
                                 .style(style::text(11.0f, 400, 16.0f))
                                 .color(style::textSecondary)
                         ),
@@ -56,6 +60,7 @@ wui::Box buildBreakContext(
 wui::Box buildBreakStage(
     FocusViewModel& viewModel,
     const FocusAssets& assets,
+    const FocusSessionRecord& session,
     float width)
 {
     using namespace wui;
@@ -71,10 +76,13 @@ wui::Box buildBreakStage(
                     Row()
                         .gap(8.0f)
                         .children(
-                            buildPill("短休息", true),
+                            buildPill(
+                                session.type == SessionType::LongBreak
+                                    ? "长休息" : "短休息",
+                                true),
                             buildPill(
                                 std::to_string(
-                                    viewModel.data().settings.shortBreakMinutes)
+                                    session.plannedDurationMs / kMinuteMs)
                                     + " 分钟",
                                 false)
                         ),
@@ -98,7 +106,7 @@ wui::Box buildBreakStage(
 wui::Box buildBreakControls(
     float width,
     bool running,
-    ShortBreakPageActions actions)
+    BreakTimerPageActions actions)
 {
     using namespace wui;
     return Box()
@@ -116,14 +124,16 @@ wui::Box buildBreakControls(
                         21.0f,
                         false,
                         "重置休息",
-                        std::move(actions.reset)),
+                        std::move(actions.reset))
+                        .automationId("focus.break.reset"),
                     buildGlyphControl(
                         running ? "▮▮" : "▶",
                         68.0f,
                         running ? 15.0f : 22.0f,
                         true,
                         running ? "暂停休息" : "继续休息",
-                        std::move(actions.toggle)),
+                        std::move(actions.toggle))
+                        .automationId("focus.break.toggle"),
                     buildGlyphControl(
                         "▶|",
                         40.0f,
@@ -131,6 +141,7 @@ wui::Box buildBreakControls(
                         false,
                         "提前结束休息",
                         std::move(actions.skip))
+                        .automationId("focus.break.skip")
                 )
         );
 }
@@ -163,21 +174,37 @@ wui::Box buildBreakFooter(
 
 } // namespace
 
-wui::Box ShortBreakPage::body()
+wui::Box BreakTimerPage::body()
 {
     using namespace wui;
     FocusViewModel& viewModel = *viewModel_;
     const FocusAssets& assets = *assets_;
     const float pageWidth = pageWidth_;
     const float pageHeight = pageHeight_;
-    ShortBreakPageActions actions = std::move(actions_);
+    BreakTimerPageActions actions = std::move(actions_);
+    const auto minimizeShortcut = actions.minimize;
+    const auto toggleShortcut = actions.toggle;
+    const FocusSessionRecord* session = viewModel.activeSession();
+    if (session == nullptr || session->type == SessionType::Focus) {
+        return Box()
+            .background(style::canvas)
+            .width(pageWidth)
+            .height(pageHeight)
+            .contentAlign(wui::Alignment::Center, wui::Alignment::Center)
+            .children(
+                Text("没有活动中的休息会话")
+                    .style(style::text(18.0f, 700, 26.0f))
+                    .color(style::textPrimary)
+            );
+    }
     const float contentWidth = std::min(424.0f, pageWidth - 56.0f);
     auto content = Column()
         .gap(12.0f)
         .align(wui::Alignment::Center)
         .children(
-            buildBreakContext(viewModel, contentWidth),
-            buildBreakStage(viewModel, assets, contentWidth),
+            buildBreakContext(viewModel, *session, contentWidth),
+            buildOperationBanner(viewModel, contentWidth),
+            buildBreakStage(viewModel, assets, *session, contentWidth),
             buildBreakControls(
                 contentWidth, viewModel.isRunning(), std::move(actions)),
             buildBreakFooter(viewModel, contentWidth)
@@ -187,14 +214,32 @@ wui::Box ShortBreakPage::body()
         .background(style::canvas)
         .width(pageWidth)
         .height(pageHeight)
+        .onKey([minimizeShortcut, toggleShortcut](const wui::KeyEvent& event) {
+            if (event.action != wui::KeyAction::Down) return false;
+            if ((event.keyCode == 27
+                    || (event.keyCode == 263
+                        && (event.modifiers & wui::KeyModifierAlt) != 0))
+                && minimizeShortcut) {
+                minimizeShortcut();
+                return true;
+            }
+            if (event.keyCode == 32 && toggleShortcut) {
+                toggleShortcut();
+                return true;
+            }
+            return false;
+        })
         .children(
             Column()
                 .align(wui::Alignment::Stretch)
                 .children(
-                    buildWindowBar(
-                        pageWidth, "FocusTomato · 短休息", assets),
+                    buildPageNavigationAction(
+                        pageWidth,
+                        "← 返回任务 · 休息继续",
+                        "focus.break.minimize",
+                        minimizeShortcut),
                     Box()
-                        .height(pageHeight - 56.0f)
+                        .height(pageHeight - 52.0f)
                         .padding({28.0f, 20.0f, 28.0f, 20.0f})
                         .contentAlign(
                             wui::Alignment::Center,

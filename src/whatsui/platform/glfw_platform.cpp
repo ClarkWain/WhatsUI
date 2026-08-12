@@ -36,7 +36,10 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <GLFW/glfw3native.h>
+#include <dwmapi.h>
 #include <imm.h>
+#include <shellapi.h>
+#include <windowsx.h>
 #endif
 
 namespace wui {
@@ -107,8 +110,10 @@ void enablePerMonitorV2DpiAwareness() noexcept
 
 class GlfwRenderSurface : public RenderSurface {
 public:
-    GlfwRenderSurface(GLFWwindow* window, int fbWidth, int fbHeight)
+    GlfwRenderSurface(
+        GLFWwindow* window, int fbWidth, int fbHeight, bool transparent)
         : window_(window)
+        , transparent_(transparent)
     {
         canvas_ = wsc::Canvas::create(wsc::Canvas::Backend::OpenGL, fbWidth, fbHeight);
         canvas_->setSize(fbWidth, fbHeight);
@@ -148,7 +153,10 @@ public:
     void beginFrame() override
     {
         canvas_->beginFrame();
-        canvas_->drawColor(wsc::Color(30, 30, 30));
+        canvas_->drawColor(
+            transparent_
+                ? wsc::Color(0, 0, 0, 0)
+                : wsc::Color(30, 30, 30));
     }
 
     void endFrame() override
@@ -206,6 +214,7 @@ private:
     std::unique_ptr<wsc::Canvas> canvas_;
     bool canPresent_{false};
     bool directWriteActive_{false};
+    bool transparent_{false};
     SizeF fbSize_{};
 };
 
@@ -593,19 +602,202 @@ private:
 #endif
 };
 
+class GlfwNativeFrameBridge final {
+public:
+    using RegionsProvider =
+        std::function<const std::vector<WindowFrameRegion>&()>;
+
+    GlfwNativeFrameBridge(
+        GLFWwindow* window,
+        WindowFrameStyle frameStyle,
+        bool resizable,
+        RegionsProvider regionsProvider)
+        : window_(window)
+        , frameStyle_(frameStyle)
+        , resizable_(resizable)
+        , regionsProvider_(std::move(regionsProvider))
+    {
+#if defined(_WIN32)
+        if (frameStyle_ != WindowFrameStyle::Custom) return;
+        nativeWindow_ = glfwGetWin32Window(window_);
+        if (nativeWindow_ == nullptr) return;
+
+        SetPropW(nativeWindow_, propertyName(), reinterpret_cast<HANDLE>(this));
+        SetLastError(ERROR_SUCCESS);
+        const auto previous = SetWindowLongPtrW(
+            nativeWindow_, GWLP_WNDPROC,
+            reinterpret_cast<LONG_PTR>(&frameWindowProc));
+        if (previous == 0 && GetLastError() != ERROR_SUCCESS) {
+            RemovePropW(nativeWindow_, propertyName());
+            nativeWindow_ = nullptr;
+            return;
+        }
+        previousWindowProc_ = reinterpret_cast<WNDPROC>(previous);
+
+        LONG_PTR style = GetWindowLongPtrW(nativeWindow_, GWL_STYLE);
+        style &= ~static_cast<LONG_PTR>(WS_CAPTION);
+        style |= WS_SYSMENU | WS_MINIMIZEBOX;
+        if (resizable_) style |= WS_THICKFRAME | WS_MAXIMIZEBOX;
+        else style &= ~static_cast<LONG_PTR>(
+            WS_THICKFRAME | WS_MAXIMIZEBOX);
+        SetWindowLongPtrW(nativeWindow_, GWL_STYLE, style);
+        SetWindowPos(nativeWindow_, nullptr, 0, 0, 0, 0,
+                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE
+                         | SWP_NOZORDER | SWP_NOACTIVATE);
+#endif
+    }
+
+    ~GlfwNativeFrameBridge()
+    {
+#if defined(_WIN32)
+        if (nativeWindow_ != nullptr) {
+            if (reinterpret_cast<WNDPROC>(
+                    GetWindowLongPtrW(nativeWindow_, GWLP_WNDPROC))
+                == &frameWindowProc) {
+                SetWindowLongPtrW(
+                    nativeWindow_, GWLP_WNDPROC,
+                    reinterpret_cast<LONG_PTR>(previousWindowProc_));
+            }
+            RemovePropW(nativeWindow_, propertyName());
+        }
+#endif
+    }
+
+private:
+#if defined(_WIN32)
+    static constexpr const wchar_t* propertyName() noexcept
+    {
+        return L"WhatsUI.GlfwNativeFrameBridge";
+    }
+
+    [[nodiscard]] LRESULT resizeHitTest(POINT clientPoint) const noexcept
+    {
+        if (!resizable_ || IsZoomed(nativeWindow_)) return HTCLIENT;
+        RECT client{};
+        GetClientRect(nativeWindow_, &client);
+        const UINT dpi = GetDpiForWindow(nativeWindow_);
+        const int frameX = GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi)
+            + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+        const int frameY = GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi)
+            + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+        const bool left = clientPoint.x < frameX;
+        const bool right = clientPoint.x >= client.right - frameX;
+        const bool top = clientPoint.y < frameY;
+        const bool bottom = clientPoint.y >= client.bottom - frameY;
+        if (top && left) return HTTOPLEFT;
+        if (top && right) return HTTOPRIGHT;
+        if (bottom && left) return HTBOTTOMLEFT;
+        if (bottom && right) return HTBOTTOMRIGHT;
+        if (left) return HTLEFT;
+        if (right) return HTRIGHT;
+        if (top) return HTTOP;
+        if (bottom) return HTBOTTOM;
+        return HTCLIENT;
+    }
+
+    [[nodiscard]] LRESULT regionHitTest(POINT clientPoint) const noexcept
+    {
+        const float scale = windowContentScale(window_);
+        const PointF logicalPoint{
+            static_cast<float>(clientPoint.x) / scale,
+            static_cast<float>(clientPoint.y) / scale};
+        const auto region = hitTestWindowFrameRegions(
+            regionsProvider_(), logicalPoint);
+        if (region) {
+            switch (*region) {
+            case WindowFrameRegionKind::MinimizeButton: return HTMINBUTTON;
+            case WindowFrameRegionKind::MaximizeButton: return HTMAXBUTTON;
+            case WindowFrameRegionKind::CloseButton: return HTCLOSE;
+            case WindowFrameRegionKind::Caption: return HTCAPTION;
+            case WindowFrameRegionKind::Client: return HTCLIENT;
+            }
+        }
+        return HTCLIENT;
+    }
+
+    LRESULT handleMessage(
+        HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        switch (message) {
+        case WM_NCCALCSIZE:
+            if (wParam == TRUE) return 0;
+            break;
+        case WM_NCHITTEST: {
+            LRESULT dwmResult = 0;
+            if (DwmDefWindowProc(hwnd, message, wParam, lParam, &dwmResult)) {
+                return dwmResult;
+            }
+            POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            ScreenToClient(hwnd, &point);
+            const LRESULT resize = resizeHitTest(point);
+            if (resize != HTCLIENT) return resize;
+            return regionHitTest(point);
+        }
+        case WM_GETMINMAXINFO: {
+            auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
+            const HMONITOR monitor = MonitorFromWindow(
+                hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO monitorInfo{sizeof(MONITORINFO)};
+            if (monitor != nullptr && GetMonitorInfoW(monitor, &monitorInfo)) {
+                info->ptMaxPosition.x =
+                    monitorInfo.rcWork.left - monitorInfo.rcMonitor.left;
+                info->ptMaxPosition.y =
+                    monitorInfo.rcWork.top - monitorInfo.rcMonitor.top;
+                info->ptMaxSize.x =
+                    monitorInfo.rcWork.right - monitorInfo.rcWork.left;
+                info->ptMaxSize.y =
+                    monitorInfo.rcWork.bottom - monitorInfo.rcWork.top;
+                return 0;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+        return CallWindowProcW(
+            previousWindowProc_, hwnd, message, wParam, lParam);
+    }
+
+    static LRESULT CALLBACK frameWindowProc(
+        HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        auto* bridge = reinterpret_cast<GlfwNativeFrameBridge*>(
+            GetPropW(hwnd, propertyName()));
+        if (bridge != nullptr && bridge->previousWindowProc_ != nullptr) {
+            return bridge->handleMessage(hwnd, message, wParam, lParam);
+        }
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+    HWND nativeWindow_{nullptr};
+    WNDPROC previousWindowProc_{nullptr};
+#endif
+    GLFWwindow* window_{nullptr};
+    WindowFrameStyle frameStyle_{WindowFrameStyle::System};
+    bool resizable_{true};
+    RegionsProvider regionsProvider_;
+};
+
 // --- GlfwPlatformWindow ---
 
 class GlfwPlatformWindow : public PlatformWindow {
 public:
-    GlfwPlatformWindow(GLFWwindow* window, WindowId id, std::string title)
+    GlfwPlatformWindow(
+        GLFWwindow* window, WindowId id, WindowOptions options)
         : window_(window)
         , id_(id)
-        , title_(std::move(title))
+        , title_(options.title)
+        , options_(std::move(options))
         , clipboard_(window)
         , cursorService_(window)
         , textInputSession_(window, id)
     {
         glfwSetWindowUserPointer(window, this);
+        nativeFrameBridge_ = std::make_unique<GlfwNativeFrameBridge>(
+            window_, options_.frameStyle, options_.resizable,
+            [this]() -> const std::vector<WindowFrameRegion>& {
+                return frameRegions_;
+            });
         textInputSession_.setCallbacks(
             [this](const TextInputEvent& event) {
                 requestRedraw();
@@ -623,6 +815,7 @@ public:
             // These resources access the active GL context / Win32 HWND while
             // being destroyed. Tear them down before GLFW destroys either.
             glfwMakeContextCurrent(window_);
+            nativeFrameBridge_.reset();
             textInputSession_.shutdown();
             textMeasurer_.reset();
             surface_.reset();
@@ -657,8 +850,14 @@ public:
         return m;
     }
 
-    void show() override { glfwShowWindow(window_); }
+    void show() override
+    {
+        glfwShowWindow(window_);
+        requestRedraw();
+    }
+    void hide() override { glfwHideWindow(window_); }
     void close() override { glfwSetWindowShouldClose(window_, GLFW_TRUE); }
+    void requestClose() override { handleCloseRequest(); }
 
     [[nodiscard]] bool isOpen() const noexcept override
     {
@@ -668,6 +867,84 @@ public:
     [[nodiscard]] bool isFocused() const noexcept override
     {
         return glfwGetWindowAttrib(window_, GLFW_FOCUSED) != 0;
+    }
+
+    [[nodiscard]] bool isVisible() const noexcept override
+    {
+        return window_ != nullptr
+            && glfwGetWindowAttrib(window_, GLFW_VISIBLE) == GLFW_TRUE;
+    }
+
+    void focus() override { glfwFocusWindow(window_); }
+    void minimize() override { glfwIconifyWindow(window_); }
+    void maximize() override { glfwMaximizeWindow(window_); }
+    void restore() override { glfwRestoreWindow(window_); }
+
+    [[nodiscard]] WindowState state() const noexcept override
+    {
+        if (!isVisible()) return WindowState::Hidden;
+        if (glfwGetWindowAttrib(window_, GLFW_ICONIFIED) == GLFW_TRUE) {
+            return WindowState::Minimized;
+        }
+        if (glfwGetWindowAttrib(window_, GLFW_MAXIMIZED) == GLFW_TRUE) {
+            return WindowState::Maximized;
+        }
+        return WindowState::Normal;
+    }
+
+    [[nodiscard]] WindowCapabilities capabilities() const noexcept override
+    {
+        WindowCapabilities result;
+        result.customFrame = true;
+        result.transparentFramebuffer =
+            glfwGetWindowAttrib(window_, GLFW_TRANSPARENT_FRAMEBUFFER)
+            == GLFW_TRUE;
+        result.alwaysOnTop = true;
+#if defined(_WIN32)
+        result.systemMove = true;
+        result.systemResize = true;
+#endif
+        return result;
+    }
+
+    void setAlwaysOnTop(bool value) override
+    {
+        glfwSetWindowAttrib(window_, GLFW_FLOATING,
+                            value ? GLFW_TRUE : GLFW_FALSE);
+    }
+
+    void setOpacity(float value) override
+    {
+        glfwSetWindowOpacity(window_, std::clamp(value, 0.0f, 1.0f));
+    }
+
+    void setFrameRegions(std::vector<WindowFrameRegion> regions) override
+    {
+        frameRegions_ = std::move(regions);
+    }
+
+    void setCloseRequestHandler(WindowCloseRequestHandler handler) override
+    {
+        closeRequestHandler_ = std::move(handler);
+    }
+
+    void handleCloseRequest()
+    {
+        const WindowCloseDecision decision = closeRequestHandler_
+            ? closeRequestHandler_()
+            : WindowCloseDecision::Close;
+        switch (decision) {
+        case WindowCloseDecision::Close:
+            glfwSetWindowShouldClose(window_, GLFW_TRUE);
+            break;
+        case WindowCloseDecision::Hide:
+            glfwSetWindowShouldClose(window_, GLFW_FALSE);
+            hide();
+            break;
+        case WindowCloseDecision::Cancel:
+            glfwSetWindowShouldClose(window_, GLFW_FALSE);
+            break;
+        }
     }
 
     void setTitle(std::string_view title) override
@@ -704,6 +981,14 @@ public:
     [[nodiscard]] TextInputSession& textInput() override { return textInputSession_; }
 
     [[nodiscard]] GLFWwindow* glfwWindow() const noexcept { return window_; }
+    [[nodiscard]] const WindowOptions& options() const noexcept
+    {
+        return options_;
+    }
+    [[nodiscard]] const std::vector<WindowFrameRegion>& frameRegions() const noexcept
+    {
+        return frameRegions_;
+    }
     [[nodiscard]] bool needsRedraw() const noexcept { return needsRedraw_; }
     void clearRedraw() noexcept { needsRedraw_ = false; }
 
@@ -711,7 +996,10 @@ public:
     {
         int fbw, fbh;
         glfwGetFramebufferSize(window_, &fbw, &fbh);
-        surface_ = std::make_unique<GlfwRenderSurface>(window_, fbw, fbh);
+        surface_ = std::make_unique<GlfwRenderSurface>(
+            window_, fbw, fbh,
+            glfwGetWindowAttrib(window_, GLFW_TRANSPARENT_FRAMEBUFFER)
+                == GLFW_TRUE);
         textMeasurer_ = std::make_unique<WhatsCanvasTextMeasurer>(surface_->canvas());
         (void)textMeasurer_->installWindowsFallbackPolicy();
     }
@@ -735,12 +1023,367 @@ private:
     GLFWwindow* window_;
     WindowId id_;
     std::string title_;
+    WindowOptions options_;
     std::unique_ptr<GlfwRenderSurface> surface_;
     GlfwClipboard clipboard_;
     GlfwCursorService cursorService_;
     GlfwTextInputSession textInputSession_;
+    std::unique_ptr<GlfwNativeFrameBridge> nativeFrameBridge_;
     std::unique_ptr<WhatsCanvasTextMeasurer> textMeasurer_;
+    std::vector<WindowFrameRegion> frameRegions_;
+    WindowCloseRequestHandler closeRequestHandler_;
     bool needsRedraw_{true};
+};
+
+class GlfwDesktopServices final : public DesktopServices {
+public:
+    GlfwDesktopServices()
+    {
+#if defined(_WIN32)
+        taskbarCreatedMessage_ = RegisterWindowMessageW(L"TaskbarCreated");
+        WNDCLASSEXW windowClass{};
+        windowClass.cbSize = sizeof(windowClass);
+        windowClass.lpfnWndProc = &messageWindowProc;
+        windowClass.hInstance = GetModuleHandleW(nullptr);
+        windowClass.lpszClassName = className();
+        if (RegisterClassExW(&windowClass) == 0
+            && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+            return;
+        }
+        messageWindow_ = CreateWindowExW(
+            0, className(), L"WhatsUI Desktop Services", 0,
+            0, 0, 0, 0, HWND_MESSAGE, nullptr,
+            GetModuleHandleW(nullptr), this);
+#endif
+    }
+
+    ~GlfwDesktopServices() override
+    {
+        removeTrayIcon();
+#if defined(_WIN32)
+        if (trayIcon_ != nullptr) {
+            DestroyIcon(trayIcon_);
+            trayIcon_ = nullptr;
+        }
+        if (messageWindow_ != nullptr) {
+            DestroyWindow(messageWindow_);
+            messageWindow_ = nullptr;
+        }
+#endif
+    }
+
+    [[nodiscard]] DesktopCapabilities capabilities() const noexcept override
+    {
+#if defined(_WIN32)
+        const bool available = messageWindow_ != nullptr;
+        return {available, available, false};
+#else
+        return {};
+#endif
+    }
+
+    DesktopOperationResult setTrayIcon(
+        const TrayIconOptions& options) override
+    {
+#if defined(_WIN32)
+        if (messageWindow_ == nullptr) {
+            return DesktopOperationResult::Unsupported;
+        }
+        if (!options.icon.empty() && !options.icon.valid()) {
+            return DesktopOperationResult::Failed;
+        }
+        if (!replaceTrayIcon(options.icon)) {
+            return DesktopOperationResult::Failed;
+        }
+        trayOptions_ = options;
+        trayRequested_ = true;
+        return addOrUpdateTrayIcon()
+            ? DesktopOperationResult::Succeeded
+            : DesktopOperationResult::Failed;
+#else
+        (void)options;
+        return DesktopOperationResult::Unsupported;
+#endif
+    }
+
+    void removeTrayIcon() override
+    {
+#if defined(_WIN32)
+        trayRequested_ = false;
+        if (!trayInstalled_ || messageWindow_ == nullptr) return;
+        auto data = baseNotifyData();
+        (void)Shell_NotifyIconW(NIM_DELETE, &data);
+        trayInstalled_ = false;
+#endif
+    }
+
+    DesktopOperationResult showNotification(
+        const DesktopNotification& notification) override
+    {
+#if defined(_WIN32)
+        if (messageWindow_ == nullptr) {
+            return DesktopOperationResult::Unsupported;
+        }
+        if (!trayInstalled_) {
+            const bool wasRequested = trayRequested_;
+            trayRequested_ = true;
+            if (trayOptions_.tooltip.empty()) {
+                trayOptions_.tooltip = "WhatsUI";
+            }
+            if (!addOrUpdateTrayIcon()) {
+                trayRequested_ = wasRequested;
+                return DesktopOperationResult::Failed;
+            }
+        }
+
+        NOTIFYICONDATAW data = baseNotifyData();
+        data.uFlags = NIF_INFO;
+        const std::wstring title = utf8ToWide(notification.title);
+        const std::wstring body = utf8ToWide(notification.body);
+        wcsncpy_s(data.szInfoTitle, title.c_str(), _TRUNCATE);
+        wcsncpy_s(data.szInfo, body.c_str(), _TRUNCATE);
+        switch (notification.urgency) {
+        case NotificationUrgency::Low: data.dwInfoFlags = NIIF_NONE; break;
+        case NotificationUrgency::Normal: data.dwInfoFlags = NIIF_INFO; break;
+        case NotificationUrgency::Critical: data.dwInfoFlags = NIIF_WARNING; break;
+        }
+        data.dwInfoFlags |= NIIF_RESPECT_QUIET_TIME;
+        pendingNotificationId_ = notification.id;
+        pendingNotificationPayload_ = notification.activationPayload;
+        return Shell_NotifyIconW(NIM_MODIFY, &data)
+            ? DesktopOperationResult::Succeeded
+            : DesktopOperationResult::Failed;
+#else
+        (void)notification;
+        return DesktopOperationResult::Unsupported;
+#endif
+    }
+
+private:
+#if defined(_WIN32)
+    static constexpr UINT callbackMessage() noexcept
+    {
+        return WM_APP + 0x51;
+    }
+
+    static constexpr const wchar_t* className() noexcept
+    {
+        return L"WhatsUI.GlfwDesktopServices";
+    }
+
+    static std::wstring utf8ToWide(std::string_view text)
+    {
+        if (text.empty()) return {};
+        const int size = MultiByteToWideChar(
+            CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+            static_cast<int>(text.size()), nullptr, 0);
+        if (size <= 0) return {};
+        std::wstring result(static_cast<std::size_t>(size), L'\0');
+        MultiByteToWideChar(
+            CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+            static_cast<int>(text.size()), result.data(), size);
+        return result;
+    }
+
+    [[nodiscard]] NOTIFYICONDATAW baseNotifyData() const noexcept
+    {
+        NOTIFYICONDATAW data{};
+        data.cbSize = sizeof(data);
+        data.hWnd = messageWindow_;
+        data.uID = 1;
+        data.uCallbackMessage = callbackMessage();
+        return data;
+    }
+
+    [[nodiscard]] static HICON createIcon(const DesktopIcon& icon)
+    {
+        if (!icon.valid()) return nullptr;
+        BITMAPV5HEADER header{};
+        header.bV5Size = sizeof(header);
+        header.bV5Width = icon.pixelWidth;
+        header.bV5Height = -icon.pixelHeight;
+        header.bV5Planes = 1;
+        header.bV5BitCount = 32;
+        header.bV5Compression = BI_BITFIELDS;
+        header.bV5RedMask = 0x00FF0000;
+        header.bV5GreenMask = 0x0000FF00;
+        header.bV5BlueMask = 0x000000FF;
+        header.bV5AlphaMask = 0xFF000000;
+
+        void* bitmapPixels = nullptr;
+        HDC screen = GetDC(nullptr);
+        HBITMAP colorBitmap = CreateDIBSection(
+            screen, reinterpret_cast<BITMAPINFO*>(&header),
+            DIB_RGB_COLORS, &bitmapPixels, nullptr, 0);
+        ReleaseDC(nullptr, screen);
+        if (colorBitmap == nullptr || bitmapPixels == nullptr) {
+            if (colorBitmap != nullptr) DeleteObject(colorBitmap);
+            return nullptr;
+        }
+
+        auto* destination = static_cast<unsigned char*>(bitmapPixels);
+        for (std::size_t offset = 0;
+             offset < icon.rgbaPixels.size(); offset += 4) {
+            const unsigned int alpha = icon.rgbaPixels[offset + 3];
+            destination[offset] = static_cast<unsigned char>(
+                icon.rgbaPixels[offset + 2] * alpha / 255u);
+            destination[offset + 1] = static_cast<unsigned char>(
+                icon.rgbaPixels[offset + 1] * alpha / 255u);
+            destination[offset + 2] = static_cast<unsigned char>(
+                icon.rgbaPixels[offset] * alpha / 255u);
+            destination[offset + 3] = static_cast<unsigned char>(alpha);
+        }
+
+        HBITMAP maskBitmap = CreateBitmap(
+            icon.pixelWidth, icon.pixelHeight, 1, 1, nullptr);
+        if (maskBitmap == nullptr) {
+            DeleteObject(colorBitmap);
+            return nullptr;
+        }
+        ICONINFO info{};
+        info.fIcon = TRUE;
+        info.hbmColor = colorBitmap;
+        info.hbmMask = maskBitmap;
+        HICON result = CreateIconIndirect(&info);
+        DeleteObject(maskBitmap);
+        DeleteObject(colorBitmap);
+        return result;
+    }
+
+    bool replaceTrayIcon(const DesktopIcon& icon)
+    {
+        HICON replacement = nullptr;
+        if (!icon.empty()) {
+            replacement = createIcon(icon);
+            if (replacement == nullptr) return false;
+        }
+        if (trayIcon_ != nullptr) DestroyIcon(trayIcon_);
+        trayIcon_ = replacement;
+        return true;
+    }
+
+    bool addOrUpdateTrayIcon()
+    {
+        NOTIFYICONDATAW data = baseNotifyData();
+        data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+        data.hIcon = trayIcon_ != nullptr
+            ? trayIcon_
+            : LoadIconW(nullptr, MAKEINTRESOURCEW(32512));
+        const std::wstring tooltip = utf8ToWide(trayOptions_.tooltip);
+        wcsncpy_s(data.szTip, tooltip.c_str(), _TRUNCATE);
+        const DWORD operation = trayInstalled_ ? NIM_MODIFY : NIM_ADD;
+        if (!Shell_NotifyIconW(operation, &data)) return false;
+        trayInstalled_ = true;
+        data.uVersion = NOTIFYICON_VERSION_4;
+        (void)Shell_NotifyIconW(NIM_SETVERSION, &data);
+        return true;
+    }
+
+    void publishTrayAction(const std::string& actionId)
+    {
+        if (actionId.empty()) return;
+        publishEvent({DesktopEventKind::TrayAction, actionId, {}});
+    }
+
+    void showTrayMenu()
+    {
+        HMENU menu = CreatePopupMenu();
+        if (menu == nullptr) return;
+        std::vector<std::pair<UINT, std::string>> commandActions;
+        UINT command = 1000;
+        for (const auto& item : trayOptions_.menu) {
+            if (item.kind == TrayMenuItemKind::Separator) {
+                AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+                continue;
+            }
+            UINT flags = MF_STRING;
+            if (!item.enabled) flags |= MF_GRAYED;
+            if (item.kind == TrayMenuItemKind::Check && item.checked) {
+                flags |= MF_CHECKED;
+            }
+            const std::wstring label = utf8ToWide(item.label);
+            AppendMenuW(menu, flags, command, label.c_str());
+            commandActions.emplace_back(command, item.id);
+            ++command;
+        }
+
+        POINT cursor{};
+        GetCursorPos(&cursor);
+        SetForegroundWindow(messageWindow_);
+        const UINT selected = TrackPopupMenu(
+            menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
+            cursor.x, cursor.y, 0, messageWindow_, nullptr);
+        DestroyMenu(menu);
+        for (const auto& [commandId, actionId] : commandActions) {
+            if (commandId == selected) {
+                publishTrayAction(actionId);
+                break;
+            }
+        }
+        PostMessageW(messageWindow_, WM_NULL, 0, 0);
+    }
+
+    LRESULT handleMessage(
+        HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        if (message == taskbarCreatedMessage_) {
+            trayInstalled_ = false;
+            if (trayRequested_) (void)addOrUpdateTrayIcon();
+            return 0;
+        }
+        if (message == callbackMessage()) {
+            const UINT event = LOWORD(lParam);
+            switch (event) {
+            case WM_CONTEXTMENU:
+            case WM_RBUTTONUP:
+                showTrayMenu();
+                return 0;
+            case NIN_SELECT:
+            case NIN_KEYSELECT:
+            case WM_LBUTTONUP:
+                publishTrayAction(trayOptions_.defaultActionId);
+                return 0;
+            case NIN_BALLOONUSERCLICK:
+                publishEvent({
+                    DesktopEventKind::NotificationActivated,
+                    pendingNotificationId_,
+                    pendingNotificationPayload_});
+                return 0;
+            default:
+                return 0;
+            }
+        }
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+    static LRESULT CALLBACK messageWindowProc(
+        HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        GlfwDesktopServices* services = nullptr;
+        if (message == WM_NCCREATE) {
+            const auto* create = reinterpret_cast<CREATESTRUCTW*>(lParam);
+            services = static_cast<GlfwDesktopServices*>(
+                create->lpCreateParams);
+            SetWindowLongPtrW(
+                hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(services));
+        } else {
+            services = reinterpret_cast<GlfwDesktopServices*>(
+                GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        }
+        return services != nullptr
+            ? services->handleMessage(hwnd, message, wParam, lParam)
+            : DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+    HWND messageWindow_{nullptr};
+    UINT taskbarCreatedMessage_{0};
+    bool trayRequested_{false};
+    bool trayInstalled_{false};
+    TrayIconOptions trayOptions_;
+    std::string pendingNotificationId_;
+    std::string pendingNotificationPayload_;
+    HICON trayIcon_{nullptr};
+#endif
 };
 
 // --- GlfwPlatformHost ---
@@ -755,6 +1398,7 @@ public:
         if (!glfwInit()) {
             throw std::runtime_error("glfwInit() failed");
         }
+        desktopServices_ = std::make_unique<GlfwDesktopServices>();
 #if defined(_WIN32) && defined(GLFW_SCALE_TO_MONITOR)
         // Treat the requested window size as logical DIPs. GLFW expands the
         // Win32 client area to physical pixels for the current monitor.
@@ -764,15 +1408,54 @@ public:
 
     ~GlfwPlatformHost() override
     {
+        desktopServices_.reset();
         glfwTerminate();
     }
 
-    [[nodiscard]] std::unique_ptr<PlatformWindow> createWindow(std::string title, SizeF logicalSize) override
+    [[nodiscard]] DesktopServices& desktopServices() noexcept override
     {
-        const int w = static_cast<int>(logicalSize.width);
-        const int h = static_cast<int>(logicalSize.height);
+        return *desktopServices_;
+    }
 
-        GLFWwindow* glfwWindow = glfwCreateWindow(w, h, title.c_str(), nullptr, nullptr);
+    [[nodiscard]] std::unique_ptr<PlatformWindow> createWindow(
+        std::string title, SizeF logicalSize) override
+    {
+        WindowOptions options;
+        options.title = std::move(title);
+        options.initialSize = logicalSize;
+        return createWindow(options);
+    }
+
+    [[nodiscard]] std::unique_ptr<PlatformWindow> createWindow(
+        const WindowOptions& requestedOptions) override
+    {
+        WindowOptions options = requestedOptions;
+        if (options.backdrop == WindowBackdrop::Transparent) {
+            options.transparentFramebuffer = true;
+        }
+        const int w = static_cast<int>(options.initialSize.width);
+        const int h = static_cast<int>(options.initialSize.height);
+
+        glfwDefaultWindowHints();
+#if defined(_WIN32) && defined(GLFW_SCALE_TO_MONITOR)
+        glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+#endif
+        glfwWindowHint(
+            GLFW_DECORATED,
+            options.frameStyle == WindowFrameStyle::System
+                ? GLFW_TRUE : GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE,
+                       options.resizable ? GLFW_TRUE : GLFW_FALSE);
+        glfwWindowHint(GLFW_VISIBLE,
+                       options.visibleOnCreate ? GLFW_TRUE : GLFW_FALSE);
+        glfwWindowHint(GLFW_FLOATING,
+                       options.alwaysOnTop ? GLFW_TRUE : GLFW_FALSE);
+        glfwWindowHint(
+            GLFW_TRANSPARENT_FRAMEBUFFER,
+            options.transparentFramebuffer ? GLFW_TRUE : GLFW_FALSE);
+
+        GLFWwindow* glfwWindow = glfwCreateWindow(
+            w, h, options.title.c_str(), nullptr, nullptr);
         if (!glfwWindow) {
             const char* errMsg = nullptr;
             glfwGetError(&errMsg);
@@ -782,6 +1465,22 @@ public:
         glfwMakeContextCurrent(glfwWindow);
         glfwSwapInterval(1);
 
+        const float contentScale = windowContentScale(glfwWindow);
+        const auto sizeLimit = [contentScale](float logical) {
+            if (logical <= 0.0f) return GLFW_DONT_CARE;
+#if defined(_WIN32)
+            return static_cast<int>(std::round(logical * contentScale));
+#else
+            return static_cast<int>(std::round(logical));
+#endif
+        };
+        glfwSetWindowSizeLimits(
+            glfwWindow,
+            sizeLimit(options.minimumSize.width),
+            sizeLimit(options.minimumSize.height),
+            sizeLimit(options.maximumSize.width),
+            sizeLimit(options.maximumSize.height));
+
         if (!glLoaded_) {
             if (!wsc::Canvas::loadOpenGL(
                     reinterpret_cast<wsc::Canvas::OpenGLProcAddress>(glfwGetProcAddress))) {
@@ -790,7 +1489,8 @@ public:
             glLoaded_ = true;
         }
 
-        auto window = std::make_unique<GlfwPlatformWindow>(glfwWindow, nextWindowId_++, title);
+        auto window = std::make_unique<GlfwPlatformWindow>(
+            glfwWindow, nextWindowId_++, std::move(options));
         window->initSurface();
 
         installCallbacks(glfwWindow);
@@ -893,6 +1593,11 @@ private:
     void installCallbacks(GLFWwindow* window)
     {
         auto* pw = GlfwPlatformWindow::fromGlfw(window);
+
+        glfwSetWindowCloseCallback(window, [](GLFWwindow* w) {
+            auto* pw = GlfwPlatformWindow::fromGlfw(w);
+            if (pw) pw->handleCloseRequest();
+        });
 
         glfwSetCursorPosCallback(window, [](GLFWwindow* w, double x, double y) {
             auto* pw = GlfwPlatformWindow::fromGlfw(w);
@@ -1046,6 +1751,7 @@ private:
     int exitCode_{0};
     std::function<void()> frameCallback_;
     std::atomic_bool externalWakeRequested_{false};
+    std::unique_ptr<GlfwDesktopServices> desktopServices_;
 };
 
 // --- Factory function ---

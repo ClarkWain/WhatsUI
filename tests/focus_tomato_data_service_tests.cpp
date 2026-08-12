@@ -54,6 +54,8 @@ StartSessionCommand focusCommand(std::int64_t nowUtcMs = 10'000)
         SessionType::Focus,
         25 * kMinuteMs,
         nowUtcMs,
+        false,
+        std::string{"forest"},
     };
 }
 
@@ -71,6 +73,9 @@ void startIsOneValidatedCommit()
     expect(service.data().timerSnapshot
                && service.data().timerSnapshot->sessionId == "session-1",
            "Start must atomically create its recovery snapshot");
+    expect(service.data().sessions.front().soundscapeIdSnapshot
+               == std::optional<std::string>{"forest"},
+           "Start must freeze the resolved sound preference for this session");
 }
 
 void taskAndSettingsMutationsUseTheSameValidationGateway()
@@ -254,6 +259,228 @@ void breakSkipUsesItsOwnTerminalFact()
            "A focus session must never be mislabeled as a skipped break");
 }
 
+void reusedIdentifiersRejectDifferentCommands()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository);
+    expect(service.addTask({"task-1", "原任务", 1, 1'000}).succeeded(),
+           "Setup task creation should succeed");
+    expect(service.addTask({"task-1", "不同任务", 2, 2'000}).status
+               == DataCommandStatus::Conflict,
+           "Reusing a task ID for different data must be a conflict, not idempotent success");
+
+    FocusDataService sessionService(repository, dataWithTask());
+    expect(sessionService.startSession(focusCommand()).succeeded(),
+           "Setup session creation should succeed");
+    expect(sessionService.abortSession("session-1", 20'000).succeeded(),
+           "Setup session abort should succeed");
+    auto conflicting = focusCommand(30'000);
+    conflicting.plannedDurationMs = 50 * kMinuteMs;
+    expect(sessionService.startSession(conflicting).status
+               == DataCommandStatus::Conflict,
+           "Reusing a session ID for a different start command must be rejected");
+}
+
+void completionCheckpointWinsTerminalRaces()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository, dataWithTask());
+    expect(service.startSession(focusCommand()).succeeded(),
+           "Setup focus should start");
+    const std::int64_t deadline = 10'000 + 25 * kMinuteMs;
+    expect(service.markDeadlineReached("session-1", deadline).succeeded(),
+           "Natural completion checkpoint should persist");
+    expect(service.abortSession("session-1", deadline + 1).status
+               == DataCommandStatus::Conflict,
+           "A completion-pending focus must not be overwritten as aborted");
+    expect(service.data().sessions.front().status
+               == SessionStatus::CompletionPending,
+           "Rejected abort must preserve the recoverable completion checkpoint");
+}
+
+void activeTaskCannotBeDeletedUntilItsSessionEnds()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository, dataWithTask());
+    expect(service.startSession(focusCommand()).succeeded(),
+           "Setup focus should start");
+    expect(service.archiveTask("task-1", 1, 20'000).status
+               == DataCommandStatus::Conflict,
+           "A task used by the active timer must not disappear from management");
+    expect(service.data().tasks.front().status == TaskStatus::Active,
+           "Rejected deletion must preserve the visible task");
+
+    const std::int64_t deadline = 10'000 + 25 * kMinuteMs;
+    expect(service.markDeadlineReached("session-1", deadline).succeeded()
+               && service.finalizeCompletion("session-1", deadline).succeeded(),
+           "The protected active session should still complete normally");
+    expect(service.archiveTask("task-1", 2, deadline + 1).succeeded(),
+           "A task may be soft-deleted after its active session ends");
+    expect(service.data().tasks.front().status == TaskStatus::Archived
+               && service.data().tasks.front().completedPomodoros == 1
+               && service.data().sessions.front().titleSnapshot
+                    == "完成产品设计稿",
+           "Soft deletion must preserve historical facts and title snapshots");
+}
+
+void taskEditingAndRestoreAreRevisionChecked()
+{
+    RecordingRepository repository;
+    FocusData data = dataWithTask();
+    data.tasks.push_back({
+        "task-2", "第二项", TaskStatus::Active, 1, 0,
+        2048, 1, 1'000, 1'000,
+    });
+    FocusDataService service(repository, data);
+
+    expect(service.updateTask(
+               {"task-1", "更新后的名称", 5, 99, 2'000}).status
+               == DataCommandStatus::Conflict,
+           "A stale editor must not overwrite a newer task revision");
+    expect(service.updateTask(
+               {"task-1", "更新后的名称", 5, 1, 2'000,
+                {{40}, TaskSoundPreference::Soundscape, "forest"}}).succeeded(),
+           "A matching editor revision should update title and estimate");
+    expect(service.data().tasks.front().title == "更新后的名称"
+               && service.data().tasks.front().estimatedPomodoros == 5
+               && service.data().tasks.front().execution.focusMinutes
+                    == std::optional<int>{40}
+               && service.data().tasks.front().execution.soundscapeId
+                    == "forest"
+               && service.data().tasks.front().revision == 2,
+           "Task editing must publish execution preferences in one revision");
+    expect(service.updateTask(
+               {"task-1", "更新后的名称", 5, 2, 3'000,
+                {{40}, TaskSoundPreference::Soundscape, "forest"}}).status
+               == DataCommandStatus::NoChange,
+           "Submitting an unchanged editor must not create a revision");
+
+    expect(service.archiveTask("task-1", 2, 3'000).succeeded(),
+           "Edited tasks should remain soft-deletable");
+    expect(service.restoreTask("task-1", 3, 4'000).succeeded(),
+           "A deleted task should be recoverable");
+    expect(service.data().tasks.front().status == TaskStatus::Active
+               && service.data().tasks.front().sortOrder == 3072
+               && service.data().tasks.front().revision == 4,
+           "Restoring must allocate a collision-free active sort order");
+
+    expect(service.setTaskCompletion("task-1", true, 4, 5'000).succeeded()
+               && service.archiveTask("task-1", 5, 6'000).succeeded(),
+           "Completed tasks should also be soft-deletable");
+    expect(service.data().tasks.front().status == TaskStatus::ArchivedDone,
+           "Soft deletion must remember that a task was completed");
+    expect(service.restoreTask("task-1", 6, 7'000).succeeded()
+               && service.data().tasks.front().status == TaskStatus::Done
+               && service.data().tasks.front().revision == 7,
+           "Restoring a deleted completed task must preserve completion");
+}
+
+void taskCompletionIsReversibleAndRevisionChecked()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository, dataWithTask());
+    expect(service.setTaskCompletion("task-1", true, 99, 2'000).status
+               == DataCommandStatus::Conflict,
+           "A stale task row must not overwrite newer completion state");
+    expect(service.setTaskCompletion("task-1", true, 1, 2'000).succeeded(),
+           "An active task should be markable as done");
+    expect(service.data().tasks.front().status == TaskStatus::Done
+               && service.data().tasks.front().revision == 2,
+           "Completing a task should update status and optimistic revision");
+    expect(service.setTaskCompletion("task-1", false, 2, 3'000).succeeded(),
+           "A completed task should be restorable without deleting history");
+    expect(service.data().tasks.front().status == TaskStatus::Active
+               && service.data().tasks.front().revision == 3,
+           "Restoring should return the task to active with a new revision");
+}
+
+void recordInterruptionAppliesUnionTransaction()
+{
+    RecordingRepository repository;
+    FocusDataService service(repository, dataWithTask());
+    expect(service.startSession(focusCommand()).succeeded(),
+           "Setup focus start should succeed");
+    expect(service.pauseSession("session-1", 310'000).succeeded(),
+           "Setup pause should succeed");
+    const int savesBeforeInterruption = repository.saveCalls;
+
+    // 1. Continue decision: append event and resume the timer.
+    RecordInterruptionCommand cont;
+    cont.sessionId = "session-1";
+    cont.event = {
+        InterruptionReason::Meeting, "standup",
+        315'000, 315'020, InterruptionSource::User,
+    };
+    cont.decision = ResumeDecision::Continue;
+    cont.nowUtcMs = 400'000;
+    const auto contResult = service.recordInterruption(cont);
+    expect(contResult.status == DataCommandStatus::Success,
+           "Continue decision must succeed on a paused active session");
+    const auto& afterContinue = service.data().sessions.front();
+    expect(afterContinue.status == SessionStatus::Running,
+           "Continue decision must resume the timer");
+    expect(afterContinue.interruptions.size() == 1
+               && afterContinue.interruptions.at(0).reason
+                       == InterruptionReason::Meeting,
+           "Continue decision must append the interruption event");
+    expect(afterContinue.targetEndAtUtcMs
+               == std::optional<std::int64_t>{
+                       cont.nowUtcMs + afterContinue.remainingMs},
+           "Continue decision must recompute the deadline from now + remaining");
+    expect(repository.saveCalls == savesBeforeInterruption + 1,
+           "Continue decision must be a single atomic commit");
+
+    // 2. Running is not paused: recordInterruption must reject.
+    RecordInterruptionCommand invalid = cont;
+    invalid.event.occurredAtUtcMs = 500'000;
+    invalid.event.detectedAtUtcMs = 500'010;
+    invalid.decision = ResumeDecision::EndSession;
+    invalid.nowUtcMs = 500'020;
+    const auto invalidResult = service.recordInterruption(invalid);
+    expect(invalidResult.status == DataCommandStatus::Conflict,
+           "recordInterruption must reject a running session");
+    expect(service.data().sessions.front().interruptions.size() == 1,
+           "Conflict must not append the event");
+
+    // 3. Pause again, then EndSession decision aborts atomically.
+    expect(service.pauseSession("session-1", 600'000).succeeded(),
+           "Setup second pause should succeed");
+    RecordInterruptionCommand endCmd;
+    endCmd.sessionId = "session-1";
+    endCmd.event = {
+        InterruptionReason::Emergency, "fire drill",
+        600'500, 600'520, InterruptionSource::User,
+    };
+    endCmd.decision = ResumeDecision::EndSession;
+    endCmd.nowUtcMs = 601'000;
+    const auto endResult = service.recordInterruption(endCmd);
+    expect(endResult.status == DataCommandStatus::Success,
+           "EndSession decision must succeed on a paused session");
+    const auto& afterEnd = service.data().sessions.front();
+    expect(afterEnd.status == SessionStatus::Aborted,
+           "EndSession decision must abort the session");
+    expect(afterEnd.completionReason == CompletionReason::UserAborted,
+           "EndSession must record UserAborted as the completion reason");
+    expect(afterEnd.interruptions.size() == 2
+               && afterEnd.interruptions.at(1).reason
+                       == InterruptionReason::Emergency,
+           "EndSession must append the interruption event");
+    expect(!service.data().activeSessionId,
+           "EndSession must clear the active session");
+
+    // 4. SkipRest on a focus session must be rejected.
+    RecordInterruptionCommand skipFocus = endCmd;
+    skipFocus.decision = ResumeDecision::SkipRest;
+    skipFocus.event.occurredAtUtcMs = 700'000;
+    skipFocus.event.detectedAtUtcMs = 700'010;
+    skipFocus.nowUtcMs = 700'020;
+    const auto skipResult = service.recordInterruption(skipFocus);
+    expect(skipResult.status == DataCommandStatus::Conflict
+               || skipResult.status == DataCommandStatus::NotFound
+               || skipResult.status == DataCommandStatus::InvalidArgument,
+           "SkipRest against a non-active focus session must not succeed");
+}
+
 } // namespace
 
 int main()
@@ -266,6 +493,12 @@ int main()
         completionIsRecoverableAtomicAndIdempotent();
         abortNeverIncrementsFocusFacts();
         breakSkipUsesItsOwnTerminalFact();
+        reusedIdentifiersRejectDifferentCommands();
+        completionCheckpointWinsTerminalRaces();
+        activeTaskCannotBeDeletedUntilItsSessionEnds();
+        taskEditingAndRestoreAreRevisionChecked();
+        taskCompletionIsReversibleAndRevisionChecked();
+        recordInterruptionAppliesUnionTransaction();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

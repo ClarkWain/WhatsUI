@@ -46,10 +46,17 @@ FocusData validData()
     FocusData data;
     data.settings.focusMinutes = 50;
     data.settings.autoStartBreak = true;
+    data.settings.defaultSoundscapeId = "cafe";
     data.tasks.push_back({
         "task-%-1", "含有 Unicode\t与换行\n🍅", TaskStatus::Active,
         3, 0, 1024, 4, 1'000, 2'000,
     });
+    data.tasks.push_back({
+        "task-deleted-done", "已删除的已完成任务", TaskStatus::ArchivedDone,
+        2, 0, 2048, 3, 1'000, 2'000,
+    });
+    data.tasks.front().execution = {
+        40, TaskSoundPreference::Soundscape, "forest"};
     data.sessions.push_back({
         "session-1",
         std::string{"task-%-1"},
@@ -63,6 +70,7 @@ FocusData validData()
         std::nullopt,
         CompletionReason::None,
         "session-1",
+        std::string{"forest"},
     });
     data.activeSessionId = "session-1";
     data.timerSnapshot = TimerSnapshot{
@@ -90,6 +98,30 @@ void roundTripPreservesCompleteAggregate()
            "A saved aggregate should load normally");
     expect(loaded.validation.ok() && loaded.data == expected,
            "Round trip must preserve every record and pass post-read validation");
+}
+
+void legacyRowsReceiveSafeExecutionDefaults()
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "legacy.store";
+    {
+        std::ofstream output(path, std::ios::binary);
+        output
+            << "WhatsUIFocusTomatoStore\t1\n"
+            << "S\t25\t5\t15\t4\t70\t0\t0\n"
+            << "T\ttask-1\tLegacy\tactive\t1\t0\t1024\t1\t1000\t1000\n"
+            << "A\t-\n";
+    }
+    FileFocusRepository repository(path);
+    const auto loaded = repository.load();
+    expect(loaded.status == RepositoryLoadStatus::Loaded
+               && loaded.data.tasks.size() == 1,
+           "Rows written before task preferences must remain readable");
+    expect(!loaded.data.tasks.front().execution.focusMinutes
+               && loaded.data.tasks.front().execution.sound
+                    == TaskSoundPreference::Inherit
+               && loaded.data.settings.defaultSoundscapeId == "rain",
+           "Legacy rows must inherit the same duration and sound users previously saw");
 }
 
 void rejectedSaveLeavesLastGoodFileUntouched()
@@ -147,6 +179,92 @@ void semanticallyInvalidFileReturnsValidationReport()
            "Load result must expose semantic diagnostics to the recovery UI");
 }
 
+void legacyV1FileMigratesToV2OnLoad()
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "focus.store";
+    {
+        std::ofstream output(path, std::ios::binary);
+        output
+            << "WhatsUIFocusTomatoStore\t1\n"
+            << "S\t25\t5\t15\t4\t70\t0\t0\train\n"
+            << "T\ttask-1\tTitle\tactive\t1\t0\t1024\t1\t1000\t1000\n"
+            << "A\t-\n";
+    }
+    FileFocusRepository repository(path);
+    const auto loaded = repository.load();
+    expect(loaded.status == RepositoryLoadStatus::Loaded,
+           "A well-formed legacy v1 file must be accepted after migration");
+    expect(loaded.data.schemaVersion == kCurrentSchemaVersion,
+           "Migration must bump schemaVersion to the current value");
+    expect(loaded.data.tasks.size() == 1,
+           "Migration must preserve v1 tasks verbatim");
+    expect(loaded.validation.ok(),
+           "Migrated aggregate must satisfy the current validator");
+
+    // Saving now must produce a v2 header; reloading must round-trip
+    // through the identity short-circuit.
+    expect(repository.save(loaded.data).succeeded(),
+           "Migrated aggregate must save cleanly");
+    const auto reloaded = repository.load();
+    expect(reloaded.status == RepositoryLoadStatus::Loaded
+            && reloaded.data == loaded.data,
+           "Second load after save must be a no-op (identity migration)");
+
+    std::ifstream input(path, std::ios::binary);
+    std::string firstLine;
+    std::getline(input, firstLine);
+    expect(firstLine == "WhatsUIFocusTomatoStore\t2",
+           "On-disk header must reflect the current schemaVersion after save");
+}
+
+void unsupportedFutureVersionIsRejected()
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "focus.store";
+    {
+        std::ofstream output(path, std::ios::binary);
+        output
+            << "WhatsUIFocusTomatoStore\t"
+            << (kCurrentSchemaVersion + 1) << "\n"
+            << "S\t25\t5\t15\t4\t70\t0\t0\train\n"
+            << "A\t-\n";
+    }
+    FileFocusRepository repository(path);
+    const auto loaded = repository.load();
+    expect(loaded.status == RepositoryLoadStatus::RejectedCorrupt,
+           "A version newer than the current one must be rejected without "
+           "silent downgrade");
+}
+
+void interruptionEventsRoundTripAcrossSaveLoad()
+{
+    TemporaryDirectory directory;
+    FileFocusRepository repository(directory.path() / "focus.store");
+
+    FocusData data = validData();
+    data.sessions.front().interruptions.push_back({
+        InterruptionReason::Meeting,
+        std::string{"team standup\t含有 tab 与换行\n🍅"},
+        1'234, 1'250,
+        InterruptionSource::User,
+    });
+    data.sessions.front().interruptions.push_back({
+        InterruptionReason::SystemLock,
+        std::string{},
+        1'500, 1'505,
+        InterruptionSource::System,
+    });
+
+    expect(repository.save(data).succeeded(),
+           "Interruption events must save alongside the session");
+    const auto loaded = repository.load();
+    expect(loaded.status == RepositoryLoadStatus::Loaded,
+           "Round trip must succeed");
+    expect(loaded.data == data,
+           "Interruption fields (reason, source, timestamps, note) must round-trip verbatim");
+}
+
 void interruptedReplacementRestoresCompleteBackup()
 {
     TemporaryDirectory directory;
@@ -169,9 +287,13 @@ int main()
 {
     try {
         roundTripPreservesCompleteAggregate();
+        legacyRowsReceiveSafeExecutionDefaults();
         rejectedSaveLeavesLastGoodFileUntouched();
         malformedFileIsPreservedInsteadOfOverwritten();
         semanticallyInvalidFileReturnsValidationReport();
+        legacyV1FileMigratesToV2OnLoad();
+        unsupportedFutureVersionIsRejected();
+        interruptionEventsRoundTripAcrossSaveLoad();
         interruptedReplacementRestoresCompleteBackup();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {

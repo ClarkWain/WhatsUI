@@ -21,7 +21,24 @@ artifacts/fluent-review/
 artifacts/p0-repro*
 artifacts/todo-empty-state-review/
 artifacts/todo-interaction-smoke/
+artifacts/compact_*.png
+artifacts/compact_*.ppm
+artifacts/compact_final/
+artifacts/component_gallery_*.png
+artifacts/component_gallery_*.ppm
+artifacts/focus_tomato_desktop_capabilities/
+artifacts/focus_tomato_task_management/
+artifacts/focus_tomato_task_preferences/
+artifacts/focus_tomato_theme/
+artifacts/focus_tomato_visual/
+artifacts/focus_tomato_visual_*/
+artifacts/gallery_compact_audit/
+artifacts/nav-review/
 release-check/
+
+# Local scratch directory used by focus-tomato experiments; never a release
+# artifact.
+tmp/
 
 # Local clone of the Fluent UI reference repository used for design research.
 # It is neither a WhatsUI dependency nor a source-distributed artifact.

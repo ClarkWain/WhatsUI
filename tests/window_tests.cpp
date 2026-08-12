@@ -62,6 +62,19 @@ public:
     std::size_t selectionEnd{0};
 };
 
+class FakeDesktopServices final : public wui::DesktopServices {
+public:
+    [[nodiscard]] wui::DesktopCapabilities capabilities() const noexcept override
+    {
+        return {true, true, false};
+    }
+
+    void emit(wui::DesktopEvent event)
+    {
+        publishEvent(event);
+    }
+};
+
 class FakeWindow final : public wui::PlatformWindow {
 public:
     explicit FakeWindow(wui::WindowId id, wui::WindowMetrics metrics = {{320.0f, 180.0f}, {640.0f, 360.0f}, 2.0f})
@@ -106,12 +119,32 @@ public:
     {
         return std::make_unique<FakeWindow>(nextId_++, metrics_);
     }
+    [[nodiscard]] std::unique_ptr<wui::PlatformWindow> createWindow(
+        const wui::WindowOptions& options) override
+    {
+        receivedOptions = options;
+        receivedWindowOptions = true;
+        return createWindow(options.title, options.initialSize);
+    }
     [[nodiscard]] int run() override { return 0; }
     void quit(int exitCode = 0) override { exitCode_ = exitCode; }
+    [[nodiscard]] wui::DesktopServices& desktopServices() noexcept override
+    {
+        return desktopServices_;
+    }
+
+    [[nodiscard]] FakeDesktopServices& fakeDesktopServices() noexcept
+    {
+        return desktopServices_;
+    }
+
+    wui::WindowOptions receivedOptions{};
+    bool receivedWindowOptions{false};
 private:
     wui::WindowId nextId_{1};
     wui::WindowMetrics metrics_;
     int exitCode_{0};
+    FakeDesktopServices desktopServices_;
 };
 
 // Uses the same native-boundary projection as the GLFW IMM32 host without
@@ -778,6 +811,94 @@ void testAppContextIsReadyDuringInitialComposition()
            "UiApp must expose a bound context before initial UI composition");
 }
 
+void testWindowOptionsAndDesktopCapabilityContracts()
+{
+    auto host = std::make_unique<FakeHost>();
+    auto* hostProbe = host.get();
+    wui::UiApp app(std::move(host));
+
+    wui::WindowOptions options;
+    options.title = "custom window";
+    options.initialSize = {640.0f, 480.0f};
+    options.minimumSize = {320.0f, 240.0f};
+    options.frameStyle = wui::WindowFrameStyle::Custom;
+    options.backdrop = wui::WindowBackdrop::Transparent;
+    options.transparentFramebuffer = true;
+    options.alwaysOnTop = true;
+    options.visibleOnCreate = false;
+
+    auto& window = app.openWindow(options);
+    expect(hostProbe->receivedWindowOptions,
+           "UiApp must preserve the structured window creation boundary");
+    expect(hostProbe->receivedOptions.title == options.title
+               && hostProbe->receivedOptions.initialSize.width == 640.0f
+               && hostProbe->receivedOptions.minimumSize.height == 240.0f
+               && hostProbe->receivedOptions.frameStyle
+                    == wui::WindowFrameStyle::Custom
+               && hostProbe->receivedOptions.transparentFramebuffer
+               && hostProbe->receivedOptions.alwaysOnTop
+               && !hostProbe->receivedOptions.visibleOnCreate,
+           "WindowOptions must reach the platform host without losing policy");
+    expect(window.platformWindow().state() == wui::WindowState::Normal,
+           "Legacy platform windows must retain a safe normal-state fallback");
+
+    const auto desktopCapabilities = app.desktopServices().capabilities();
+    expect(desktopCapabilities.tray && desktopCapabilities.notifications,
+           "UiApp must expose the desktop capabilities supplied by its host");
+}
+
+void testCustomFrameRegionHitTestingKeepsControlsInteractive()
+{
+    const std::vector<wui::WindowFrameRegion> regions{
+        {{0.0f, 0.0f, 300.0f, 48.0f},
+         wui::WindowFrameRegionKind::Caption},
+        {{16.0f, 8.0f, 80.0f, 32.0f},
+         wui::WindowFrameRegionKind::Client},
+        {{300.0f, 0.0f, 46.0f, 48.0f},
+         wui::WindowFrameRegionKind::MinimizeButton},
+        {{346.0f, 0.0f, 46.0f, 48.0f},
+         wui::WindowFrameRegionKind::CloseButton},
+    };
+    expect(wui::hitTestWindowFrameRegions(regions, {20.0f, 20.0f})
+               == wui::WindowFrameRegionKind::Client,
+           "Explicit client controls must win over an overlapping drag region");
+    expect(wui::hitTestWindowFrameRegions(regions, {150.0f, 20.0f})
+               == wui::WindowFrameRegionKind::Caption,
+           "Unoccupied title-bar space must resolve to the system caption");
+    expect(wui::hitTestWindowFrameRegions(regions, {360.0f, 20.0f})
+               == wui::WindowFrameRegionKind::CloseButton,
+           "Caption buttons must retain their native non-client semantics");
+    expect(!wui::hitTestWindowFrameRegions(regions, {100.0f, 80.0f}),
+           "Ordinary page content must not become a draggable caption");
+}
+
+void testDesktopEventsAreDispatchedThroughTheUiContext()
+{
+    auto host = std::make_unique<FakeHost>();
+    auto* hostProbe = host.get();
+    wui::UiApp app(std::move(host));
+    int deliveries = 0;
+    app.desktopServices().setEventHandler(
+        [&deliveries](const wui::DesktopEvent& event) {
+            expect(event.id == "show", "Desktop event payload must survive UI dispatch");
+            ++deliveries;
+        });
+
+    hostProbe->fakeDesktopServices().emit(
+        {wui::DesktopEventKind::TrayAction, "show", {}});
+    expect(deliveries == 0,
+           "Native desktop callbacks must not synchronously mutate UI state");
+    expect(app.dispatcher().drain() == 1 && deliveries == 1,
+           "Desktop callbacks must execute at the UiDispatcher boundary");
+
+    hostProbe->fakeDesktopServices().emit(
+        {wui::DesktopEventKind::TrayAction, "show", {}});
+    app.desktopServices().setEventHandler({});
+    (void)app.dispatcher().drain();
+    expect(deliveries == 1,
+           "Clearing the desktop handler must invalidate already queued delivery");
+}
+
 } // namespace
 
 int main()
@@ -800,6 +921,9 @@ int main()
         testWindowMaterializesAuthorViewsAtEveryBoundary();
         testAppReleasesClosedWindows();
         testAppContextIsReadyDuringInitialComposition();
+        testWindowOptionsAndDesktopCapabilityContracts();
+        testCustomFrameRegionHitTestingKeepsControlsInteractive();
+        testDesktopEventsAreDispatchedThroughTheUiContext();
         return 0;
     } catch (const std::exception& error) {
         std::fputs(error.what(), stderr);
